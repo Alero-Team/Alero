@@ -1,4 +1,6 @@
-//! Spike CLI (S3/S4). Usage:
+//! CLI test bench. Usage:
+//!   pb-cli run <dir> <name> [tcpPort] [downloadDir]   full engine, commands on stdin (type `help`)
+//! Spike commands from S3/S4 (single connection, no pairing):
 //!   pb-cli id <dir> <name>
 //!   pb-cli listen|connect <dir> <addr> <trusted_id|*> ping
 //!   pb-cli listen|connect <dir> <addr> <trusted_id|*> send <file> [blockSize] [abortAfterBlocks]
@@ -6,11 +8,13 @@
 //! `*` = pairing mode (accept any peer). Keys are plain files: spike only, the real app
 //! uses the OS keystore (Protocol.md §2). TLS role (listen/connect) is independent of send/recv.
 
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
+use std::sync::Arc;
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use pb_core::engine::{Config, Engine, Event, EventSink, DEFAULT_PORT};
 use pb_core::identity::{device_id_from_cert, Identity};
 use pb_core::tls::{client_config, peer_device_id, server_config, Verifier};
 use pb_core::transfer::{receive_file, send_file, DEFAULT_BLOCK};
@@ -85,11 +89,79 @@ fn run_role<S: Read + Write>(s: &mut S, client: bool, role: &[String]) -> Result
     }
 }
 
+struct Print;
+
+impl EventSink for Print {
+    fn on_event(&self, e: Event) {
+        match e {
+            // Progress is chatty on a terminal: print every ~5% only.
+            Event::TransferProgress { id, done, total, bytes_per_sec } => {
+                if total > 0 && (done * 20 / total != (done.saturating_sub(1_000_000)) * 20 / total || done == total) {
+                    println!("PROGRESS {id} {done}/{total} {:.1} MB/s", bytes_per_sec as f64 / 1e6);
+                }
+            }
+            other => println!("EVENT {other:?}"),
+        }
+    }
+}
+
+/// Peer ids are 64 hex chars; accept any unambiguous prefix.
+fn resolve(engine: &Engine, prefix: &str) -> Result<String, String> {
+    let m: Vec<_> = engine.peers().into_iter().filter(|p| p.id.starts_with(prefix)).collect();
+    match m.len() {
+        1 => Ok(m[0].id.clone()),
+        0 => Err("no such device".into()),
+        _ => Err("ambiguous prefix".into()),
+    }
+}
+
+fn run_engine(a: &[String]) -> Result<(), String> {
+    let arg = |i: usize| a.get(i).map(String::as_str).ok_or_else(|| "usage: run <dir> <name> [tcpPort] [downloadDir]".to_string());
+    let dir = std::path::PathBuf::from(arg(2)?);
+    let port: u16 = a.get(4).map_or(Ok(DEFAULT_PORT), |v| v.parse()).map_err(|_| "bad port")?;
+    let cfg = Config {
+        data_dir: dir.join("data"),
+        download_dir: a.get(5).map_or(dir.join("downloads"), Into::into),
+        name: arg(3)?.to_string(),
+        port,
+        discovery_port: DEFAULT_PORT,
+        auto_accept: true,
+    };
+    let engine = Engine::start(cfg, Arc::new(Print))?;
+    println!("READY id={} port={}", engine.device_id(), engine.port());
+    for line in std::io::stdin().lock().lines() {
+        let line = line.map_err(|e| e.to_string())?;
+        let w: Vec<&str> = line.split_whitespace().collect();
+        let r: Result<(), String> = match w.as_slice() {
+            ["help"] => Ok(println!("peers | pair <id|ip[:port]> | yes <id> | no <id> | send <id> <file> | cancel <xferId> | revoke <id> | history | retry <xferId> | diag | quit")),
+            ["peers"] => Ok(engine.peers().iter().for_each(|p| println!("PEER {} {:?} trusted={} {} {}", p.id, p.name, p.trusted, p.addr, format!("{:?}", p.state)))),
+            ["pair", t] => resolve(&engine, t).and_then(|id| engine.pair_with_peer(&id)).or_else(|_| engine.pair_with_addr(t)),
+            ["yes", id] => resolve(&engine, id).map(|id| engine.respond_pair(&id, true)),
+            ["no", id] => resolve(&engine, id).map(|id| engine.respond_pair(&id, false)),
+            ["send", id, file] => resolve(&engine, id).and_then(|id| engine.send_file(&id, std::path::Path::new(file), None)).map(|x| println!("QUEUED {x}")),
+            ["cancel", x] => Ok(engine.cancel_transfer(x)),
+            ["revoke", id] => resolve(&engine, id).and_then(|id| engine.revoke(&id)),
+            ["history"] => Ok(engine.history().iter().for_each(|h| println!("HIST {} {} {} {} {}", h.id, if h.incoming { "in" } else { "out" }, h.status, h.name, h.size))),
+            ["retry", x] => engine.retry(x).map(|n| println!("QUEUED {n}")),
+            ["diag"] => Ok(engine.diagnostics().iter().for_each(|l| println!("DIAG {l}"))),
+            ["quit"] => break,
+            [] => Ok(()),
+            _ => Err("unknown command, try `help`".into()),
+        };
+        if let Err(e) = r {
+            println!("ERROR {e}");
+        }
+    }
+    engine.shutdown();
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     let a: Vec<String> = std::env::args().collect();
     let arg = |i: usize| a.get(i).map(String::as_str).ok_or_else(|| "missing argument".to_string());
     let e = |x: &dyn ToString| x.to_string();
     match arg(1)? {
+        "run" => run_engine(&a),
         "id" => {
             println!("{}", load_or_generate(arg(2)?, arg(3)?)?.device_id);
             Ok(())

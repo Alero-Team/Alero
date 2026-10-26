@@ -277,6 +277,7 @@ version = "0.0.1"
 dependencies = [
  "rcgen",
  "rustls",
+ "serde",
  "serde_json",
  "sha2",
  "x509-parser",

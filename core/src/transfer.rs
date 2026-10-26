@@ -3,8 +3,10 @@
 //! Wire after the TLS handshake:
 //!   S→R frame `pb.transfer.offer {name,size,blockSize}`
 //!   R→S frame `pb.transfer.accept {blocks,prefixRoot}`  (R re-hashes its `.part` prefix from disk)
+//!        or frame `pb.transfer.reject {reason}` (R declines; S stops and must not retry)
 //!   S→R frame `pb.transfer.start {fromBlock}`           (S re-hashes the same prefix; equal ⇒ resume, else 0)
 //!   S→R repeated `0x01 | u32 len | sha256(block) | block`, then `0x02` + frame `pb.transfer.done {root}`
+//!        or a single `0x03` byte if the sender cancels (R then deletes its `.part`)
 //!   R→S frame `pb.transfer.result {ok}`
 //! `root` = SHA-256 over the concatenated per-block hashes of the whole file, so a resumed file is
 //! checked end to end without a second full-file pass.
@@ -12,6 +14,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -23,6 +26,7 @@ const MIN_BLOCK: u32 = 4096;
 const MAX_BLOCK: u32 = 16 * 1024 * 1024;
 const TAG_BLOCK: u8 = 1;
 const TAG_DONE: u8 = 2;
+const TAG_CANCEL: u8 = 3;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TransferError {
@@ -32,6 +36,10 @@ pub enum TransferError {
     InvalidName,
     /// Test hook: the sender stopped on purpose.
     Aborted,
+    /// The user cancelled this transfer on this side or the peer said so with a cancel tag.
+    Cancelled,
+    /// The receiver declined the offer; retrying is pointless.
+    Rejected(String),
 }
 
 impl From<std::io::Error> for TransferError {
@@ -109,15 +117,53 @@ pub fn send_file<S: Read + Write>(
     abort_after_blocks: Option<u64>,
 ) -> Result<Report, TransferError> {
     let name = path.file_name().and_then(|n| n.to_str()).ok_or(TransferError::InvalidName)?.to_string();
-    safe_name(&name)?;
+    send_file_ex(s, path, &name, "", block_size, abort_after_blocks, &AtomicBool::new(false), &mut |_, _| {})
+}
+
+/// `name` is what the receiver will call the file (it may differ from `path`, e.g. `/proc/self/fd/N` on Android).
+/// `id` identifies the transfer across retries. `progress(done, total)` runs after every block.
+#[allow(clippy::too_many_arguments)]
+pub fn send_file_ex<S: Read + Write>(
+    s: &mut S,
+    path: &Path,
+    name: &str,
+    id: &str,
+    block_size: u32,
+    abort_after_blocks: Option<u64>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<Report, TransferError> {
+    let r = send_inner(s, path, name, id, block_size, abort_after_blocks, cancel, progress);
+    match r {
+        Err(_) if cancel.load(Ordering::Relaxed) => Err(TransferError::Cancelled),
+        other => other,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn send_inner<S: Read + Write>(
+    s: &mut S,
+    path: &Path,
+    name: &str,
+    id: &str,
+    block_size: u32,
+    abort_after_blocks: Option<u64>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<Report, TransferError> {
+    safe_name(name)?;
+    let name = name.to_string();
     if !(MIN_BLOCK..=MAX_BLOCK).contains(&block_size) {
         return proto("block size out of range");
     }
     let mut f = File::open(path)?;
     let size = f.metadata()?.len();
-    write_frame(s, &json!({"type":"pb.transfer.offer","body":{"name":name,"size":size,"blockSize":block_size}}))?;
+    write_frame(s, &json!({"type":"pb.transfer.offer","body":{"id":id,"name":name,"size":size,"blockSize":block_size}}))?;
 
     let acc = read_frame(s)?;
+    if acc["type"] == "pb.transfer.reject" {
+        return Err(TransferError::Rejected(acc["body"]["reason"].as_str().unwrap_or("rejected").to_string()));
+    }
     let acc = field(&acc, "pb.transfer.accept")?;
     let (blocks, their_root) = (acc["blocks"].as_u64().ok_or(TransferError::Protocol("blocks".into()))?, acc["prefixRoot"].as_str().unwrap_or(""));
     let bs = block_size as u64;
@@ -137,7 +183,13 @@ pub fn send_file<S: Read + Write>(
     const HDR: usize = 1 + 4 + 32;
     let mut buf = vec![0u8; HDR + block_size as usize];
     let (mut sent_blocks, mut bytes) = (0u64, 0u64);
+    progress(from * bs, size);
     loop {
+        if cancel.load(Ordering::Relaxed) {
+            s.write_all(&[TAG_CANCEL])?;
+            s.flush()?;
+            return Err(TransferError::Cancelled);
+        }
         let mut n = 0;
         while n < block_size as usize {
             let r = f.read(&mut buf[HDR + n..])?;
@@ -157,6 +209,7 @@ pub fn send_file<S: Read + Write>(
         s.write_all(&buf[..HDR + n])?;
         sent_blocks += 1;
         bytes += n as u64;
+        progress(from * bs + bytes, size);
         if abort_after_blocks == Some(sent_blocks) {
             s.flush()?;
             return Err(TransferError::Aborted);
@@ -189,6 +242,38 @@ fn unique_path(dir: &Path, name: &str) -> PathBuf {
 }
 
 pub fn receive_file<S: Read + Write>(s: &mut S, dest_dir: &Path) -> Result<(Report, PathBuf), TransferError> {
+    receive_file_ex(s, dest_dir, &mut |_, _, _| Ok(()), &AtomicBool::new(false), &mut |_, _| {})
+}
+
+/// `decide(id, name, size)` may refuse the offer with a reason. `.part` files are removed on cancel.
+pub fn receive_file_ex<S: Read + Write>(
+    s: &mut S,
+    dest_dir: &Path,
+    decide: &mut dyn FnMut(&str, &str, u64) -> Result<(), String>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<(Report, PathBuf), TransferError> {
+    let mut part_path = None;
+    let r = receive_inner(s, dest_dir, decide, cancel, progress, &mut part_path);
+    match r {
+        Err(_) if cancel.load(Ordering::Relaxed) => {
+            if let Some(p) = part_path {
+                let _ = std::fs::remove_file(p);
+            }
+            Err(TransferError::Cancelled)
+        }
+        other => other,
+    }
+}
+
+fn receive_inner<S: Read + Write>(
+    s: &mut S,
+    dest_dir: &Path,
+    decide: &mut dyn FnMut(&str, &str, u64) -> Result<(), String>,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+    part_out: &mut Option<PathBuf>,
+) -> Result<(Report, PathBuf), TransferError> {
     let offer = read_frame(s)?;
     let o = field(&offer, "pb.transfer.offer")?;
     let name = o["name"].as_str().ok_or(TransferError::InvalidName)?.to_string();
@@ -198,9 +283,15 @@ pub fn receive_file<S: Read + Write>(s: &mut S, dest_dir: &Path) -> Result<(Repo
     if !(MIN_BLOCK..=MAX_BLOCK).contains(&bs) {
         return proto("block size out of range");
     }
+    if let Err(reason) = decide(o["id"].as_str().unwrap_or(""), &name, size) {
+        write_frame(s, &json!({"type":"pb.transfer.reject","body":{"reason":reason}}))?;
+        s.flush()?;
+        return Err(TransferError::Rejected(reason));
+    }
 
     std::fs::create_dir_all(dest_dir)?;
     let part_path = dest_dir.join(format!("{name}.part"));
+    *part_out = Some(part_path.clone());
     let mut part = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&part_path)?;
     let blocks = (part.metadata()?.len() / bs as u64).min(size / bs as u64);
     let prefix = hash_prefix(&mut part, blocks, bs)?;
@@ -220,7 +311,11 @@ pub fn receive_file<S: Read + Write>(s: &mut S, dest_dir: &Path) -> Result<(Repo
 
     let (mut written, mut buf) = (from * bs as u64, vec![0u8; bs as usize]);
     let mut tag = [0u8; 1];
+    progress(written, size);
     loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(TransferError::Cancelled);
+        }
         s.read_exact(&mut tag)?;
         match tag[0] {
             TAG_BLOCK => {
@@ -238,8 +333,13 @@ pub fn receive_file<S: Read + Write>(s: &mut S, dest_dir: &Path) -> Result<(Repo
                 part.write_all(&buf[..n])?;
                 root.update(h);
                 written += n as u64;
+                progress(written, size);
             }
             TAG_DONE => break,
+            TAG_CANCEL => {
+                cancel.store(true, Ordering::Relaxed);
+                return Err(TransferError::Cancelled);
+            }
             _ => return proto("unknown tag"),
         }
     }

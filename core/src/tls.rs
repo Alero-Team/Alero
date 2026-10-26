@@ -4,7 +4,7 @@
 //! `max_early_data_size` is 0, so there is no 0-RTT.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::crypto::{ring, verify_tls12_signature, verify_tls13_signature, CryptoProvider};
@@ -14,22 +14,27 @@ use rustls::{CertificateError, ClientConfig, DigitallySignedStruct, Distinguishe
 
 use crate::identity::{device_id_from_cert, Identity};
 
-/// Decides which certificates are accepted. Immutable: revoking a device means building a new config.
+/// Decides which certificates are accepted. The trusted set can be shared and edited at runtime, so
+/// pairing and revoking take effect on the next handshake without rebuilding the config.
 #[derive(Debug)]
 pub struct Verifier {
-    trusted: HashSet<String>,
+    trusted: Arc<RwLock<HashSet<String>>>,
     accept_unknown: bool,
     provider: Arc<CryptoProvider>,
 }
 
 impl Verifier {
     pub fn new(trusted: impl IntoIterator<Item = String>, accept_unknown: bool) -> Self {
-        Self { trusted: trusted.into_iter().collect(), accept_unknown, provider: provider() }
+        Self::shared(Arc::new(RwLock::new(trusted.into_iter().collect())), accept_unknown)
+    }
+
+    pub fn shared(trusted: Arc<RwLock<HashSet<String>>>, accept_unknown: bool) -> Self {
+        Self { trusted, accept_unknown, provider: provider() }
     }
 
     fn check(&self, cert: &CertificateDer<'_>) -> Result<(), Error> {
         let id = device_id_from_cert(cert).map_err(|_| CertificateError::BadEncoding)?;
-        if self.accept_unknown || self.trusted.contains(&id) {
+        if self.accept_unknown || self.trusted.read().map_err(|_| Error::General("trust lock poisoned".into()))?.contains(&id) {
             Ok(())
         } else {
             Err(CertificateError::ApplicationVerificationFailure.into())
