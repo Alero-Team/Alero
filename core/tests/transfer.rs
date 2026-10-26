@@ -155,3 +155,19 @@ fn receiver_rejects_a_hostile_name_in_the_offer() {
     assert_eq!(rx.join().unwrap().unwrap_err(), TransferError::InvalidName);
     assert!(std::fs::read_dir(&dst).unwrap().next().is_none(), "nothing written");
 }
+
+#[cfg(unix)]
+#[test]
+fn fd_source_duplicates_an_open_descriptor() {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    let p = std::env::temp_dir().join(format!("pb-fd-{}", std::process::id()));
+    std::fs::write(&p, b"hello fd").unwrap();
+    let held = std::fs::File::open(&p).unwrap();
+    let mut dup = pb_core::transfer::open_source(std::path::Path::new(&format!("fd:{}", held.as_raw_fd()))).unwrap();
+    let mut s = String::new();
+    dup.read_to_string(&mut s).unwrap();
+    assert_eq!(s, "hello fd");
+    assert!(pb_core::transfer::open_source(std::path::Path::new("fd:abc")).is_err());
+    std::fs::remove_file(p).ok();
+}

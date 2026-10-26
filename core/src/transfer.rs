@@ -64,6 +64,20 @@ pub struct Report {
     pub bytes: u64,
 }
 
+/// Opens the source of an outgoing transfer. `fd:N` means "duplicate descriptor N that the host app already opened"
+/// (Android content URIs: re-opening `/proc/self/fd/N` by path is denied without storage permission).
+/// The duplicate shares the file offset with the original, so only one transfer may use a descriptor at a time.
+pub fn open_source(path: &Path) -> std::io::Result<File> {
+    #[cfg(unix)]
+    if let Some(n) = path.to_str().and_then(|p| p.strip_prefix("fd:")) {
+        use std::os::fd::{BorrowedFd, RawFd};
+        let fd: RawFd = n.parse().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "bad fd"))?;
+        // SAFETY: the host promises `fd` stays open for the duration of the transfer; we only duplicate it.
+        return Ok(File::from(unsafe { BorrowedFd::borrow_raw(fd) }.try_clone_to_owned()?));
+    }
+    File::open(path)
+}
+
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -156,7 +170,7 @@ fn send_inner<S: Read + Write>(
     if !(MIN_BLOCK..=MAX_BLOCK).contains(&block_size) {
         return proto("block size out of range");
     }
-    let mut f = File::open(path)?;
+    let mut f = open_source(path)?;
     let size = f.metadata()?.len();
     write_frame(s, &json!({"type":"pb.transfer.offer","body":{"id":id,"name":name,"size":size,"blockSize":block_size}}))?;
 

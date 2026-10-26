@@ -189,7 +189,7 @@ impl PbEngine {
         Ok(self.inner.revoke(&peer_id)?)
     }
 
-    /// `path` may be `/proc/self/fd/N` for a content URI the app opened; `display_name` is then required.
+    /// `path` may be `fd:N` (a descriptor the app opened for a content URI and keeps open); `display_name` is then required.
     pub fn send_file(&self, peer_id: String, path: String, display_name: Option<String>) -> Result<String, PbError> {
         Ok(self.inner.send_file(&peer_id, Path::new(&path), display_name.as_deref())?)
     }

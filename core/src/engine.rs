@@ -676,7 +676,7 @@ impl Inner {
             Err((c, m)) => (false, c.to_string(), m, String::new()),
         };
         let status = if ok { "done" } else if code == "CANCELLED" { "cancelled" } else { "failed" };
-        let keep = if ok && x.incoming { path.clone() } else if x.src.starts_with("/proc/") { String::new() } else { x.src.clone() };
+        let keep = if ok && x.incoming { path.clone() } else if x.src.starts_with("fd:") { String::new() } else { x.src.clone() };
         let _ = self.store.push_history(HistoryEntry {
             id: x.id.clone(),
             peer_id: x.peer_id.clone(),
@@ -1026,7 +1026,7 @@ impl Engine {
             None => path.file_name().and_then(|n| n.to_str()).ok_or("file has no usable name")?.to_string(),
         };
         safe_name(&name).map_err(|_| "file name not allowed".to_string())?;
-        let size = std::fs::File::open(path).and_then(|f| f.metadata()).map_err(|e| format!("cannot read file: {e}"))?.len();
+        let size = crate::transfer::open_source(path).and_then(|f| f.metadata()).map_err(|e| format!("cannot read file: {e}"))?.len();
         let id = random_id();
         let x = Arc::new(Xfer {
             id: id.clone(),
