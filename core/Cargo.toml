@@ -1,0 +1,15 @@
+[package]
+name = "pb-core"
+version = "0.0.1"
+edition = "2021"
+description = "phonebridge core: protocol framing, identity, pairing, transfer (no UI)"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+serde_json = "1"
+# `ring` provider: no CMake/NASM needed on Windows (aws-lc-rs would need them).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
+sha2 = "0.10"
+x509-parser = "0.18"
