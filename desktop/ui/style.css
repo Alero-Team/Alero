@@ -1,0 +1,51 @@
+/* Palette from the ui-ux-pro-max "flat design" suggestion; system fonts only (no network, no bundled font yet). */
+:root {
+  --primary: #2563eb; --on-primary: #fff;
+  --bg: #f8fafc; --fg: #0f172a; --card: #fff; --muted: #475569; --border: #e2e8f0; --danger: #dc2626; --ok: #15803d;
+  --drop: #dbeafe;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #60a5fa; --on-primary: #0b1220;
+    --bg: #0b1220; --fg: #e2e8f0; --card: #111a2b; --muted: #94a3b8; --border: #243049; --danger: #f87171; --ok: #4ade80;
+    --drop: #1e3a5f;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; display: flex; flex-direction: column; }
+header { padding: 16px 16px 0; border-bottom: 1px solid var(--border); }
+h1 { font-size: 20px; margin: 0 0 12px; }
+h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 20px 0 8px; font-weight: 600; }
+nav { display: flex; gap: 4px; }
+nav button { background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); padding: 8px 12px; font: inherit; cursor: pointer; }
+nav button[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+main { flex: 1; overflow-y: auto; padding: 8px 16px 24px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 8px 0; }
+.card.dropping { background: var(--drop); border-color: var(--primary); }
+.row { display: flex; align-items: center; gap: 8px; }
+.grow { flex: 1; min-width: 0; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { color: var(--muted); font-size: 12px; }
+.err { color: var(--danger); }
+.ok { color: var(--ok); }
+button.btn { font: inherit; cursor: pointer; border-radius: 8px; padding: 7px 14px; border: 1px solid var(--border); background: var(--card); color: var(--fg); }
+button.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-weight: 600; }
+button.link { background: none; border: 0; color: var(--primary); cursor: pointer; font: inherit; padding: 4px 6px; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+progress { width: 100%; height: 8px; accent-color: var(--primary); margin: 8px 0 2px; }
+input[type=text] { font: inherit; width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
+.empty { color: var(--muted); padding: 8px 2px; }
+.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.hint { margin-top: 8px; }
+#toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; max-width: 90%; opacity: 0; pointer-events: none; transition: opacity .2s; }
+#toast.show { opacity: 1; }
+#modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+#modal[hidden] { display: none; }
+.dialog { background: var(--card); border-radius: 12px; padding: 20px; max-width: 380px; width: 100%; border: 1px solid var(--border); }
+.dialog h3 { margin: 0 0 8px; font-size: 16px; }
+.code { font: 700 40px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .08em; margin: 14px 0; text-align: center; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.switch { display: flex; gap: 12px; align-items: center; }
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }

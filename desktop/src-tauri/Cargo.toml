@@ -1,0 +1,17 @@
+[package]
+name = "phonebridge-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "Phonebridge desktop app (alpha): thin Tauri shell over pb-core"
+license = "GPL-3.0-or-later"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+pb-core = { path = "../../core" }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+serde_json = "1"
