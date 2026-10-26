@@ -1,0 +1,18 @@
+# Obsidian: versionar solo la config compartida
+docs/.obsidian/workspace*.json
+docs/.obsidian/cache
+
+# Herramientas de desarrollo instaladas localmente (decisión de versionado pendiente, ver ADR)
+.claude/skills/ui-ux-pro-max/
+
+# Secretos y artefactos
+*.jks
+*.keystore
+*.pem
+*.key
+local.properties
+.env
+build/
+node_modules/
+target/
+.gradle/
