@@ -1,3 +1,11 @@
 [workspace]
-members = ["core", "cli"]
+members = ["core", "cli", "ffi", "desktop/src-tauri"]
 resolver = "2"
+
+# Shipped binaries should be small and quick to start.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

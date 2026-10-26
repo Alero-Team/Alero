@@ -16,3 +16,15 @@ build/
 node_modules/
 target/
 .gradle/
+
+# Android: generated or local
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+# Built from the Rust core by android/build-core.ps1
+android/app/src/main/jniLibs/
+android/app/src/main/java/uniffi/
+
+# Alpha builds for hand testing (not versioned)
+alpha/

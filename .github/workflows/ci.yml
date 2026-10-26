@@ -8,7 +8,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: cargo test --workspace
+      - run: cargo test -p pb-core -p pb-cli -p pb-ffi
       # The vectors file must be exactly what the independent Python generator produces.
       - if: matrix.os == 'ubuntu-latest'
         run: |

@@ -24,6 +24,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rustls::pki_types::ServerName;
 use rustls::{ClientConnection, ServerConfig, ServerConnection, StreamOwned};
+use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -41,7 +42,7 @@ const PAIR_TIMEOUT: Duration = Duration::from_secs(120);
 const OFFER_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_SEND_ATTEMPTS: u32 = 6;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum PeerState {
     Disconnected,
     Connecting,
@@ -50,7 +51,7 @@ pub enum PeerState {
     Rejected,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PeerView {
     pub id: String,
     pub name: String,
@@ -60,7 +61,8 @@ pub struct PeerView {
     pub detail: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type")]
 pub enum Event {
     PeerChanged { peer: PeerView },
     PeerGone { id: String },
@@ -936,6 +938,10 @@ impl Engine {
 
     pub fn port(&self) -> u16 {
         self.inner.port
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.my_name()
     }
 
     pub fn set_name(&self, name: &str) {

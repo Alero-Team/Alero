@@ -1,0 +1,24 @@
+[package]
+name = "pb-ffi"
+version = "0.0.1"
+edition = "2021"
+description = "UniFFI bindings of pb-core for the Android app"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+name = "pb_ffi"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+pb-core = { path = "../core" }
+uniffi = "0.32"
+
+[features]
+# `cargo run -p pb-ffi --features bindgen --bin uniffi-bindgen generate ...` builds the Kotlin bindings.
+bindgen = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+required-features = ["bindgen"]
