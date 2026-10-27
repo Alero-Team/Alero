@@ -28,3 +28,6 @@ android/app/src/main/java/uniffi/
 
 # Alpha builds for hand testing (not versioned)
 alpha/
+
+# Third-party design shots: local reference only, not ours to publish.
+docs/design/references/externas/
