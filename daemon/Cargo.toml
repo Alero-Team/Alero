@@ -1,0 +1,19 @@
+[package]
+name = "pb-daemon"
+version = "0.1.0"
+edition = "2021"
+description = "Phonebridge desktop tray daemon: owns the engine; the Flutter window is a client"
+license = "GPL-3.0-or-later"
+publish = false
+
+[[bin]]
+name = "pb_daemon"
+path = "src/main.rs"
+
+[dependencies]
+pb-core = { path = "../core" }
+serde_json = "1"
+# Same versions Tauri already pulled in (Cargo.lock): nothing new to download or review.
+tao = "0.37"
+tray-icon = "0.25"
+png = "0.18"
