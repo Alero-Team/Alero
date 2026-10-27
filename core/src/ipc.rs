@@ -47,6 +47,7 @@ pub enum Cmd {
     ClearHistory,
     Retry { id: String },
     Diagnostics,
+    SendMessage { peer: String, kind: String, body: Value },
     Subscribe,
 }
 
@@ -87,6 +88,7 @@ pub fn exec(e: &Engine, c: Cmd) -> Result<Value, String> {
         Cmd::ClearHistory => json!(e.clear_history()?),
         Cmd::Retry { id } => json!(e.retry(&id)?),
         Cmd::Diagnostics => json!(e.diagnostics()),
+        Cmd::SendMessage { peer, kind, body } => json!(e.send_message(&peer, &kind, body)?),
         Cmd::Subscribe => return Err("Subscribe solo vale como orden de conexión".into()),
     })
 }

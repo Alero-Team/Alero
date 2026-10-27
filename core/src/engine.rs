@@ -41,6 +41,10 @@ const PING_EVERY: Duration = Duration::from_secs(10);
 const PAIR_TIMEOUT: Duration = Duration::from_secs(120);
 const OFFER_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_SEND_ATTEMPTS: u32 = 6;
+/// A peer silent for this long is not dialed any more (it is off or away); hearing it again resumes at once.
+const STALE_PEER: Duration = Duration::from_secs(90);
+/// Phones announce rarely once settled (see discovery_loop).
+const QUIET_DISCOVERY: bool = cfg!(target_os = "android");
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PeerState {
@@ -75,6 +79,9 @@ pub enum Event {
     TransferNote { id: String, message: String },
     TransferFinished { id: String, ok: bool, code: String, message: String, path: String },
     Log { message: String },
+    /// An app message (`pb.x.*`) from a paired device: device info, clipboard, notifications, media…
+    /// The core only carries it; each app gives it meaning (Protocol.md §6).
+    Message { peer_id: String, kind: String, body: Value },
 }
 
 pub trait EventSink: Send + Sync {
@@ -244,6 +251,11 @@ fn clean(s: &str) -> String {
     s.chars().filter(|c| !c.is_control()).take(64).collect::<String>().trim().to_string()
 }
 
+/// App messages live in their own namespace so they can never be mistaken for protocol frames.
+fn app_kind(k: &str) -> bool {
+    k.len() <= 64 && k.starts_with("pb.x.") && k[5..].chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
+}
+
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
@@ -343,9 +355,10 @@ impl Inner {
         f(p)
     }
 
-    fn note_peer(&self, id: &str, name: &str, addr: Option<SocketAddr>) {
+    /// Records what we just heard about a peer. True when it is new, changed, or had been silent for a while.
+    fn note_peer(&self, id: &str, name: &str, addr: Option<SocketAddr>) -> bool {
         if id == self.id.device_id {
-            return;
+            return false;
         }
         let name = clean(name);
         let changed = self.with_peer(id, |p| {
@@ -363,6 +376,7 @@ impl Inner {
         if changed {
             self.changed(id);
         }
+        changed
     }
 
     fn set_state(&self, id: &str, state: PeerState, detail: &str) {
@@ -463,7 +477,7 @@ impl Inner {
         }
         let ok = match kind.as_str() {
             "pair" => true,
-            "control" | "data" => self.is_trusted(&peer_id),
+            "control" | "data" | "msg" => self.is_trusted(&peer_id),
             _ => false,
         };
         if !ok {
@@ -476,8 +490,34 @@ impl Inner {
         match kind.as_str() {
             "pair" => self.run_pair(tls, &peer_id, &name, true),
             "control" => self.run_control(tls, peer_id, false),
+            "msg" => self.run_msg_in(tls, &peer_id),
             _ => self.run_data_in(tls, &peer_id),
         }
+    }
+
+    // --- app messages ------------------------------------------------------------------------------------
+    // shortcut: one short TLS connection per message (a LAN handshake is a few ms); multiplex over the
+    // control connection if message rates grow (e.g. live media position).
+
+    fn run_msg_in(&self, mut tls: Tls, peer_id: &str) -> Result<(), String> {
+        tls.timeouts(Duration::from_secs(10));
+        let m = read_frame(&mut tls).map_err(|e| e.code().to_string())?;
+        let kind = m["type"].as_str().unwrap_or("");
+        if !app_kind(kind) {
+            let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PROTOCOL"}}));
+            return Err(format!("not an app message: {kind}"));
+        }
+        self.emit(Event::Message { peer_id: peer_id.into(), kind: kind.into(), body: m["body"].clone() });
+        write_frame(&mut tls, &json!({"type":"pb.ack","body":{}})).map_err(|e| e.code().to_string())
+    }
+
+    fn send_msg(&self, peer_id: &str, addr: SocketAddr, m: &Value) -> Result<(), String> {
+        let mut tls = self.dial(addr, Some(peer_id))?;
+        tls.timeouts(Duration::from_secs(10));
+        self.hello_out(&mut tls, "msg")?;
+        write_frame(&mut tls, m).map_err(|e| e.code().to_string())?;
+        let r = read_frame(&mut tls).map_err(|e| e.code().to_string())?;
+        if r["type"] == "pb.ack" { Ok(()) } else { Err(r["body"]["code"].as_str().unwrap_or("PROTOCOL").to_string()) }
     }
 
     // --- pairing -----------------------------------------------------------------------------------------
@@ -547,6 +587,8 @@ impl Inner {
             }
         };
         if mine {
+            // Dropped just now: keep redialing for a while (a Wi-Fi blip), then give up until it is heard again.
+            self.with_peer(&peer_id, |p| p.seen = Instant::now());
             let detail = if self.is_trusted(&peer_id) { "connection lost" } else { "" };
             self.set_state(&peer_id, PeerState::Disconnected, detail);
         }
@@ -600,6 +642,9 @@ impl Inner {
                         return None;
                     }
                     let addr = p.addr?;
+                    if p.seen.elapsed() > STALE_PEER {
+                        return None; // off or away: wait to hear it instead of dialing a dead address forever
+                    }
                     let now = Instant::now();
                     let since = *p.wait_since.get_or_insert(now);
                     // The lower id dials at once; the other waits a moment so we do not dial each other.
@@ -616,7 +661,7 @@ impl Inner {
                     thread::spawn(move || me.dial_control(id, addr));
                 }
             }
-            thread::sleep(Duration::from_millis(500));
+            thread::sleep(Duration::from_millis(1000));
         }
     }
 
@@ -809,21 +854,25 @@ impl Inner {
             }
         };
         let _ = sock.set_broadcast(true);
-        let _ = sock.set_read_timeout(Some(Duration::from_millis(500)));
+        let _ = sock.set_read_timeout(Some(Duration::from_secs(1)));
         *lk(&self.disco_status) = format!("discovery on UDP {}", self.discovery_port);
+        let started = Instant::now();
         let mut next = Instant::now();
         let mut buf = [0u8; 1024];
+        let announce = |to: SocketAddr| {
+            let msg = json!({"type":"pb.announce","body":{"id":self.id.device_id,"name":self.my_name(),"port":self.port,"protocol":PROTOCOL}});
+            let _ = sock.send_to(msg.to_string().as_bytes(), to);
+        };
         while !self.stop.load(Ordering::Relaxed) {
             if Instant::now() >= next {
-                next = Instant::now() + Duration::from_secs(4);
-                let msg = json!({"type":"pb.announce","body":{"id":self.id.device_id,"name":self.my_name(),"port":self.port,"protocol":PROTOCOL}}).to_string();
-                let mut targets = vec![SocketAddr::from((Ipv4Addr::BROADCAST, self.discovery_port))];
+                // A phone only shouts for its first minutes; after that it listens and answers whoever appears
+                // (battery, and no endless "searching" when the computer is off). Desktops keep the fast cadence.
+                let quiet = QUIET_DISCOVERY && started.elapsed() > Duration::from_secs(120);
+                next = Instant::now() + Duration::from_secs(if quiet { 30 } else { 4 });
+                announce(SocketAddr::from((Ipv4Addr::BROADCAST, self.discovery_port)));
                 if let Some(ip) = primary_ip() {
                     let o = ip.octets();
-                    targets.push(SocketAddr::from((Ipv4Addr::new(o[0], o[1], o[2], 255), self.discovery_port)));
-                }
-                for t in targets {
-                    let _ = sock.send_to(msg.as_bytes(), t);
+                    announce(SocketAddr::from((Ipv4Addr::new(o[0], o[1], o[2], 255), self.discovery_port)));
                 }
             }
             if let Ok((n, from)) = sock.recv_from(&mut buf) {
@@ -836,7 +885,10 @@ impl Inner {
                 if id.len() != 64 || port == 0 || port > 65535 {
                     continue;
                 }
-                self.note_peer(id, b["name"].as_str().unwrap_or(""), Some(SocketAddr::new(from.ip(), port as u16)));
+                // Someone new (or back after a silence): answer at once so they find us without waiting our slow cadence.
+                if self.note_peer(id, b["name"].as_str().unwrap_or(""), Some(SocketAddr::new(from.ip(), port as u16))) {
+                    announce(SocketAddr::new(from.ip(), self.discovery_port));
+                }
             }
         }
     }
@@ -983,6 +1035,12 @@ impl Engine {
             let r = (|| {
                 let mut tls = me.dial(addr, None)?;
                 let peer_id = tls.peer_id()?;
+                if me.is_trusted(&peer_id) {
+                    // Already paired: this address is one more route to it (USB cable, VPN). Dial it right away.
+                    me.note_peer(&peer_id, "", Some(addr));
+                    me.with_peer(&peer_id, |p| p.wait_since = Instant::now().checked_sub(Duration::from_secs(6)));
+                    return Ok(());
+                }
                 let name = me.hello_out(&mut tls, "pair")?;
                 me.note_peer(&peer_id, &name, Some(addr));
                 me.run_pair(tls, &peer_id, &name, false)
@@ -1045,6 +1103,29 @@ impl Engine {
         let p = path.to_path_buf();
         thread::spawn(move || me.run_send(x, p));
         Ok(id)
+    }
+
+    /// Sends an app message (`kind` must start with `pb.x.`) to a paired, reachable device. Returns at once;
+    /// delivery runs in the background and a failure is reported as a `Log` event.
+    pub fn send_message(&self, peer_id: &str, kind: &str, body: Value) -> Result<(), String> {
+        if !app_kind(kind) {
+            return Err("message kind must start with pb.x.".into());
+        }
+        if !self.inner.is_trusted(peer_id) {
+            return Err("that device is not paired".into());
+        }
+        let addr = self.inner.with_peer(peer_id, |p| p.addr).ok_or("that device has not been seen on the network")?;
+        let m = json!({"type": kind, "body": body});
+        if m.to_string().len() > crate::frame::MAX_BODY {
+            return Err("message too large".into());
+        }
+        let (me, id, kind) = (self.inner.clone(), peer_id.to_string(), kind.to_string());
+        thread::spawn(move || {
+            if let Err(e) = me.send_msg(&id, addr, &m) {
+                me.log(format!("{kind} to {id} failed: {e}"));
+            }
+        });
+        Ok(())
     }
 
     /// Answer a `TransferOffer`.

@@ -273,3 +273,33 @@ fn transfer_survives_the_receiver_dropping_and_resumes_by_itself() {
     assert_eq!(std::fs::metadata(&src).unwrap().len(), std::fs::metadata(&got).unwrap().len());
     assert_eq!(std::fs::read(&src).unwrap() == std::fs::read(&got).unwrap(), true, "byte-identical after resume");
 }
+
+#[test]
+fn app_messages_reach_paired_peers_only() {
+    let (a, b) = (node("alice", true), node("bob", true));
+    assert!(a.e.send_message(&b.e.device_id(), "pb.x.info", serde_json::json!({})).is_err(), "not paired yet");
+    pair(&a, &b);
+    connected(&a, &b);
+    assert!(a.e.send_message(&b.e.device_id(), "pb.ping", serde_json::json!({})).is_err(), "protocol namespace is off limits");
+    a.e.send_message(&b.e.device_id(), "pb.x.clip", serde_json::json!({"text": "hola"})).unwrap();
+    let a_id = a.e.device_id();
+    let text = b.s.wait(10, |e| match e {
+        Event::Message { peer_id, kind, body } if *peer_id == a_id && kind == "pb.x.clip" => body["text"].as_str().map(String::from),
+        _ => None,
+    });
+    assert_eq!(text, "hola");
+}
+
+#[test]
+fn linking_a_paired_address_adds_a_route_without_pairing_again() {
+    let (a, b) = (node("a", true), node("b", true));
+    pair(&a, &b);
+    connected(&a, &b);
+    let from = a.s.mark();
+    // The cable case: the user (or the app) points at an address of a device that is already paired.
+    a.e.pair_with_addr(&format!("127.0.0.1:{}", b.e.port())).unwrap();
+    std::thread::sleep(Duration::from_secs(2));
+    let again = a.s.ev.lock().unwrap().iter().skip(from).any(|e| matches!(e, Event::PairRequest { .. }));
+    assert!(!again, "an already paired device must not ask for a new code");
+    assert!(a.e.peers().iter().any(|p| p.id == b.e.device_id() && p.trusted && p.state == PeerState::Connected));
+}

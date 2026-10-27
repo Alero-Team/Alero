@@ -122,6 +122,8 @@ fn event(e: core::Event) -> Event {
         E::TransferNote { id, message } => Event::TransferNote { id, message },
         E::TransferFinished { id, ok, code, message, path } => Event::TransferFinished { id, ok, code, message, path },
         E::Log { message } => Event::Log { message },
+        // Legacy alpha UI: app messages (pb.x.*) are not used here.
+        E::Message { kind, .. } => Event::Log { message: format!("app message {kind}") },
     }
 }
 
