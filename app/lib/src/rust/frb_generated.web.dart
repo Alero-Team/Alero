@@ -90,9 +90,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
-  RustStreamSink<Event> sse_decode_StreamSink_event_Sse(
-    SseDeserializer deserializer,
-  );
+  RustStreamSink<Event> sse_decode_StreamSink_event_Sse(SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -152,16 +150,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
-    SseSerializer serializer,
-  );
+  void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer);
 
   @protected
-  void sse_encode_StreamSink_event_Sse(
-    RustStreamSink<Event> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_StreamSink_event_Sse(RustStreamSink<Event> self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -191,19 +183,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_history_item(
-    List<HistoryItem> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_history_item(List<HistoryItem> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_peer(List<Peer> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_prim_u_8_strict(
-    Uint8List self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);

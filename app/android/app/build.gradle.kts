@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.phonebridge.pb_app"
+    namespace = "dev.alero.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "29.0.14206865" // the NDK installed for the Rust core
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.phonebridge.pb_app"
+        applicationId = "dev.alero.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 26
@@ -35,6 +35,10 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // Smaller and faster to load: R8 shrinks code, unused resources go. Rules keep the JNI entry points.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
@@ -47,4 +51,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // QR pairing scanner: Apache-2.0, plain ZXing, no Google Play services.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

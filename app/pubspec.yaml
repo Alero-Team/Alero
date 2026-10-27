@@ -7,12 +7,17 @@ environment:
   sdk: ^3.13.7
 
 dependencies:
+  animations: 3.0.0 # BSD-3, flutter.dev: Material transitions
+  desktop_drop: 0.8.4 # Apache-2.0; 0.9.x was a week old on 2026-10-27
+  dynamic_color: 2.1.0 # Apache-2.0, material.io: Android dynamic color, Windows accent
   file_selector: ^1.1.0
   flutter:
     sdk: flutter
   flutter_rust_bridge: 2.13.0
   freezed_annotation: ^3.1.0
+  material_symbols_icons: 4.2960.0 # Apache-2.0: Material Symbols Rounded
   path_provider: ^2.1.6
+  qr: 4.0.0 # BSD-3-Clause; QR pairing
   pb_bridge:
     path: rust_builder
   window_manager: ^0.5.2
@@ -28,3 +33,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+  fonts:
+    # Google Sans Flex, SIL OFL 1.1 (assets/fonts/OFL.txt). Variable: weight via FontVariation.
+    - family: GoogleSansFlex
+      fonts:
+        - asset: assets/fonts/GoogleSansFlex.ttf

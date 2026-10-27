@@ -31,3 +31,6 @@ alpha/
 
 # Third-party design shots: local reference only, not ours to publish.
 docs/design/references/externas/
+
+# Downloaded by tools/fetch-scrcpy.ps1 (pinned, hash-checked); not committed.
+third_party/

@@ -1,9 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
+class Shared {
+  Shared(this.files, this.text);
+  final List<Picked> files;
+  final String text;
+}
 
 class Picked {
   Picked(this.path, this.name, [this.fd]);
@@ -31,14 +37,61 @@ class Native {
 
   static void closeFd(int fd) => _ch.invokeMethod('closeFd', fd);
 
-  /// Android: moves a received file to Downloads/Phonebridge and returns where it went. Desktop: already there.
+  /// Android share menu: what another app shared with us, once.
+  static Future<Shared?> takeShared() async {
+    if (!_android) return null;
+    final m = await _ch.invokeMapMethod<String, Object?>('takeShared');
+    if (m == null) return null;
+    final files = [
+      for (final f in (m['files'] as List? ?? []))
+        if (f is Map) Picked('fd:${f['fd']}', f['name'] as String, f['fd'] as int),
+    ];
+    return Shared(files, m['text'] as String? ?? '');
+  }
+
+  /// Called when Android hands us a new share while the app is open.
+  static void onShared(Future<void> Function() f) {
+    if (!_android) return;
+    _ch.setMethodCallHandler((call) async {
+      if (call.method == 'shared') await f();
+    });
+  }
+
+  /// Android special access for notifications and media sessions (granted in system settings).
+  static Future<bool> notifAccess() async => _android && (await _ch.invokeMethod<bool>('notifAccess') ?? false);
+  static Future<void> openNotifAccess() async => _android ? _ch.invokeMethod('openNotifAccess') : null;
+  static Future<bool> notifPermission() async => !_android || (await _ch.invokeMethod<bool>('notifPermission') ?? true);
+  static Future<void> openAppSettings() async => _android ? _ch.invokeMethod('openAppSettings') : null;
+  static Future<void> openTethering() async => _android ? _ch.invokeMethod('openTethering') : null;
+  static Future<void> openDevSettings() async => _android ? _ch.invokeMethod('openDevSettings') : null;
+
+  /// Android: scans a QR with the camera (ZXing, no Google services). null if cancelled.
+  static Future<String?> scanQr() async => _android ? _ch.invokeMethod<String>('scanQr') : null;
+
+  /// Android: pick an image (no permission: the system picker) to show as this phone's wallpaper on the computer.
+  static Future<bool> pickWallpaper() async => _android && (await _ch.invokeMethod<bool>('pickWallpaper') ?? false);
+  static Future<void> clearWallpaper() async => _android ? _ch.invokeMethod('clearWallpaper') : null;
+  static Future<bool> hasWallpaper() async {
+    final j = await deviceInfo();
+    return j != null && jsonDecode(j)['wallpaper']?['custom'] == true;
+  }
+
+  /// This phone's own info (same JSON it sends as `pb.x.info`).
+  static Future<String?> deviceInfo() async => _android ? _ch.invokeMethod<String>('deviceInfo') : null;
+
+  static Future<void> openFolder(String path) async {
+    if (_android) return _ch.invokeMethod('openDownloads');
+    Directory(path).createSync(recursive: true);
+    await Process.start(Platform.isWindows ? 'explorer' : 'xdg-open', [path]);
+  }
+
+  /// Android: moves a received file to Downloads/Alero and returns where it went. Desktop: already there.
   static Future<String> publish(String path) async =>
       _android ? await _ch.invokeMethod<String>('publish', path) ?? '' : '';
 
-  /// Android: text of the ongoing service notification.
-  static void status(String text) {
-    if (_android) _ch.invokeMethod('status', text);
-  }
+  /// Android: keep listening in the background even with no computer connected (adds a silent notification).
+  static Future<bool> background() async => _android && (await _ch.invokeMethod<bool>('background') ?? false);
+  static Future<void> setBackground(bool on) async => _android ? _ch.invokeMethod('setBackground', on) : null;
 
   /// Something needs the user: a notification on Android, the window comes up on desktop.
   static void alert(String title, String text) {
@@ -59,7 +112,7 @@ class Native {
     if (_android) return;
     await windowManager.ensureInitialized();
     await windowManager.waitUntilReadyToShow(
-      const WindowOptions(title: 'Phonebridge', size: Size(900, 680), minimumSize: Size(420, 480)),
+      const WindowOptions(title: 'Alero', size: Size(900, 680), minimumSize: Size(420, 480)),
       () => windowManager.show(),
     );
   }

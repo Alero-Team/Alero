@@ -56,7 +56,7 @@ extension EventPatterns on Event {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( Event_PeerChanged value)?  peerChanged,TResult Function( Event_PeerGone value)?  peerGone,TResult Function( Event_PairRequest value)?  pairRequest,TResult Function( Event_PairFinished value)?  pairFinished,TResult Function( Event_TransferOffer value)?  transferOffer,TResult Function( Event_TransferStarted value)?  transferStarted,TResult Function( Event_TransferProgress value)?  transferProgress,TResult Function( Event_TransferNote value)?  transferNote,TResult Function( Event_TransferFinished value)?  transferFinished,TResult Function( Event_Log value)?  log,TResult Function( Event_Show value)?  show_,TResult Function( Event_Quit value)?  quit,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( Event_PeerChanged value)?  peerChanged,TResult Function( Event_PeerGone value)?  peerGone,TResult Function( Event_PairRequest value)?  pairRequest,TResult Function( Event_PairFinished value)?  pairFinished,TResult Function( Event_TransferOffer value)?  transferOffer,TResult Function( Event_TransferStarted value)?  transferStarted,TResult Function( Event_TransferProgress value)?  transferProgress,TResult Function( Event_TransferNote value)?  transferNote,TResult Function( Event_TransferFinished value)?  transferFinished,TResult Function( Event_Log value)?  log,TResult Function( Event_Message value)?  message,TResult Function( Event_Show value)?  show_,TResult Function( Event_Quit value)?  quit,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case Event_PeerChanged() when peerChanged != null:
@@ -69,7 +69,8 @@ return transferStarted(_that);case Event_TransferProgress() when transferProgres
 return transferProgress(_that);case Event_TransferNote() when transferNote != null:
 return transferNote(_that);case Event_TransferFinished() when transferFinished != null:
 return transferFinished(_that);case Event_Log() when log != null:
-return log(_that);case Event_Show() when show_ != null:
+return log(_that);case Event_Message() when message != null:
+return message(_that);case Event_Show() when show_ != null:
 return show_(_that);case Event_Quit() when quit != null:
 return quit(_that);case _:
   return orElse();
@@ -89,7 +90,7 @@ return quit(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( Event_PeerChanged value)  peerChanged,required TResult Function( Event_PeerGone value)  peerGone,required TResult Function( Event_PairRequest value)  pairRequest,required TResult Function( Event_PairFinished value)  pairFinished,required TResult Function( Event_TransferOffer value)  transferOffer,required TResult Function( Event_TransferStarted value)  transferStarted,required TResult Function( Event_TransferProgress value)  transferProgress,required TResult Function( Event_TransferNote value)  transferNote,required TResult Function( Event_TransferFinished value)  transferFinished,required TResult Function( Event_Log value)  log,required TResult Function( Event_Show value)  show_,required TResult Function( Event_Quit value)  quit,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( Event_PeerChanged value)  peerChanged,required TResult Function( Event_PeerGone value)  peerGone,required TResult Function( Event_PairRequest value)  pairRequest,required TResult Function( Event_PairFinished value)  pairFinished,required TResult Function( Event_TransferOffer value)  transferOffer,required TResult Function( Event_TransferStarted value)  transferStarted,required TResult Function( Event_TransferProgress value)  transferProgress,required TResult Function( Event_TransferNote value)  transferNote,required TResult Function( Event_TransferFinished value)  transferFinished,required TResult Function( Event_Log value)  log,required TResult Function( Event_Message value)  message,required TResult Function( Event_Show value)  show_,required TResult Function( Event_Quit value)  quit,}){
 final _that = this;
 switch (_that) {
 case Event_PeerChanged():
@@ -102,7 +103,8 @@ return transferStarted(_that);case Event_TransferProgress():
 return transferProgress(_that);case Event_TransferNote():
 return transferNote(_that);case Event_TransferFinished():
 return transferFinished(_that);case Event_Log():
-return log(_that);case Event_Show():
+return log(_that);case Event_Message():
+return message(_that);case Event_Show():
 return show_(_that);case Event_Quit():
 return quit(_that);}
 }
@@ -118,7 +120,7 @@ return quit(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( Event_PeerChanged value)?  peerChanged,TResult? Function( Event_PeerGone value)?  peerGone,TResult? Function( Event_PairRequest value)?  pairRequest,TResult? Function( Event_PairFinished value)?  pairFinished,TResult? Function( Event_TransferOffer value)?  transferOffer,TResult? Function( Event_TransferStarted value)?  transferStarted,TResult? Function( Event_TransferProgress value)?  transferProgress,TResult? Function( Event_TransferNote value)?  transferNote,TResult? Function( Event_TransferFinished value)?  transferFinished,TResult? Function( Event_Log value)?  log,TResult? Function( Event_Show value)?  show_,TResult? Function( Event_Quit value)?  quit,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( Event_PeerChanged value)?  peerChanged,TResult? Function( Event_PeerGone value)?  peerGone,TResult? Function( Event_PairRequest value)?  pairRequest,TResult? Function( Event_PairFinished value)?  pairFinished,TResult? Function( Event_TransferOffer value)?  transferOffer,TResult? Function( Event_TransferStarted value)?  transferStarted,TResult? Function( Event_TransferProgress value)?  transferProgress,TResult? Function( Event_TransferNote value)?  transferNote,TResult? Function( Event_TransferFinished value)?  transferFinished,TResult? Function( Event_Log value)?  log,TResult? Function( Event_Message value)?  message,TResult? Function( Event_Show value)?  show_,TResult? Function( Event_Quit value)?  quit,}){
 final _that = this;
 switch (_that) {
 case Event_PeerChanged() when peerChanged != null:
@@ -131,7 +133,8 @@ return transferStarted(_that);case Event_TransferProgress() when transferProgres
 return transferProgress(_that);case Event_TransferNote() when transferNote != null:
 return transferNote(_that);case Event_TransferFinished() when transferFinished != null:
 return transferFinished(_that);case Event_Log() when log != null:
-return log(_that);case Event_Show() when show_ != null:
+return log(_that);case Event_Message() when message != null:
+return message(_that);case Event_Show() when show_ != null:
 return show_(_that);case Event_Quit() when quit != null:
 return quit(_that);case _:
   return null;
@@ -150,7 +153,7 @@ return quit(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Peer peer)?  peerChanged,TResult Function( String id)?  peerGone,TResult Function( String peerId,  String name,  String code,  bool incoming)?  pairRequest,TResult Function( String peerId,  String name,  bool ok,  String code,  String message)?  pairFinished,TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size)?  transferOffer,TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size,  bool incoming)?  transferStarted,TResult Function( String id,  BigInt done,  BigInt total,  BigInt bytesPerSec)?  transferProgress,TResult Function( String id,  String message)?  transferNote,TResult Function( String id,  bool ok,  String code,  String message,  String path)?  transferFinished,TResult Function( String message)?  log,TResult Function()?  show_,TResult Function()?  quit,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( Peer peer)?  peerChanged,TResult Function( String id)?  peerGone,TResult Function( String peerId,  String name,  String code,  bool incoming)?  pairRequest,TResult Function( String peerId,  String name,  bool ok,  String code,  String message)?  pairFinished,TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size)?  transferOffer,TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size,  bool incoming)?  transferStarted,TResult Function( String id,  BigInt done,  BigInt total,  BigInt bytesPerSec)?  transferProgress,TResult Function( String id,  String message)?  transferNote,TResult Function( String id,  bool ok,  String code,  String message,  String path)?  transferFinished,TResult Function( String message)?  log,TResult Function( String peerId,  String kind,  String body)?  message,TResult Function()?  show_,TResult Function()?  quit,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case Event_PeerChanged() when peerChanged != null:
 return peerChanged(_that.peer);case Event_PeerGone() when peerGone != null:
@@ -162,7 +165,8 @@ return transferStarted(_that.id,_that.peerId,_that.peerName,_that.name,_that.siz
 return transferProgress(_that.id,_that.done,_that.total,_that.bytesPerSec);case Event_TransferNote() when transferNote != null:
 return transferNote(_that.id,_that.message);case Event_TransferFinished() when transferFinished != null:
 return transferFinished(_that.id,_that.ok,_that.code,_that.message,_that.path);case Event_Log() when log != null:
-return log(_that.message);case Event_Show() when show_ != null:
+return log(_that.message);case Event_Message() when message != null:
+return message(_that.peerId,_that.kind,_that.body);case Event_Show() when show_ != null:
 return show_();case Event_Quit() when quit != null:
 return quit();case _:
   return orElse();
@@ -182,7 +186,7 @@ return quit();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Peer peer)  peerChanged,required TResult Function( String id)  peerGone,required TResult Function( String peerId,  String name,  String code,  bool incoming)  pairRequest,required TResult Function( String peerId,  String name,  bool ok,  String code,  String message)  pairFinished,required TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size)  transferOffer,required TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size,  bool incoming)  transferStarted,required TResult Function( String id,  BigInt done,  BigInt total,  BigInt bytesPerSec)  transferProgress,required TResult Function( String id,  String message)  transferNote,required TResult Function( String id,  bool ok,  String code,  String message,  String path)  transferFinished,required TResult Function( String message)  log,required TResult Function()  show_,required TResult Function()  quit,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( Peer peer)  peerChanged,required TResult Function( String id)  peerGone,required TResult Function( String peerId,  String name,  String code,  bool incoming)  pairRequest,required TResult Function( String peerId,  String name,  bool ok,  String code,  String message)  pairFinished,required TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size)  transferOffer,required TResult Function( String id,  String peerId,  String peerName,  String name,  BigInt size,  bool incoming)  transferStarted,required TResult Function( String id,  BigInt done,  BigInt total,  BigInt bytesPerSec)  transferProgress,required TResult Function( String id,  String message)  transferNote,required TResult Function( String id,  bool ok,  String code,  String message,  String path)  transferFinished,required TResult Function( String message)  log,required TResult Function( String peerId,  String kind,  String body)  message,required TResult Function()  show_,required TResult Function()  quit,}) {final _that = this;
 switch (_that) {
 case Event_PeerChanged():
 return peerChanged(_that.peer);case Event_PeerGone():
@@ -194,7 +198,8 @@ return transferStarted(_that.id,_that.peerId,_that.peerName,_that.name,_that.siz
 return transferProgress(_that.id,_that.done,_that.total,_that.bytesPerSec);case Event_TransferNote():
 return transferNote(_that.id,_that.message);case Event_TransferFinished():
 return transferFinished(_that.id,_that.ok,_that.code,_that.message,_that.path);case Event_Log():
-return log(_that.message);case Event_Show():
+return log(_that.message);case Event_Message():
+return message(_that.peerId,_that.kind,_that.body);case Event_Show():
 return show_();case Event_Quit():
 return quit();}
 }
@@ -210,7 +215,7 @@ return quit();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Peer peer)?  peerChanged,TResult? Function( String id)?  peerGone,TResult? Function( String peerId,  String name,  String code,  bool incoming)?  pairRequest,TResult? Function( String peerId,  String name,  bool ok,  String code,  String message)?  pairFinished,TResult? Function( String id,  String peerId,  String peerName,  String name,  BigInt size)?  transferOffer,TResult? Function( String id,  String peerId,  String peerName,  String name,  BigInt size,  bool incoming)?  transferStarted,TResult? Function( String id,  BigInt done,  BigInt total,  BigInt bytesPerSec)?  transferProgress,TResult? Function( String id,  String message)?  transferNote,TResult? Function( String id,  bool ok,  String code,  String message,  String path)?  transferFinished,TResult? Function( String message)?  log,TResult? Function()?  show_,TResult? Function()?  quit,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( Peer peer)?  peerChanged,TResult? Function( String id)?  peerGone,TResult? Function( String peerId,  String name,  String code,  bool incoming)?  pairRequest,TResult? Function( String peerId,  String name,  bool ok,  String code,  String message)?  pairFinished,TResult? Function( String id,  String peerId,  String peerName,  String name,  BigInt size)?  transferOffer,TResult? Function( String id,  String peerId,  String peerName,  String name,  BigInt size,  bool incoming)?  transferStarted,TResult? Function( String id,  BigInt done,  BigInt total,  BigInt bytesPerSec)?  transferProgress,TResult? Function( String id,  String message)?  transferNote,TResult? Function( String id,  bool ok,  String code,  String message,  String path)?  transferFinished,TResult? Function( String message)?  log,TResult? Function( String peerId,  String kind,  String body)?  message,TResult? Function()?  show_,TResult? Function()?  quit,}) {final _that = this;
 switch (_that) {
 case Event_PeerChanged() when peerChanged != null:
 return peerChanged(_that.peer);case Event_PeerGone() when peerGone != null:
@@ -222,7 +227,8 @@ return transferStarted(_that.id,_that.peerId,_that.peerName,_that.name,_that.siz
 return transferProgress(_that.id,_that.done,_that.total,_that.bytesPerSec);case Event_TransferNote() when transferNote != null:
 return transferNote(_that.id,_that.message);case Event_TransferFinished() when transferFinished != null:
 return transferFinished(_that.id,_that.ok,_that.code,_that.message,_that.path);case Event_Log() when log != null:
-return log(_that.message);case Event_Show() when show_ != null:
+return log(_that.message);case Event_Message() when message != null:
+return message(_that.peerId,_that.kind,_that.body);case Event_Show() when show_ != null:
 return show_();case Event_Quit() when quit != null:
 return quit();case _:
   return null;
@@ -953,6 +959,78 @@ class _$Event_LogCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') $Res call({Object? message = null,}) {
   return _then(Event_Log(
 message: null == message ? _self.message : message // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class Event_Message extends Event {
+  const Event_Message({required this.peerId, required this.kind, required this.body}): super._();
+  
+
+ final  String peerId;
+ final  String kind;
+ final  String body;
+
+/// Create a copy of Event
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$Event_MessageCopyWith<Event_Message> get copyWith => _$Event_MessageCopyWithImpl<Event_Message>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is Event_Message&&(identical(other.peerId, peerId) || other.peerId == peerId)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.body, body) || other.body == body));
+}
+
+
+@override
+int get hashCode {
+    return Object.hash(runtimeType,peerId,kind,body);
+}
+
+@override
+String toString() {
+    return 'Event.message(peerId: $peerId, kind: $kind, body: $body)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $Event_MessageCopyWith<$Res> implements $EventCopyWith<$Res> {
+  factory $Event_MessageCopyWith(Event_Message value, $Res Function(Event_Message) _then) = _$Event_MessageCopyWithImpl;
+@useResult
+$Res call({
+ String peerId, String kind, String body
+});
+
+
+
+
+}
+/// @nodoc
+class _$Event_MessageCopyWithImpl<$Res>
+    implements $Event_MessageCopyWith<$Res> {
+  _$Event_MessageCopyWithImpl(this._self, this._then);
+
+  final Event_Message _self;
+  final $Res Function(Event_Message) _then;
+
+/// Create a copy of Event
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? peerId = null,Object? kind = null,Object? body = null,}) {
+  return _then(Event_Message(
+peerId: null == peerId ? _self.peerId : peerId // ignore: cast_nullable_to_non_nullable
+as String,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
+as String,body: null == body ? _self.body : body // ignore: cast_nullable_to_non_nullable
 as String,
   ));
 }

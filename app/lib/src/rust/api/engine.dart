@@ -15,8 +15,7 @@ part 'engine.freezed.dart';
 
 /// Starts the engine (Android) or connects to the daemon, starting it if needed (desktop). No-op if already
 /// done. Returns this device's id.
-Future<String> start({required Config config}) =>
-    RustLib.instance.api.crateApiEngineStart(config: config);
+Future<String> start({required Config config}) => RustLib.instance.api.crateApiEngineStart(config: config);
 
 /// Engine events for the current UI. Calling it again replaces the previous listener.
 Stream<Event> events() => RustLib.instance.api.crateApiEngineEvents();
@@ -28,59 +27,43 @@ int defaultPort() => RustLib.instance.api.crateApiEngineDefaultPort();
 
 Future<String> deviceName() => RustLib.instance.api.crateApiEngineDeviceName();
 
-Future<void> setName({required String name}) =>
-    RustLib.instance.api.crateApiEngineSetName(name: name);
+Future<void> setName({required String name}) => RustLib.instance.api.crateApiEngineSetName(name: name);
 
-Future<void> setAutoAccept({required bool on_}) =>
-    RustLib.instance.api.crateApiEngineSetAutoAccept(on_: on_);
+Future<void> setAutoAccept({required bool on_}) => RustLib.instance.api.crateApiEngineSetAutoAccept(on_: on_);
 
 Future<List<Peer>> peers() => RustLib.instance.api.crateApiEnginePeers();
 
-Future<void> pairWithPeer({required String peerId}) =>
-    RustLib.instance.api.crateApiEnginePairWithPeer(peerId: peerId);
+Future<void> pairWithPeer({required String peerId}) => RustLib.instance.api.crateApiEnginePairWithPeer(peerId: peerId);
 
-Future<void> pairWithAddr({required String addr}) =>
-    RustLib.instance.api.crateApiEnginePairWithAddr(addr: addr);
+Future<void> pairWithAddr({required String addr}) => RustLib.instance.api.crateApiEnginePairWithAddr(addr: addr);
 
 Future<void> respondPair({required String peerId, required bool accept}) =>
-    RustLib.instance.api.crateApiEngineRespondPair(
-      peerId: peerId,
-      accept: accept,
-    );
+    RustLib.instance.api.crateApiEngineRespondPair(peerId: peerId, accept: accept);
 
-Future<void> revoke({required String peerId}) =>
-    RustLib.instance.api.crateApiEngineRevoke(peerId: peerId);
+Future<void> revoke({required String peerId}) => RustLib.instance.api.crateApiEngineRevoke(peerId: peerId);
 
 /// `path` may be `fd:N` (Android: a descriptor the app opened for a content URI); `display_name` is then required.
 /// Returns the transfer id.
-Future<String> sendFile({
-  required String peerId,
-  required String path,
-  String? displayName,
-}) => RustLib.instance.api.crateApiEngineSendFile(
-  peerId: peerId,
-  path: path,
-  displayName: displayName,
-);
+Future<String> sendFile({required String peerId, required String path, String? displayName}) =>
+    RustLib.instance.api.crateApiEngineSendFile(peerId: peerId, path: path, displayName: displayName);
 
 Future<void> respondTransfer({required String id, required bool accept}) =>
     RustLib.instance.api.crateApiEngineRespondTransfer(id: id, accept: accept);
 
-Future<void> cancelTransfer({required String id}) =>
-    RustLib.instance.api.crateApiEngineCancelTransfer(id: id);
+Future<void> cancelTransfer({required String id}) => RustLib.instance.api.crateApiEngineCancelTransfer(id: id);
 
-Future<List<HistoryItem>> history() =>
-    RustLib.instance.api.crateApiEngineHistory();
+Future<List<HistoryItem>> history() => RustLib.instance.api.crateApiEngineHistory();
 
-Future<void> clearHistory() =>
-    RustLib.instance.api.crateApiEngineClearHistory();
+Future<void> clearHistory() => RustLib.instance.api.crateApiEngineClearHistory();
 
 /// Returns the new transfer id.
-Future<String> retry({required String historyId}) =>
-    RustLib.instance.api.crateApiEngineRetry(historyId: historyId);
+Future<String> retry({required String historyId}) => RustLib.instance.api.crateApiEngineRetry(historyId: historyId);
 
-Future<List<String>> diagnostics() =>
-    RustLib.instance.api.crateApiEngineDiagnostics();
+/// Sends an app message; `body` is JSON text.
+Future<void> sendMessage({required String peerId, required String kind, required String body}) =>
+    RustLib.instance.api.crateApiEngineSendMessage(peerId: peerId, kind: kind, body: body);
+
+Future<List<String>> diagnostics() => RustLib.instance.api.crateApiEngineDiagnostics();
 
 class Config {
   final String dataDir;
@@ -161,10 +144,7 @@ sealed class Event with _$Event {
     required BigInt total,
     required BigInt bytesPerSec,
   }) = Event_TransferProgress;
-  const factory Event.transferNote({
-    required String id,
-    required String message,
-  }) = Event_TransferNote;
+  const factory Event.transferNote({required String id, required String message}) = Event_TransferNote;
   const factory Event.transferFinished({
     required String id,
     required bool ok,
@@ -173,6 +153,9 @@ sealed class Event with _$Event {
     required String path,
   }) = Event_TransferFinished;
   const factory Event.log({required String message}) = Event_Log;
+
+  /// App message from a paired device (`pb.x.*`); `body` is JSON text.
+  const factory Event.message({required String peerId, required String kind, required String body}) = Event_Message;
 
   /// Desktop: the tray asks to bring the window up.
   const factory Event.show_() = Event_Show;
@@ -260,13 +243,7 @@ class Peer {
   });
 
   @override
-  int get hashCode =>
-      id.hashCode ^
-      name.hashCode ^
-      addr.hashCode ^
-      state.hashCode ^
-      trusted.hashCode ^
-      detail.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ addr.hashCode ^ state.hashCode ^ trusted.hashCode ^ detail.hashCode;
 
   @override
   bool operator ==(Object other) =>

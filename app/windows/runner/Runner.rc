@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.phonebridge" "\0"
-            VALUE "FileDescription", "pb_app" "\0"
+            VALUE "CompanyName", "Alero" "\0"
+            VALUE "FileDescription", "Alero" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "pb_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.phonebridge. All rights reserved." "\0"
-            VALUE "OriginalFilename", "pb_app.exe" "\0"
-            VALUE "ProductName", "pb_app" "\0"
+            VALUE "InternalName", "Alero" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 the Alero authors. GPL-3.0-or-later." "\0"
+            VALUE "OriginalFilename", "alero.exe" "\0"
+            VALUE "ProductName", "Alero" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

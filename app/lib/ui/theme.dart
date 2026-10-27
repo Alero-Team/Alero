@@ -1,7 +1,10 @@
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Design tokens (G5). Neutral solid surfaces and one lime accent. Every text/indicator pair was measured
-/// against WCAG AA (see docs/design/Sistema.md); change a color only after re-measuring.
+/// Design tokens (G5 v3). Colors come from the system: Material You on Android, the accent color on Windows.
+/// Every role below is a Material 3 scheme role, whose tone pairs are built for ≥ 4.5:1 text contrast
+/// (checked for several accents in test/contrast_test.dart).
 class Palette extends ThemeExtension<Palette> {
   const Palette({
     required this.bg,
@@ -11,53 +14,37 @@ class Palette extends ThemeExtension<Palette> {
     required this.muted,
     required this.line,
     required this.accent,
+    required this.onAccent,
     required this.signal,
     required this.danger,
     required this.primary,
     required this.onPrimary,
   });
 
+  factory Palette.of(ColorScheme s) => Palette(
+    bg: s.surface,
+    surface: s.surfaceContainerLow,
+    alt: s.surfaceContainerHighest,
+    ink: s.onSurface,
+    muted: s.onSurfaceVariant,
+    line: s.outlineVariant,
+    accent: s.primaryContainer,
+    onAccent: s.onPrimaryContainer,
+    signal: s.primary,
+    danger: s.error,
+    primary: s.primary,
+    onPrimary: s.onPrimary,
+  );
+
   final Color bg, surface, alt, ink, muted, line;
 
-  /// Lime fill (selected nav, highlights). Text on it is always [onAccent].
-  final Color accent;
+  /// Tonal accent fill (selected nav, highlights) and the text/icon color that goes on it.
+  final Color accent, onAccent;
 
-  /// Lime that is readable on surfaces: connected dot, progress, success icons.
+  /// Accent readable on surfaces: connected dot, progress, success icons.
   final Color signal;
   final Color danger;
-
-  /// Main call to action: ink pill in light, lime pill in dark.
   final Color primary, onPrimary;
-
-  static const onAccent = Color(0xFF111111);
-
-  static const light = Palette(
-    bg: Color(0xFFF3F3F0),
-    surface: Color(0xFFFFFFFF),
-    alt: Color(0xFFEBEBE6),
-    ink: Color(0xFF111111),
-    muted: Color(0xFF5C5C57),
-    line: Color(0xFFD9D9D3),
-    accent: Color(0xFFC8F031),
-    signal: Color(0xFF3D6B0B),
-    danger: Color(0xFFB42318),
-    primary: Color(0xFF111111),
-    onPrimary: Color(0xFFFFFFFF),
-  );
-
-  static const dark = Palette(
-    bg: Color(0xFF0C0C0D),
-    surface: Color(0xFF18181A),
-    alt: Color(0xFF242427),
-    ink: Color(0xFFF2F2EF),
-    muted: Color(0xFFA3A39D),
-    line: Color(0xFF34343A),
-    accent: Color(0xFFC8F031),
-    signal: Color(0xFFC8F031),
-    danger: Color(0xFFFF8A7A),
-    primary: Color(0xFFC8F031),
-    onPrimary: Color(0xFF111111),
-  );
 
   @override
   Palette copyWith() => this;
@@ -72,66 +59,83 @@ class Gap {
 }
 
 class Radii {
-  static const card = 24.0, tile = 16.0, chip = 12.0, pill = 999.0;
+  static const card = 28.0, tile = 16.0, chip = 12.0, pill = 999.0;
 }
 
 /// Wider than this: side navigation (desktop, tablets). Narrower: floating bottom bar.
 const wideLayout = 840.0;
 
-ThemeData buildTheme(Palette p, Brightness b) {
-  final scheme = ColorScheme(
-    brightness: b,
-    primary: p.primary,
-    onPrimary: p.onPrimary,
-    secondary: p.signal,
-    onSecondary: b == Brightness.dark ? Palette.onAccent : Colors.white,
-    secondaryContainer: p.accent,
-    onSecondaryContainer: Palette.onAccent,
-    tertiary: p.signal,
-    onTertiary: Palette.onAccent,
-    error: p.danger,
-    onError: b == Brightness.dark ? Palette.onAccent : Colors.white,
-    surface: p.surface,
-    onSurface: p.ink,
-    onSurfaceVariant: p.muted,
-    surfaceContainerLowest: p.surface,
-    surfaceContainerLow: p.surface,
-    surfaceContainer: p.surface,
-    surfaceContainerHigh: p.alt,
-    surfaceContainerHighest: p.alt,
-    outline: p.muted,
-    outlineVariant: p.line,
-  );
-  final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b);
-  final text = base.textTheme
-      .apply(bodyColor: p.ink, displayColor: p.ink)
+/// Used when the system offers no color (older Android, Linux without a portal).
+const fallbackSeed = Color(0xFF3F6AD8);
+
+/// Reads the system color once (and again when the app comes back to the front).
+class SystemColor extends ValueNotifier<(Color, DynamicSchemeVariant)> {
+  SystemColor() : super((fallbackSeed, DynamicSchemeVariant.tonalSpot));
+
+  Future<void> load() async {
+    try {
+      final core = await DynamicColorPlugin.getCorePalette();
+      if (core != null) {
+        // Android 12+: the system palette's key color, expanded the way the system does it.
+        value = (Color(core.primary.get(40)), DynamicSchemeVariant.tonalSpot);
+        return;
+      }
+      final accent = await DynamicColorPlugin.getAccentColor();
+      // Windows: the accent's hue, expanded like Material You (fidelity made saturated accents garish).
+      if (accent != null) value = (accent, DynamicSchemeVariant.tonalSpot);
+    } on PlatformException {
+      // keep the fallback
+    }
+  }
+}
+
+const font = 'GoogleSansFlex';
+
+/// Variable font: weight must also be passed as an axis.
+TextStyle? weight(TextStyle? s, int w) => s?.copyWith(
+  fontWeight: FontWeight.values[(w ~/ 100 - 1).clamp(0, 8)],
+  fontVariations: [FontVariation('wght', w.toDouble())],
+);
+
+ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b) {
+  final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: b, dynamicSchemeVariant: variant);
+  final p = Palette.of(scheme);
+  final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b, fontFamily: font);
+  final t = base.textTheme;
+  // Material 3 type scale (not enlarged); emphasis comes from weight, as in M3 Expressive.
+  final text = t
       .copyWith(
-        headlineMedium: base.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.5),
-        headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.3),
-        titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-        titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        labelLarge: base.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-      );
+        displaySmall: weight(t.displaySmall, 600),
+        headlineMedium: weight(t.headlineMedium, 600),
+        headlineSmall: weight(t.headlineSmall, 600),
+        titleLarge: weight(t.titleLarge, 600),
+        titleMedium: weight(t.titleMedium, 600),
+        titleSmall: weight(t.titleSmall, 600),
+        labelLarge: weight(t.labelLarge, 600),
+        labelMedium: weight(t.labelMedium, 500),
+        bodyLarge: weight(t.bodyLarge, 400),
+        bodyMedium: weight(t.bodyMedium, 400),
+        bodySmall: weight(t.bodySmall, 400),
+      )
+      .apply(bodyColor: p.ink, displayColor: p.ink, fontFamily: font);
   final pill = RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.pill));
-  const tap = Size(48, 48);
+  const tap = Size(40, 40);
   return base.copyWith(
     extensions: [p],
     scaffoldBackgroundColor: p.bg,
     textTheme: text,
+    iconTheme: IconThemeData(color: p.ink, size: 20, weight: 400, fill: 0, opticalSize: 20),
     dividerTheme: DividerThemeData(color: p.line, space: 1, thickness: 1),
     cardTheme: CardThemeData(
       color: p.surface,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.card),
-        side: BorderSide(color: p.line),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: tap,
-        padding: const EdgeInsets.symmetric(horizontal: Gap.xl),
+        padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
         shape: pill,
         textStyle: text.labelLarge,
       ),
@@ -139,7 +143,7 @@ ThemeData buildTheme(Palette p, Brightness b) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: tap,
-        padding: const EdgeInsets.symmetric(horizontal: Gap.xl),
+        padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
         shape: pill,
         foregroundColor: p.ink,
         side: BorderSide(color: p.line),
@@ -147,7 +151,7 @@ ThemeData buildTheme(Palette p, Brightness b) {
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(minimumSize: tap, shape: pill, foregroundColor: p.ink, textStyle: text.labelLarge),
+      style: TextButton.styleFrom(minimumSize: tap, shape: pill, textStyle: text.labelLarge),
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(minimumSize: tap, foregroundColor: p.ink),
@@ -158,14 +162,14 @@ ThemeData buildTheme(Palette p, Brightness b) {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.tile), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.tile),
-        borderSide: BorderSide(color: p.ink, width: 2),
+        borderSide: BorderSide(color: p.primary, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: Gap.l, vertical: Gap.m),
     ),
-    switchTheme: SwitchThemeData(
-      thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Palette.onAccent : p.muted),
-      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.accent : p.alt),
-      trackOutlineColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.signal : p.muted),
+    listTileTheme: ListTileThemeData(
+      iconColor: p.ink,
+      titleTextStyle: text.bodyLarge,
+      subtitleTextStyle: text.bodyMedium?.copyWith(color: p.muted),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: p.signal,
@@ -174,33 +178,40 @@ ThemeData buildTheme(Palette p, Brightness b) {
       borderRadius: BorderRadius.circular(Radii.pill),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: p.surface,
+      backgroundColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: p.ink,
-      contentTextStyle: text.bodyMedium?.copyWith(color: p.bg),
-      actionTextColor: p.accent,
+      backgroundColor: scheme.inverseSurface,
+      contentTextStyle: text.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+      actionTextColor: scheme.inversePrimary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.tile)),
     ),
+    tooltipTheme: TooltipThemeData(
+      waitDuration: const Duration(milliseconds: 500),
+      textStyle: text.bodySmall?.copyWith(color: scheme.onInverseSurface),
+    ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: p.surface,
+      backgroundColor: Colors.transparent,
       indicatorColor: p.accent,
       height: 68,
       elevation: 0,
-      labelTextStyle: WidgetStatePropertyAll(text.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+      labelTextStyle: WidgetStatePropertyAll(text.labelMedium),
       iconTheme: WidgetStateProperty.resolveWith(
-        (s) => IconThemeData(color: s.contains(WidgetState.selected) ? Palette.onAccent : p.ink),
+        (s) => IconThemeData(
+          size: 22,
+          color: s.contains(WidgetState.selected) ? p.onAccent : p.muted,
+          fill: s.contains(WidgetState.selected) ? 1 : 0,
+        ),
       ),
     ),
-    navigationRailTheme: NavigationRailThemeData(
-      backgroundColor: p.surface,
-      indicatorColor: p.accent,
-      selectedIconTheme: const IconThemeData(color: Palette.onAccent),
-      unselectedIconTheme: IconThemeData(color: p.ink),
-      selectedLabelTextStyle: text.labelLarge,
-      unselectedLabelTextStyle: text.labelLarge?.copyWith(fontWeight: FontWeight.w500, color: p.muted),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+      },
     ),
   );
 }

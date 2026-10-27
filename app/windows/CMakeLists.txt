@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(pb_app LANGUAGES CXX)
+project(alero LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "pb_app")
+set(BINARY_NAME "alero")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -83,8 +83,15 @@ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 
 # Tray daemon that owns the engine; the window starts it on demand. Build it first:
 # `cargo build --release -p pb-daemon` at the repository root.
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../target/release/pb_daemon.exe"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../target/release/alero_daemon.exe"
   DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+
+# scrcpy for "Ver pantalla" (tools/fetch-scrcpy.ps1 downloads the pinned, hash-checked release). Optional:
+# without it the screen page explains what is missing.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/scrcpy/scrcpy.exe")
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/scrcpy/"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/scrcpy" COMPONENT Runtime)
+endif()
 
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"

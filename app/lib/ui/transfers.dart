@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import 'shell.dart';
@@ -11,53 +14,57 @@ class TransfersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.pal;
-    final history = hub.history.reversed.take(200).toList();
+    final history = hub.history.take(200).toList();
     return ScreenFrame(
-      title: 'Transferencias',
+      title: 'Archivos',
       onRefresh: hub.refresh,
+      trailing: FilledButton.tonalIcon(
+        onPressed: hub.openDownloads,
+        icon: const Icon(Symbols.folder_open_rounded, size: 18),
+        label: const Text('Abrir carpeta'),
+      ),
       children: [
-        const SectionHeader('En curso'),
-        if (hub.active.isEmpty)
-          Text('Nada en curso.', style: TextStyle(color: c.muted))
-        else
-          for (final x in hub.active)
-            Padding(
-              padding: const EdgeInsets.only(bottom: Gap.s),
-              child: TransferCard(x, hub),
-            ),
-        SectionHeader(
-          'Historial',
-          action: history.isEmpty ? null : 'Borrar historial',
-          onAction: () async {
-            final ok = await confirm(
-              context,
-              '¿Borrar el historial?',
-              'Se quita la lista de transferencias. Los archivos recibidos no se borran.',
-              'Borrar',
-            );
-            if (ok) await hub.clearHistory();
-          },
-        ),
-        if (history.isEmpty)
-          const EmptyState(
-            icon: Icons.swap_vert,
-            title: 'Sin transferencias todavía',
-            body: 'Envía un archivo desde Inicio o desde el otro dispositivo.',
-          )
-        else
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Gap.l, vertical: Gap.s),
-              child: Column(
-                children: [
-                  for (final (i, h) in history.indexed) ...[if (i > 0) const Divider(), HistoryTile(h, hub)],
-                ],
-              ),
-            ),
+        if (hub.active.isNotEmpty) ...[
+          Panel(
+            title: 'En curso',
+            icon: Symbols.sync_rounded,
+            child: Column(children: [for (final x in hub.active) TransferRow(x, hub)]),
           ),
-        const SizedBox(height: Gap.l),
-        Text('Los archivos recibidos se guardan en ${hub.downloads}.', style: TextStyle(color: c.muted)),
+          const SizedBox(height: Gap.l),
+        ],
+        Panel(
+          title: 'Historial',
+          icon: Symbols.history_rounded,
+          action: history.isEmpty
+              ? null
+              : TextButton(
+                  onPressed: () async {
+                    final ok = await confirm(
+                      context,
+                      '¿Borrar el historial?',
+                      'Se quita la lista de transferencias. Los archivos recibidos no se borran.',
+                      'Borrar',
+                    );
+                    if (ok) await hub.clearHistory();
+                  },
+                  child: const Text('Borrar'),
+                ),
+          child: history.isEmpty
+              ? EmptyState(
+                  card: false,
+                  icon: Symbols.folder_rounded,
+                  title: 'Sin transferencias todavía',
+                  body: Platform.isAndroid
+                      ? 'Envía un archivo desde Inicio o compártelo desde cualquier app.'
+                      : 'Envía un archivo desde Inicio o suéltalo sobre esta ventana.',
+                )
+              : Column(children: [for (final h in history) HistoryTile(h, hub)]),
+        ),
+        const SizedBox(height: Gap.m),
+        Text(
+          'Los archivos recibidos se guardan en ${hub.downloads}.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.pal.muted),
+        ),
       ],
     );
   }

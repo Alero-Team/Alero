@@ -1,4 +1,4 @@
-package dev.phonebridge.pb_app
+package dev.alero.app
 
 import android.Manifest
 import android.app.Activity
@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.webkit.MimeTypeMap
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -22,17 +23,28 @@ import java.io.File
  */
 class MainActivity : FlutterActivity() {
     private var pickResult: MethodChannel.Result? = null
+    private var scanResult: MethodChannel.Result? = null
+    private var wallpaperResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Notifier.init(this)
-        startForegroundService(Intent(this, PbService::class.java))
+        Features.start(this)
+        if (Prefs.background(this)) PbService.update(this, emptyList()) // no service unless asked or a computer is connected
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        shared = intent
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        shared = intent
+        channel?.invokeMethod("shared", null) // Dart asks for it with takeShared
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pb/android").setMethodCallHandler { call, result ->
+        channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pb/android")
+        channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "deviceName" -> result.success(Build.MODEL ?: "Android")
                 "pickFiles" -> pick(result)
@@ -44,17 +56,81 @@ class MainActivity : FlutterActivity() {
                     val path = call.arguments as String
                     Thread { val where = publish(path); runOnUiThread { result.success(where) } }.start()
                 }
-                "status" -> {
-                    PbService.status(this, call.arguments as String)
+                "background" -> result.success(Prefs.background(this))
+                "setBackground" -> {
+                    Prefs.setBackground(this, call.arguments as Boolean)
+                    PbService.update(this, Features.onlineNames())
                     result.success(null)
                 }
                 "alert" -> {
                     Notifier.alert(call.argument<String>("title") ?: "", call.argument<String>("text") ?: "")
                     result.success(null)
                 }
+                "notifAccess" -> result.success(NotifListener.enabled(this))
+                "openNotifAccess" -> {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    result.success(null)
+                }
+                "notifPermission" -> result.success(
+                    Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+                )
+                "openAppSettings" -> {
+                    startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    result.success(null)
+                }
+                "openDownloads" -> {
+                    try {
+                        startActivity(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Exception) {}
+                    result.success(null)
+                }
+                "openDevSettings" -> {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                    result.success(null)
+                }
+                "openTethering" -> {
+                    // USB tethering lives on a different screen per maker; the generic wireless page is the fallback.
+                    try {
+                        startActivity(Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings"))
+                    } catch (_: Exception) {
+                        startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                    }
+                    result.success(null)
+                }
+                "deviceInfo" -> result.success(Features.info().toString())
+                "scanQr" -> {
+                    scanResult?.success(null)
+                    scanResult = result
+                    com.google.zxing.integration.android.IntentIntegrator(this)
+                        .setPrompt("Escanea el código del ordenador")
+                        .setBeepEnabled(false)
+                        .setOrientationLocked(false)
+                        .initiateScan(listOf(com.google.zxing.integration.android.IntentIntegrator.QR_CODE))
+                }
+                "takeShared" -> result.success(takeShared())
+                "pickWallpaper" -> {
+                    wallpaperResult?.success(false)
+                    wallpaperResult = result
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), WALLPAPER)
+                }
+                "clearWallpaper" -> result.success(Features.setWallpaper(null))
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /** What another app shared with us: files as open descriptors (like pickFiles) and/or text. */
+    private fun takeShared(): Map<String, Any>? {
+        val i = shared ?: return null
+        shared = null
+        if (i.action != Intent.ACTION_SEND && i.action != Intent.ACTION_SEND_MULTIPLE) return null
+        val uris = mutableListOf<Uri>()
+        if (i.action == Intent.ACTION_SEND) {
+            @Suppress("DEPRECATION") (i.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uris += it }
+        } else {
+            @Suppress("DEPRECATION") i.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris += it }
+        }
+        return mapOf("files" to descriptors(uris), "text" to (i.getStringExtra(Intent.EXTRA_TEXT) ?: ""))
     }
 
     private fun pick(result: MethodChannel.Result) {
@@ -68,6 +144,19 @@ class MainActivity : FlutterActivity() {
     @Deprecated("FlutterActivity has no Activity Result API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        com.google.zxing.integration.android.IntentIntegrator.parseActivityResult(requestCode, resultCode, data)?.let {
+            scanResult?.success(it.contents)
+            scanResult = null
+            return
+        }
+        if (requestCode == WALLPAPER) {
+            val r = wallpaperResult ?: return
+            wallpaperResult = null
+            val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
+            if (uri == null) return r.success(false)
+            Thread { val ok = Features.setWallpaper(uri); runOnUiThread { r.success(ok) } }.start()
+            return
+        }
         if (requestCode != PICK) return
         val r = pickResult ?: return
         pickResult = null
@@ -75,13 +164,16 @@ class MainActivity : FlutterActivity() {
         if (resultCode == Activity.RESULT_OK && data != null) {
             data.clipData?.let { c -> for (k in 0 until c.itemCount) uris += c.getItemAt(k).uri } ?: data.data?.let { uris += it }
         }
-        // The descriptor stays open until Dart calls closeFd when the transfer ends: the engine reads from it.
-        r.success(uris.mapNotNull { uri ->
+        r.success(descriptors(uris))
+    }
+
+    // The descriptor stays open until Dart calls closeFd when the transfer ends: the engine reads from it.
+    private fun descriptors(uris: List<Uri>) =
+        uris.mapNotNull { uri ->
             val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null } ?: return@mapNotNull null
             synchronized(open) { open[pfd.fd] = pfd }
             mapOf("fd" to pfd.fd, "name" to safeName(displayName(uri)))
-        })
-    }
+        }
 
     private fun displayName(uri: Uri): String =
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
@@ -92,7 +184,7 @@ class MainActivity : FlutterActivity() {
     private fun safeName(n: String) =
         n.map { if (it.isISOControl() || it in "/\\:*?\"<>|") '_' else it }.joinToString("").trim().trimEnd('.').ifEmpty { "archivo" }
 
-    /** Moves a received file from the app's private folder to Downloads/Phonebridge. Returns where it went. */
+    /** Moves a received file from the app's private folder to Downloads/Alero. Returns where it went. */
     private fun publish(path: String): String {
         val src = File(path)
         if (Build.VERSION.SDK_INT < 29) return path // MediaStore.Downloads is API 29+
@@ -100,7 +192,7 @@ class MainActivity : FlutterActivity() {
             val cv = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, src.name)
                 put(MediaStore.Downloads.MIME_TYPE, MimeTypeMap.getSingleton().getMimeTypeFromExtension(src.extension.lowercase()) ?: "application/octet-stream")
-                put(MediaStore.Downloads.RELATIVE_PATH, "Download/Phonebridge")
+                put(MediaStore.Downloads.RELATIVE_PATH, "Download/Alero")
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return path
@@ -109,14 +201,17 @@ class MainActivity : FlutterActivity() {
             cv.put(MediaStore.Downloads.IS_PENDING, 0)
             contentResolver.update(uri, cv, null, null)
             src.delete()
-            "Descargas/Phonebridge/${src.name}"
+            "Descargas/Alero/${src.name}"
         } catch (e: Exception) {
             path // stays in the app's folder; Dart shows this path
         }
     }
 
     companion object {
+        private var channel: MethodChannel? = null
+        private var shared: Intent? = null
         private const val PICK = 41
+        private const val WALLPAPER = 42
         private val open = HashMap<Int, ParcelFileDescriptor>()
     }
 }
