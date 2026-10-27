@@ -2,7 +2,7 @@
 //! only converts types and forwards calls.
 //!
 //! Android: the engine is one per process and outlives the Dart side (the foreground service keeps the process
-//! alive). Desktop: the engine lives in the tray daemon (`pb_daemon`) and every call goes over `pb_core::ipc`, so
+//! alive). Desktop: the engine lives in the tray daemon (`alero_daemon`) and every call goes over `pb_core::ipc`, so
 //! closing the window frees Flutter's memory. Either way a new UI calls `start` (no-op if done) and `events` again
 //! to re-attach.
 
@@ -65,6 +65,8 @@ pub enum Event {
     TransferNote { id: String, message: String },
     TransferFinished { id: String, ok: bool, code: String, message: String, path: String },
     Log { message: String },
+    /// App message from a paired device (`pb.x.*`); `body` is JSON text.
+    Message { peer_id: String, kind: String, body: String },
     /// Desktop: the tray asks to bring the window up.
     Show,
     /// Desktop: the user chose "Salir" in the tray.
@@ -96,11 +98,13 @@ struct Forward;
 
 impl core::EventSink for Forward {
     fn on_event(&self, e: core::Event) {
+        #[cfg(target_os = "android")]
+        crate::jni_api::push(&e);
         emit(event(e));
     }
 }
 
-fn call(c: Cmd) -> Result<serde_json::Value, String> {
+pub(crate) fn call(c: Cmd) -> Result<serde_json::Value, String> {
     let b = BACKEND.lock().unwrap().clone().ok_or_else(|| "El motor no está iniciado".to_string())?;
     match &*b {
         Backend::Local(e) => ipc::exec(e, c),
@@ -140,7 +144,7 @@ fn connect(cfg: core::Config) -> Result<Backend, String> {
         Some(c) => c,
         None => {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            let daemon = exe.with_file_name(if cfg!(windows) { "pb_daemon.exe" } else { "pb_daemon" });
+            let daemon = exe.with_file_name(if cfg!(windows) { "alero_daemon.exe" } else { "alero_daemon" });
             let _ = std::fs::remove_file(data.join(ipc::IPC_FILE));
             let launch = serde_json::to_string(&ipc::Launch { config: cfg, ui: exe }).map_err(|e| e.to_string())?;
             std::process::Command::new(&daemon)
@@ -265,6 +269,12 @@ pub fn retry(history_id: String) -> Result<String, String> {
     get(Cmd::Retry { id: history_id })
 }
 
+/// Sends an app message; `body` is JSON text.
+pub fn send_message(peer_id: String, kind: String, body: String) -> Result<(), String> {
+    let body = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    call(Cmd::SendMessage { peer: peer_id, kind, body }).map(drop)
+}
+
 pub fn diagnostics() -> Result<Vec<String>, String> {
     get(Cmd::Diagnostics)
 }
@@ -300,5 +310,6 @@ fn event(e: core::Event) -> Event {
         E::TransferNote { id, message } => Event::TransferNote { id, message },
         E::TransferFinished { id, ok, code, message, path } => Event::TransferFinished { id, ok, code, message, path },
         E::Log { message } => Event::Log { message },
+        E::Message { peer_id, kind, body } => Event::Message { peer_id, kind, body: body.to_string() },
     }
 }

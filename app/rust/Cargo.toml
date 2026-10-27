@@ -12,5 +12,9 @@ pb-core = { path = "../../core" }
 serde = "1"
 serde_json = "1"
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Already in Cargo.lock (no new download): the Kotlin service calls the engine without Dart.
+jni = "0.21"
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

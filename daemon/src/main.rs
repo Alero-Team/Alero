@@ -3,11 +3,11 @@
 
 //! Desktop tray daemon: runs the engine and the tray icon, and serves the Flutter window over `pb_core::ipc`.
 //! The window is started on demand and exits when closed, so idle cost is this process only (N2).
-//! Started by the window as `pb_daemon <Launch JSON>`.
+//! Started by the window as `alero_daemon <Launch JSON>`.
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use pb_core::engine::{Engine, Event, EventSink};
@@ -16,10 +16,14 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
+#[cfg(windows)]
+mod win;
+
 struct Ui {
     exe: PathBuf,
     subs: Arc<Subscribers>,
     last_launch: Mutex<Option<Instant>>,
+    engine: OnceLock<Arc<Engine>>,
 }
 
 impl Ui {
@@ -47,10 +51,63 @@ impl EventSink for Sink {
     fn on_event(&self, e: Event) {
         let needs_user = matches!(e, Event::PairRequest { .. } | Event::TransferOffer { .. });
         // Undelivered requests are replayed by `Subscribers` to the window we start here.
-        if !self.0.subs.push(&Push::Event { event: e }) && needs_user {
+        let delivered = self.0.subs.push(&Push::Event { event: e.clone() });
+        if delivered {
+            return;
+        }
+        if needs_user {
             self.0.launch();
+        } else {
+            self.0.alone(e);
         }
     }
+}
+
+impl Ui {
+    /// No window open: what the phone sends still reaches the user (toast, clipboard), and the phone still
+    /// learns what this computer is. With a window open, the Flutter side does all of this.
+    fn alone(&self, e: Event) {
+        let Some(engine) = self.engine.get() else { return };
+        match e {
+            Event::PeerChanged { peer } if peer.trusted && peer.state == pb_core::engine::PeerState::Connected => {
+                let _ = engine.send_message(&peer.id, "pb.x.info", desktop_info(engine));
+            }
+            Event::Message { peer_id, kind, body } => {
+                let s = |k: &str| body[k].as_str().unwrap_or("").to_string();
+                match kind.as_str() {
+                    "pb.x.info.request" => {
+                        let _ = engine.send_message(&peer_id, "pb.x.info", desktop_info(engine));
+                    }
+                    #[cfg(windows)]
+                    "pb.x.notif.posted" => {
+                        let title = if s("title").is_empty() { s("app") } else { format!("{} · {}", s("app"), s("title")) };
+                        win::toast(&title, &s("text"));
+                    }
+                    #[cfg(windows)]
+                    "pb.x.clip" if !s("text").is_empty() => {
+                        win::set_clipboard(&s("text"));
+                        let from = engine.peers().into_iter().find(|p| p.id == peer_id).map(|p| p.name).unwrap_or_default();
+                        win::toast("Portapapeles copiado", &format!("Recibido de {from}"));
+                    }
+                    _ => {}
+                }
+            }
+            #[cfg(windows)]
+            Event::TransferFinished { ok: true, path, .. } if !path.is_empty() => {
+                let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                win::toast("Archivo recibido", &name);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn desktop_info(engine: &Engine) -> serde_json::Value {
+    #[cfg(windows)]
+    let (os, version) = ("Windows", win::os_version());
+    #[cfg(not(windows))]
+    let (os, version) = (std::env::consts::OS, String::new());
+    serde_json::json!({"kind": "desktop", "model": engine.name(), "os": os, "osVersion": version, "battery": {"level": -1}})
 }
 
 enum UserEvent {
@@ -62,7 +119,7 @@ fn main() {
     let launch: Launch = match std::env::args().nth(1).map(|a| serde_json::from_str(&a)) {
         Some(Ok(l)) => l,
         _ => {
-            eprintln!("uso: pb_daemon <Launch JSON> (lo lanza la app)");
+            eprintln!("uso: alero_daemon <Launch JSON> (lo lanza la app)");
             std::process::exit(2);
         }
     };
@@ -74,11 +131,14 @@ fn main() {
         std::process::exit(1);
     };
     let subs = Arc::new(Subscribers::default());
-    let ui = Arc::new(Ui { exe: launch.ui, subs: subs.clone(), last_launch: Mutex::new(None) });
+    let ui = Arc::new(Ui { exe: launch.ui, subs: subs.clone(), last_launch: Mutex::new(None), engine: OnceLock::new() });
+    #[cfg(windows)]
+    win::register_app();
     let engine = match Engine::start(launch.config, Arc::new(Sink(ui.clone()))) {
         Ok(e) => Arc::new(e),
         Err(e) => fail(e),
     };
+    let _ = ui.engine.set(engine.clone());
     if let Err(e) = ipc::listen(&data, engine.clone(), subs.clone()) {
         fail(format!("canal local: {e}"));
     }
@@ -94,7 +154,7 @@ fn main() {
         let _ = proxy.send_event(UserEvent::Tray(e));
     }));
 
-    let open = MenuItem::new("Abrir Phonebridge", true, None);
+    let open = MenuItem::new("Abrir Alero", true, None);
     let quit = MenuItem::new("Salir", true, None);
     let menu = Menu::new();
     menu.append_items(&[&open, &quit]).expect("tray menu");
@@ -102,7 +162,7 @@ fn main() {
     let _tray = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_menu_on_left_click(false)
-        .with_tooltip("Phonebridge")
+        .with_tooltip("Alero")
         .with_icon(icon())
         .build()
         .unwrap_or_else(|e| fail(format!("icono de bandeja: {e}")));

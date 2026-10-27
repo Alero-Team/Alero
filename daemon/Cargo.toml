@@ -2,12 +2,12 @@
 name = "pb-daemon"
 version = "0.1.0"
 edition = "2021"
-description = "Phonebridge desktop tray daemon: owns the engine; the Flutter window is a client"
+description = "Alero desktop tray daemon: owns the engine; the Flutter window is a client"
 license = "GPL-3.0-or-later"
 publish = false
 
 [[bin]]
-name = "pb_daemon"
+name = "alero_daemon"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,3 +17,15 @@ serde_json = "1"
 tao = "0.37"
 tray-icon = "0.25"
 png = "0.18"
+
+[target.'cfg(windows)'.dependencies]
+# Same versions already in Cargo.lock (pulled by tao): toasts, clipboard and OS version without new crates.
+windows = { version = "0.62", features = [
+    "Data_Xml_Dom",
+    "UI_Notifications",
+    "Win32_Foundation",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Registry",
+] }
+windows-version = "0.1"

@@ -2942,6 +2942,8 @@ dependencies = [
  "serde_json",
  "tao",
  "tray-icon",
+ "windows",
+ "windows-version",
 ]
 
 [[package]]
@@ -2957,6 +2959,7 @@ name = "pb_bridge"
 version = "0.1.0"
 dependencies = [
  "flutter_rust_bridge",
+ "jni",
  "pb-core",
  "serde",
  "serde_json",
