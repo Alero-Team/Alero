@@ -24,7 +24,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rustls::pki_types::ServerName;
 use rustls::{ClientConnection, ServerConfig, ServerConnection, StreamOwned};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -42,7 +42,7 @@ const PAIR_TIMEOUT: Duration = Duration::from_secs(120);
 const OFFER_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_SEND_ATTEMPTS: u32 = 6;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PeerState {
     Disconnected,
     Connecting,
@@ -51,7 +51,7 @@ pub enum PeerState {
     Rejected,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PeerView {
     pub id: String,
     pub name: String,
@@ -61,7 +61,7 @@ pub struct PeerView {
     pub detail: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Event {
     PeerChanged { peer: PeerView },
@@ -81,7 +81,7 @@ pub trait EventSink: Send + Sync {
     fn on_event(&self, e: Event);
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub data_dir: PathBuf,
     pub download_dir: PathBuf,
