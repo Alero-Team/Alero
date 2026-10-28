@@ -10,6 +10,18 @@ import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
+/// What Android has and has not granted, so the row never says "granted" for something that is not.
+String _mediaStatus(Hub hub) {
+  final m = hub.filesMedia;
+  final missing = [
+    if (!m.contains('images')) 'fotos',
+    if (!m.contains('video')) 'vídeos',
+    if (!m.contains('audio')) 'música y audio',
+  ];
+  final partial = hub.filesLimited ? 'Solo compartes las fotos que elegiste. ' : '';
+  return '$partial${missing.isEmpty ? '' : 'Sin acceso a: ${missing.join(', ')}. '}Sin el permiso esas secciones salen vacías.';
+}
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen(this.hub, {super.key});
   final Hub hub;
@@ -149,11 +161,11 @@ class SettingsScreen extends StatelessWidget {
                   trailing: AleroSwitch(value: hub.filesAllowed, onChanged: hub.setFilesAllowed, label: 'Explorar archivos desde el ordenador'),
                   onTap: () => hub.setFilesAllowed(!hub.filesAllowed),
                 ),
-                if (hub.filesAllowed && !hub.filesPermission)
+                if (hub.filesAllowed && (hub.filesMedia.length < 3 || hub.filesLimited))
                   SettingTile(
-                    title: 'Falta el permiso de fotos, vídeos y música',
-                    subtitle: 'Sin él, solo se ven «Recibidos de Alero» y las carpetas añadidas.',
-                    trailing: TextButton(onPressed: Native.openAppSettings, child: const Text('Permisos')),
+                    title: 'Permisos de fotos, vídeos y música',
+                    subtitle: _mediaStatus(hub),
+                    trailing: TextButton(onPressed: hub.requestMedia, child: const Text('Conceder')),
                   ),
                 for (final (i, name) in hub.filesFolders.indexed)
                   SettingTile(

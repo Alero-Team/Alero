@@ -54,6 +54,9 @@ Future<void> cancelTransfer({required String id}) => RustLib.instance.api.crateA
 
 Future<List<HistoryItem>> history() => RustLib.instance.api.crateApiEngineHistory();
 
+/// Removes one record from the list; never deletes the file itself.
+Future<void> removeHistory({required String id}) => RustLib.instance.api.crateApiEngineRemoveHistory(id: id);
+
 Future<void> clearHistory() => RustLib.instance.api.crateApiEngineClearHistory();
 
 /// Returns the new transfer id.

@@ -47,10 +47,33 @@ fn esc(s: &str) -> String {
 }
 
 pub fn toast(title: &str, body: &str) {
+    toast_icon(title, body, "", "");
+}
+
+/// Writes the phone app's icon (base64 PNG) to the temp folder and returns its `file:///` URI, or "" if it has none.
+fn icon_uri(pkg: &str, b64: &str) -> String {
+    use base64::Engine;
+    let name: String = pkg.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_').collect();
+    if name.is_empty() || b64.is_empty() {
+        return String::new();
+    }
+    let Ok(png) = base64::engine::general_purpose::STANDARD.decode(b64) else { return String::new() };
+    let dir = std::env::temp_dir().join("alero-icons");
+    let path = dir.join(format!("{name}.png"));
+    if std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, png)).is_err() {
+        return String::new();
+    }
+    format!("file:///{}", path.to_string_lossy().replace('\\', "/"))
+}
+
+/// Toast with the icon of the phone app it comes from; without one the toast keeps the default look.
+pub fn toast_icon(title: &str, body: &str, pkg: &str, icon_b64: &str) {
+    let uri = icon_uri(pkg, icon_b64);
+    let image = if uri.is_empty() { String::new() } else { format!("<image placement=\"appLogoOverride\" src=\"{}\"/>", esc(&uri)) };
     let r = (|| -> windows::core::Result<()> {
         let xml = XmlDocument::new()?;
         xml.LoadXml(&HSTRING::from(format!(
-            "<toast><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual></toast>",
+            "<toast><visual><binding template=\"ToastGeneric\">{image}<text>{}</text><text>{}</text></binding></visual></toast>",
             esc(title),
             esc(body)
         )))?;

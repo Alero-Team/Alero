@@ -113,7 +113,22 @@ class NotifListener : NotificationListenerService() {
     private fun worth(sbn: StatusBarNotification) =
         sbn.packageName != packageName && !sbn.isOngoing && sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0
 
-    private fun json(sbn: StatusBarNotification): JSONObject? {
+    /** Launcher icon of the source app as a small PNG (base64); cached per package, "" when it has none. */
+    private fun icon(pkg: String): String = icons.getOrPut(pkg) {
+        try {
+            val d = packageManager.getApplicationIcon(pkg)
+            val b = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+            d.setBounds(0, 0, 64, 64)
+            d.draw(android.graphics.Canvas(b))
+            val out = ByteArrayOutputStream()
+            b.compress(Bitmap.CompressFormat.PNG, 100, out)
+            Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun json(sbn: StatusBarNotification, withIcon: Boolean = true): JSONObject? {
         if (!worth(sbn)) return null
         val x = sbn.notification.extras
         val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
@@ -122,6 +137,8 @@ class NotifListener : NotificationListenerService() {
         return JSONObject()
             .put("key", sbn.key)
             .put("app", appName(sbn.packageName))
+            .put("pkg", sbn.packageName)
+            .put("icon", if (withIcon) icon(sbn.packageName) else "")
             .put("title", title.take(200))
             .put("text", text.take(1000))
             .put("time", sbn.postTime)
@@ -130,6 +147,7 @@ class NotifListener : NotificationListenerService() {
 
     companion object {
         private var me: NotifListener? = null
+        private val icons = HashMap<String, String>()
 
         fun enabled(c: Context): Boolean =
             Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners")?.contains(c.packageName) == true
@@ -137,7 +155,13 @@ class NotifListener : NotificationListenerService() {
         fun snapshot(): JSONObject? {
             val s = me ?: return null
             val items = JSONArray()
-            for (n in s.activeNotifications.orEmpty().sortedByDescending { it.postTime }.take(50)) s.json(n)?.let { items.put(it) }
+            // One icon per app: the snapshot would otherwise pass the frame limit.
+            val sent = HashSet<String>()
+            for (n in s.activeNotifications.orEmpty().sortedByDescending { it.postTime }.take(50))
+                s.json(n, false)?.let { j -> // the icon goes on the first notification that is really sent
+                    if (sent.add(n.packageName)) j.put("icon", s.icon(n.packageName))
+                    items.put(j)
+                }
             return JSONObject().put("items", items)
         }
 

@@ -67,17 +67,23 @@ class Native {
   static Future<void> openUsbSettings() async => _android ? _ch.invokeMethod('openUsbSettings') : null;
   /// Android: files the computer may browse. `allowed` is the owner's switch, `permission` whether Android's media
   /// permission is granted, `folders` the folders picked with the system picker.
-  static Future<({bool allowed, bool permission, List<String> folders})> files() async {
-    if (!_android) return (allowed: false, permission: false, folders: <String>[]);
+  static Future<({bool allowed, bool permission, List<String> folders, Set<String> media, bool limited})> files() async {
+    if (!_android) return (allowed: false, permission: false, folders: <String>[], media: <String>{}, limited: false);
     final m = await _ch.invokeMapMethod<String, Object?>('files') ?? {};
     return (
       allowed: m['allowed'] == true,
       permission: m['permission'] == true,
       folders: [for (final f in (m['folders'] as List? ?? [])) '$f'],
+      media: {for (final e in ((m['media'] as Map?) ?? {}).entries) if (e.value == true && e.key != 'limited') '${e.key}'},
+      limited: ((m['media'] as Map?) ?? {})['limited'] == true,
     );
   }
 
   static Future<void> setFiles(bool on) async => _android ? _ch.invokeMethod('setFiles', on) : null;
+  /// Asks Android for the media permissions still missing. True when it will not ask again (settings only).
+  static Future<bool> requestMedia() async => _android && (await _ch.invokeMethod<bool>('requestMedia') ?? false);
+  /// The app's own permission page in system settings (photos, music and so on live there).
+  static Future<void> openPermissions() async => _android ? _ch.invokeMethod('openPermissions') : null;
   static Future<bool> addFolder() async => _android && (await _ch.invokeMethod<bool>('addFolder') ?? false);
   static Future<void> removeFolder(int i) async => _android ? _ch.invokeMethod('removeFolder', i) : null;
 

@@ -26,6 +26,7 @@ class MainActivity : FlutterActivity() {
     private var scanResult: MethodChannel.Result? = null
     private var wallpaperResult: MethodChannel.Result? = null
     private var treeResult: MethodChannel.Result? = null
+    private var mediaResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +35,16 @@ class MainActivity : FlutterActivity() {
         if (Prefs.background(this)) PbService.update(this, emptyList()) // no service unless asked or a computer is connected
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         shared = intent
+    }
+
+    /** Answers Dart with `blocked`: something was denied and Android will not ask again (only system settings can grant it). */
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != MEDIA) return
+        val r = mediaResult ?: return
+        mediaResult = null
+        val denied = permissions.filterIndexed { i, _ -> grantResults.getOrNull(i) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        r.success(denied.isNotEmpty() && Files.mediaState()["limited"] != true && denied.none { shouldShowRequestPermissionRationale(it) })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -93,14 +104,24 @@ class MainActivity : FlutterActivity() {
                     mapOf(
                         "allowed" to Prefs.files(this),
                         "permission" to Files.hasAnyMedia(),
+                        "media" to Files.mediaState(),
                         "folders" to Files.treeNames(),
                     ),
                 )
                 "setFiles" -> {
                     val on = call.arguments as Boolean
                     Prefs.setFiles(this, on)
-                    // The runtime permission is asked here, at the moment the user turns the feature on.
-                    if (on) requestPermissions(Files.mediaPermissions(), 7)
+                    result.success(null)
+                }
+                "requestMedia" -> {
+                    val missing = Files.missingPermissions()
+                    if (missing.isEmpty()) return@setMethodCallHandler result.success(false)
+                    mediaResult?.success(false)
+                    mediaResult = result
+                    requestPermissions(missing, MEDIA)
+                }
+                "openPermissions" -> {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)))
                     result.success(null)
                 }
                 "addFolder" -> {
@@ -267,6 +288,7 @@ class MainActivity : FlutterActivity() {
         private const val PICK = 41
         private const val WALLPAPER = 42
         private const val TREE = 43
+        private const val MEDIA = 44
         private val open = HashMap<Int, ParcelFileDescriptor>()
     }
 }

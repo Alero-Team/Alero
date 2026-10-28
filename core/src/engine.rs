@@ -1209,6 +1209,10 @@ impl Engine {
         self.inner.store.history()
     }
 
+    pub fn remove_history(&self, id: &str) -> Result<(), String> {
+        self.inner.store.remove_history(id)
+    }
+
     pub fn clear_history(&self) -> Result<(), String> {
         self.inner.store.clear_history()
     }

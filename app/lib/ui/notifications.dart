@@ -112,18 +112,22 @@ class _NotifRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: s.secondaryContainer, shape: BoxShape.circle),
-            child: ExcludeSemantics(
-              child: Text(
-                n.app.isEmpty ? '?' : n.app.characters.first.toUpperCase(),
-                style: t.labelLarge?.copyWith(color: s.onSecondaryContainer),
-              ),
-            ),
-          ),
+          hub.appIcons[n.pkg] != null
+              ? ExcludeSemantics(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(hub.appIcons[n.pkg]!, width: 36, height: 36, gaplessPlayback: true),
+                  ),
+                )
+              : Container(
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: s.secondaryContainer, shape: BoxShape.circle),
+                  child: ExcludeSemantics(
+                    child: Icon(Symbols.notifications_rounded, size: 20, color: s.onSecondaryContainer),
+                  ),
+                ),
           const SizedBox(width: Gap.m),
           Expanded(
             child: Column(

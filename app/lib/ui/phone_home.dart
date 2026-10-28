@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'clipboard.dart';
+import 'pc_control.dart';
 import 'pc_screen.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
@@ -107,7 +108,7 @@ class _Tile extends StatelessWidget {
   }
 }
 
-/// The remote: touchpad, clicks, keyboard, volume and playback, in one card. When the computer has not allowed
+/// Entry to the remote (touchpad, clicks, keyboard) on its own screen. When the computer has not allowed
 /// control (its owner decides, in its own Settings) the card says so instead of showing dead buttons.
 class ControlCard extends StatelessWidget {
   const ControlCard(this.hub, this.peer, {super.key});
@@ -124,13 +125,6 @@ class ControlCard extends StatelessWidget {
     return Panel(
       title: 'Controlar ${peer.name}',
       icon: Symbols.mouse_rounded,
-      action: blocker == null
-          ? IconButton(
-              tooltip: 'Teclado',
-              onPressed: () => openKeyboard(context, hub, peer.id),
-              icon: const Icon(Symbols.keyboard_rounded, size: 22),
-            )
-          : null,
       child: blocker != null
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: Gap.s),
@@ -143,28 +137,10 @@ class ControlCard extends StatelessWidget {
                 ],
               ),
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Touchpad(hub, peer.id),
-                const SizedBox(height: Gap.s),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonal(onPressed: () => hub.remote.click(peer.id), child: const Text('Clic izquierdo')),
-                    ),
-                    const SizedBox(width: Gap.s),
-                    Expanded(
-                      child: FilledButton.tonal(
-                        onPressed: () => hub.remote.click(peer.id, button: 'right'),
-                        child: const Text('Clic derecho'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: Gap.l),
-                PcMediaControls(hub, peer.id),
-              ],
+          : FilledButton.icon(
+              onPressed: () => openPcControl(context, hub, peer.id, peer.name),
+              icon: const Icon(Symbols.mouse_rounded, size: 20),
+              label: const Text('Controlar'),
             ),
     );
   }

@@ -37,6 +37,16 @@ class Hub extends ChangeNotifier {
   /// What paired devices report about themselves (`pb.x.*`), by peer id.
   final info = <String, PeerInfo>{};
   final notifs = <String, List<PhoneNotif>>{};
+
+  /// App icon (PNG) by package: the phone sends it once per app, so later rows reuse it.
+  final appIcons = <String, Uint8List>{};
+
+  PhoneNotif _notif(Map j) {
+    final n = PhoneNotif(j);
+    final icon = j['icon'] as String? ?? '';
+    if (n.pkg.isNotEmpty && icon.isNotEmpty) appIcons[n.pkg] = base64Decode(icon);
+    return n;
+  }
   final media = <String, MediaState>{};
   final wallpaper = <String, Uint8List>{};
 
@@ -71,6 +81,10 @@ class Hub extends ChangeNotifier {
   /// Android: may a paired computer browse this phone's files (photos, videos, music, chosen folders)?
   bool filesAllowed = false, filesPermission = false;
   List<String> filesFolders = const [];
+
+  /// Libraries Android lets this app read in full ('images', 'video', 'audio'), and whether only some photos are shared.
+  Set<String> filesMedia = const {};
+  bool filesLimited = false;
 
   /// Files/text another Android app shared with us, waiting for the user to pick a device.
   Shared? share;
@@ -338,10 +352,10 @@ class Hub extends ChangeNotifier {
       case 'pb.x.notif.snapshot':
         notifs[peerId] = [
           for (final n in (b['items'] as List? ?? []))
-            if (n is Map) PhoneNotif(n),
+            if (n is Map) _notif(n),
         ];
       case 'pb.x.notif.posted':
-        final n = PhoneNotif(b);
+        final n = _notif(b);
         notifs[peerId] = [n, ...?notifs[peerId]?.where((o) => o.key != n.key)].take(100).toList();
       case 'pb.x.notif.removed':
         notifs[peerId] = [...?notifs[peerId]?.where((o) => o.key != b['key'])];
@@ -450,6 +464,8 @@ class Hub extends ChangeNotifier {
     filesAllowed = f.allowed;
     filesPermission = f.permission;
     filesFolders = f.folders;
+    filesMedia = f.media;
+    filesLimited = f.limited;
     notifyListeners();
   }
 
@@ -457,6 +473,17 @@ class Hub extends ChangeNotifier {
     await Native.setFiles(on);
     filesAllowed = on;
     notifyListeners();
+    if (on) await requestMedia();
+  }
+
+  /// Ask for photos/videos/music; if Android will not show its dialog any more, open the app's permission page.
+  Future<void> requestMedia() async {
+    final blocked = await Native.requestMedia();
+    await checkPermissions();
+    if (blocked) {
+      messages.add('Android ya no puede preguntar: concede Fotos y vídeos o Música y audio en los permisos de la app.');
+      await Native.openPermissions();
+    }
   }
 
   Future<void> addFilesFolder() async {
@@ -559,6 +586,14 @@ class Hub extends ChangeNotifier {
   });
   Future<void> cancel(String id) => _run(() => pb.cancelTransfer(id: id));
   Future<void> retry(String historyId) => _run(() => pb.retry(historyId: historyId));
+  /// Drops one record from the list (the file on disk stays). The list updates before the store answers.
+  Future<void> removeHistory(String id) => _run(() async {
+    history = history.where((h) => h.id != id).toList();
+    notifyListeners();
+    await pb.removeHistory(id: id);
+    await refresh();
+  });
+
   Future<void> clearHistory() => _run(() async {
     await pb.clearHistory();
     await refresh();

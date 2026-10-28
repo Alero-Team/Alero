@@ -83,11 +83,12 @@ class PhoneNotif {
   PhoneNotif(Map j)
     : key = j['key'] as String? ?? '',
       app = j['app'] as String? ?? '',
+      pkg = j['pkg'] as String? ?? '',
       title = j['title'] as String? ?? '',
       text = j['text'] as String? ?? '',
       time = DateTime.fromMillisecondsSinceEpoch((j['time'] as num?)?.toInt() ?? 0),
       clearable = j['clearable'] != false;
-  final String key, app, title, text;
+  final String key, app, pkg, title, text;
   final DateTime time;
   final bool clearable;
 }

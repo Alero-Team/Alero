@@ -284,6 +284,13 @@ class HistoryTile extends StatelessWidget {
               padding: const EdgeInsets.only(right: Gap.s),
               child: ExcludeSemantics(child: Icon(icon, size: 18, color: color, fill: 1)),
             ),
+          // Only the list entry goes; the file stays where it is.
+          IconButton(
+            tooltip: 'Quitar del historial (no borra el archivo)',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Symbols.close_rounded, size: 18, color: c.muted),
+            onPressed: () => hub.removeHistory(h.id),
+          ),
         ],
       ),
     );

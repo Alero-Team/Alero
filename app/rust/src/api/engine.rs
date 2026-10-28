@@ -260,6 +260,11 @@ pub fn history() -> Result<Vec<HistoryItem>, String> {
         .collect())
 }
 
+/// Removes one record from the list; never deletes the file itself.
+pub fn remove_history(id: String) -> Result<(), String> {
+    call(Cmd::RemoveHistory { id }).map(drop)
+}
+
 pub fn clear_history() -> Result<(), String> {
     call(Cmd::ClearHistory).map(drop)
 }

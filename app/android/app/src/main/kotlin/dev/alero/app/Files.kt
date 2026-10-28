@@ -60,6 +60,26 @@ object Files {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
+    /** Which libraries are fully readable; `limited` = Android 14+ "selected photos only" (partial, not full access). */
+    fun mediaState(): Map<String, Boolean> {
+        val full = Build.VERSION.SDK_INT < 33
+        fun f(p: String) = if (full) has(Manifest.permission.READ_EXTERNAL_STORAGE) else has(p)
+        val images = f(Manifest.permission.READ_MEDIA_IMAGES)
+        val video = f(Manifest.permission.READ_MEDIA_VIDEO)
+        return mapOf(
+            "images" to images,
+            "video" to video,
+            "audio" to f(Manifest.permission.READ_MEDIA_AUDIO),
+            "limited" to (Build.VERSION.SDK_INT >= 34 && !images && !video && has(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)),
+        )
+    }
+
+    /** What to ask the system for: only what is not granted yet. */
+    fun missingPermissions(): Array<String> = mediaPermissions().filter { !has(it) }.let { m ->
+        // READ_MEDIA_VISUAL_USER_SELECTED alone is not a request; it only travels with photos/videos.
+        if (m.any { it != Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED }) m.toTypedArray() else emptyArray()
+    }
+
     private fun has(p: String) = ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
     /** At least one library can be read (the user may have granted only photos, or only music). */
@@ -149,6 +169,9 @@ object Files {
     private fun uriFor(root: String, id: String): Uri? = when {
         root == "alero" -> if (Build.VERSION.SDK_INT >= 29) ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toLong()) else null
         root.startsWith("tree:") -> trees().getOrNull(root.substring(5).toIntOrNull() ?: -1)?.let { DocumentsContract.buildDocumentUriUsingTree(it, id) }
+        // "t<tree>|<document id>": a photo/video found inside a folder the user added (see listMediaFlat)
+        root in setOf("images", "video") && id.startsWith("t") && id.contains('|') ->
+            trees().getOrNull(id.substring(1, id.indexOf('|')).toIntOrNull() ?: -1)?.let { DocumentsContract.buildDocumentUriUsingTree(it, id.substring(id.indexOf('|') + 1)) }
         root in setOf("images", "video", "audio") -> ContentUris.withAppendedId(mediaUri(root), id.toLong())
         else -> null
     }
@@ -188,6 +211,64 @@ object Files {
         val dirs = folders.entries.sortedBy { it.key.lowercase() }
             .map { (n, f) -> entry(n, true, f[0], f[1], "", "", if (path.isEmpty()) n else "$path/$n") }
         return dirs + files.sortedBy { it.getString("name").lowercase() }
+    }
+
+    /**
+     * Photos or videos from every readable place, as one flat list: the whole MediaStore library (by media type,
+     * not by folder) plus whatever the granted folders hold with an `image/` or `video/` MIME type. A file seen
+     * through both sources is listed once (same real path).
+     */
+    private fun listMediaFlat(root: String): List<JSONObject> {
+        if (!hasMedia(root)) throw SecurityException("media permission")
+        val prefix = if (root == "images") "image/" else "video/"
+        val base = Environment.getExternalStorageDirectory().path
+        val seen = HashSet<String>()
+        val out = ArrayList<JSONObject>()
+        @Suppress("DEPRECATION") val data = MediaStore.MediaColumns.DATA
+        ctx.contentResolver.query(
+            mediaUri(root),
+            arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DATE_MODIFIED, MediaStore.MediaColumns.MIME_TYPE, data),
+            null, null, "${MediaStore.MediaColumns.DATE_MODIFIED} DESC",
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val mime = c.getString(4) ?: ""
+                if (mime.isNotEmpty() && !mime.startsWith(prefix)) continue
+                val path = c.getString(5)
+                if (path != null && !seen.add(path)) continue
+                out += entry(c.getString(1) ?: "?", false, c.getLong(2), c.getLong(3), mime, c.getLong(0).toString())
+            }
+        }
+        trees().forEachIndexed { i, tree ->
+            var budget = 20_000 // documents visited per folder: a deliberate cap so a huge tree cannot stall the phone
+            fun walk(doc: String, depth: Int) {
+                if (depth > 12 || budget <= 0) return
+                val dirs = ArrayList<String>()
+                ctx.contentResolver.query(
+                    DocumentsContract.buildChildDocumentsUriUsingTree(tree, doc),
+                    arrayOf(
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_SIZE,
+                        DocumentsContract.Document.COLUMN_LAST_MODIFIED, DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    ),
+                    null, null, null,
+                )?.use { c ->
+                    while (c.moveToNext() && budget-- > 0) {
+                        val id = c.getString(0)
+                        val mime = c.getString(4) ?: ""
+                        if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+                            dirs += id
+                        } else if (mime.startsWith(prefix)) {
+                            // "primary:DCIM/a.jpg" is /storage/emulated/0/DCIM/a.jpg: the same file MediaStore listed
+                            val real = if (id.startsWith("primary:")) "$base/${id.substring(8)}" else null
+                            if (real != null && !seen.add(real)) continue
+                            out += entry(c.getString(1) ?: "?", false, if (c.isNull(2)) 0 else c.getLong(2), c.getLong(3) / 1000, mime, "t$i|$id")
+                        }
+                    }
+                }
+                dirs.forEach { walk(it, depth + 1) }
+            }
+            try { walk(DocumentsContract.getTreeDocumentId(tree), 0) } catch (_: Exception) {}
+        }
+        return out.sortedByDescending { it.getLong("mtime") }
     }
 
     private fun listAlero(): List<JSONObject> {
@@ -232,7 +313,8 @@ object Files {
         val all = synchronized(cache) { if (offset == 0) null else cache[key] } ?: when {
             root == "alero" -> listAlero()
             root.startsWith("tree:") -> listTree(root, path)
-            root in setOf("images", "video", "audio") -> listMedia(root, path)
+            root == "images" || root == "video" -> listMediaFlat(root)
+            root == "audio" -> listMedia(root, path)
             else -> emptyList()
         }.also { synchronized(cache) { cache[key] = it } }
         val a = JSONArray()

@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
                     default_rust_auto_opaque = RustAutoOpaqueMoi,
                 );
                 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-                pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1414717789;
+                pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -453619412;
             
 
 // Section: executor
@@ -144,6 +144,15 @@ fn wire__crate__api__engine__cancel_transfer_impl(port_: flutter_rust_bridge::fo
             deserializer.end(); move |context|  {
                     transform_result_sse::<_, String>((move ||  {
                          let output_ok = crate::api::engine::peers()?;   std::result::Result::Ok(output_ok)
+                    })())
+                } })
+            }fn wire__crate__api__engine__remove_history_impl(port_: flutter_rust_bridge::for_generated::MessagePort,ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,rust_vec_len_: i32,data_len_: i32)  {
+                FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "remove_history", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <String>::sse_decode(&mut deserializer);deserializer.end(); move |context|  {
+                    transform_result_sse::<_, String>((move ||  {
+                         let output_ok = crate::api::engine::remove_history(api_id)?;   std::result::Result::Ok(output_ok)
                     })())
                 } })
             }fn wire__crate__api__engine__respond_pair_impl(port_: flutter_rust_bridge::for_generated::MessagePort,ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,rust_vec_len_: i32,data_len_: i32)  {
@@ -460,16 +469,17 @@ return crate::api::engine::Peer{id: var_id, name: var_name, addr: var_addr, stat
 9 => wire__crate__api__engine__pair_with_addr_impl(port, ptr, rust_vec_len, data_len),
 10 => wire__crate__api__engine__pair_with_peer_impl(port, ptr, rust_vec_len, data_len),
 11 => wire__crate__api__engine__peers_impl(port, ptr, rust_vec_len, data_len),
-12 => wire__crate__api__engine__respond_pair_impl(port, ptr, rust_vec_len, data_len),
-13 => wire__crate__api__engine__respond_transfer_impl(port, ptr, rust_vec_len, data_len),
-14 => wire__crate__api__engine__retry_impl(port, ptr, rust_vec_len, data_len),
-15 => wire__crate__api__engine__revoke_impl(port, ptr, rust_vec_len, data_len),
-16 => wire__crate__api__engine__send_file_impl(port, ptr, rust_vec_len, data_len),
-17 => wire__crate__api__engine__send_message_impl(port, ptr, rust_vec_len, data_len),
-18 => wire__crate__api__engine__set_auto_accept_impl(port, ptr, rust_vec_len, data_len),
-19 => wire__crate__api__engine__set_name_impl(port, ptr, rust_vec_len, data_len),
-20 => wire__crate__api__engine__shutdown_impl(port, ptr, rust_vec_len, data_len),
-21 => wire__crate__api__engine__start_impl(port, ptr, rust_vec_len, data_len),
+12 => wire__crate__api__engine__remove_history_impl(port, ptr, rust_vec_len, data_len),
+13 => wire__crate__api__engine__respond_pair_impl(port, ptr, rust_vec_len, data_len),
+14 => wire__crate__api__engine__respond_transfer_impl(port, ptr, rust_vec_len, data_len),
+15 => wire__crate__api__engine__retry_impl(port, ptr, rust_vec_len, data_len),
+16 => wire__crate__api__engine__revoke_impl(port, ptr, rust_vec_len, data_len),
+17 => wire__crate__api__engine__send_file_impl(port, ptr, rust_vec_len, data_len),
+18 => wire__crate__api__engine__send_message_impl(port, ptr, rust_vec_len, data_len),
+19 => wire__crate__api__engine__set_auto_accept_impl(port, ptr, rust_vec_len, data_len),
+20 => wire__crate__api__engine__set_name_impl(port, ptr, rust_vec_len, data_len),
+21 => wire__crate__api__engine__shutdown_impl(port, ptr, rust_vec_len, data_len),
+22 => wire__crate__api__engine__start_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
                 }

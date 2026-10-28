@@ -90,7 +90,7 @@ impl Ui {
                     #[cfg(windows)]
                     "pb.x.notif.posted" => {
                         let title = if s("title").is_empty() { s("app") } else { format!("{} · {}", s("app"), s("title")) };
-                        win::toast(&title, &s("text"));
+                        win::toast_icon(&title, &s("text"), &s("pkg"), &s("icon"));
                     }
                     #[cfg(windows)]
                     "pb.x.clip" if !s("text").is_empty() => {
