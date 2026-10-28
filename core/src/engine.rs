@@ -17,7 +17,7 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::frame::{read_frame, write_frame};
+use crate::frame::{read_frame, read_frame_max, write_frame, write_frame_max, MAX_APP_BODY};
 use crate::identity::Identity;
 use crate::store::{HistoryEntry, PeerRecord, Store};
 use crate::tls::{client_config, peer_device_id, server_config, Verifier};
@@ -43,6 +43,7 @@ const OFFER_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_SEND_ATTEMPTS: u32 = 6;
 /// A peer silent for this long is not dialed any more (it is off or away); hearing it again resumes at once.
 const STALE_PEER: Duration = Duration::from_secs(90);
+const MSG_IDLE: Duration = Duration::from_secs(60);
 /// Phones announce rarely once settled (see discovery_loop).
 const QUIET_DISCOVERY: bool = cfg!(target_os = "android");
 
@@ -240,6 +241,8 @@ struct Inner {
     seq: AtomicU64,
     inflight: AtomicUsize,
     disco_status: Mutex<String>,
+    /// One ordered queue (and one kept-open connection) per peer for app messages.
+    msg_queues: Mutex<HashMap<String, Sender<Value>>>,
 }
 
 fn lk<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -496,30 +499,74 @@ impl Inner {
     }
 
     // --- app messages ------------------------------------------------------------------------------------
-    // shortcut: one short TLS connection per message (a LAN handshake is a few ms); multiplex over the
-    // control connection if message rates grow (e.g. live media position).
+    // One msg connection per peer stays open and carries messages in order, each answered with pb.ack
+    // (a handshake per message made remote-control input laggy and unordered). The sender closes it after a
+    // minute without traffic; the receiver also gives up on a silent connection.
 
     fn run_msg_in(&self, mut tls: Tls, peer_id: &str) -> Result<(), String> {
-        tls.timeouts(Duration::from_secs(10));
-        let m = read_frame(&mut tls).map_err(|e| e.code().to_string())?;
-        let kind = m["type"].as_str().unwrap_or("");
-        if !app_kind(kind) {
-            let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PROTOCOL"}}));
-            return Err(format!("not an app message: {kind}"));
+        tls.timeouts(MSG_IDLE + Duration::from_secs(30));
+        loop {
+            // A closed or silent connection simply ends the loop.
+            let Ok(m) = read_frame_max(&mut tls, MAX_APP_BODY) else { return Ok(()) };
+            let kind = m["type"].as_str().unwrap_or("");
+            if !app_kind(kind) {
+                let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PROTOCOL"}}));
+                return Err(format!("not an app message: {kind}"));
+            }
+            if !self.is_trusted(peer_id) {
+                return Ok(());
+            }
+            self.emit(Event::Message { peer_id: peer_id.into(), kind: kind.into(), body: m["body"].clone() });
+            write_frame(&mut tls, &json!({"type":"pb.ack","body":{}})).map_err(|e| e.code().to_string())?;
         }
-        self.emit(Event::Message { peer_id: peer_id.into(), kind: kind.into(), body: m["body"].clone() });
-        write_frame(&mut tls, &json!({"type":"pb.ack","body":{}})).map_err(|e| e.code().to_string())
     }
 
-    fn send_msg(&self, peer_id: &str, addr: SocketAddr, m: &Value) -> Result<(), String> {
-        let mut tls = self.dial(addr, Some(peer_id))?;
-        tls.timeouts(Duration::from_secs(10));
-        self.hello_out(&mut tls, "msg")?;
-        write_frame(&mut tls, m).map_err(|e| e.code().to_string())?;
-        let r = read_frame(&mut tls).map_err(|e| e.code().to_string())?;
+    /// Sends one message over the kept-open connection, opening it first if needed.
+    fn msg_once(&self, conn: &mut Option<Tls>, peer_id: &str, m: &Value) -> Result<(), String> {
+        if conn.is_none() {
+            let addr = self.with_peer(peer_id, |p| p.addr).ok_or("that device has not been seen on the network")?;
+            let mut tls = self.dial(addr, Some(peer_id))?;
+            tls.timeouts(Duration::from_secs(10));
+            self.hello_out(&mut tls, "msg")?;
+            *conn = Some(tls);
+        }
+        let tls = conn.as_mut().expect("just opened");
+        write_frame_max(tls, m, MAX_APP_BODY).map_err(|e| e.code().to_string())?;
+        let r = read_frame(tls).map_err(|e| e.code().to_string())?;
         if r["type"] == "pb.ack" { Ok(()) } else { Err(r["body"]["code"].as_str().unwrap_or("PROTOCOL").to_string()) }
     }
 
+    fn msg_worker(self: Arc<Self>, id: String, rx: Receiver<Value>) {
+        let mut conn: Option<Tls> = None;
+        while !self.stop.load(Ordering::Relaxed) {
+            let m = match rx.recv_timeout(MSG_IDLE) {
+                Ok(m) => m,
+                Err(RecvTimeoutError::Timeout) => {
+                    // Idle: close. Under the lock, so a message queued just now is not lost.
+                    let mut q = lk(&self.msg_queues);
+                    match rx.try_recv() {
+                        Ok(m) => m,
+                        Err(_) => {
+                            q.remove(&id);
+                            return;
+                        }
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => return,
+            };
+            for attempt in 0..2 {
+                match self.msg_once(&mut conn, &id, &m) {
+                    Ok(()) => break,
+                    Err(e) => {
+                        conn = None; // a stale connection (peer restarted) is replaced once
+                        if attempt == 1 || !self.is_trusted(&id) {
+                            self.log(format!("{} to {id} failed: {e}", m["type"].as_str().unwrap_or("message")));
+                        }
+                    }
+                }
+            }
+        }
+    }
     // --- pairing -----------------------------------------------------------------------------------------
 
     fn run_pair(self: &Arc<Self>, mut tls: Tls, peer_id: &str, name: &str, incoming: bool) -> Result<(), String> {
@@ -952,6 +999,7 @@ impl Engine {
             seq: AtomicU64::new(1),
             inflight: AtomicUsize::new(0),
             disco_status: Mutex::new(if cfg.discovery_port == 0 { "discovery off".into() } else { "starting".into() }),
+            msg_queues: Mutex::new(HashMap::new()),
         });
         let me = inner.clone();
         thread::spawn(move || {
@@ -1114,21 +1162,25 @@ impl Engine {
         if !self.inner.is_trusted(peer_id) {
             return Err("that device is not paired".into());
         }
-        let addr = self.inner.with_peer(peer_id, |p| p.addr).ok_or("that device has not been seen on the network")?;
+        self.inner.with_peer(peer_id, |p| p.addr).ok_or("that device has not been seen on the network")?;
         let m = json!({"type": kind, "body": body});
-        if m.to_string().len() > crate::frame::MAX_BODY {
+        if m.to_string().len() > MAX_APP_BODY {
             return Err("message too large".into());
         }
-        let (me, id, kind) = (self.inner.clone(), peer_id.to_string(), kind.to_string());
-        thread::spawn(move || {
-            if let Err(e) = me.send_msg(&id, addr, &m) {
-                me.log(format!("{kind} to {id} failed: {e}"));
+        let mut q = lk(&self.inner.msg_queues);
+        if let Some(tx) = q.get(peer_id) {
+            if tx.send(m.clone()).is_ok() {
+                return Ok(());
             }
-        });
+        }
+        let (tx, rx) = channel();
+        let _ = tx.send(m);
+        q.insert(peer_id.to_string(), tx);
+        let (me, id) = (self.inner.clone(), peer_id.to_string());
+        thread::spawn(move || me.msg_worker(id, rx));
         Ok(())
     }
 
-    /// Answer a `TransferOffer`.
     pub fn respond_transfer(&self, id: &str, accept: bool) {
         if let Some(tx) = lk(&self.inner.offers).get(id) {
             let _ = tx.send(accept);

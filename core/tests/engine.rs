@@ -303,3 +303,44 @@ fn linking_a_paired_address_adds_a_route_without_pairing_again() {
     assert!(!again, "an already paired device must not ask for a new code");
     assert!(a.e.peers().iter().any(|p| p.id == b.e.device_id() && p.trusted && p.state == PeerState::Connected));
 }
+
+#[test]
+fn app_messages_arrive_in_order_over_one_kept_connection_and_large_ones_fit() {
+    let (a, b) = (node("alice", true), node("bob", true));
+    pair(&a, &b);
+    connected(&a, &b);
+    connected(&b, &a);
+    let id = b.e.device_id();
+    for i in 0..300 {
+        a.e.send_message(&id, "pb.x.test", serde_json::json!({ "n": i })).unwrap();
+    }
+    // A remote-screen sized frame (well over the 64 KiB control limit).
+    a.e.send_message(&id, "pb.x.big", serde_json::json!({ "data": "x".repeat(150_000) })).unwrap();
+    assert!(
+        a.e.send_message(&id, "pb.x.huge", serde_json::json!({ "data": "x".repeat(300_000) })).is_err(),
+        "over the application limit"
+    );
+    let a_id = a.e.device_id();
+    // Wait for the last one, then read everything that arrived, in arrival order.
+    b.s.wait(20, |e| match e {
+        Event::Message { peer_id, kind, body } if *peer_id == a_id && kind == "pb.x.test" && body["n"] == 299 => Some(()),
+        _ => None,
+    });
+    let seen: Vec<i64> = b
+        .s
+        .ev
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|e| match e {
+            Event::Message { kind, body, .. } if kind == "pb.x.test" => body["n"].as_i64(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(seen, (0..300).collect::<Vec<i64>>(), "in order, none lost");
+    let len = b.s.wait(10, |e| match e {
+        Event::Message { kind, body, .. } if kind == "pb.x.big" => body["data"].as_str().map(|s| s.len()),
+        _ => None,
+    });
+    assert_eq!(len, 150_000);
+}
