@@ -41,6 +41,7 @@ object Features {
     fun start(c: Context) {
         if (::ctx.isInitialized) return
         ctx = c.applicationContext
+        Files.init(ctx)
         Thread(::loop, "pb-features").apply { isDaemon = true }.start()
         ctx.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
@@ -78,10 +79,13 @@ object Features {
                 // The foreground service (and its notification) exists only while a computer is connected.
                 PbService.update(ctx, onlineNames())
             }
+            "TransferFinished" -> Files.finished(e.getString("id"))
             "Message" -> {
                 val peer = e.getString("peer_id")
                 val body = e.optJSONObject("body") ?: JSONObject()
-                when (e.getString("kind")) {
+                val kind = e.getString("kind")
+                if (kind.startsWith("pb.x.fs.")) return Files.handle(peer, kind, body)
+                when (kind) {
                     "pb.x.info.request" -> hello(peer)
                     "pb.x.clip" -> setClipboard(body.optString("text"))
                     "pb.x.media.cmd" -> NotifListener.command(body)

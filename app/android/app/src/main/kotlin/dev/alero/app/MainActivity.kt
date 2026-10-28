@@ -25,6 +25,7 @@ class MainActivity : FlutterActivity() {
     private var pickResult: MethodChannel.Result? = null
     private var scanResult: MethodChannel.Result? = null
     private var wallpaperResult: MethodChannel.Result? = null
+    private var treeResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,6 +89,45 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                     result.success(null)
                 }
+                "files" -> result.success(
+                    mapOf(
+                        "allowed" to Prefs.files(this),
+                        "permission" to Files.hasAnyMedia(),
+                        "folders" to Files.treeNames(),
+                    ),
+                )
+                "setFiles" -> {
+                    val on = call.arguments as Boolean
+                    Prefs.setFiles(this, on)
+                    // The runtime permission is asked here, at the moment the user turns the feature on.
+                    if (on) requestPermissions(Files.mediaPermissions(), 7)
+                    result.success(null)
+                }
+                "addFolder" -> {
+                    treeResult?.success(false)
+                    treeResult = result
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), TREE)
+                }
+                "removeFolder" -> {
+                    Files.removeTree(call.arguments as Int)
+                    result.success(null)
+                }
+                "openUsbSettings" -> {
+                    // No public API for the USB mode. The Pixel's USB screen is the nearest we can open; elsewhere
+                    // the general settings, and the in-app guide explains the notification route.
+                    val tries = listOf(
+                        Intent().setClassName("com.android.settings", "com.android.settings.Settings\$UsbDetailsActivity"),
+                        Intent(Settings.ACTION_DEVICE_INFO_SETTINGS),
+                        Intent(Settings.ACTION_SETTINGS),
+                    )
+                    for (i in tries) {
+                        try {
+                            startActivity(i)
+                            break
+                        } catch (_: Exception) {}
+                    }
+                    result.success(null)
+                }
                 "openTethering" -> {
                     // USB tethering lives on a different screen per maker; the generic wireless page is the fallback.
                     try {
@@ -104,7 +144,8 @@ class MainActivity : FlutterActivity() {
                     com.google.zxing.integration.android.IntentIntegrator(this)
                         .setPrompt("Escanea el código del ordenador")
                         .setBeepEnabled(false)
-                        .setOrientationLocked(false)
+                        .setCaptureActivity(PortraitCaptureActivity::class.java)
+                        .setOrientationLocked(true)
                         .initiateScan(listOf(com.google.zxing.integration.android.IntentIntegrator.QR_CODE))
                 }
                 "takeShared" -> result.success(takeShared())
@@ -147,6 +188,19 @@ class MainActivity : FlutterActivity() {
         com.google.zxing.integration.android.IntentIntegrator.parseActivityResult(requestCode, resultCode, data)?.let {
             scanResult?.success(it.contents)
             scanResult = null
+            return
+        }
+        if (requestCode == TREE) {
+            val r = treeResult ?: return
+            treeResult = null
+            val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
+            if (uri == null) return r.success(false)
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                r.success(true)
+            } catch (_: Exception) {
+                r.success(false)
+            }
             return
         }
         if (requestCode == WALLPAPER) {
@@ -212,6 +266,7 @@ class MainActivity : FlutterActivity() {
         private var shared: Intent? = null
         private const val PICK = 41
         private const val WALLPAPER = 42
+        private const val TREE = 43
         private val open = HashMap<Int, ParcelFileDescriptor>()
     }
 }

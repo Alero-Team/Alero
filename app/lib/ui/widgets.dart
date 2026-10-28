@@ -400,7 +400,7 @@ class SettingTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: weight(t.bodyLarge, 500)),
+                    Text(title, style: weight(t.bodyLarge, 500), maxLines: 2, overflow: TextOverflow.ellipsis),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(subtitle!, style: t.bodySmall?.copyWith(color: context.pal.muted)),

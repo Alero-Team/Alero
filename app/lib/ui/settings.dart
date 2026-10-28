@@ -113,6 +113,69 @@ class SettingsScreen extends StatelessWidget {
           )
         : null;
 
+    final remote = Platform.isAndroid
+        ? null
+        : Panel(
+            title: 'Control remoto',
+            icon: Symbols.settings_remote_rounded,
+            child: Column(
+              children: [
+                SettingTile(
+                  title: 'Permitir que mis teléfonos controlen este equipo',
+                  subtitle: Platform.isWindows
+                      ? 'Mover el ratón, escribir, cambiar el volumen y la música, ver la pantalla y pedir capturas. Solo desde dispositivos emparejados; verás un aviso cuando se use. Bloquear o suspender siempre se confirman en el teléfono. Apagado por defecto.'
+                      : 'Todavía no está disponible en este sistema (hace falta uinput y el portal de pantalla). Solo Windows por ahora.',
+                  trailing: AleroSwitch(
+                    value: hub.remoteAllow,
+                    onChanged: Platform.isWindows ? hub.setRemoteAllow : (_) {},
+                    label: 'Control remoto',
+                  ),
+                  onTap: Platform.isWindows ? () => hub.setRemoteAllow(!hub.remoteAllow) : null,
+                ),
+              ],
+            ),
+          );
+
+    final files = Platform.isAndroid
+        ? Panel(
+            title: 'Archivos para el ordenador',
+            icon: Symbols.folder_shared_rounded,
+            child: Column(
+              children: [
+                SettingTile(
+                  title: 'Dejar que el ordenador explore mis archivos',
+                  subtitle:
+                      'Un ordenador emparejado podrá ver y descargar tus fotos, vídeos, música y las carpetas que añadas abajo. Nunca las carpetas privadas de otras apps. Apagado por defecto.',
+                  trailing: AleroSwitch(value: hub.filesAllowed, onChanged: hub.setFilesAllowed, label: 'Explorar archivos desde el ordenador'),
+                  onTap: () => hub.setFilesAllowed(!hub.filesAllowed),
+                ),
+                if (hub.filesAllowed && !hub.filesPermission)
+                  SettingTile(
+                    title: 'Falta el permiso de fotos, vídeos y música',
+                    subtitle: 'Sin él, solo se ven «Recibidos de Alero» y las carpetas añadidas.',
+                    trailing: TextButton(onPressed: Native.openAppSettings, child: const Text('Permisos')),
+                  ),
+                for (final (i, name) in hub.filesFolders.indexed)
+                  SettingTile(
+                    leading: Icon(Symbols.folder_rounded, size: 20, color: s.onSurfaceVariant),
+                    title: name,
+                    subtitle: 'Carpeta añadida',
+                    trailing: IconButton(
+                      tooltip: 'Quitar $name',
+                      icon: Icon(Symbols.close_rounded, size: 20, color: s.onSurfaceVariant),
+                      onPressed: () => hub.removeFilesFolder(i),
+                    ),
+                  ),
+                SettingTile(
+                  title: 'Añadir una carpeta',
+                  subtitle: 'Android te deja elegir cuál (por ejemplo Documentos). Solo se comparte esa carpeta.',
+                  trailing: FilledButton.tonal(onPressed: hub.addFilesFolder, child: const Text('Añadir')),
+                ),
+              ],
+            ),
+          )
+        : null;
+
     final look = Panel(
       title: 'Apariencia',
       icon: Symbols.palette_rounded,
@@ -132,6 +195,16 @@ class SettingsScreen extends StatelessWidget {
               onSelectionChanged: (v) => hub.setTheme(v.first),
             ),
           ),
+          SettingTile(
+            title: 'Modo AMOLED',
+            subtitle: 'Negro puro como fondo del tema oscuro. Ahorra batería en pantallas OLED. Solo se nota cuando el tema oscuro está en uso.',
+            trailing: ValueListenableBuilder(
+              valueListenable: hub.amoled,
+              builder: (_, on, _) => AleroSwitch(value: on, onChanged: hub.setAmoled, label: 'Modo AMOLED'),
+            ),
+            onTap: () => hub.setAmoled(!hub.amoled.value),
+          ),
+          const SizedBox(height: Gap.xs),
           Text(
             Platform.isAndroid
                 ? 'Los colores siguen los de tu fondo de pantalla (Material You).'
@@ -200,9 +273,9 @@ class SettingsScreen extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: Column(children: [device, gap, receive, gap, ?phone, if (phone != null) gap, ?perms])),
+                  Expanded(child: Column(children: [device, gap, receive, gap, ?phone, if (phone != null) gap, ?files, if (files != null) gap, ?perms])),
                   gap,
-                  Expanded(child: Column(children: [look, gap, diag])),
+                  Expanded(child: Column(children: [look, gap, ?remote, if (remote != null) gap, diag])),
                 ],
               ),
             ]
@@ -212,8 +285,10 @@ class SettingsScreen extends StatelessWidget {
               receive,
               gap,
               if (phone != null) ...[phone, gap],
+              if (files != null) ...[files, gap],
               look,
               gap,
+              if (remote != null) ...[remote, gap],
               if (perms != null) ...[perms, gap],
               diag,
             ],

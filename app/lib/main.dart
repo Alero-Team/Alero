@@ -25,14 +25,14 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     // Only theme inputs rebuild the app; engine events rebuild the screens below.
-    listenable: Listenable.merge([color, hub.themeMode]),
+    listenable: Listenable.merge([color, hub.themeMode, hub.amoled]),
     builder: (_, _) {
       final (seed, variant) = color.value;
       return MaterialApp(
         title: 'Alero',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(seed, variant, Brightness.light),
-        darkTheme: buildTheme(seed, variant, Brightness.dark),
+        darkTheme: buildTheme(seed, variant, Brightness.dark, amoled: hub.amoled.value),
         themeMode: switch (hub.theme) {
           'light' => ThemeMode.light,
           'dark' => ThemeMode.dark,

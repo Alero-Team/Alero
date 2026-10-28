@@ -11,6 +11,7 @@ import 'clipboard.dart';
 import 'expressive.dart';
 import 'media.dart';
 import 'notifications.dart';
+import 'phone_home.dart';
 import 'screen.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -48,6 +49,24 @@ class HomeScreen extends StatelessWidget {
     }
 
     final hero = _Hero(main, info, hub, go: go);
+    if (Platform.isAndroid && !phone) {
+      // A phone looking at a computer: identity and state, the day-to-day actions, then the remote.
+      const gap = SizedBox(height: Gap.l);
+      return ScreenFrame(
+        title: 'Inicio',
+        onRefresh: hub.refresh,
+        children: [
+          if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
+          hero,
+          gap,
+          QuickActions(hub, main),
+          gap,
+          ControlCard(hub, main),
+          gap,
+          _Recent(hub, go: go),
+        ],
+      );
+    }
     final recent = _Recent(hub, go: go);
     final media = online && phone ? MediaPanel(hub, main.id) : null;
     final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
@@ -135,7 +154,7 @@ class _Hero extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final online = p.state == pb.PeerState.connected;
     final phone = info?.phone ?? !Platform.isAndroid;
-    final facts = [info?.osLabel ?? '', info?.network ?? ''].where((x) => x.isNotEmpty).join(' · ');
+    final facts = [info?.osLabel ?? '', info?.network ?? '', if (online) hub.routeOf(p)].where((x) => x.isNotEmpty).join(' · ');
     final picture = phone
         ? PhoneMockup(info: info, wallpaper: hub.wallpaper[p.id], width: 72, online: online)
         : const DesktopGlyph(size: 72, icon: Symbols.computer_rounded);
@@ -198,6 +217,7 @@ class _Hero extends StatelessWidget {
                 ),
               ],
             ),
+            if (!Platform.isAndroid) ...[
             const SizedBox(height: Gap.xl),
             // M3 Expressive button group: one primary action, the rest tonal.
             Wrap(
@@ -218,6 +238,7 @@ class _Hero extends StatelessWidget {
                   ),
               ],
             ),
+            ],
           ],
         ),
       ),

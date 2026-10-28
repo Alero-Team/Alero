@@ -10,8 +10,11 @@ import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'brand.dart';
 import 'devices.dart';
+import 'explorer.dart';
 import 'expressive.dart';
 import 'home.dart';
+import 'nav.dart';
+import 'pc_screen.dart';
 import 'settings.dart';
 import 'theme.dart';
 import 'transfers.dart';
@@ -19,7 +22,7 @@ import 'widgets.dart';
 
 /// Four top-level places. Clipboard, notifications, media and screen are things you do with a device, so they
 /// live on Home as panels and actions, not as destinations (fewer places, each with one purpose).
-enum Section { home, files, devices, settings }
+enum Section { home, files, explorer, devices, settings }
 
 class _Dest {
   const _Dest(this.section, this.label, this.icon);
@@ -28,11 +31,13 @@ class _Dest {
   final IconData icon;
 }
 
-const _dests = [
-  _Dest(Section.home, 'Inicio', Symbols.home_rounded),
-  _Dest(Section.files, 'Archivos', Symbols.folder_rounded),
-  _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded),
-  _Dest(Section.settings, 'Ajustes', Symbols.settings_rounded),
+/// The phone's own file browser is a computer feature: it reads another device's files, so it has no place on a phone.
+final _dests = [
+  const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
+  const _Dest(Section.files, 'Archivos', Symbols.folder_rounded),
+  if (!Platform.isAndroid) const _Dest(Section.explorer, 'Explorador', Symbols.perm_media_rounded),
+  const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded),
+  const _Dest(Section.settings, 'Ajustes', Symbols.settings_rounded),
 ];
 
 /// App frame: side navigation on wide windows, floating glass bar on phones. Owns the questions the engine
@@ -48,9 +53,10 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Hub get hub => widget.hub;
-  Section _section = Section.home;
+  // ALERO_SECTION=explorer (etc.) opens that screen first: handy for screenshots and manual checks.
+  Section _section = Section.values.where((s) => s.name == Platform.environment['ALERO_SECTION']).firstOrNull ?? Section.home;
   late final StreamSubscription<String> _msgs;
-  bool _shareOpen = false;
+  bool _shareOpen = false, _shotOpen = false;
 
   @override
   void initState() {
@@ -107,6 +113,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     } else if (o == null && _offerRoute != null && _offerRoute!.isActive) {
       Navigator.of(context).removeRoute(_offerRoute!);
     }
+    if (hub.shot != null && !_shotOpen) {
+      _shotOpen = true;
+      showShot(context, hub).whenComplete(() => _shotOpen = false);
+    }
     if (hub.share != null && !_shareOpen) {
       _shareOpen = true;
       showModalBottomSheet<void>(
@@ -123,6 +133,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Widget _page() => switch (_section) {
     Section.home => HomeScreen(hub, go: _go),
     Section.files => TransfersScreen(hub),
+    Section.explorer => ExplorerScreen(hub),
     Section.devices => DevicesScreen(hub),
     Section.settings => SettingsScreen(hub),
   };
@@ -214,30 +225,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     body: page,
     bottomNavigationBar: SafeArea(
       minimum: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.m),
-      child: Glass(
-        radius: Radii.card + 4,
-        child: NavigationBar(
-          selectedIndex: _dests.indexWhere((d) => d.section == _section),
-          onDestinationSelected: (i) => _go(_dests[i].section),
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          animationDuration: motion(context, Spring.spatial.settle),
-          destinations: [
-            for (final d in _dests)
-              NavigationDestination(
-                icon: _withBadge(d.section, Icon(d.icon)),
-                selectedIcon: _withBadge(d.section, Icon(d.icon, fill: 1)),
-                label: d.label,
-              ),
-          ],
-        ),
+      child: AleroNavBar(
+        items: [for (final d in _dests) NavData(d.icon, d.label, badge: _badge(d.section))],
+        selected: _dests.indexWhere((d) => d.section == _section),
+        onSelect: (i) => _go(_dests[i].section),
       ),
     ),
   );
-
-  Widget _withBadge(Section s, Widget icon) {
-    final n = _badge(s);
-    return n > 0 ? Badge(label: Text('$n'), child: icon) : icon;
-  }
 }
 
 /// Sidebar destination: a full-width pill with icon and label on one line, so they line up exactly.
@@ -384,7 +378,7 @@ class _ShareSheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(Gap.m),
-        child: Glass(
+        child: SolidSurface(
           padding: const EdgeInsets.all(Gap.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -645,7 +639,7 @@ class _DropState extends State<_Drop> {
                   curve: Spring.spatial,
                   child: Padding(
                     padding: const EdgeInsets.all(Gap.xl),
-                    child: Glass(
+                    child: SolidSurface(
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,

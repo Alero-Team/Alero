@@ -97,8 +97,27 @@ TextStyle? weight(TextStyle? s, int w) => s?.copyWith(
   fontVariations: [FontVariation('wght', w.toDouble())],
 );
 
-ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b) {
-  final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: b, dynamicSchemeVariant: variant);
+/// The color scheme for a seed. [amoled] (dark only) swaps the grey surfaces for pure black and near-black steps:
+/// the accent colors, text and outline roles are untouched, so contrast and identity stay as in the dark theme.
+ColorScheme schemeFor(Color seed, DynamicSchemeVariant variant, Brightness b, {bool amoled = false}) {
+  final s = ColorScheme.fromSeed(seedColor: seed, brightness: b, dynamicSchemeVariant: variant);
+  if (!amoled || b != Brightness.dark) return s;
+  return s.copyWith(
+    surface: Colors.black,
+    surfaceDim: Colors.black,
+    surfaceBright: const Color(0xFF242424),
+    surfaceContainerLowest: Colors.black,
+    surfaceContainerLow: const Color(0xFF0C0C0C),
+    surfaceContainer: const Color(0xFF131313),
+    surfaceContainerHigh: const Color(0xFF1B1B1B),
+    surfaceContainerHighest: const Color(0xFF242424),
+    // Hairlines must stay visible against black.
+    outlineVariant: Color.lerp(s.outlineVariant, Colors.white, 0.12),
+  );
+}
+
+ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bool amoled = false}) {
+  final scheme = schemeFor(seed, variant, b, amoled: amoled);
   final p = Palette.of(scheme);
   final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b, fontFamily: font);
   final t = base.textTheme;
@@ -130,7 +149,11 @@ ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b) {
       color: p.surface,
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
+      // A discreet border keeps cards readable on any surface, black included.
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Radii.card),
+        side: BorderSide(color: p.line.withValues(alpha: 0.55)),
+      ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(

@@ -18,6 +18,10 @@ object Prefs {
     private fun sp(c: Context) = c.getSharedPreferences("alero", Context.MODE_PRIVATE)
     fun background(c: Context) = sp(c).getBoolean("background", false)
     fun setBackground(c: Context, on: Boolean) = sp(c).edit().putBoolean("background", on).apply()
+
+    /** The owner lets a paired computer browse photos, videos, music and chosen folders. Off by default. */
+    fun files(c: Context) = sp(c).getBoolean("files", false)
+    fun setFiles(c: Context, on: Boolean) = sp(c).edit().putBoolean("files", on).apply()
 }
 
 /** A silent status notification (the service) and alerts for the things that need the user. */

@@ -7,6 +7,8 @@ import '../hub.dart';
 import '../native.dart';
 import '../remote.dart';
 import '../src/rust/api/engine.dart' as pb;
+import 'connect_help.dart';
+import 'pc_details.dart';
 import 'qr.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -160,36 +162,18 @@ class _DevicesScreenState extends State<DevicesScreen> {
       ),
     );
 
-    final cablePanel = Panel(
-      title: 'Cable USB',
-      icon: Symbols.usb_rounded,
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              Platform.isAndroid
-                  ? 'Sin Wi-Fi, conecta el cable al ordenador y activa «Anclaje USB». El ordenador te encontrará solo. También puedes pulsar «Conectar por cable» en el ordenador.'
-                  : 'Sin Wi-Fi, conecta el teléfono con un cable. Activa «Depuración USB» en el teléfono y acepta la autorización. Después todo funciona igual: archivos, portapapeles, notificaciones y pantalla.',
-              style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(width: Gap.m),
-          Platform.isAndroid
-              ? FilledButton.tonalIcon(
-                  onPressed: Native.openTethering,
-                  icon: const Icon(Symbols.usb_rounded, size: 18),
-                  label: const Text('Anclaje USB'),
-                )
-              : FilledButton.tonalIcon(
-                  onPressed: hub.connectCable,
-                  icon: const Icon(Symbols.usb_rounded, size: 18),
-                  label: const Text('Conectar'),
-                ),
-        ],
-      ),
-    );
+    final cablePanel = ConnectionPanel(hub);
 
     const gap = SizedBox(height: Gap.l, width: Gap.l);
+    // A phone sees what each connected computer reports and can do with it (advanced controls).
+    final details = Platform.isAndroid
+        ? [
+            for (final p in paired.where((p) => p.state == pb.PeerState.connected && (hub.info[p.id]?.phone != true))) ...[
+              PcDetails(hub, p),
+              gap,
+            ],
+          ]
+        : const <Widget>[];
     return ScreenFrame(
       title: 'Dispositivos',
       onRefresh: hub.refresh,
@@ -204,7 +188,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                 ],
               ),
             ]
-          : [pairedPanel, gap, qrPanel, gap, nearbyPanel, gap, cablePanel, gap, ipPanel],
+          : [...details, pairedPanel, gap, qrPanel, gap, nearbyPanel, gap, cablePanel, gap, ipPanel],
     );
   }
 }

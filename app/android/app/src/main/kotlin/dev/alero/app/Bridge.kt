@@ -15,6 +15,9 @@ object Bridge {
     /** null on success, else the error. */
     external fun send(peer: String, kind: String, body: String): String?
 
+    /** Starts sending a file (`fd:N` for an open descriptor). Returns the transfer id, or `!` + the error. */
+    external fun sendFile(peer: String, path: String, name: String): String
+
     /** JSON array of peers, or null if the engine is not running yet. */
     external fun peers(): String?
 

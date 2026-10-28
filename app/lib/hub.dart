@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'fs_client.dart';
 import 'native.dart';
+import 'pc_remote.dart';
 import 'remote.dart';
 import 'scrcpy.dart';
 import 'src/rust/api/engine.dart' as pb;
@@ -37,6 +39,26 @@ class Hub extends ChangeNotifier {
   final notifs = <String, List<PhoneNotif>>{};
   final media = <String, MediaState>{};
   final wallpaper = <String, Uint8List>{};
+
+  /// Phone side: drives a paired computer (mouse, keys, volume, media, screenshots, its screen).
+  late final remote = PcRemote(this);
+
+  /// Computer side: browsing a phone's files. Files it asks for are accepted without a prompt (we asked).
+  late final fs = FsClient(this);
+  final _expected = <String, (bool, DateTime)>{};
+
+  void expectFromPhone(String name, {bool open = false}) {
+    _expected.removeWhere((_, v) => DateTime.now().difference(v.$2) > const Duration(minutes: 10));
+    _expected[name] = (open, DateTime.now());
+  }
+  ScreenFeed? screen;
+
+  /// The computer we asked for a screenshot, and the one that arrived (the UI shows it, then clears it).
+  String? shotWanted;
+  Shot? shot;
+
+  /// Computer side: the owner's switch for remote control. The daemon reads the same file (remote.json).
+  bool remoteAllow = false;
   final clips = <ClipItem>[];
 
   /// Android: special access for notifications/media, and the normal notification permission.
@@ -46,11 +68,18 @@ class Hub extends ChangeNotifier {
   /// chose a wallpaper image to show on the computer.
   bool background = false, customWallpaper = false;
 
+  /// Android: may a paired computer browse this phone's files (photos, videos, music, chosen folders)?
+  bool filesAllowed = false, filesPermission = false;
+  List<String> filesFolders = const [];
+
   /// Files/text another Android app shared with us, waiting for the user to pick a device.
   Shared? share;
 
   /// 'system' | 'light' | 'dark'. A notifier of its own so only the theme (not the whole app) rebuilds.
   final themeMode = ValueNotifier('system');
+
+  /// Pure-black variant of the dark theme; independent of the mode above (it only shows while dark is in use).
+  final amoled = ValueNotifier(false);
   String get theme => themeMode.value;
 
   late File _settings;
@@ -67,6 +96,8 @@ class Hub extends ChangeNotifier {
     name = s['name'] as String? ?? await Native.deviceName();
     autoAccept = s['autoAccept'] as bool? ?? true;
     themeMode.value = s['theme'] as String? ?? 'system';
+    amoled.value = s['amoled'] as bool? ?? false;
+    remoteAllow = _readRemote();
     pb.events().listen(_on);
     Native.onShared(takeShare);
     try {
@@ -93,6 +124,27 @@ class Hub extends ChangeNotifier {
     }
   }
 
+  File get _remoteFile => File('${_settings.parent.path}/remote.json');
+
+  bool _readRemote() {
+    try {
+      return (jsonDecode(_remoteFile.readAsStringSync()) as Map)['allow'] == true;
+    } catch (_) {
+      return false; // missing or unreadable: control stays off
+    }
+  }
+
+  /// Computer: let paired phones control this computer (the daemon enforces it) and tell them right away.
+  void setRemoteAllow(bool on) {
+    _remoteFile.parent.createSync(recursive: true);
+    _remoteFile.writeAsStringSync(jsonEncode({'allow': on}));
+    remoteAllow = on;
+    for (final p in peers.where(_online)) {
+      sendMessage(p.id, 'pb.x.remote.state', {'allowed': on});
+    }
+    notifyListeners();
+  }
+
   Map<String, dynamic> _readSettings() {
     try {
       return jsonDecode(_settings.readAsStringSync()) as Map<String, dynamic>;
@@ -103,7 +155,7 @@ class Hub extends ChangeNotifier {
 
   void _saveSettings() {
     _settings.parent.createSync(recursive: true);
-    _settings.writeAsStringSync(jsonEncode({'name': name, 'autoAccept': autoAccept, 'theme': theme}));
+    _settings.writeAsStringSync(jsonEncode({'name': name, 'autoAccept': autoAccept, 'theme': theme, 'amoled': amoled.value}));
   }
 
   Future<void> refresh() async {
@@ -153,6 +205,10 @@ class Hub extends ChangeNotifier {
                 },
         );
         refresh();
+      case pb.Event_TransferOffer() when _expected.containsKey(e.name) && peers.any((p) => p.id == e.peerId && p.trusted):
+        // A file we asked a phone for (explorer): no question.
+        pb.respondTransfer(id: e.id, accept: true);
+        return;
       case pb.Event_TransferOffer():
         offer = e;
         Native.alert('Archivo entrante', '${e.peerName} quiere enviarte ${e.name}');
@@ -190,6 +246,15 @@ class Hub extends ChangeNotifier {
     final fd = _fds.remove(e.id);
     if (fd != null) Native.closeFd(fd);
     var where = '';
+    // A screenshot we asked for: read it before the platform moves it to Downloads, so it can be shown at once.
+    Shot? arrived;
+    if (e.ok && x?.incoming == true && e.path.isNotEmpty && (x?.name ?? '').startsWith('Captura-PC-')) {
+      try {
+        arrived = Shot(File(e.path).readAsBytesSync(), x!.name, x.peerName);
+      } catch (_) {
+        // unreadable: it is still saved, only the preview is missing
+      }
+    }
     if (e.ok && x?.incoming == true && e.path.isNotEmpty) where = await Native.publish(e.path);
     final n = x?.name ?? 'archivo';
     messages.add(switch (e) {
@@ -198,7 +263,19 @@ class Hub extends ChangeNotifier {
       _ when e.code == 'CANCELLED' => 'Cancelado: $n',
       _ => 'Falló $n: ${explain(e.code, e.message)}',
     });
-    if (e.ok && x?.incoming == true) Native.alert('Archivo recibido', n);
+    final want = x != null && e.ok && x.incoming ? _expected.remove(x.name) : null;
+    if (want != null) {
+      messages.add('Descargado: ${x!.name}');
+      if (want.$1 && e.path.isNotEmpty) FsClient.openFile(e.path);
+    } else if (!e.ok && x != null) {
+      _expected.remove(x.name);
+    }
+    if (arrived != null) {
+      shot = arrived;
+      shotWanted = null;
+    } else if (e.ok && x?.incoming == true) {
+      Native.alert('Archivo recibido', n);
+    }
     await refresh();
   }
 
@@ -216,24 +293,14 @@ class Hub extends ChangeNotifier {
   Future<void> _send(String peerId, String kind, Map<String, Object?> body) =>
       _run(() => pb.sendMessage(peerId: peerId, kind: kind, body: jsonEncode(body)));
 
-  /// On connect: our own info (desktop; Android's comes from the service) and a request for theirs.
-  void _hello(String peerId) {
-    if (!Platform.isAndroid) _send(peerId, 'pb.x.info', _desktopInfo());
-    _send(peerId, 'pb.x.info.request', {});
-  }
+  Future<void> sendMessage(String peerId, String kind, Map<String, Object?> body) => _send(peerId, kind, body);
 
-  Map<String, Object?> _desktopInfo() {
-    final os = Platform.isWindows ? 'Windows' : (Platform.isLinux ? 'Linux' : Platform.operatingSystem);
-    final build = int.tryParse(RegExp(r'Build (\d+)').firstMatch(Platform.operatingSystemVersion)?.group(1) ?? '');
-    final version = Platform.isWindows && build != null ? (build >= 22000 ? '11' : '10') : '';
-    return {
-      'kind': 'desktop',
-      'model': name,
-      'os': os,
-      'osVersion': version,
-      'battery': {'level': -1},
-    };
-  }
+  /// On connect: ask for the other side's info (a computer's own info comes from its daemon, a phone's from its
+  /// service; each answers by itself when it sees us connect, this covers a window opened later).
+  void _hello(String peerId) => _send(peerId, 'pb.x.info.request', {});
+
+  /// How we reach a paired device, in words: a USB cable shows up as a loopback address.
+  String routeOf(pb.Peer p) => p.addr.startsWith('127.0.0.1') || p.addr.startsWith('[::1]') ? 'Cable USB' : 'Red local';
 
   void _message(String peerId, String kind, String raw) {
     final Map<String, dynamic> b;
@@ -242,12 +309,32 @@ class Hub extends ChangeNotifier {
     } catch (_) {
       return;
     }
+    if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
     switch (kind) {
       case 'pb.x.info':
         info[peerId] = PeerInfo(b);
       case 'pb.x.info.request':
-        if (!Platform.isAndroid) _send(peerId, 'pb.x.info', _desktopInfo());
+        return; // the daemon (computer) or the service (phone) answers, window or not
+      case 'pb.x.remote.state':
+        final cur = info[peerId];
+        if (cur != null) info[peerId] = cur.withAllowed(b['allowed'] == true);
+      case 'pb.x.remote.denied':
+        final why = b['reason'] as String? ?? '';
+        if (why == 'not_allowed') {
+          final cur = info[peerId];
+          if (cur != null) info[peerId] = cur.withAllowed(false);
+          messages.add('Ese ordenador no permite el control remoto. Actívalo en Alero › Ajustes del ordenador.');
+        } else {
+          messages.add(why == 'unsupported' ? 'Este ordenador no admite esa función todavía.' : 'No se pudo completar la acción en el ordenador.');
+        }
+      case 'pb.x.remote.power.result':
+        messages.add(b['ok'] == true ? 'Hecho' : 'El ordenador no pudo hacerlo');
         return;
+      case 'pb.x.screen.frame':
+        screen?.onFrame(b); // notifies by itself: the whole app does not repaint five times a second
+        return;
+      case 'pb.x.pcmedia.state':
+        media[peerId] = MediaState(b);
       case 'pb.x.notif.snapshot':
         notifs[peerId] = [
           for (final n in (b['items'] as List? ?? []))
@@ -359,7 +446,26 @@ class Hub extends ChangeNotifier {
     notifPermission = await Native.notifPermission();
     background = await Native.background();
     customWallpaper = await Native.hasWallpaper();
+    final f = await Native.files();
+    filesAllowed = f.allowed;
+    filesPermission = f.permission;
+    filesFolders = f.folders;
     notifyListeners();
+  }
+
+  Future<void> setFilesAllowed(bool on) async {
+    await Native.setFiles(on);
+    filesAllowed = on;
+    notifyListeners();
+  }
+
+  Future<void> addFilesFolder() async {
+    if (await Native.addFolder()) await checkPermissions();
+  }
+
+  Future<void> removeFilesFolder(int i) async {
+    await Native.removeFolder(i);
+    await checkPermissions();
   }
 
   Future<void> setBackground(bool on) async {
@@ -386,6 +492,12 @@ class Hub extends ChangeNotifier {
   Future<void> openDownloads() => Native.openFolder(downloads);
 
   Future<void> openNotifAccess() => Native.openNotifAccess();
+
+  void setAmoled(bool on) {
+    amoled.value = on;
+    _saveSettings();
+    notifyListeners();
+  }
 
   void setTheme(String t) {
     themeMode.value = t;

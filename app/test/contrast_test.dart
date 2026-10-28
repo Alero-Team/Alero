@@ -21,9 +21,8 @@ void main() {
   for (final seed in seeds) {
     for (final b in Brightness.values) {
       test('contrast ${seed.toARGB32().toRadixString(16)} $b', () {
-        final p = Palette.of(
-          ColorScheme.fromSeed(seedColor: seed, brightness: b, dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot),
-        );
+        for (final amoled in [false, true]) {
+        final p = Palette.of(schemeFor(seed, DynamicSchemeVariant.tonalSpot, b, amoled: amoled));
         // Text: 4.5:1. Indicators (dots, progress, icons that carry state): 3:1.
         for (final (fg, bg, min, what) in [
           (p.ink, p.bg, 4.5, 'ink/bg'),
@@ -36,7 +35,13 @@ void main() {
           (p.signal, p.alt, 3.0, 'signal/alt'),
           (p.danger, p.surface, 4.5, 'danger/surface'),
         ]) {
-          expect(ratio(fg, bg), greaterThanOrEqualTo(min), reason: what);
+          expect(ratio(fg, bg), greaterThanOrEqualTo(min), reason: '$what amoled=$amoled');
+        }
+        if (amoled && b == Brightness.dark) {
+          // The page really is black, and cards/lines stay distinguishable from it.
+          expect(p.bg, Colors.black);
+          expect(ratio(p.line, Colors.black), greaterThanOrEqualTo(1.5), reason: 'hairline on black');
+        }
         }
       });
     }

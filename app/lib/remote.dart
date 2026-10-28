@@ -43,6 +43,23 @@ class PeerInfo {
   int get storageFree => ((j['storage'] as Map?)?['free'] as num?)?.toInt() ?? 0;
   int get storageTotal => ((j['storage'] as Map?)?['total'] as num?)?.toInt() ?? 0;
   bool get notifAccess => j['notifAccess'] == true;
+
+  /// A computer's remote-control capabilities (the "remote" field of its pb.x.info). Absent on phones and old versions.
+  Map? get _remote => j['remote'] as Map?;
+  bool get remoteAllowed => _remote?['allowed'] == true;
+  bool get canInput => _remote?['input'] == true;
+  bool get canScreen => _remote?['screen'] == true;
+  bool get canMedia => _remote?['media'] == true;
+  bool get canPower => _remote?['power'] == true;
+
+  /// Laptops report a battery; desktops report none (-1).
+  bool get hasBattery => battery >= 0;
+
+  /// Same info with the user's switch changed (the computer tells us when its owner flips it).
+  PeerInfo withAllowed(bool on) => PeerInfo({
+    ...j,
+    'remote': {...?_remote, 'allowed': on},
+  });
   ScreenShape? get screen => ScreenShape.from(j['screen']);
 
   /// Dominant colours of the phone's wallpaper (ARGB), which Android hands to any app without a permission.

@@ -11,7 +11,7 @@ import '../remote.dart';
 import 'theme.dart';
 
 /// Material 3 Expressive pieces Flutter 3.47 does not ship: spring motion, wavy progress, cookie shape, shape
-/// morphing; plus the glass panel used only on floating elements (ADR-0008).
+/// morphing, and a solid floating surface.
 
 /// Spring as a [Curve], so implicit animations (AnimatedContainer…) move like M3 Expressive.
 /// Stiffness/damping from the M3 Expressive motion scheme (REPORTADO: values mirrored by community ports of
@@ -142,9 +142,10 @@ class _Wave extends CustomPainter {
   bool shouldRepaint(_Wave o) => o.value != value || o.color != color || o.track != track;
 }
 
-/// Frosted panel for floating UI only (nav bar, mini player, sheets). Solid with high contrast enabled.
-class Glass extends StatelessWidget {
-  const Glass({super.key, required this.child, this.radius = Radii.card, this.padding = EdgeInsets.zero});
+/// A solid surface with a discreet border: sheets, the drop target, anything that floats above content.
+/// (Replaces the translucent glass of the first designs: the user asked for solid, minimal surfaces.)
+class SolidSurface extends StatelessWidget {
+  const SolidSurface({super.key, required this.child, this.radius = Radii.card, this.padding = EdgeInsets.zero});
   final Widget child;
   final double radius;
   final EdgeInsets padding;
@@ -152,99 +153,17 @@ class Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final solid = MediaQuery.of(context).highContrast;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final br = BorderRadius.circular(radius);
-    final body = Container(
+    return Container(
       padding: padding,
-      foregroundDecoration: solid ? null : _Rim(radius, dark),
       decoration: BoxDecoration(
-        borderRadius: br,
-        color: solid ? s.surfaceContainer : null,
-        gradient: solid
-            ? null
-            : LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color.lerp(s.surfaceContainerHigh, Colors.white, dark ? 0.08 : 0.5)!.withValues(alpha: 0.72),
-                  s.surfaceContainer.withValues(alpha: 0.62),
-                ],
-              ),
-        border: solid ? Border.all(color: s.outlineVariant) : null,
+        color: s.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: s.outlineVariant),
       ),
       child: child,
     );
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: br,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.35 : 0.10),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: br,
-        child: solid
-            ? body
-            : BackdropFilter(
-                // Blur plus a saturation lift: what is behind the glass keeps its color, like Liquid Glass.
-                filter: ImageFilter.compose(
-                  outer: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                  inner: const ColorFilter.matrix(<double>[
-                    1.25, -0.12, -0.02, 0, 0, //
-                    -0.05, 1.18, -0.02, 0, 0,
-                    -0.05, -0.12, 1.28, 0, 0,
-                    0, 0, 0, 1, 0,
-                  ]),
-                ),
-                child: body,
-              ),
-      ),
-    );
   }
 }
-
-/// A thin light along the edge, brighter at the top-left, as if lit from above (the rim of Liquid Glass).
-class _Rim extends Decoration {
-  const _Rim(this.radius, this.dark);
-  final double radius;
-  final bool dark;
-
-  @override
-  BoxPainter createBoxPainter([VoidCallback? onChanged]) => _RimPainter(radius, dark);
-}
-
-class _RimPainter extends BoxPainter {
-  _RimPainter(this.radius, this.dark);
-  final double radius;
-  final bool dark;
-
-  @override
-  void paint(Canvas canvas, Offset offset, ImageConfiguration c) {
-    final r = offset & c.size!;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(r.deflate(0.6), Radius.circular(radius)),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..shader = LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: dark ? 0.38 : 0.9),
-            Colors.white.withValues(alpha: dark ? 0.04 : 0.15),
-            Colors.white.withValues(alpha: dark ? 0.18 : 0.5),
-          ],
-          stops: const [0, 0.55, 1],
-        ).createShader(r),
-    );
-  }
-}
-
 /// M3 Expressive "cookie" shape: a circle with soft scallops.
 class CookieBorder extends OutlinedBorder {
   const CookieBorder({this.lobes = 9, this.depth = 0.07, super.side});

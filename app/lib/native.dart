@@ -62,6 +62,25 @@ class Native {
   static Future<void> openNotifAccess() async => _android ? _ch.invokeMethod('openNotifAccess') : null;
   static Future<bool> notifPermission() async => !_android || (await _ch.invokeMethod<bool>('notifPermission') ?? true);
   static Future<void> openAppSettings() async => _android ? _ch.invokeMethod('openAppSettings') : null;
+  /// Opens Android's USB screen if this maker has one reachable; otherwise the general settings. It can never
+  /// change the USB mode itself: that choice belongs to the user.
+  static Future<void> openUsbSettings() async => _android ? _ch.invokeMethod('openUsbSettings') : null;
+  /// Android: files the computer may browse. `allowed` is the owner's switch, `permission` whether Android's media
+  /// permission is granted, `folders` the folders picked with the system picker.
+  static Future<({bool allowed, bool permission, List<String> folders})> files() async {
+    if (!_android) return (allowed: false, permission: false, folders: <String>[]);
+    final m = await _ch.invokeMapMethod<String, Object?>('files') ?? {};
+    return (
+      allowed: m['allowed'] == true,
+      permission: m['permission'] == true,
+      folders: [for (final f in (m['folders'] as List? ?? [])) '$f'],
+    );
+  }
+
+  static Future<void> setFiles(bool on) async => _android ? _ch.invokeMethod('setFiles', on) : null;
+  static Future<bool> addFolder() async => _android && (await _ch.invokeMethod<bool>('addFolder') ?? false);
+  static Future<void> removeFolder(int i) async => _android ? _ch.invokeMethod('removeFolder', i) : null;
+
   static Future<void> openTethering() async => _android ? _ch.invokeMethod('openTethering') : null;
   static Future<void> openDevSettings() async => _android ? _ch.invokeMethod('openDevSettings') : null;
 
