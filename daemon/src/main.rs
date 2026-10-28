@@ -16,14 +16,19 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
+mod remote;
+mod sys;
 #[cfg(windows)]
 mod win;
+
+use remote::Remote;
 
 struct Ui {
     exe: PathBuf,
     subs: Arc<Subscribers>,
     last_launch: Mutex<Option<Instant>>,
     engine: OnceLock<Arc<Engine>>,
+    remote: Arc<Remote>,
 }
 
 impl Ui {
@@ -49,6 +54,16 @@ struct Sink(Arc<Ui>);
 
 impl EventSink for Sink {
     fn on_event(&self, e: Event) {
+        // Remote control, screen sharing and this computer's own info are answered here, window or not.
+        if let Some(engine) = self.0.engine.get() {
+            match &e {
+                Event::Message { peer_id, kind, body } if self.0.remote.handle(engine, peer_id, kind, body) => return,
+                Event::PeerChanged { peer } if peer.trusted && peer.state == pb_core::engine::PeerState::Connected => {
+                    self.0.remote.push_info(engine, Some(&peer.id));
+                }
+                _ => {}
+            }
+        }
         let needs_user = matches!(e, Event::PairRequest { .. } | Event::TransferOffer { .. });
         // Undelivered requests are replayed by `Subscribers` to the window we start here.
         let delivered = self.0.subs.push(&Push::Event { event: e.clone() });
@@ -69,15 +84,9 @@ impl Ui {
     fn alone(&self, e: Event) {
         let Some(engine) = self.engine.get() else { return };
         match e {
-            Event::PeerChanged { peer } if peer.trusted && peer.state == pb_core::engine::PeerState::Connected => {
-                let _ = engine.send_message(&peer.id, "pb.x.info", desktop_info(engine));
-            }
             Event::Message { peer_id, kind, body } => {
                 let s = |k: &str| body[k].as_str().unwrap_or("").to_string();
                 match kind.as_str() {
-                    "pb.x.info.request" => {
-                        let _ = engine.send_message(&peer_id, "pb.x.info", desktop_info(engine));
-                    }
                     #[cfg(windows)]
                     "pb.x.notif.posted" => {
                         let title = if s("title").is_empty() { s("app") } else { format!("{} · {}", s("app"), s("title")) };
@@ -102,14 +111,6 @@ impl Ui {
     }
 }
 
-fn desktop_info(engine: &Engine) -> serde_json::Value {
-    #[cfg(windows)]
-    let (os, version) = ("Windows", win::os_version());
-    #[cfg(not(windows))]
-    let (os, version) = (std::env::consts::OS, String::new());
-    serde_json::json!({"kind": "desktop", "model": engine.name(), "os": os, "osVersion": version, "battery": {"level": -1}})
-}
-
 enum UserEvent {
     Menu(MenuEvent),
     Tray(TrayIconEvent),
@@ -131,7 +132,13 @@ fn main() {
         std::process::exit(1);
     };
     let subs = Arc::new(Subscribers::default());
-    let ui = Arc::new(Ui { exe: launch.ui, subs: subs.clone(), last_launch: Mutex::new(None), engine: OnceLock::new() });
+    let ui = Arc::new(Ui {
+        exe: launch.ui,
+        subs: subs.clone(),
+        last_launch: Mutex::new(None),
+        engine: OnceLock::new(),
+        remote: Remote::new(data.clone()),
+    });
     #[cfg(windows)]
     win::register_app();
     let engine = match Engine::start(launch.config, Arc::new(Sink(ui.clone()))) {
@@ -139,6 +146,7 @@ fn main() {
         Err(e) => fail(e),
     };
     let _ = ui.engine.set(engine.clone());
+    ui.remote.spawn_status(engine.clone());
     if let Err(e) = ipc::listen(&data, engine.clone(), subs.clone()) {
         fail(format!("canal local: {e}"));
     }

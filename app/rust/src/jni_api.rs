@@ -18,7 +18,16 @@ const QUEUE_MAX: usize = 256;
 
 /// Called for every engine event; keeps what the service needs as JSON lines.
 pub(crate) fn push(e: &core::Event) {
-    let keep = matches!(e, core::Event::Message { .. } | core::Event::PeerChanged { .. } | core::Event::PeerGone { .. });
+    // Only what the service acts on: remote-screen frames and other large messages are for the Dart side.
+    let keep = match e {
+        core::Event::Message { kind, .. } => {
+            kind.starts_with("pb.x.fs.")
+                || matches!(kind.as_str(), "pb.x.info.request" | "pb.x.clip" | "pb.x.media.cmd" | "pb.x.notif.dismiss")
+        }
+        // PeerChanged/Gone: who is connected. TransferFinished: the service closes the file it opened for a send.
+        core::Event::PeerChanged { .. } | core::Event::PeerGone { .. } | core::Event::TransferFinished { .. } => true,
+        _ => false,
+    };
     if !keep {
         return;
     }
@@ -56,6 +65,18 @@ pub extern "system" fn Java_dev_alero_app_Bridge_send(
         .map_err(|e| e.to_string())
         .and_then(|body| crate::api::engine::call(Cmd::SendMessage { peer, kind, body }));
     out(&mut env, r.err())
+}
+
+/// Starts sending a file (`fd:N` for a descriptor the service opened). Returns the transfer id, or `!` + the error.
+#[no_mangle]
+pub extern "system" fn Java_dev_alero_app_Bridge_sendFile(mut env: JNIEnv, _: JClass, peer: JString, path: JString, name: JString) -> jstring {
+    let (peer, path, name) = (text(&mut env, &peer), text(&mut env, &path), text(&mut env, &name));
+    let r = crate::api::engine::call(Cmd::SendFile { peer, path, name: Some(name) });
+    let s = match r {
+        Ok(v) => v.as_str().unwrap_or_default().to_string(),
+        Err(e) => format!("!{e}"),
+    };
+    out(&mut env, Some(s))
 }
 
 /// JSON array of peers, or null if the engine is not running.
