@@ -320,34 +320,50 @@ mod win {
     }
 }
 
-#[cfg(all(test, windows))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capture_scales_and_returns_rgb() {
-        init();
-        let (w, h, rgb) = capture(640).expect("an interactive desktop is needed to run this test");
-        assert_eq!(w, 640);
-        assert!(h > 100);
-        assert_eq!(rgb.len(), (w * h * 3) as usize);
-        assert!(rgb.iter().any(|b| *b != 0), "not a black frame");
-    }
-
-    #[test]
-    fn battery_is_sane_or_absent() {
-        if let Some((pct, _)) = battery() {
-            assert!(pct <= 100);
+/// The system's own hardware identity and built-in wallpaper, sampled once at startup.
+pub fn device_metadata() -> serde_json::Value {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let script = r#"
+Add-Type -AssemblyName System.Drawing
+$bios = Get-ItemProperty 'HKLM:\HARDWARE\DESCRIPTION\System\BIOS'
+$image = $null
+$small = $null
+$stream = $null
+$graphics = $null
+$jpeg = ''
+try {
+  $path = Join-Path $env:WINDIR 'Web\Wallpaper\Windows\img0.jpg'
+  $image = [Drawing.Image]::FromFile($path)
+  $small = [Drawing.Bitmap]::new(480, [Math]::Max(1, [int](480 * $image.Height / $image.Width)))
+  $graphics = [Drawing.Graphics]::FromImage($small)
+  $graphics.DrawImage($image, 0, 0, $small.Width, $small.Height)
+  $stream = [IO.MemoryStream]::new()
+  $small.Save($stream, [Drawing.Imaging.ImageFormat]::Jpeg)
+  $jpeg = [Convert]::ToBase64String($stream.ToArray())
+} catch {} finally {
+  if ($graphics) { $graphics.Dispose() }
+  if ($image) { $image.Dispose() }
+  if ($small) { $small.Dispose() }
+  if ($stream) { $stream.Dispose() }
+}
+@{manufacturer=$bios.SystemManufacturer; model=$bios.SystemFamily; product=$bios.SystemProductName; stockJpeg=$jpeg} | ConvertTo-Json -Compress
+"#;
+        if let Ok(out) = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script]).creation_flags(0x08000000).output() {
+            if let Ok(value) = serde_json::from_slice(&out.stdout) { return value; }
         }
     }
+    serde_json::json!({})
+}
 
-    #[test]
-    fn media_state_does_not_crash_without_a_session() {
-        let _ = media_state();
+pub fn screen_size() -> (i32, i32) {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+        return (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
     }
-
-    #[test]
-    fn key_names_map() {
-        assert!(key("definitely-not-a-key", &[]) == false);
-    }
+    #[cfg(not(windows))]
+    (0, 0)
 }

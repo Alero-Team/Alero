@@ -32,7 +32,13 @@ class PcDetails extends StatelessWidget {
           const SizedBox(width: Gap.m),
           Expanded(child: Text(title, style: t.bodyMedium)),
           Flexible(
-            child: Text(value, style: weight(t.bodyMedium, 500), textAlign: TextAlign.end, maxLines: 2, overflow: TextOverflow.ellipsis),
+            child: Text(
+              value,
+              style: weight(t.bodyMedium, 500),
+              textAlign: TextAlign.end,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -44,10 +50,43 @@ class PcDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          fact(Icon(online ? Symbols.link_rounded : Symbols.link_off_rounded, size: 20, color: s.onSurfaceVariant), 'Conexión',
-              online ? 'Conectado · ${hub.routeOf(peer)}' : 'Sin conexión'),
+          fact(
+            Icon(
+              online ? Symbols.link_rounded : Symbols.link_off_rounded,
+              size: 20,
+              color: s.onSurfaceVariant,
+            ),
+            'Conexión',
+            online ? 'Conectado · ${hub.routeOf(peer)}' : 'Sin conexión',
+          ),
           if (info != null) ...[
-            fact(Icon(Symbols.desktop_windows_rounded, size: 20, color: s.onSurfaceVariant), 'Sistema', info.osLabel.isEmpty ? '—' : info.osLabel),
+            fact(
+              Icon(Symbols.laptop_rounded, size: 20, color: s.onSurfaceVariant),
+              'Modelo',
+              [
+                info.manufacturer,
+                info.model,
+              ].where((s) => s.isNotEmpty).join(' '),
+            ),
+            if (info.screen != null)
+              fact(
+                Icon(
+                  Symbols.aspect_ratio_rounded,
+                  size: 20,
+                  color: s.onSurfaceVariant,
+                ),
+                'Pantalla',
+                '${info.screen!.w} × ${info.screen!.h} px',
+              ),
+            fact(
+              Icon(
+                Symbols.desktop_windows_rounded,
+                size: 20,
+                color: s.onSurfaceVariant,
+              ),
+              'Sistema',
+              info.osLabel.isEmpty ? '—' : info.osLabel,
+            ),
             if (info.hasBattery)
               fact(
                 BatteryGlyph(info.battery, charging: info.charging, width: 22),
@@ -55,11 +94,22 @@ class PcDetails extends StatelessWidget {
                 '${info.battery} % · ${info.charging ? 'cargando' : 'con batería'}',
               )
             else
-              fact(Icon(Symbols.power_rounded, size: 20, color: s.onSurfaceVariant), 'Energía', 'Sin batería (sobremesa)'),
+              fact(
+                Icon(
+                  Symbols.power_rounded,
+                  size: 20,
+                  color: s.onSurfaceVariant,
+                ),
+                'Energía',
+                'Sin batería (sobremesa)',
+              ),
           ],
           if (blocker != null) ...[
             const SizedBox(height: Gap.s),
-            Text(blocker, style: t.bodySmall?.copyWith(color: s.onSurfaceVariant)),
+            Text(
+              blocker,
+              style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+            ),
           ] else ...[
             const Divider(height: Gap.xl),
             Text('Reproduciendo', style: t.labelLarge),
@@ -75,11 +125,15 @@ class PcDetails extends StatelessWidget {
                     hub.remote.shot(peer.id);
                     hub.messages.add('Pidiendo la captura a ${peer.name}…');
                   },
-                  icon: const Icon(Symbols.screenshot_monitor_rounded, size: 18),
+                  icon: const Icon(
+                    Symbols.screenshot_monitor_rounded,
+                    size: 18,
+                  ),
                   label: const Text('Capturar pantalla'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: () => openPcScreen(context, hub, peer.id, peer.name),
+                  onPressed: () =>
+                      openPcScreen(context, hub, peer.id, peer.name),
                   icon: const Icon(Symbols.cast_rounded, size: 18),
                   label: const Text('Ver pantalla'),
                 ),

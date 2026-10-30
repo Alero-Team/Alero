@@ -1,0 +1,88 @@
+name: Packages
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a preliminary release after building
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  packages:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.8'
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare signing identity
+        shell: pwsh
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if (!$env:SIGNING_KEY) { throw 'Configure the Android signing secrets before building packages.' }
+          $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
+          [IO.File]::WriteAllBytes($keyFile, [Convert]::FromBase64String($env:SIGNING_KEY))
+          "ALERO_ANDROID_KEYSTORE=$keyFile" >> $env:GITHUB_ENV
+          "ALERO_ANDROID_KEYSTORE_PASSWORD=$env:SIGNING_PASSWORD" >> $env:GITHUB_ENV
+          "ALERO_ANDROID_KEY_ALIAS=$env:SIGNING_ALIAS" >> $env:GITHUB_ENV
+          "ALERO_ANDROID_KEY_PASSWORD=$env:SIGNING_KEY_PASSWORD" >> $env:GITHUB_ENV
+      - run: cargo fetch --locked
+      - run: rustup target add aarch64-linux-android
+      - name: Android package and storage tests
+        shell: pwsh
+        run: |
+          $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
+          ./tools/build-android.ps1 -FlutterRoot $flutterRoot -AndroidSdk $env:ANDROID_HOME
+          Push-Location app/android
+          ./gradlew.bat :app:testDebugUnitTest
+          if ($LASTEXITCODE -ne 0) { throw 'Android tests failed' }
+          Pop-Location
+      - name: Install packaging tools
+        run: choco install innosetup --yes --no-progress
+      - name: Windows package
+        shell: pwsh
+        run: |
+          $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
+          ./tools/build-windows.ps1 -FlutterRoot $flutterRoot
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alero-packages
+          path: dist/*
+          if-no-files-found: error
+      - name: Remove temporary signing key
+        if: always()
+        shell: pwsh
+        run: |
+          $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
+          if (Test-Path -LiteralPath $keyFile) { Remove-Item -LiteralPath $keyFile }
+  publish:
+    if: inputs.publish
+    needs: packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Alero-packages
+          path: dist
+      - name: Publish preliminary release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version: \([^+]*\).*/\1/p' app/pubspec.yaml)
+          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "Alero $version" --prerelease --notes-file CHANGELOG.md

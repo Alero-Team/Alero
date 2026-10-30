@@ -30,7 +30,12 @@ class Spring extends Curve {
   static const effects = Spring(1600, 1);
 
   /// How long the spring takes to settle, used as the animation duration.
-  Duration get settle => Duration(milliseconds: (4000 / math.sqrt(stiffness) / damping).round().clamp(150, 700));
+  Duration get settle => Duration(
+    milliseconds: (4000 / math.sqrt(stiffness) / damping).round().clamp(
+      150,
+      700,
+    ),
+  );
 
   static final _sims = <(double, double), SpringSimulation>{};
 
@@ -39,18 +44,33 @@ class Spring extends Curve {
     final d = settle.inMilliseconds / 1000;
     final s = _sims.putIfAbsent(
       (stiffness, damping),
-      () => SpringSimulation(SpringDescription.withDampingRatio(mass: 1, stiffness: stiffness, ratio: damping), 0, 1, 0),
+      () => SpringSimulation(
+        SpringDescription.withDampingRatio(
+          mass: 1,
+          stiffness: stiffness,
+          ratio: damping,
+        ),
+        0,
+        1,
+        0,
+      ),
     );
     return s.x(t * d);
   }
 }
 
 /// Animation length, or zero when the system asks for reduced motion.
-Duration motion(BuildContext c, Duration d) => MediaQuery.of(c).disableAnimations ? Duration.zero : d;
+Duration motion(BuildContext c, Duration d) =>
+    MediaQuery.of(c).disableAnimations ? Duration.zero : d;
 
 /// Wavy linear progress (M3 Expressive). The wave travels while active; still with reduced motion.
 class WavyProgress extends StatefulWidget {
-  const WavyProgress({super.key, this.value, this.label = '', this.height = 12});
+  const WavyProgress({
+    super.key,
+    this.value,
+    this.label = '',
+    this.height = 12,
+  });
   final double? value;
   final String label;
   final double height;
@@ -59,8 +79,12 @@ class WavyProgress extends StatefulWidget {
   State<WavyProgress> createState() => _WavyProgressState();
 }
 
-class _WavyProgressState extends State<WavyProgress> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+class _WavyProgressState extends State<WavyProgress>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
 
   @override
   void didChangeDependencies() {
@@ -112,7 +136,8 @@ class _Wave extends CustomPainter {
     final ph = phase.value;
     final end = s.width * v;
     final start = value == null ? (s.width + end) * ph - end : 0.0;
-    final from = start.clamp(0.0, s.width), to = (start + end).clamp(0.0, s.width);
+    final from = start.clamp(0.0, s.width),
+        to = (start + end).clamp(0.0, s.width);
     final paint = Paint()
       ..color = color
       ..strokeWidth = stroke
@@ -120,7 +145,9 @@ class _Wave extends CustomPainter {
       ..style = PaintingStyle.stroke;
     final wave = Path();
     for (var x = from; x <= to; x += 1.5) {
-      final y = mid + amp * math.sin((x / wl - (value == null ? 0 : ph)) * 2 * math.pi);
+      final y =
+          mid +
+          amp * math.sin((x / wl - (value == null ? 0 : ph)) * 2 * math.pi);
       x == from ? wave.moveTo(x, y) : wave.lineTo(x, y);
     }
     canvas.drawPath(wave, paint);
@@ -129,23 +156,41 @@ class _Wave extends CustomPainter {
       ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round;
     if (to + gap < s.width - stroke) {
-      canvas.drawLine(Offset(to + gap + stroke, mid), Offset(s.width - stroke / 2, mid), t);
+      canvas.drawLine(
+        Offset(to + gap + stroke, mid),
+        Offset(s.width - stroke / 2, mid),
+        t,
+      );
     }
     if (value == null && from - gap > stroke) {
-      canvas.drawLine(Offset(stroke / 2, mid), Offset(from - gap - stroke, mid), t);
+      canvas.drawLine(
+        Offset(stroke / 2, mid),
+        Offset(from - gap - stroke, mid),
+        t,
+      );
     }
     // Stop indicator at the end of the track (M3 accessibility marker).
-    canvas.drawCircle(Offset(s.width - stroke / 2, mid), stroke / 2, Paint()..color = color);
+    canvas.drawCircle(
+      Offset(s.width - stroke / 2, mid),
+      stroke / 2,
+      Paint()..color = color,
+    );
   }
 
   @override
-  bool shouldRepaint(_Wave o) => o.value != value || o.color != color || o.track != track;
+  bool shouldRepaint(_Wave o) =>
+      o.value != value || o.color != color || o.track != track;
 }
 
 /// A solid surface with a discreet border: sheets, the drop target, anything that floats above content.
 /// (Replaces the translucent glass of the first designs: the user asked for solid, minimal surfaces.)
 class SolidSurface extends StatelessWidget {
-  const SolidSurface({super.key, required this.child, this.radius = Radii.card, this.padding = EdgeInsets.zero});
+  const SolidSurface({
+    super.key,
+    required this.child,
+    this.radius = Radii.card,
+    this.padding = EdgeInsets.zero,
+  });
   final Widget child;
   final double radius;
   final EdgeInsets padding;
@@ -164,6 +209,7 @@ class SolidSurface extends StatelessWidget {
     );
   }
 }
+
 /// M3 Expressive "cookie" shape: a circle with soft scallops.
 class CookieBorder extends OutlinedBorder {
   const CookieBorder({this.lobes = 9, this.depth = 0.07, super.side});
@@ -171,7 +217,8 @@ class CookieBorder extends OutlinedBorder {
   final double depth;
 
   @override
-  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => getOuterPath(rect);
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      getOuterPath(rect);
 
   @override
   Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
@@ -193,7 +240,8 @@ class CookieBorder extends OutlinedBorder {
   ShapeBorder scale(double t) => this;
 
   @override
-  OutlinedBorder copyWith({BorderSide? side}) => CookieBorder(lobes: lobes, depth: depth, side: side ?? this.side);
+  OutlinedBorder copyWith({BorderSide? side}) =>
+      CookieBorder(lobes: lobes, depth: depth, side: side ?? this.side);
 }
 
 /// Expressive button whose corners morph: round at rest, squarer when pressed or "on" (e.g. playing).
@@ -247,10 +295,17 @@ class _MorphButtonState extends State<MorphButton> {
                 color: widget.onPressed == null
                     ? s.surfaceContainerHighest
                     : Color.lerp(s.primary, s.onPrimary, _hover ? 0.08 : 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(r)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(r),
+                ),
               ),
               child: ExcludeSemantics(
-                child: Icon(widget.icon, size: widget.size * 0.42, color: s.onPrimary, fill: 1),
+                child: Icon(
+                  widget.icon,
+                  size: widget.size * 0.42,
+                  color: s.onPrimary,
+                  fill: 1,
+                ),
               ),
             ),
           ),
@@ -264,7 +319,13 @@ class _MorphButtonState extends State<MorphButton> {
 /// camera cutout) over its real wallpaper: the image the user chose in the phone's settings, else the wallpaper's
 /// own colours (Android gives those to any app). No manufacturer artwork: any model, no image rights issues.
 class PhoneMockup extends StatefulWidget {
-  const PhoneMockup({super.key, this.info, this.wallpaper, this.width = 96, this.online = true});
+  const PhoneMockup({
+    super.key,
+    this.info,
+    this.wallpaper,
+    this.width = 96,
+    this.online = true,
+  });
   final PeerInfo? info;
   final Uint8List? wallpaper;
   final double width;
@@ -297,9 +358,14 @@ class _PhoneMockupState extends State<PhoneMockup> {
     }
     try {
       // Decode at the size it is drawn, not the size it was sent.
-      final codec = await instantiateImageCodec(bytes, targetWidth: (widget.width * 3).ceil());
+      final codec = await instantiateImageCodec(
+        bytes,
+        targetWidth: (widget.width * 3).ceil(),
+      );
       final f = await codec.getNextFrame();
-      if (mounted && identical(bytes, widget.wallpaper)) setState(() => _img = f.image);
+      if (mounted && identical(bytes, widget.wallpaper)) {
+        setState(() => _img = f.image);
+      }
     } catch (_) {
       // A damaged image falls back to the wallpaper colours.
     }
@@ -315,17 +381,33 @@ class _PhoneMockupState extends State<PhoneMockup> {
   Widget build(BuildContext context) {
     final info = widget.info;
     final s = info?.screen;
-    final ratio = s == null ? 20 / 9 : s.h / s.w;
+    final dimensions = info?.j['screen'] as Map?;
+    final bodyW = (dimensions?['bodyWidthMm'] as num?)?.toDouble();
+    final bodyH = (dimensions?['bodyHeightMm'] as num?)?.toDouble();
+    final ratio = bodyW != null && bodyH != null
+        ? bodyH / bodyW
+        : s == null
+        ? 20 / 9
+        : s.h / s.w;
     return Semantics(
       image: true,
-      label: [info?.manufacturer, info?.model].whereType<String>().where((x) => x.isNotEmpty).join(' '),
+      label: [
+        info?.manufacturer,
+        info?.model,
+      ].whereType<String>().where((x) => x.isNotEmpty).join(' '),
       // Own layer: the wallpaper is not repainted when the card around it animates.
       child: RepaintBoundary(
         child: SizedBox(
           width: widget.width,
           height: widget.width * ratio,
           child: CustomPaint(
-            painter: _Phone(s, Theme.of(context).colorScheme, widget.online, info?.wallpaperColors ?? const [], _img),
+            painter: _Phone(
+              s,
+              Theme.of(context).colorScheme,
+              widget.online,
+              info?.wallpaperColors ?? const [],
+              _img,
+            ),
           ),
         ),
       ),
@@ -347,7 +429,9 @@ class _Phone extends CustomPainter {
     final body = Offset.zero & size;
     final screen = body.deflate(bezel);
     final k = s == null ? 1.0 : screen.width / s!.w;
-    final screenR = s != null && s!.radius > 0 ? s!.radius * k : screen.width * 0.13;
+    final screenR = s != null && s!.radius > 0
+        ? s!.radius * k
+        : screen.width * 0.13;
     canvas.drawRRect(
       RRect.fromRectAndRadius(body, Radius.circular(screenR + bezel)),
       Paint()..color = const Color(0xFF1C1C1E),
@@ -356,7 +440,13 @@ class _Phone extends CustomPainter {
     canvas.save();
     canvas.clipRRect(rr);
     if (image != null) {
-      paintImage(canvas: canvas, rect: screen, image: image!, fit: BoxFit.cover, filterQuality: FilterQuality.medium);
+      paintImage(
+        canvas: canvas,
+        rect: screen,
+        image: image!,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+      );
     } else {
       // The wallpaper's own colours as a soft mesh; the system scheme if the phone sent none.
       final a = colors.isNotEmpty ? colors[0] : c.primaryContainer;
@@ -372,37 +462,66 @@ class _Phone extends CustomPainter {
           ).createShader(screen),
       );
       canvas.drawCircle(
-        Offset(screen.left + screen.width * 0.15, screen.top + screen.height * 0.78),
+        Offset(
+          screen.left + screen.width * 0.15,
+          screen.top + screen.height * 0.78,
+        ),
         screen.width * 0.6,
         Paint()..color = t.withValues(alpha: 0.85),
       );
       canvas.drawCircle(
-        Offset(screen.right - screen.width * 0.05, screen.top + screen.height * 0.3),
+        Offset(
+          screen.right - screen.width * 0.05,
+          screen.top + screen.height * 0.3,
+        ),
         screen.width * 0.35,
         Paint()..color = Color.lerp(a, t, 0.5)!.withValues(alpha: 0.8),
       );
     }
     // Offline: the screen goes dim, as if locked.
-    if (!online) canvas.drawRect(screen, Paint()..color = c.surface.withValues(alpha: 0.6));
+    if (!online) {
+      canvas.drawRect(
+        screen,
+        Paint()..color = c.surface.withValues(alpha: 0.6),
+      );
+    }
     canvas.restore();
     // Front camera, where the phone says it is.
     final cut = s?.cutout;
     final cam = Paint()..color = Colors.black;
     if (cut != null && s != null) {
-      final r = Rect.fromLTWH(screen.left + cut.$1 * k, screen.top + cut.$2 * k, cut.$3 * k, cut.$4 * k);
+      final r = Rect.fromLTWH(
+        screen.left + cut.$1 * k,
+        screen.top + cut.$2 * k,
+        cut.$3 * k,
+        cut.$4 * k,
+      );
       if ((r.width - r.height).abs() < r.height * 0.4) {
         canvas.drawCircle(r.center, r.shortestSide * 0.42, cam);
       } else {
-        canvas.drawRRect(RRect.fromRectAndRadius(r, Radius.circular(r.height / 2)), cam);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(r, Radius.circular(r.height / 2)),
+          cam,
+        );
       }
     } else {
-      canvas.drawCircle(Offset(screen.center.dx, screen.top + screen.width * 0.07), screen.width * 0.035, cam);
+      canvas.drawCircle(
+        Offset(screen.center.dx, screen.top + screen.width * 0.07),
+        screen.width * 0.035,
+        cam,
+      );
     }
     // Side buttons.
     final btn = Paint()..color = const Color(0xFF2C2C2E);
     for (final (top, bottom) in [(0.22, 0.30), (0.36, 0.50)]) {
       canvas.drawRRect(
-        RRect.fromLTRBR(size.width - 1, size.height * top, size.width + 1.5, size.height * bottom, const Radius.circular(1)),
+        RRect.fromLTRBR(
+          size.width - 1,
+          size.height * top,
+          size.width + 1.5,
+          size.height * bottom,
+          const Radius.circular(1),
+        ),
         btn,
       );
     }
@@ -410,7 +529,11 @@ class _Phone extends CustomPainter {
 
   @override
   bool shouldRepaint(_Phone o) =>
-      o.s != s || o.c != c || o.online != online || o.image != image || !listEquals(o.colors, colors);
+      o.s != s ||
+      o.c != c ||
+      o.online != online ||
+      o.image != image ||
+      !listEquals(o.colors, colors);
 }
 
 /// A computer, for the phone app's view of a paired PC.
@@ -425,8 +548,75 @@ class DesktopGlyph extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: ShapeDecoration(color: s.primaryContainer, shape: const CookieBorder()),
+      decoration: ShapeDecoration(
+        color: s.primaryContainer,
+        shape: const CookieBorder(),
+      ),
       child: Icon(icon, size: size * 0.42, color: s.onPrimaryContainer),
+    );
+  }
+}
+
+/// Actual screen aspect ratio and OEM identity instead of a generic computer icon.
+class LaptopMockup extends StatelessWidget {
+  const LaptopMockup({super.key, this.info, this.wallpaper, this.width = 104});
+  final PeerInfo? info;
+  final Uint8List? wallpaper;
+  final double width;
+  @override
+  Widget build(BuildContext context) {
+    final shape = info?.screen;
+    final ratio = shape == null ? 16 / 9 : shape.w / shape.h;
+    final c = Theme.of(context).colorScheme;
+    return Semantics(
+      image: true,
+      label: '${info?.manufacturer ?? ''} ${info?.model ?? 'Ordenador'}',
+      child: SizedBox(
+        width: width,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: width * .035),
+              padding: EdgeInsets.fromLTRB(
+                width * .025,
+                width * .025,
+                width * .025,
+                width * .04,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xff252525),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: AspectRatio(
+                aspectRatio: ratio,
+                child: wallpaper == null
+                    ? ColoredBox(color: c.surfaceContainerHigh)
+                    : Image.memory(
+                        wallpaper!,
+                        fit: BoxFit.cover,
+                        cacheWidth: (width * 3).round(),
+                        excludeFromSemantics: true,
+                      ),
+              ),
+            ),
+            Container(
+              height: width * .085,
+              width: width,
+              decoration: const BoxDecoration(
+                color: Color(0xff3b3b3b),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(4)),
+              ),
+              alignment: Alignment.topCenter,
+              child: Container(
+                width: width * .22,
+                height: width * .025,
+                color: const Color(0xff555555),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

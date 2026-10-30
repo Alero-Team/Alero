@@ -15,19 +15,32 @@ class NavData {
 /// icons. When the selection changes, every width moves from its old value to its new one with the same spring,
 /// and the old and new widths always add up to the bar's width, so nothing jumps and nothing outside the bar moves.
 class AleroNavBar extends StatefulWidget {
-  const AleroNavBar({super.key, required this.items, required this.selected, required this.onSelect});
+  const AleroNavBar({
+    super.key,
+    required this.items,
+    required this.selected,
+    required this.onSelect,
+  });
   final List<NavData> items;
   final int selected;
   final ValueChanged<int> onSelect;
 
-  static const height = 64.0, _icon = 24.0, _gap = 8.0, _pad = 8.0, _side = 16.0;
+  static const height = 64.0,
+      _icon = 24.0,
+      _gap = 8.0,
+      _pad = 8.0,
+      _side = 16.0;
 
   @override
   State<AleroNavBar> createState() => _AleroNavBarState();
 }
 
-class _AleroNavBarState extends State<AleroNavBar> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, value: 1);
+class _AleroNavBarState extends State<AleroNavBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    value: 1,
+  );
   late int _from = widget.selected, _to = widget.selected;
 
   @override
@@ -66,7 +79,11 @@ class _AleroNavBarState extends State<AleroNavBar> with SingleTickerProviderStat
     final label = Theme.of(context).textTheme.labelLarge!;
     final n = widget.items.length;
     final selW = [
-      for (final d in widget.items) AleroNavBar._side * 2 + AleroNavBar._icon + AleroNavBar._gap + _textWidth(d.label, label),
+      for (final d in widget.items)
+        AleroNavBar._side * 2 +
+            AleroNavBar._icon +
+            AleroNavBar._gap +
+            _textWidth(d.label, label),
     ];
     return Container(
       height: AleroNavBar.height,
@@ -81,7 +98,10 @@ class _AleroNavBarState extends State<AleroNavBar> with SingleTickerProviderStat
           // Target widths for a given selection: the selected pill, and the rest shared equally.
           List<double> target(int sel) {
             final w = selW[sel].clamp(0.0, box.maxWidth - (n - 1) * 48.0);
-            return [for (var i = 0; i < n; i++) i == sel ? w : (box.maxWidth - w) / (n - 1)];
+            return [
+              for (var i = 0; i < n; i++)
+                i == sel ? w : (box.maxWidth - w) / (n - 1),
+            ];
           }
 
           final a = target(_from), b = target(_to);
@@ -96,9 +116,15 @@ class _AleroNavBarState extends State<AleroNavBar> with SingleTickerProviderStat
                       data: widget.items[i],
                       width: a[i] + (b[i] - a[i]) * t,
                       // 1 while selected, easing 0 -> 1 or 1 -> 0 around a change
-                      p: i == _to ? (_from == _to ? 1 : t) : (i == _from ? 1 - t : 0),
+                      p: i == _to
+                          ? (_from == _to ? 1 : t)
+                          : (i == _from ? 1 - t : 0),
                       label: label,
-                      textW: selW[i] - 2 * AleroNavBar._side - AleroNavBar._icon - AleroNavBar._gap,
+                      textW:
+                          selW[i] -
+                          2 * AleroNavBar._side -
+                          AleroNavBar._icon -
+                          AleroNavBar._gap,
                       onTap: () => widget.onSelect(i),
                       selected: i == widget.selected,
                     ),
@@ -148,7 +174,11 @@ class _Item extends StatelessWidget {
           height: AleroNavBar.height - 2 * AleroNavBar._pad,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Color.lerp(Colors.transparent, s.secondaryContainer, pp),
+              color: Color.lerp(
+                Colors.transparent,
+                s.surfaceContainerHighest,
+                pp,
+              ),
               borderRadius: BorderRadius.circular(Radii.pill),
             ),
             child: ClipRect(
@@ -163,7 +193,16 @@ class _Item extends StatelessWidget {
                         child: Badge(
                           isLabelVisible: data.badge > 0,
                           label: Text('${data.badge}'),
-                          child: Icon(data.icon, size: icon, fill: pp, color: Color.lerp(s.onSurfaceVariant, s.onSecondaryContainer, pp)),
+                          child: Icon(
+                            data.icon,
+                            size: icon,
+                            fill: pp,
+                            color: Color.lerp(
+                              s.onSurfaceVariant,
+                              s.onSurface,
+                              pp,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -181,7 +220,7 @@ class _Item extends StatelessWidget {
                             maxLines: 1,
                             softWrap: false,
                             overflow: TextOverflow.clip,
-                            style: label.copyWith(color: s.onSecondaryContainer),
+                            style: label.copyWith(color: s.onSurface),
                           ),
                         ),
                       ),

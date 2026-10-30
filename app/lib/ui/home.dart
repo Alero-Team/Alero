@@ -20,7 +20,8 @@ import 'widgets.dart';
 /// The connected device Home is about: the first paired one online, else the first paired.
 pb.Peer? mainPeer(Hub hub) {
   final trusted = hub.peers.where((p) => p.trusted);
-  return trusted.where((p) => p.state == pb.PeerState.connected).firstOrNull ?? trusted.firstOrNull;
+  return trusted.where((p) => p.state == pb.PeerState.connected).firstOrNull ??
+      trusted.firstOrNull;
 }
 
 /// Everything you do with the connected device, in one place: who it is and its state, what you can do
@@ -42,7 +43,10 @@ class HomeScreen extends StatelessWidget {
       return ScreenFrame(
         title: 'Inicio',
         children: [
-          if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), const SizedBox(height: Gap.l)],
+          if (hub.startError.isNotEmpty) ...[
+            ErrorBanner(hub.startError),
+            const SizedBox(height: Gap.l),
+          ],
           _Welcome(go: go),
         ],
       );
@@ -88,12 +92,18 @@ class HomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 flex: 3,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: col([hero, media, recent])),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: col([hero, media, recent]),
+                ),
               ),
               gap,
               Expanded(
                 flex: 2,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: col([notifs, status])),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: col([notifs, status]),
+                ),
               ),
             ],
           )
@@ -121,7 +131,11 @@ class _Welcome extends StatelessWidget {
           children: [
             const AleroIntro(size: 72),
             const SizedBox(height: Gap.l),
-            Text('Bienvenido a Alero', style: t.headlineSmall, textAlign: TextAlign.center),
+            Text(
+              'Bienvenido a Alero',
+              style: t.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: Gap.s),
             Text(
               'Abre Alero en el otro dispositivo, en la misma red Wi-Fi o con un cable USB, y empareja los dos.',
@@ -154,10 +168,20 @@ class _Hero extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final online = p.state == pb.PeerState.connected;
     final phone = info?.phone ?? !Platform.isAndroid;
-    final facts = [info?.osLabel ?? '', info?.network ?? '', if (online) hub.routeOf(p)].where((x) => x.isNotEmpty).join(' · ');
+    final facts = [
+      info?.model ?? '',
+      info?.osLabel ?? '',
+      info?.network ?? '',
+      if (online) hub.routeOf(p),
+    ].where((x) => x.isNotEmpty).join(' · ');
     final picture = phone
-        ? PhoneMockup(info: info, wallpaper: hub.wallpaper[p.id], width: 72, online: online)
-        : const DesktopGlyph(size: 72, icon: Symbols.computer_rounded);
+        ? PhoneMockup(
+            info: info,
+            wallpaper: hub.wallpaper[p.id],
+            width: 72,
+            online: online,
+          )
+        : LaptopMockup(info: info, wallpaper: hub.wallpaper[p.id], width: 104);
     return Card(
       color: s.surfaceContainer,
       child: Padding(
@@ -173,7 +197,12 @@ class _Hero extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(p.name, style: t.headlineSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        p.name,
+                        style: t.headlineSmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: Gap.xs),
                       StatusLine(p),
                       const SizedBox(height: Gap.s),
@@ -182,15 +211,30 @@ class _Hero extends StatelessWidget {
                         runSpacing: Gap.xs,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (facts.isNotEmpty) Text(facts, style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant)),
+                          if (facts.isNotEmpty)
+                            Text(
+                              facts,
+                              style: t.bodyMedium?.copyWith(
+                                color: s.onSurfaceVariant,
+                              ),
+                            ),
                           if ((info?.battery ?? -1) >= 0) BatteryLine(info!),
                           if (online)
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Symbols.lock_rounded, size: 16, color: s.onSurfaceVariant),
+                                Icon(
+                                  Symbols.lock_rounded,
+                                  size: 16,
+                                  color: s.onSurfaceVariant,
+                                ),
                                 const SizedBox(width: Gap.xs),
-                                Text('Cifrada', style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant)),
+                                Text(
+                                  'Cifrada',
+                                  style: t.bodyMedium?.copyWith(
+                                    color: s.onSurfaceVariant,
+                                  ),
+                                ),
                               ],
                             ),
                         ],
@@ -201,9 +245,12 @@ class _Hero extends StatelessWidget {
                           p.state == pb.PeerState.rejected
                               ? 'Ese dispositivo te quitó de su lista. Vuelve a emparejarlos desde Dispositivos.'
                               : 'Abre Alero en ${p.name} y comprueba que ambos están en la misma red Wi-Fi o conéctalos con un cable USB.',
-                          style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+                          style: t.bodyMedium?.copyWith(
+                            color: s.onSurfaceVariant,
+                          ),
                         ),
-                        if (!Platform.isAndroid && p.state != pb.PeerState.rejected) ...[
+                        if (!Platform.isAndroid &&
+                            p.state != pb.PeerState.rejected) ...[
                           const SizedBox(height: Gap.s),
                           OutlinedButton.icon(
                             onPressed: hub.connectCable,
@@ -218,26 +265,26 @@ class _Hero extends StatelessWidget {
               ],
             ),
             if (!Platform.isAndroid) ...[
-            const SizedBox(height: Gap.xl),
-            // M3 Expressive button group: one primary action, the rest tonal.
-            Wrap(
-              spacing: Gap.s,
-              runSpacing: Gap.s,
-              children: [
-                FilledButton.icon(
-                  onPressed: online ? () => hub.send(p.id) : null,
-                  icon: const Icon(Symbols.upload_rounded, size: 18),
-                  label: const Text('Enviar archivos'),
-                ),
-                ClipboardButton(hub, p.id, enabled: online),
-                if (!Platform.isAndroid && phone)
-                  FilledButton.tonalIcon(
-                    onPressed: online ? () => openScreen(context, p) : null,
-                    icon: const Icon(Symbols.cast_rounded, size: 18),
-                    label: const Text('Ver pantalla'),
+              const SizedBox(height: Gap.xl),
+              // M3 Expressive button group: one primary action, the rest tonal.
+              Wrap(
+                spacing: Gap.s,
+                runSpacing: Gap.s,
+                children: [
+                  FilledButton.icon(
+                    onPressed: online ? () => hub.send(p.id) : null,
+                    icon: const Icon(Symbols.upload_rounded, size: 18),
+                    label: const Text('Enviar archivos'),
                   ),
-              ],
-            ),
+                  ClipboardButton(hub, p.id, enabled: online),
+                  if (!Platform.isAndroid && phone)
+                    FilledButton.tonalIcon(
+                      onPressed: online ? () => openScreen(context, p) : null,
+                      icon: const Icon(Symbols.cast_rounded, size: 18),
+                      label: const Text('Ver pantalla'),
+                    ),
+                ],
+              ),
             ],
           ],
         ),
@@ -261,12 +308,14 @@ class BatteryLine extends StatelessWidget {
         const SizedBox(width: Gap.xs + 2),
         Text(
           '${info.battery} %${info.charging ? ' · cargando' : ''}',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
         ),
       ],
     );
   }
 }
+
 class _StatusPanel extends StatelessWidget {
   const _StatusPanel(this.info);
   final PeerInfo info;
@@ -275,11 +324,22 @@ class _StatusPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final s = Theme.of(context).colorScheme;
-    Widget row(IconData i, String label, String value, double? f, {Widget? icon}) => Padding(
+    Widget row(
+      IconData i,
+      String label,
+      String value,
+      double? f, {
+      Widget? icon,
+    }) => Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: Row(
         children: [
-          SizedBox(width: 24, child: Center(child: icon ?? Icon(i, size: 20, color: s.onSurfaceVariant))),
+          SizedBox(
+            width: 24,
+            child: Center(
+              child: icon ?? Icon(i, size: 20, color: s.onSurfaceVariant),
+            ),
+          ),
           const SizedBox(width: Gap.m),
           Expanded(
             child: Column(
@@ -288,17 +348,26 @@ class _StatusPanel extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(child: Text(label, style: t.bodyMedium)),
-                    Text(value, style: t.labelLarge?.copyWith(fontFeatures: tabular)),
+                    Text(
+                      value,
+                      style: t.labelLarge?.copyWith(fontFeatures: tabular),
+                    ),
                   ],
                 ),
                 if (f != null) ...[
                   const SizedBox(height: 6),
                   TweenAnimationBuilder<double>(
                     tween: Tween(end: f.clamp(0, 1)),
-                    duration: motion(context, const Duration(milliseconds: 600)),
+                    duration: motion(
+                      context,
+                      const Duration(milliseconds: 600),
+                    ),
                     curve: Curves.easeOutCubic,
-                    builder: (_, v, _) =>
-                        LinearProgressIndicator(value: v, semanticsLabel: label, semanticsValue: value),
+                    builder: (_, v, _) => LinearProgressIndicator(
+                      value: v,
+                      semanticsLabel: label,
+                      semanticsValue: value,
+                    ),
                   ),
                 ],
               ],
@@ -307,7 +376,9 @@ class _StatusPanel extends StatelessWidget {
         ],
       ),
     );
-    final used = info.storageTotal == 0 ? null : 1 - info.storageFree / info.storageTotal;
+    final used = info.storageTotal == 0
+        ? null
+        : 1 - info.storageFree / info.storageTotal;
     return Panel(
       title: 'Estado',
       icon: Symbols.monitoring_rounded,
@@ -319,7 +390,11 @@ class _StatusPanel extends StatelessWidget {
               info.charging ? 'Batería (cargando)' : 'Batería',
               '${info.battery} %',
               info.battery / 100,
-              icon: BatteryGlyph(info.battery, charging: info.charging, width: 20),
+              icon: BatteryGlyph(
+                info.battery,
+                charging: info.charging,
+                width: 20,
+              ),
             ),
           if (used != null)
             row(
@@ -328,7 +403,8 @@ class _StatusPanel extends StatelessWidget {
               '${size(info.storageTotal - info.storageFree)} de ${size(info.storageTotal)}',
               used,
             ),
-          if (info.network.isNotEmpty) row(Symbols.wifi_rounded, 'Red', info.network, null),
+          if (info.network.isNotEmpty)
+            row(Symbols.wifi_rounded, 'Red', info.network, null),
         ],
       ),
     );
@@ -346,7 +422,10 @@ class _Recent extends StatelessWidget {
     return Panel(
       title: 'Recientes',
       icon: Symbols.history_rounded,
-      action: TextButton(onPressed: () => go(Section.files), child: const Text('Ver todo')),
+      action: TextButton(
+        onPressed: () => go(Section.files),
+        child: const Text('Ver todo'),
+      ),
       child: AnimatedSize(
         duration: motion(context, Spring.spatial.settle),
         curve: Spring.spatial,

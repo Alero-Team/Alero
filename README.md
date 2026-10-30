@@ -1,25 +1,56 @@
 # Alero
 
-Open-source Android ↔ desktop (Windows, Linux) file transfer and phone companion. Direct device-to-device, no account, no cloud.
+Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
 
-**Status: alpha (0.1).** Rust core (`core/`), Windows tray daemon (`daemon/`) and a Flutter app for Windows and Android (`app/`). Works on the local network and over a USB cable. Not released: build it yourself (see below).
+**Alpha software · 0.1.2.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
 
-What works today (see `docs/`):
-- Framed control messages with shared test vectors (`protocol/vectors/`).
-- Mutual TLS 1.3 with pinning by device id (SHA-256 of the public key), tested PC ↔ Pixel 9a.
-- Resumable, integrity-checked file transfer (tested at 1 GiB, including a killed process).
+## Use
 
-## Develop
+1. Install the Android ARM64 APK and the Windows x64 installer from the same release.
+2. Open Alero on both devices, use the same Wi-Fi network and pair them in **Devices**. Alternatively, scan the computer's QR code.
+3. Allow remote control on Windows and grant only the phone permissions needed for the features you use.
+
+The touchpad moves with one finger and scrolls with two. Tap twice and keep the second touch down to drag or select. The left and right buttons stay selected until tapped again; their label changes to release the button. The keyboard button opens text input and shortcuts.
+
+The file browser's Music section excludes audio lasting 5 seconds or less, ringtones, notification sounds and alarms. **All folders** requires Android's special shared-storage permission. Private app data remains inaccessible. Click a completed transfer to open it with the system's associated application. Android cannot run Windows executables.
+
+Android's optional **Security** setting unlocks the app with the system fingerprint or device PIN. It locks the interface when returning from the background; previously paired connections can continue working in the background. Alero never stores the PIN or biometric data.
+
+Device previews use the reported screen geometry, hardware identity and built-in system wallpaper. Verified hardware profiles: Google Pixel 9a and Lenovo V15 G4 IAH. Other models use the geometry the device reports. Windows uses its installed stock Windows wallpaper; OEM-specific artwork is not bundled.
+
+## Build
+
+Requirements: Flutter **3.47.8** (Dart 3.13.7), Rust stable, Java 17+, Android SDK with NDK **29.0.14206865**, and Visual Studio C++ desktop tools for Windows. Windows packaging also needs Inno Setup 6.
+
+```powershell
+cargo fetch --locked
+cargo test --locked --workspace
+cd app
+flutter pub get --enforce-lockfile
+flutter analyze --no-pub
+flutter test --no-pub
+cd ..
+./tools/build-android.ps1 -FlutterRoot C:/src/flutter
+./tools/build-windows.ps1 -FlutterRoot C:/src/flutter
 ```
-cargo test                                   # core tests + protocol vectors
-py -3 -I protocol/vectors/generate_framing.py   # regenerate vectors (independent of Rust)
-```
-Android builds need the NDK and `rustup target add aarch64-linux-android`; see `docs/product/Roadmap.md`.
 
-## Docs
-Start at `docs/Home.md` (an Obsidian vault). Rules for contributors using Claude Code: `CLAUDE.md`.
+The build scripts create packages and SHA-256 files in `dist/`. scrcpy is downloaded from its pinned upstream release and checked against its SHA-256 hash. Third-party notices and source licenses are bundled with both apps.
+
+The GitHub **Checks** workflow runs static analysis and regression tests. The manual **Packages** workflow builds both installers, keeps the Android signing identity in encrypted repository secrets, and optionally publishes a preliminary release. It refuses publication without the configured signing key.
+
+## Signing and limitations
+
+This alpha retains the existing Android development signing identity so it can update the test installation. It is not a production signing certificate. The Windows installer has no commercial Authenticode signature. Android installation and opening apps remain subject to the operating system's normal prompts.
+
+Linux is not packaged in this release. Full phone-to-PC control requires Windows. Device authentication and storage permission prompts must be completed on the phone by its owner.
+
+## Source layout
+
+- `core/`: Rust pairing, TLS and resumable transfers.
+- `daemon/`: Windows tray service and native remote control.
+- `app/`: Flutter UI, Kotlin Android integration and Windows runner.
+- `tools/`, `packaging/`: reproducible build scripts, installer and notices.
 
 ## License
-Copyright (C) 2026 the Alero authors.
 
-Licensed under the GNU General Public License, version 3 or (at your option) any later version. See [`LICENSE`](LICENSE). Rationale: `docs/decisions/ADR-0005-licencia.md`.
+GNU GPL-3.0-or-later. See [LICENSE](LICENSE). Third-party components retain their own licenses.

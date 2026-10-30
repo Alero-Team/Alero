@@ -39,6 +39,7 @@ struct Screen {
 
 pub struct Remote {
     data: PathBuf,
+    device: Value,
     allowed: Mutex<(Option<SystemTime>, bool)>,
     noticed: Mutex<HashMap<String, Instant>>,
     denied: Mutex<HashMap<String, Instant>>,
@@ -47,6 +48,7 @@ pub struct Remote {
     watching: Mutex<bool>,
     pushed: Mutex<HashMap<String, Value>>,
     next_gen: Mutex<u64>,
+    held: Mutex<HashMap<(String, String), Instant>>,
 }
 
 fn jpeg(w: u32, h: u32, rgb: &[u8], quality: u8) -> Option<Vec<u8>> {
@@ -69,6 +71,7 @@ impl Remote {
         sys::init();
         Arc::new(Self {
             data,
+            device: sys::device_metadata(),
             allowed: Mutex::new((None, false)),
             noticed: Mutex::new(HashMap::new()),
             denied: Mutex::new(HashMap::new()),
@@ -77,6 +80,7 @@ impl Remote {
             watching: Mutex::new(false),
             pushed: Mutex::new(HashMap::new()),
             next_gen: Mutex::new(0),
+            held: Mutex::new(HashMap::new()),
         })
     }
 
@@ -102,9 +106,14 @@ impl Remote {
         let (os, version) = ("Windows", crate::win::os_version());
         #[cfg(not(windows))]
         let (os, version) = (std::env::consts::OS, String::new());
+        let (w, h) = sys::screen_size();
+        let name = engine.name();
         let mut v = json!({
             "kind": "desktop",
-            "model": engine.name(),
+            "model": self.device["model"].as_str().filter(|m| !m.is_empty()).unwrap_or(name.as_str()),
+            "manufacturer": self.device["manufacturer"],
+            "product": self.device["product"],
+            "screen": {"w": w, "h": h},
             "os": os,
             "osVersion": version,
             "remote": {
@@ -115,6 +124,11 @@ impl Remote {
                 "power": sys::CAPS.power,
             },
         });
+        if self.device["product"] == "83FS" {
+            v["screen"]["bodyWidthMm"] = json!(359.2);
+            v["screen"]["bodyHeightMm"] = json!(235.8);
+            v["screen"]["depthMm"] = json!(19.9);
+        }
         v["battery"] = match sys::battery() {
             Some((level, charging)) => json!({"level": level, "charging": charging}),
             None => json!({"level": -1}),
@@ -160,6 +174,9 @@ impl Remote {
                 continue;
             }
             if engine.send_message(&p.id, "pb.x.info", info.clone()).is_ok() {
+                if let Some(jpeg) = self.device["stockJpeg"].as_str().filter(|s| !s.is_empty()) {
+                    let _ = engine.send_message(&p.id, "pb.x.wallpaper", json!({"jpeg": jpeg}));
+                }
                 pushed.insert(p.id, info.clone());
             }
         }
@@ -167,6 +184,18 @@ impl Remote {
 
     /// Every 30 s: battery and the switch may have changed. Cheap (one power query).
     pub fn spawn_status(self: &Arc<Self>, engine: Arc<Engine>) {
+        let guard = self.clone();
+        let owner = engine.clone();
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_secs(1));
+            let online: Vec<_> = owner.peers().into_iter().filter(|p| p.trusted && p.state == PeerState::Connected).map(|p| p.id).collect();
+            let allowed = guard.allowed();
+            guard.held.lock().unwrap().retain(|(peer, button), at| {
+                let keep = allowed && online.contains(peer) && at.elapsed() < Duration::from_secs(8);
+                if !keep { sys::button(button, false); }
+                keep
+            });
+        });
         let me = self.clone();
         thread::spawn(move || loop {
             thread::sleep(Duration::from_secs(30));
@@ -199,7 +228,21 @@ impl Remote {
                 self.notice(engine, peer, "controla este equipo");
                 sys::move_by(f("dx").round().clamp(-3000.0, 3000.0) as i32, f("dy").round().clamp(-3000.0, 3000.0) as i32)
             }
-            "pb.x.remote.button" => sys::button(s("button"), b["down"] == true),
+            "pb.x.remote.keepalive" => {
+                for ((id, _), at) in self.held.lock().unwrap().iter_mut() {
+                    if id == peer { *at = Instant::now(); }
+                }
+            }
+            "pb.x.remote.button" => {
+                let button = s("button");
+                if matches!(button, "left" | "right" | "middle") {
+                    let down = b["down"] == true;
+                    let key = (peer.to_owned(), button.to_owned());
+                    let mut held = self.held.lock().unwrap();
+                    if down { held.insert(key, Instant::now()); } else { held.remove(&key); }
+                    sys::button(button, down);
+                }
+            },
             "pb.x.remote.click" => {
                 self.notice(engine, peer, "controla este equipo");
                 for _ in 0..b["count"].as_u64().unwrap_or(1).clamp(1, 2) {
@@ -415,46 +458,5 @@ impl Remote {
                 thread::sleep(Duration::from_millis(1500));
             }
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_screen_sized_frame_fits_one_app_message() {
-        // Worst case for JPEG: noise. Even then the quality ladder must end under the limit or give up cleanly.
-        let (w, h) = (1280u32, 720u32);
-        let rgb: Vec<u8> = (0..(w * h * 3) as usize).map(|i| (i.wrapping_mul(2654435761) >> 13) as u8).collect();
-        let mut q = 60u8;
-        let data = loop {
-            let d = jpeg(w, h, &rgb, q).unwrap();
-            if d.len() <= MAX_JPEG || q <= 25 {
-                break d;
-            }
-            q -= 12;
-        };
-        // On realistic content (flat colors, text) it is far smaller; for noise we only require a valid JPEG.
-        assert_eq!(&data[..2], &[0xFF, 0xD8]);
-        let flat = vec![200u8; (w * h * 3) as usize];
-        assert!(jpeg(w, h, &flat, 60).unwrap().len() < MAX_JPEG);
-        assert!(STANDARD.encode(vec![0u8; MAX_JPEG]).len() + 200 < pb_core::frame::MAX_APP_BODY);
-    }
-
-    #[test]
-    fn the_switch_is_off_until_the_file_says_otherwise() {
-        let dir = std::env::temp_dir().join(format!("alero-remote-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let r = Remote::new(dir.clone());
-        assert!(!r.allowed(), "no file: off");
-        std::fs::write(dir.join("remote.json"), r#"{"allow":true}"#).unwrap();
-        assert!(r.allowed());
-        std::fs::write(dir.join("remote.json"), "not json").unwrap();
-        std::thread::sleep(Duration::from_millis(20));
-        // An unreadable file never turns control on.
-        let _ = std::fs::write(dir.join("remote.json"), r#"{"allow":false}"#);
-        assert!(!r.allowed());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

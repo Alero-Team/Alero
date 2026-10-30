@@ -48,6 +48,29 @@ object Files {
     }
 
     fun allowed() = Prefs.files(ctx)
+    fun allFiles() = if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager()
+        else has(Manifest.permission.READ_EXTERNAL_STORAGE)
+
+    private fun storageFile(path: String): java.io.File {
+        if (!allFiles()) throw SecurityException("storage permission")
+        return StoragePaths.resolve(Environment.getExternalStorageDirectory(), path)
+    }
+
+    private fun listStorage(path: String): List<JSONObject> {
+        val base = Environment.getExternalStorageDirectory().canonicalFile
+        val folder = storageFile(path)
+        val children = folder.listFiles() ?: throw SecurityException("unreadable folder")
+        return children.mapNotNull { file ->
+            val relative = file.relativeTo(base).invariantSeparatorsPath
+            try {
+                val safe = storageFile(relative)
+                entry(safe.name, safe.isDirectory, if (safe.isDirectory) 0 else safe.length(),
+                    safe.lastModified() / 1000,
+                    android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(safe.extension.lowercase()) ?: "",
+                    relative, if (safe.isDirectory) relative else "")
+            } catch (_: SecurityException) { null }
+        }.sortedWith(compareBy({ !it.getBoolean("dir") }, { it.getString("name").lowercase() }))
+    }
 
     // --- permissions ------------------------------------------------------------------------------------
 
@@ -156,6 +179,7 @@ object Files {
         add("video", "Vídeos", "video", hasMedia("video"))
         add("audio", "Música", "audio", hasMedia("audio"))
         if (Build.VERSION.SDK_INT >= 29) add("alero", "Recibidos de Alero", "alero", true)
+        add("storage", "Todas las carpetas", "storage", allFiles())
         trees().forEachIndexed { i, t -> add("tree:$i", treeName(t), "tree", true) }
         return JSONObject().put("allowed", true).put("roots", a)
     }
@@ -167,6 +191,7 @@ object Files {
     }
 
     private fun uriFor(root: String, id: String): Uri? = when {
+        root == "storage" -> Uri.fromFile(storageFile(id).also { if (!it.isFile) throw SecurityException("not a file") })
         root == "alero" -> if (Build.VERSION.SDK_INT >= 29) ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toLong()) else null
         root.startsWith("tree:") -> trees().getOrNull(root.substring(5).toIntOrNull() ?: -1)?.let { DocumentsContract.buildDocumentUriUsingTree(it, id) }
         // "t<tree>|<document id>": a photo/video found inside a folder the user added (see listMediaFlat)
@@ -192,7 +217,8 @@ object Files {
         ctx.contentResolver.query(
             mediaUri(root),
             arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DATE_MODIFIED, MediaStore.MediaColumns.MIME_TYPE, data),
-            "$data LIKE ? ESCAPE '\\'", arrayOf(like(prefix) + "%"), null,
+            "$data LIKE ? ESCAPE '\\'" + if (root == "audio") " AND ${MediaStore.Audio.Media.DURATION} > 5000 AND ${MediaStore.Audio.Media.IS_RINGTONE} = 0 AND ${MediaStore.Audio.Media.IS_NOTIFICATION} = 0 AND ${MediaStore.Audio.Media.IS_ALARM} = 0" else "",
+            arrayOf(like(prefix) + "%"), null,
         )?.use { c ->
             while (c.moveToNext()) {
                 val full = c.getString(5) ?: continue
@@ -308,9 +334,10 @@ object Files {
     private fun list(peer: String, b: JSONObject) {
         val root = b.optString("root")
         val path = b.optString("path")
-        val offset = b.optInt("offset", 0)
+        val offset = b.optInt("offset", 0).coerceAtLeast(0)
         val key = "$root|$path"
         val all = synchronized(cache) { if (offset == 0) null else cache[key] } ?: when {
+            root == "storage" -> listStorage(path)
             root == "alero" -> listAlero()
             root.startsWith("tree:") -> listTree(root, path)
             root == "images" || root == "video" -> listMediaFlat(root)
@@ -347,6 +374,8 @@ object Files {
             Bridge.sendTo(peer, "pb.x.fs.denied", JSONObject().put("reason", "send_failed").put("detail", r.removePrefix("!")))
         } else {
             sending[r] = pfd
+            ctx.getSharedPreferences("file_locations", Context.MODE_PRIVATE).edit()
+                .putString("id:$r", uri.toString()).apply()
         }
     }
 

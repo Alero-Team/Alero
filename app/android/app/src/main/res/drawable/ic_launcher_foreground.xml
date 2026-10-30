@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Alero mark (docs/design/aero identidad.svg), two interlocking rounded paths. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <group android:translateX="24.5" android:translateY="30" android:scaleX="0.5" android:scaleY="0.5">
-        <path android:pathData="M18,78 V30 Q18,18 30,18 H47 Q59,18 59,30 V43 Q59,55 71,55 H100" android:strokeColor="#F5F5F2" android:strokeWidth="10" android:strokeLineCap="round" android:strokeLineJoin="round"/>
-        <path android:pathData="M100,30 V66 Q100,78 88,78 H71 Q59,78 59,66 V55 Q59,43 47,43 H18" android:strokeColor="#F5F5F2" android:strokeWidth="10" android:strokeLineCap="round" android:strokeLineJoin="round"/>
-    </group>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+  <group android:translateX="24.5" android:translateY="30" android:scaleX="0.5" android:scaleY="0.5">
+    <path android:pathData="M18,78 V30 Q18,18 30,18 H47 Q59,18 59,30 V42 Q59,54 71,54 H100" android:strokeColor="#F5F5F2" android:strokeWidth="10" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+    <path android:pathData="M100,18 V66 Q100,78 88,78 H71 Q59,78 59,66 V54 Q59,42 47,42 H18" android:strokeColor="#F5F5F2" android:strokeWidth="10" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+  </group>
 </vector>

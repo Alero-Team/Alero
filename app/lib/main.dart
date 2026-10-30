@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'app_info.dart';
 import 'hub.dart';
 import 'native.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/shell.dart';
+import 'ui/app_lock.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerAleroLicenses();
   await RustLib.init();
   final color = SystemColor();
   await color.load(); // before the first frame, so the window opens in the user's colors
   await Native.initDesktop();
+  await Native.loadLock();
   final hub = Hub();
   runApp(App(hub, color));
-  await hub.start(); // after the first frame is queued, so the window shows at once
+  await hub
+      .start(); // after the first frame is queued, so the window shows at once
 }
 
 class App extends StatelessWidget {
@@ -30,9 +36,21 @@ class App extends StatelessWidget {
       final (seed, variant) = color.value;
       return MaterialApp(
         title: 'Alero',
+        locale: const Locale('es'),
+        supportedLocales: const [Locale('es')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
         debugShowCheckedModeBanner: false,
         theme: buildTheme(seed, variant, Brightness.light),
-        darkTheme: buildTheme(seed, variant, Brightness.dark, amoled: hub.amoled.value),
+        darkTheme: buildTheme(
+          seed,
+          variant,
+          Brightness.dark,
+          amoled: hub.amoled.value,
+        ),
         themeMode: switch (hub.theme) {
           'light' => ThemeMode.light,
           'dark' => ThemeMode.dark,
@@ -43,10 +61,15 @@ class App extends StatelessWidget {
         builder: (context, child) {
           final th = Theme.of(context);
           // Toasts are a fixed-width card on big windows and full width (minus margins) on phones.
-          final toast = th.snackBarTheme.copyWith(width: MediaQuery.sizeOf(context).width >= 600 ? 420 : null);
+          final toast = th.snackBarTheme.copyWith(
+            width: MediaQuery.sizeOf(context).width >= 600 ? 420 : null,
+          );
           return Theme(
             data: th.copyWith(snackBarTheme: toast),
-            child: MediaQuery.withClampedTextScaling(maxScaleFactor: 1.5, child: child!),
+            child: MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 1.5,
+              child: AppLock(child: child!),
+            ),
           );
         },
         home: Shell(hub, onResume: color.load),

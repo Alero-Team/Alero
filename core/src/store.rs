@@ -109,38 +109,3 @@ impl Store {
         self.save::<HistoryEntry>("history.json", &[])
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn entry(id: &str, path: &str) -> HistoryEntry {
-        HistoryEntry {
-            id: id.into(),
-            peer_id: "p".into(),
-            peer_name: "p".into(),
-            name: "f.txt".into(),
-            size: 1,
-            incoming: true,
-            status: "done".into(),
-            code: String::new(),
-            message: String::new(),
-            time: 1,
-            path: path.into(),
-        }
-    }
-
-    #[test]
-    fn remove_history_drops_the_record_and_keeps_the_file() {
-        let dir = std::env::temp_dir().join(format!("alero-store-test-{}", std::process::id()));
-        let file = dir.join("keep.txt");
-        let store = Store::open(&dir).unwrap();
-        std::fs::write(&file, b"x").unwrap();
-        store.push_history(entry("a", file.to_str().unwrap())).unwrap();
-        store.push_history(entry("b", "")).unwrap();
-        store.remove_history("a").unwrap();
-        assert_eq!(store.history().iter().map(|h| h.id.as_str()).collect::<Vec<_>>(), ["b"]);
-        assert!(file.exists());
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-}

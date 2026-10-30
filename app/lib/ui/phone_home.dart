@@ -21,15 +21,24 @@ class QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final online = peer.state == pb.PeerState.connected;
     final info = hub.info[peer.id];
-    final canShot = online && info != null && info.remoteAllowed && info.canScreen;
+    final canShot =
+        online && info != null && info.remoteAllowed && info.canScreen;
     return Row(
       children: [
         Expanded(
-          child: _Tile(Symbols.upload_rounded, 'Enviar', online ? () => hub.send(peer.id) : null),
+          child: _Tile(
+            Symbols.upload_rounded,
+            'Enviar',
+            online ? () => hub.send(peer.id) : null,
+          ),
         ),
         const SizedBox(width: Gap.s),
         Expanded(
-          child: _Tile(Symbols.content_paste_go_rounded, 'Portapapeles', online ? () => openClipboard(context, hub, peer.id) : null),
+          child: _Tile(
+            Symbols.content_paste_go_rounded,
+            'Portapapeles',
+            online ? () => openClipboard(context, hub, peer.id) : null,
+          ),
         ),
         const SizedBox(width: Gap.s),
         Expanded(
@@ -45,7 +54,9 @@ class QuickActions extends StatelessWidget {
           child: _Tile(
             Symbols.cast_rounded,
             'Pantalla',
-            canShot ? () => openPcScreen(context, hub, peer.id, peer.name) : null,
+            canShot
+                ? () => openPcScreen(context, hub, peer.id, peer.name)
+                : null,
             hint: online && !canShot ? 'Requiere control remoto' : null,
           ),
         ),
@@ -92,11 +103,23 @@ class _Tile extends StatelessWidget {
                     Container(
                       width: 40,
                       height: 40,
-                      decoration: BoxDecoration(color: s.secondaryContainer, borderRadius: BorderRadius.circular(Radii.pill)),
-                      child: Icon(icon, size: 22, color: s.onSecondaryContainer),
+                      decoration: BoxDecoration(
+                        color: s.secondaryContainer,
+                        borderRadius: BorderRadius.circular(Radii.pill),
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 22,
+                        color: s.onSecondaryContainer,
+                      ),
                     ),
                     const SizedBox(height: 6),
-                    Text(label, style: t.labelMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      label,
+                      style: t.labelMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
@@ -131,9 +154,18 @@ class ControlCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(online ? Symbols.lock_rounded : Symbols.link_off_rounded, size: 20, color: s.onSurfaceVariant),
+                  Icon(
+                    online ? Symbols.lock_rounded : Symbols.link_off_rounded,
+                    size: 20,
+                    color: s.onSurfaceVariant,
+                  ),
                   const SizedBox(width: Gap.m),
-                  Expanded(child: Text(blocker, style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant))),
+                  Expanded(
+                    child: Text(
+                      blocker,
+                      style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+                    ),
+                  ),
                 ],
               ),
             )

@@ -22,6 +22,9 @@ import java.io.File
  * The engine runs in Rust inside this process; nothing here decides protocol or trust.
  */
 class MainActivity : FlutterActivity() {
+    private val security by lazy { AppSecurity(this) }
+    private val fileLocations by lazy { getSharedPreferences("file_locations", MODE_PRIVATE) }
+    private val sourceUris = HashMap<Int, Uri>()
     private var pickResult: MethodChannel.Result? = null
     private var scanResult: MethodChannel.Result? = null
     private var wallpaperResult: MethodChannel.Result? = null
@@ -30,6 +33,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        security.secureWindow()
         Notifier.init(this)
         Features.start(this)
         if (Prefs.background(this)) PbService.update(this, emptyList()) // no service unless asked or a computer is connected
@@ -58,6 +62,38 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pb/android")
         channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
+                "lockEnabled" -> result.success(security.enabled())
+                "authenticate" -> security.authenticate(result)
+                "setLock" -> security.authenticate(result, call.arguments as Boolean)
+                "allFiles" -> result.success(Files.allFiles())
+                "requestAllFiles" -> {
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+                    } else {
+                        requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), MEDIA)
+                    }
+                    result.success(null)
+                }
+                "rememberFile" -> {
+                    val uri = sourceUris[call.argument<Int>("fd")]
+                    if (uri != null) fileLocations.edit().putString("id:" + call.argument<String>("id"), uri.toString()).apply()
+                    result.success(null)
+                }
+                "openFile" -> {
+                    val path = call.argument<String>("path") ?: ""
+                    val id = call.argument<String>("id") ?: ""
+                    Thread {
+                        try {
+                            val intent = fileIntent(path, id)
+                            runOnUiThread {
+                                try { startActivity(intent); result.success(null) }
+                                catch (_: Exception) { result.error("open_file", "No hay una app compatible para abrir el archivo.", null) }
+                            }
+                        } catch (_: Exception) {
+                            runOnUiThread { result.error("open_file", "No se pudo abrir el archivo. Comprueba que sigue disponible.", null) }
+                        }
+                    }.start()
+                }
                 "deviceName" -> result.success(Build.MODEL ?: "Android")
                 "pickFiles" -> pick(result)
                 "closeFd" -> {
@@ -149,15 +185,6 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(null)
                 }
-                "openTethering" -> {
-                    // USB tethering lives on a different screen per maker; the generic wireless page is the fallback.
-                    try {
-                        startActivity(Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings"))
-                    } catch (_: Exception) {
-                        startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
-                    }
-                    result.success(null)
-                }
                 "deviceInfo" -> result.success(Features.info().toString())
                 "scanQr" -> {
                     scanResult?.success(null)
@@ -211,6 +238,10 @@ class MainActivity : FlutterActivity() {
             scanResult = null
             return
         }
+        if (requestCode == AppSecurity.REQUEST) {
+            security.finish(resultCode == Activity.RESULT_OK)
+            return
+        }
         if (requestCode == TREE) {
             val r = treeResult ?: return
             treeResult = null
@@ -247,6 +278,9 @@ class MainActivity : FlutterActivity() {
         uris.mapNotNull { uri ->
             val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null } ?: return@mapNotNull null
             synchronized(open) { open[pfd.fd] = pfd }
+            sourceUris[pfd.fd] = uri
+            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            catch (_: SecurityException) { /* Shares may grant access only while the sender allows it. */ }
             mapOf("fd" to pfd.fd, "name" to safeName(displayName(uri)))
         }
 
@@ -275,11 +309,45 @@ class MainActivity : FlutterActivity() {
             cv.clear()
             cv.put(MediaStore.Downloads.IS_PENDING, 0)
             contentResolver.update(uri, cv, null, null)
+            fileLocations.edit().putString(path, uri.toString()).apply()
             src.delete()
             "Descargas/Alero/${src.name}"
         } catch (e: Exception) {
             path // stays in the app's folder; Dart shows this path
         }
+    }
+
+    private fun fileIntent(path: String, id: String): Intent {
+        val saved = fileLocations.getString("id:$id", null) ?: fileLocations.getString(path, null)
+        var uri = saved?.let(Uri::parse)
+        // Older versions moved received files without remembering their content URI.
+        if (uri == null && !File(path).isFile && Build.VERSION.SDK_INT >= 29) {
+            contentResolver.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Downloads._ID),
+                "${MediaStore.Downloads.RELATIVE_PATH} = ? AND ${MediaStore.Downloads.DISPLAY_NAME} = ?",
+                arrayOf("Download/Alero/", File(path).name), "${MediaStore.Downloads.DATE_ADDED} DESC")?.use {
+                if (it.moveToFirst()) uri = android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, it.getLong(0))
+            }
+        }
+        if (uri == null) {
+            val file = File(path)
+            require(file.isFile) { "missing file" }
+            uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+        }
+        if (uri?.scheme == "file") {
+            val source = File(uri!!.path!!)
+            val folder = File(cacheDir, "opened-files").apply { mkdirs() }
+            val cached = File(folder, source.path.hashCode().toUInt().toString(16) + "-" + source.name)
+            if (!cached.exists() || cached.length() != source.length() || cached.lastModified() != source.lastModified()) {
+                source.copyTo(cached, overwrite = true)
+                cached.setLastModified(source.lastModified())
+            }
+            uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", cached)
+        }
+        val mime = contentResolver.getType(uri!!) ?: MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(File(path).extension.lowercase()) ?: "application/octet-stream"
+        return Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 
     companion object {

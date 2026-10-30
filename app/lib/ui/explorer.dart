@@ -10,7 +10,8 @@ import 'widgets.dart';
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
-String _ext(String name) => name.contains('.') ? name.split('.').last.toUpperCase() : '';
+String _ext(String name) =>
+    name.contains('.') ? name.split('.').last.toUpperCase() : '';
 
 /// The phone's files, on the computer (ADR-0011). It lists what the phone chooses to show (photos, videos, music,
 /// Alero's received files and the folders its owner added) and asks it to send files; downloads and uploads are
@@ -28,7 +29,12 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   FsClient get fs => hub.fs;
 
   pb.Peer? get _phone => hub.peers
-      .where((p) => p.trusted && p.state == pb.PeerState.connected && hub.info[p.id]?.phone == true)
+      .where(
+        (p) =>
+            p.trusted &&
+            p.state == pb.PeerState.connected &&
+            hub.info[p.id]?.phone == true,
+      )
       .firstOrNull;
 
   @override
@@ -47,7 +53,11 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   /// Starts (or restarts after a reconnection) the session with the phone that is connected now.
   void _ensure() {
     final p = _phone;
-    if (p != null && (fs.peerId != p.id || (fs.roots.isEmpty && !fs.loading && fs.error == null))) fs.open(p.id);
+    if (p != null &&
+        (fs.peerId != p.id ||
+            (fs.roots.isEmpty && !fs.loading && fs.error == null))) {
+      fs.open(p.id);
+    }
   }
 
   @override
@@ -64,7 +74,17 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             children: [
               Row(
                 children: [
-                  Expanded(child: Semantics(header: true, child: Text(phone == null ? 'Explorador' : 'Archivos de ${phone.name}', style: t.headlineMedium))),
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        phone == null
+                            ? 'Explorador'
+                            : 'Archivos de ${phone.name}',
+                        style: t.headlineMedium,
+                      ),
+                    ),
+                  ),
                   if (phone != null) ..._actions(context, phone),
                 ],
               ),
@@ -88,7 +108,13 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                   child: Panel(
                     title: 'Transferencias en curso',
                     icon: Symbols.sync_rounded,
-                    child: SingleChildScrollView(child: Column(children: [for (final x in hub.active) TransferRow(x, hub)])),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          for (final x in hub.active) TransferRow(x, hub),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -108,7 +134,9 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
           child: FilledButton.icon(
             onPressed: () {
               fs.download(chosen);
-              hub.messages.add('Pidiendo ${chosen.length == 1 ? chosen.first.name : '${chosen.length} archivos'} al teléfono…');
+              hub.messages.add(
+                'Pidiendo ${chosen.length == 1 ? chosen.first.name : '${chosen.length} archivos'} al teléfono…',
+              );
               fs.clearSelection();
             },
             icon: const Icon(Symbols.download_rounded, size: 18),
@@ -135,9 +163,15 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
       IconButton(
         tooltip: fs.grid ? 'Ver como lista' : 'Ver como cuadrícula',
         onPressed: fs.toggleView,
-        icon: Icon(fs.grid ? Symbols.view_list_rounded : Symbols.grid_view_rounded),
+        icon: Icon(
+          fs.grid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
+        ),
       ),
-      IconButton(tooltip: 'Actualizar', onPressed: fs.refresh, icon: const Icon(Symbols.refresh_rounded)),
+      IconButton(
+        tooltip: 'Actualizar',
+        onPressed: fs.refresh,
+        icon: const Icon(Symbols.refresh_rounded),
+      ),
     ];
   }
 
@@ -156,11 +190,21 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
           'Falta un permiso en el teléfono',
           'Android pide permiso para ver fotos, vídeos y música. Concédelo en Alero › Ajustes › Permisos.',
         ),
-        _ => (Symbols.signal_disconnected_rounded, 'El teléfono no responde', 'Comprueba que Alero está abierto y conectado, y vuelve a intentarlo.'),
+        _ => (
+          Symbols.signal_disconnected_rounded,
+          'El teléfono no responde',
+          'Comprueba que Alero está abierto y conectado, y vuelve a intentarlo.',
+        ),
       };
       return Align(
         alignment: Alignment.topCenter,
-        child: EmptyState(icon: icon, title: title, body: body, action: 'Volver a intentarlo', onAction: fs.refresh),
+        child: EmptyState(
+          icon: icon,
+          title: title,
+          body: body,
+          action: 'Volver a intentarlo',
+          onAction: fs.refresh,
+        ),
       );
     }
     return Card(
@@ -173,11 +217,28 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               padding: const EdgeInsets.all(Gap.m),
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(Gap.m, Gap.s, Gap.m, Gap.s),
-                  child: Text('Ubicaciones', style: t.labelLarge?.copyWith(color: s.onSurfaceVariant)),
+                  padding: const EdgeInsets.fromLTRB(
+                    Gap.m,
+                    Gap.s,
+                    Gap.m,
+                    Gap.s,
+                  ),
+                  child: Text(
+                    'Ubicaciones',
+                    style: t.labelLarge?.copyWith(color: s.onSurfaceVariant),
+                  ),
                 ),
-                for (final r in fs.roots) _RootItem(r, selected: r.id == fs.root, onTap: r.ok ? () => fs.selectRoot(r.id) : null),
-                if (fs.roots.isEmpty && fs.loading) const Padding(padding: EdgeInsets.all(Gap.l), child: LinearProgressIndicator()),
+                for (final r in fs.roots)
+                  _RootItem(
+                    r,
+                    selected: r.id == fs.root,
+                    onTap: r.ok ? () => fs.selectRoot(r.id) : null,
+                  ),
+                if (fs.roots.isEmpty && fs.loading)
+                  const Padding(
+                    padding: EdgeInsets.all(Gap.l),
+                    child: LinearProgressIndicator(),
+                  ),
               ],
             ),
           ),
@@ -203,21 +264,50 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             spacing: 2,
             children: [
               if (fs.crumbs.isNotEmpty)
-                IconButton(tooltip: 'Subir un nivel', onPressed: fs.up, icon: const Icon(Symbols.arrow_upward_rounded, size: 20)),
-              TextButton(onPressed: fs.crumbs.isEmpty ? null : () => fs.goTo(0), child: Text(root?.name ?? '…')),
+                IconButton(
+                  tooltip: 'Subir un nivel',
+                  onPressed: fs.up,
+                  icon: const Icon(Symbols.arrow_upward_rounded, size: 20),
+                ),
+              TextButton(
+                onPressed: fs.crumbs.isEmpty ? null : () => fs.goTo(0),
+                child: Text(root?.name ?? '…'),
+              ),
               for (final (i, c) in fs.crumbs.indexed) ...[
-                Icon(Symbols.chevron_right_rounded, size: 18, color: s.onSurfaceVariant),
-                TextButton(onPressed: i == fs.crumbs.length - 1 ? null : () => fs.goTo(i + 1), child: Text(c.$1)),
+                Icon(
+                  Symbols.chevron_right_rounded,
+                  size: 18,
+                  color: s.onSurfaceVariant,
+                ),
+                TextButton(
+                  onPressed: i == fs.crumbs.length - 1
+                      ? null
+                      : () => fs.goTo(i + 1),
+                  child: Text(c.$1),
+                ),
               ],
             ],
           ),
         ),
+        if (fs.root == 'audio')
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Gap.l,
+              vertical: Gap.xs,
+            ),
+            child: Text(
+              'Audio de más de 5 segundos · sin tonos, alarmas ni notificaciones',
+              style: t.bodySmall,
+            ),
+          ),
         if (fs.loading) const LinearProgressIndicator(),
         Expanded(
           child: list.isEmpty && !fs.loading
               ? Center(
                   child: Text(
-                    fs.error != null ? 'No se pudo leer esta carpeta.' : 'Esta carpeta está vacía.',
+                    fs.error != null
+                        ? 'No se pudo leer esta carpeta.'
+                        : 'Esta carpeta está vacía.',
                     style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
                   ),
                 )
@@ -234,14 +324,20 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                   itemBuilder: (_, i) => _GridTile(fs, list[i]),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: Gap.m, vertical: Gap.s),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Gap.m,
+                    vertical: Gap.s,
+                  ),
                   itemCount: list.length,
                   itemBuilder: (_, i) => _Row(fs, list[i]),
                 ),
         ),
         if (fs.total > 0)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Gap.l, vertical: Gap.s),
+            padding: const EdgeInsets.symmetric(
+              horizontal: Gap.l,
+              vertical: Gap.s,
+            ),
             child: Text(
               '${fs.total} elementos${fs.selected.isEmpty ? '' : ' · ${fs.selected.length} seleccionados'}',
               style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
@@ -269,7 +365,11 @@ class _RootItem extends StatelessWidget {
       _ => Symbols.folder_rounded,
     };
     return Tooltip(
-      message: r.ok ? r.name : 'Falta el permiso de Android para ver ${r.name.toLowerCase()}',
+      message: r.ok
+          ? r.name
+          : r.id == 'storage'
+          ? 'En el teléfono: Ajustes › Archivos para el ordenador › Todas las carpetas › Permitir'
+          : 'Falta el permiso de Android para ver ${r.name.toLowerCase()}',
       child: Padding(
         padding: const EdgeInsets.only(bottom: 2),
         child: Material(
@@ -279,20 +379,37 @@ class _RootItem extends StatelessWidget {
             borderRadius: BorderRadius.circular(Radii.pill),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Gap.m, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: Gap.m,
+                vertical: 10,
+              ),
               child: Row(
                 children: [
-                  Icon(icon, size: 20, fill: selected ? 1 : 0, color: selected ? s.onSecondaryContainer : s.onSurfaceVariant),
+                  Icon(
+                    icon,
+                    size: 20,
+                    fill: selected ? 1 : 0,
+                    color: selected
+                        ? s.onSecondaryContainer
+                        : s.onSurfaceVariant,
+                  ),
                   const SizedBox(width: Gap.m),
                   Expanded(
                     child: Text(
                       r.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: selected ? s.onSecondaryContainer : s.onSurface),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: selected ? s.onSecondaryContainer : s.onSurface,
+                      ),
                     ),
                   ),
-                  if (!r.ok) Icon(Symbols.lock_rounded, size: 16, color: s.onSurfaceVariant),
+                  if (!r.ok)
+                    Icon(
+                      Symbols.lock_rounded,
+                      size: 16,
+                      color: s.onSurfaceVariant,
+                    ),
                 ],
               ),
             ),
@@ -314,11 +431,22 @@ class _Preview extends StatelessWidget {
   Widget build(BuildContext context) {
     final kind = fileKind(e.name);
     final c = kindColors(context, kind);
-    final wantsThumb = !e.dir && (kind == FileKind.image || kind == FileKind.video || fs.root == 'images' || fs.root == 'video');
+    final wantsThumb =
+        !e.dir &&
+        (kind == FileKind.image ||
+            kind == FileKind.video ||
+            fs.root == 'images' ||
+            fs.root == 'video');
     if (wantsThumb) fs.wantThumb(e);
     final bytes = wantsThumb ? fs.thumb('${fs.root}|${e.id}') : null;
     if (bytes != null) {
-      return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true, cacheWidth: (size * 2).round());
+      return Image.memory(
+        bytes,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        cacheWidth: (size * 2).round(),
+        semanticLabel: 'Miniatura de ${e.name}',
+      );
     }
     final s = Theme.of(context).colorScheme;
     return ColoredBox(
@@ -356,8 +484,13 @@ class _GridTile extends StatelessWidget {
           duration: const Duration(milliseconds: 120),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(Radii.tile),
-            border: Border.all(color: sel ? s.primary : Colors.transparent, width: 2),
-            color: sel ? s.primaryContainer.withValues(alpha: 0.4) : Colors.transparent,
+            border: Border.all(
+              color: sel ? s.primary : Colors.transparent,
+              width: 2,
+            ),
+            color: sel
+                ? s.primaryContainer.withValues(alpha: 0.4)
+                : Colors.transparent,
           ),
           padding: const EdgeInsets.all(6),
           child: Column(
@@ -375,10 +508,17 @@ class _GridTile extends StatelessWidget {
                           top: 6,
                           right: 6,
                           child: DecoratedBox(
-                            decoration: BoxDecoration(color: s.primary, shape: BoxShape.circle),
+                            decoration: BoxDecoration(
+                              color: s.primary,
+                              shape: BoxShape.circle,
+                            ),
                             child: Padding(
                               padding: const EdgeInsets.all(2),
-                              child: Icon(Symbols.check_rounded, size: 16, color: s.onPrimary),
+                              child: Icon(
+                                Symbols.check_rounded,
+                                size: 16,
+                                color: s.onPrimary,
+                              ),
                             ),
                           ),
                         ),
@@ -387,7 +527,13 @@ class _GridTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              Text(e.name, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: t.bodySmall),
+              Text(
+                e.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: t.bodySmall,
+              ),
               Text(
                 e.dir ? '${e.size} elementos' : size(e.size),
                 maxLines: 1,
@@ -413,7 +559,9 @@ class _Row extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final sel = fs.selected.contains(e.id);
     return Material(
-      color: sel ? s.primaryContainer.withValues(alpha: 0.4) : Colors.transparent,
+      color: sel
+          ? s.primaryContainer.withValues(alpha: 0.4)
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(Radii.tile),
       child: InkWell(
         borderRadius: BorderRadius.circular(Radii.tile),
@@ -425,24 +573,59 @@ class _Row extends StatelessWidget {
             children: [
               SizedBox(
                 width: 22,
-                child: e.dir ? null : Icon(sel ? Symbols.check_box_rounded : Symbols.check_box_outline_blank_rounded, size: 20, color: sel ? s.primary : s.onSurfaceVariant),
+                child: e.dir
+                    ? null
+                    : Icon(
+                        sel
+                            ? Symbols.check_box_rounded
+                            : Symbols.check_box_outline_blank_rounded,
+                        size: 20,
+                        color: sel ? s.primary : s.onSurfaceVariant,
+                      ),
               ),
               const SizedBox(width: Gap.s),
-              ClipRRect(borderRadius: BorderRadius.circular(Radii.chip), child: SizedBox(width: 40, height: 40, child: _Preview(fs, e, size: 40))),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(Radii.chip),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: _Preview(fs, e, size: 40),
+                ),
+              ),
               const SizedBox(width: Gap.m),
-              Expanded(child: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: weight(t.bodyMedium, 500))),
-              SizedBox(width: 64, child: Text(e.dir ? 'Carpeta' : _ext(e.name), style: t.bodySmall?.copyWith(color: s.onSurfaceVariant))),
+              Expanded(
+                child: Text(
+                  e.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: weight(t.bodyMedium, 500),
+                ),
+              ),
+              SizedBox(
+                width: 64,
+                child: Text(
+                  e.dir ? 'Carpeta' : _ext(e.name),
+                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                ),
+              ),
               SizedBox(
                 width: 90,
                 child: Text(
                   e.dir ? '${e.size} elem.' : size(e.size),
                   textAlign: TextAlign.end,
-                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
+                  style: t.bodySmall?.copyWith(
+                    color: s.onSurfaceVariant,
+                    fontFeatures: tabular,
+                  ),
                 ),
               ),
               SizedBox(
                 width: 100,
-                child: Text(e.mtime.millisecondsSinceEpoch > 0 ? _date(e.mtime) : '', textAlign: TextAlign.end, style: t.bodySmall?.copyWith(color: s.onSurfaceVariant)),
+                child: Text(
+                  e.mtime.millisecondsSinceEpoch > 0 ? _date(e.mtime) : '',
+                  textAlign: TextAlign.end,
+                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                ),
               ),
             ],
           ),

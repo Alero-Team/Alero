@@ -30,11 +30,22 @@ android {
         ndk { abiFilters += "arm64-v8a" }
     }
 
+    signingConfigs {
+        val signingFile = System.getenv("ALERO_ANDROID_KEYSTORE")
+        if (!signingFile.isNullOrBlank()) {
+            create("aleroRelease") {
+                storeFile = file(signingFile)
+                storePassword = System.getenv("ALERO_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ALERO_ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ALERO_ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Alpha builds keep the installed identity; CI supplies the same identity through encrypted secrets.
+            signingConfig = signingConfigs.findByName("aleroRelease") ?: signingConfigs.getByName("debug")
             // Smaller and faster to load: R8 shrinks code, unused resources go. Rules keep the JNI entry points.
             isMinifyEnabled = true
             isShrinkResources = true
@@ -54,6 +65,7 @@ flutter {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     // QR pairing scanner: Apache-2.0, plain ZXing, no Google Play services.
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

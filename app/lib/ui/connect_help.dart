@@ -8,9 +8,7 @@ import '../native.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-/// "Sin Wi-Fi": what each way of using a cable or sharing a connection really is. These are different things
-/// that Android groups on one screen, so the wording is explicit. Alero never turns any of them on by itself:
-/// the buttons only open the system screen where the user decides.
+/// Supported local connections: Alero's USB tunnel and Android's file-transfer mode.
 class ConnectionPanel extends StatelessWidget {
   const ConnectionPanel(this.hub, {super.key});
   final Hub hub;
@@ -20,28 +18,32 @@ class ConnectionPanel extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final android = Platform.isAndroid;
-    Widget row(IconData icon, String title, String body, Widget action) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: Gap.s),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          IconTile(icon),
-          const SizedBox(width: Gap.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: weight(t.bodyLarge, 500)),
-                const SizedBox(height: 2),
-                Text(body, style: t.bodySmall?.copyWith(color: s.onSurfaceVariant)),
-                const SizedBox(height: Gap.s),
-                action,
-              ],
-            ),
+    Widget row(IconData icon, String title, String body, Widget action) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: Gap.s),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconTile(icon),
+              const SizedBox(width: Gap.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: weight(t.bodyLarge, 500)),
+                    const SizedBox(height: 2),
+                    Text(
+                      body,
+                      style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: Gap.s),
+                    action,
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
 
     return Panel(
       title: 'Cable y conexiones',
@@ -70,35 +72,18 @@ class ConnectionPanel extends StatelessWidget {
             row(
               Symbols.folder_open_rounded,
               'Transferir archivos por USB (MTP)',
-              'Para ver el teléfono en el Explorador de Windows y copiar fotos y archivos con el cable. No comparte Internet. Android no permite que una app cambie el modo USB: lo eliges tú.',
+              'Para ver el teléfono en el Explorador de Windows y copiar fotos y archivos con el cable. Android te permite elegir el modo USB desde sus ajustes.',
               FilledButton.tonalIcon(
                 onPressed: () => _mtpGuide(context),
                 icon: const Icon(Symbols.help_rounded, size: 18),
                 label: const Text('Cómo activarlo'),
               ),
             ),
-            row(
-              Symbols.share_rounded,
-              'Compartir Internet (anclaje)',
-              'Es otra cosa: el teléfono presta su Internet móvil al ordenador. Anclaje USB (por el cable), punto de acceso Wi-Fi (crea una red) o Bluetooth (lento). Ninguno hace falta para usar Alero; con el anclaje USB el ordenador te encuentra solo. Gasta datos móviles y solo se activa si tú lo haces.',
-              OutlinedButton.icon(
-                onPressed: Native.openTethering,
-                icon: const Icon(Symbols.settings_rounded, size: 18),
-                label: const Text('Abrir ajustes de anclaje'),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: Gap.xs),
-              child: Text(
-                'Bluetooth: Alero no lo usa para conectarse. En el teléfono sirve para anclaje a Internet, audio y los archivos que envía el sistema; no para las funciones de Alero.',
-                style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-              ),
-            ),
           ] else
             Padding(
               padding: const EdgeInsets.only(top: Gap.xs),
               child: Text(
-                'Para copiar archivos con el Explorador de Windows, en el teléfono elige «Transferencia de archivos» al conectar el cable (Alero en el teléfono, Dispositivos › Cable y conexiones, lo explica). Es distinto de compartir Internet.',
+                'Para copiar archivos con el Explorador de Windows, en el teléfono elige «Transferencia de archivos» al conectar el cable. Encontrarás los pasos en Dispositivos › Cable y conexiones.',
                 style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
               ),
             ),
@@ -116,11 +101,20 @@ class ConnectionPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _Step(1, 'Conecta el teléfono al ordenador con un cable de datos (algunos cables solo cargan).'),
+            _Step(
+              1,
+              'Conecta el teléfono al ordenador con un cable de datos (algunos cables solo cargan).',
+            ),
             _Step(2, 'Desbloquea el teléfono.'),
-            _Step(3, 'Baja el panel de notificaciones y toca «Carga de este dispositivo mediante USB» (o «USB»).'),
+            _Step(
+              3,
+              'Baja el panel de notificaciones y toca «Carga de este dispositivo mediante USB» (o «USB»).',
+            ),
             _Step(4, 'Elige «Transferencia de archivos».'),
-            _Step(5, 'En Windows aparece en «Este equipo». Si no, prueba otro puerto o cable.'),
+            _Step(
+              5,
+              'En Windows aparece en «Este equipo». Si no, prueba otro puerto o cable.',
+            ),
             SizedBox(height: Gap.m),
             Text(
               'Si Android no muestra ese aviso, puedes fijarlo en Opciones de desarrollador › «Configuración USB predeterminada». Alero no puede cambiar el modo USB por ti: Android lo reserva al usuario.',
@@ -129,7 +123,10 @@ class ConnectionPanel extends StatelessWidget {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cerrar'),
+        ),
         FilledButton(
           onPressed: () {
             Navigator.pop(ctx);
@@ -153,7 +150,13 @@ class _Step extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(width: 24, child: Text('$n.', style: weight(Theme.of(context).textTheme.bodyMedium, 600))),
+        SizedBox(
+          width: 24,
+          child: Text(
+            '$n.',
+            style: weight(Theme.of(context).textTheme.bodyMedium, 600),
+          ),
+        ),
         Expanded(child: Text(text)),
       ],
     ),

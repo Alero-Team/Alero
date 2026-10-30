@@ -10,6 +10,9 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.provider.Settings
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Base64
@@ -30,7 +33,15 @@ class NotifListener : NotificationListenerService() {
         override fun onPlaybackStateChanged(s: PlaybackState?) = pushMedia()
         override fun onSessionDestroyed() = pick(null)
     }
-    private var lastMedia = ""
+    private val main = Handler(Looper.getMainLooper())
+    private val poll = object : Runnable {
+        override fun run() {
+            val all = getSystemService(MediaSessionManager::class.java)
+                .getActiveSessions(ComponentName(this@NotifListener, NotifListener::class.java))
+            pick(all)
+            main.postDelayed(this, 2000)
+        }
+    }
 
     override fun onListenerConnected() {
         me = this
@@ -39,13 +50,18 @@ class NotifListener : NotificationListenerService() {
         val cn = ComponentName(this, NotifListener::class.java)
         msm.addOnActiveSessionsChangedListener(sessions, cn)
         pick(msm.getActiveSessions(cn))
+        main.removeCallbacks(poll)
+        main.postDelayed(poll, 2000)
         Bridge.broadcast("pb.x.info", Features.info())
     }
 
     override fun onListenerDisconnected() {
         getSystemService(MediaSessionManager::class.java).removeOnActiveSessionsChangedListener(sessions)
         controller?.unregisterCallback(media)
+        main.removeCallbacks(poll)
+        controller = null
         me = null
+        Bridge.broadcast("pb.x.media.state", JSONObject().put("active", false))
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -57,19 +73,26 @@ class NotifListener : NotificationListenerService() {
     }
 
     private fun pick(list: List<MediaController>?) {
-        controller?.unregisterCallback(media)
-        // The one that is playing, else the most recent.
-        controller = list?.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list?.firstOrNull()
-        controller?.registerCallback(media)
+        val all = list ?: getSystemService(MediaSessionManager::class.java)
+            .getActiveSessions(ComponentName(this, NotifListener::class.java))
+        val players = all.filter {
+            val metadata = it.metadata
+            !metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).isNullOrBlank() ||
+                !metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE).isNullOrBlank() ||
+                (metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0) > 0
+        }
+        val next = players.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            ?: players.firstOrNull { it.sessionToken == controller?.sessionToken } ?: players.firstOrNull()
+        if (next?.sessionToken != controller?.sessionToken) {
+            controller?.unregisterCallback(media)
+            controller = next
+            controller?.registerCallback(media, main)
+        }
         pushMedia()
     }
 
     private fun pushMedia() {
         val s = state() ?: JSONObject().put("active", false)
-        // Same track and state: skip (callbacks fire often); position is extrapolated on the computer.
-        val sig = s.optString("title") + s.optBoolean("playing") + s.optString("app") + s.optLong("duration")
-        if (sig == lastMedia) return
-        lastMedia = sig
         Bridge.broadcast("pb.x.media.state", s)
     }
 
@@ -78,15 +101,22 @@ class NotifListener : NotificationListenerService() {
         val m = c.metadata
         val p = c.playbackState
         val am = getSystemService(AudioManager::class.java)
+        val duration = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0
+        val playing = p?.state == PlaybackState.STATE_PLAYING
+        val elapsed = if (playing && p != null && p.lastPositionUpdateTime > 0)
+            (SystemClock.elapsedRealtime() - p.lastPositionUpdateTime).coerceAtLeast(0) else 0
+        val position = ((p?.position ?: 0) + elapsed * (p?.playbackSpeed ?: 1f)).toLong().coerceAtLeast(0)
         return JSONObject()
             .put("active", true)
             .put("app", appName(c.packageName))
-            .put("title", m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "")
+            .put("title", m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: "")
             .put("artist", m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: "")
             .put("album", m?.getString(MediaMetadata.METADATA_KEY_ALBUM) ?: "")
             .put("duration", m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0)
             .put("playing", p?.state == PlaybackState.STATE_PLAYING)
-            .put("position", p?.position ?: 0)
+            .put("position", if (duration > 0) position.coerceAtMost(duration) else position)
+            .put("speed", p?.playbackSpeed?.toDouble() ?: 1.0)
+            .put("actions", p?.actions ?: 0)
             .put("at", System.currentTimeMillis())
             .put("volume", am.getStreamVolume(AudioManager.STREAM_MUSIC))
             .put("volumeMax", am.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
@@ -97,9 +127,11 @@ class NotifListener : NotificationListenerService() {
     private fun art(m: MediaMetadata?): String {
         val b = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: return ""
         val side = 160
-        val small = Bitmap.createScaledBitmap(b, side, side * b.height / maxOf(1, b.width), true)
+        val scale = minOf(1f, side.toFloat() / maxOf(1, b.width), side.toFloat() / maxOf(1, b.height))
+        val small = Bitmap.createScaledBitmap(b, maxOf(1, (b.width * scale).toInt()), maxOf(1, (b.height * scale).toInt()), true)
         val out = ByteArrayOutputStream()
         small.compress(Bitmap.CompressFormat.JPEG, 70, out)
+        if (small !== b) small.recycle()
         return if (out.size() > 40_000) "" else Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
@@ -183,10 +215,11 @@ class NotifListener : NotificationListenerService() {
                 "prev" -> t?.skipToPrevious()
                 "seek" -> t?.seekTo(b.optLong("position"))
                 "volume" -> s.getSystemService(AudioManager::class.java)
-                    .setStreamVolume(AudioManager.STREAM_MUSIC, b.optInt("value"), 0)
+                    .let { it.setStreamVolume(AudioManager.STREAM_MUSIC,
+                        b.optInt("value").coerceIn(0, it.getStreamMaxVolume(AudioManager.STREAM_MUSIC)), 0) }
             }
-            s.lastMedia = "" // the reply may not change the signature (e.g. volume); force one update
-            s.pushMedia()
+            s.main.post { s.pushMedia() }
+            s.main.postDelayed({ s.pushMedia() }, 350)
         }
     }
 }

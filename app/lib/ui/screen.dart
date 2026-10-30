@@ -64,11 +64,17 @@ class _ScreenDialogState extends State<_ScreenDialog> {
 
   Future<String> _check() async {
     _ready = await Scrcpy.ready(_ipOf(widget.phone)) != null;
-    return _ready ? 'Listo para abrir la pantalla.' : 'Prepara el teléfono una vez con los pasos de abajo.';
+    return _ready
+        ? 'Listo para abrir la pantalla.'
+        : 'Prepara el teléfono una vez con los pasos de abajo.';
   }
 
   Future<String> _pair() async {
-    final out = await Scrcpy.pair(_ipOf(widget.phone), _port.text.trim(), _code.text.trim());
+    final out = await Scrcpy.pair(
+      _ipOf(widget.phone),
+      _port.text.trim(),
+      _code.text.trim(),
+    );
     if (!out.toLowerCase().contains('successfully')) {
       return 'No se vinculó. El puerto y el código cambian cada vez que abres la pantalla de vinculación.';
     }
@@ -79,8 +85,15 @@ class _ScreenDialogState extends State<_ScreenDialog> {
 
   Future<String> _start() async {
     final serial = await Scrcpy.ready(_ipOf(widget.phone));
-    if (serial == null) return 'No se encuentra el teléfono. Comprueba la depuración inalámbrica.';
-    final p = await Scrcpy.start(serial, title: widget.phone.name, screenOff: _screenOff, audio: _audio);
+    if (serial == null) {
+      return 'No se encuentra el teléfono. Comprueba la depuración inalámbrica.';
+    }
+    final p = await Scrcpy.start(
+      serial,
+      title: widget.phone.name,
+      screenOff: _screenOff,
+      audio: _audio,
+    );
     p.stderr.drain<void>();
     p.stdout.drain<void>();
     if (mounted) Navigator.pop(context);
@@ -98,7 +111,12 @@ class _ScreenDialogState extends State<_ScreenDialog> {
         content: const Text(
           'Esta instalación no incluye el componente de pantalla (scrcpy). Reinstala la app o copia la carpeta «scrcpy» junto al programa.',
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
       );
     }
     return AlertDialog(
@@ -118,7 +136,9 @@ class _ScreenDialogState extends State<_ScreenDialog> {
               const SizedBox(height: Gap.s),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Apagar la pantalla del teléfono mientras tanto'),
+                title: const Text(
+                  'Apagar la pantalla del teléfono mientras tanto',
+                ),
                 value: _screenOff,
                 onChanged: (v) => setState(() => _screenOff = v),
               ),
@@ -136,7 +156,11 @@ class _ScreenDialogState extends State<_ScreenDialog> {
                       if (_busy)
                         const Padding(
                           padding: EdgeInsets.only(right: Gap.s),
-                          child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         ),
                       Expanded(child: Text(_status, style: t.bodyMedium)),
                     ],
@@ -144,11 +168,15 @@ class _ScreenDialogState extends State<_ScreenDialog> {
                 ),
               const SizedBox(height: Gap.s),
               Theme(
-                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
                   initiallyExpanded: false,
                   tilePadding: EdgeInsets.zero,
-                  title: Text('Preparar el teléfono (una sola vez)', style: t.titleSmall),
+                  title: Text(
+                    'Preparar el teléfono (una sola vez)',
+                    style: t.titleSmall,
+                  ),
                   childrenPadding: const EdgeInsets.only(bottom: Gap.s),
                   expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -165,7 +193,12 @@ class _ScreenDialogState extends State<_ScreenDialog> {
                             CircleAvatar(
                               radius: 11,
                               backgroundColor: s.secondaryContainer,
-                              child: Text('${i + 1}', style: t.labelSmall?.copyWith(color: s.onSecondaryContainer)),
+                              child: Text(
+                                '${i + 1}',
+                                style: t.labelSmall?.copyWith(
+                                  color: s.onSecondaryContainer,
+                                ),
+                              ),
                             ),
                             const SizedBox(width: Gap.m),
                             Expanded(child: Text(step, style: t.bodyMedium)),
@@ -178,7 +211,9 @@ class _ScreenDialogState extends State<_ScreenDialog> {
                           child: TextField(
                             controller: _port,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Puerto'),
+                            decoration: const InputDecoration(
+                              labelText: 'Puerto',
+                            ),
                           ),
                         ),
                         const SizedBox(width: Gap.s),
@@ -186,12 +221,16 @@ class _ScreenDialogState extends State<_ScreenDialog> {
                           child: TextField(
                             controller: _code,
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Código'),
+                            decoration: const InputDecoration(
+                              labelText: 'Código',
+                            ),
                           ),
                         ),
                         const SizedBox(width: Gap.s),
                         FilledButton.tonal(
-                          onPressed: _busy ? null : () => _run('Vinculando…', _pair),
+                          onPressed: _busy
+                              ? null
+                              : () => _run('Vinculando…', _pair),
                           child: const Text('Vincular'),
                         ),
                       ],
@@ -209,7 +248,10 @@ class _ScreenDialogState extends State<_ScreenDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
         FilledButton.icon(
           onPressed: _busy || !_ready ? null : () => _run('Abriendo…', _start),
           icon: const Icon(Symbols.cast_rounded, size: 18),

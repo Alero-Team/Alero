@@ -1,6 +1,9 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <shellapi.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -25,6 +28,20 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  file_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      flutter_controller_->engine()->messenger(), "pb/windows", &flutter::StandardMethodCodec::GetInstance());
+  file_channel_->SetMethodCallHandler([](const auto& call, auto result) {
+    if (call.method_name() != "openFile") { result->NotImplemented(); return; }
+    const auto* path = std::get_if<std::string>(call.arguments());
+    if (!path || path->empty()) { result->Error("path", "Archivo no disponible"); return; }
+    const int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path->data(), static_cast<int>(path->size()), nullptr, 0);
+    if (!size) { result->Error("path", "Ruta no válida"); return; }
+    std::wstring wide(size, L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path->data(), static_cast<int>(path->size()), wide.data(), size);
+    const auto opened = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL));
+    if (opened <= 32) result->Error("open_file", "No se pudo abrir el archivo");
+    else result->Success();
+  });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +57,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  file_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

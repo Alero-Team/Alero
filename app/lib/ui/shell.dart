@@ -35,7 +35,8 @@ class _Dest {
 final _dests = [
   const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
   const _Dest(Section.files, 'Archivos', Symbols.folder_rounded),
-  if (!Platform.isAndroid) const _Dest(Section.explorer, 'Explorador', Symbols.perm_media_rounded),
+  if (!Platform.isAndroid)
+    const _Dest(Section.explorer, 'Explorador', Symbols.perm_media_rounded),
   const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded),
   const _Dest(Section.settings, 'Ajustes', Symbols.settings_rounded),
 ];
@@ -54,7 +55,11 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Hub get hub => widget.hub;
   // ALERO_SECTION=explorer (etc.) opens that screen first: handy for screenshots and manual checks.
-  Section _section = Section.values.where((s) => s.name == Platform.environment['ALERO_SECTION']).firstOrNull ?? Section.home;
+  Section _section =
+      Section.values
+          .where((s) => s.name == Platform.environment['ALERO_SECTION'])
+          .firstOrNull ??
+      Section.home;
   late final StreamSubscription<String> _msgs;
   bool _shareOpen = false, _shotOpen = false;
 
@@ -63,7 +68,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _msgs = hub.messages.stream.listen((m) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+      }
     });
     hub.addListener(_questions);
   }
@@ -95,7 +102,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   void _questions() {
     final p = hub.pairPrompt;
     if (p != null && _pairRoute == null) {
-      final route = _pairRoute = DialogRoute<bool>(context: context, barrierDismissible: false, builder: (_) => _PairDialog(p));
+      final route = _pairRoute = DialogRoute<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _PairDialog(p),
+      );
       Navigator.of(context).push(route).then((ok) {
         _pairRoute = null;
         if (hub.pairPrompt != null) hub.answerPair(ok ?? false);
@@ -105,7 +116,11 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     }
     final o = hub.offer;
     if (o != null && _offerRoute == null) {
-      final route = _offerRoute = DialogRoute<bool>(context: context, barrierDismissible: false, builder: (_) => _OfferDialog(o));
+      final route = _offerRoute = DialogRoute<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _OfferDialog(o),
+      );
       Navigator.of(context).push(route).then((ok) {
         _offerRoute = null;
         if (hub.offer != null) hub.answerOffer(ok ?? false);
@@ -147,9 +162,14 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         // layout (top-aligned), so nothing jumps while the old page fades out.
         final page = PageTransitionSwitcher(
           duration: motion(context, const Duration(milliseconds: 300)),
-          layoutBuilder: (entries) => Stack(alignment: Alignment.topCenter, children: entries),
-          transitionBuilder: (child, a, b) =>
-              FadeThroughTransition(animation: a, secondaryAnimation: b, fillColor: Colors.transparent, child: child),
+          layoutBuilder: (entries) =>
+              Stack(alignment: Alignment.topCenter, children: entries),
+          transitionBuilder: (child, a, b) => FadeThroughTransition(
+            animation: a,
+            secondaryAnimation: b,
+            fillColor: Colors.transparent,
+            child: child,
+          ),
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         return box.maxWidth >= wideLayout ? _wide(page) : _narrow(page);
@@ -162,7 +182,9 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   Widget _wide(Widget page) {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
-    final online = hub.peers.where((p) => p.trusted && p.state == pb.PeerState.connected).toList();
+    final online = hub.peers
+        .where((p) => p.trusted && p.state == pb.PeerState.connected)
+        .toList();
     return Scaffold(
       backgroundColor: s.surfaceContainer,
       body: Row(
@@ -176,14 +198,29 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(Gap.m, Gap.xl, Gap.m, Gap.l),
+                      padding: const EdgeInsets.fromLTRB(
+                        Gap.m,
+                        Gap.xl,
+                        Gap.m,
+                        Gap.l,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const AleroLogo(size: 26),
                           const SizedBox(height: Gap.l),
-                          Text(hub.name, style: t.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text('Este equipo', style: t.bodySmall?.copyWith(color: s.onSurfaceVariant)),
+                          Text(
+                            hub.name,
+                            style: t.titleMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'Este equipo',
+                            style: t.bodySmall?.copyWith(
+                              color: s.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -226,7 +263,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
     bottomNavigationBar: SafeArea(
       minimum: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.m),
       child: AleroNavBar(
-        items: [for (final d in _dests) NavData(d.icon, d.label, badge: _badge(d.section))],
+        items: [
+          for (final d in _dests)
+            NavData(d.icon, d.label, badge: _badge(d.section)),
+        ],
         selected: _dests.indexWhere((d) => d.section == _section),
         onSelect: (i) => _go(_dests[i].section),
       ),
@@ -262,8 +302,10 @@ class _NavItemState extends State<_NavItem> {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final sel = widget.selected;
-    final fg = sel ? s.onSecondaryContainer : s.onSurfaceVariant;
-    final bg = sel ? s.secondaryContainer : (_hover ? s.onSurface.withValues(alpha: 0.06) : Colors.transparent);
+    final fg = sel ? s.onSurface : s.onSurfaceVariant;
+    final bg = sel
+        ? s.surfaceContainerHighest
+        : (_hover ? s.onSurface.withValues(alpha: 0.06) : Colors.transparent);
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Semantics(
@@ -282,20 +324,28 @@ class _NavItemState extends State<_NavItem> {
               curve: Spring.spatial,
               height: 48,
               padding: EdgeInsets.symmetric(horizontal: sel ? Gap.l : Gap.m),
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Radii.pill)),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(Radii.pill),
+              ),
               child: ExcludeSemantics(
                 child: Row(
                   children: [
                     TweenAnimationBuilder<double>(
                       tween: Tween(end: sel ? 1 : 0),
-                      duration: motion(context, const Duration(milliseconds: 250)),
-                      builder: (_, f, _) => Icon(widget.icon, size: 22, color: fg, fill: f),
+                      duration: motion(
+                        context,
+                        const Duration(milliseconds: 250),
+                      ),
+                      builder: (_, f, _) =>
+                          Icon(widget.icon, size: 22, color: fg, fill: f),
                     ),
                     const SizedBox(width: Gap.m),
                     Expanded(
                       child: Text(
                         widget.label,
-                        style: (sel ? t.labelLarge : weight(t.labelLarge, 500))?.copyWith(color: fg),
+                        style: (sel ? t.labelLarge : weight(t.labelLarge, 500))
+                            ?.copyWith(color: fg),
                       ),
                     ),
                     if (widget.badge > 0) Badge(label: Text('${widget.badge}')),
@@ -330,7 +380,12 @@ class _PhoneChip extends StatelessWidget {
           padding: const EdgeInsets.all(Gap.m),
           child: Row(
             children: [
-              Icon(online.isEmpty ? Symbols.mobile_off_rounded : Symbols.smartphone_rounded, size: 20),
+              Icon(
+                online.isEmpty
+                    ? Symbols.mobile_off_rounded
+                    : Symbols.smartphone_rounded,
+                size: 20,
+              ),
               const SizedBox(width: Gap.m),
               Expanded(
                 child: Column(
@@ -345,7 +400,9 @@ class _PhoneChip extends StatelessWidget {
                     Text(
                       online.isEmpty
                           ? 'Ningún dispositivo'
-                          : (online.length == 1 ? 'Conectado' : '${online.length} conectados'),
+                          : (online.length == 1
+                                ? 'Conectado'
+                                : '${online.length} conectados'),
                       style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
                     ),
                   ],
@@ -369,11 +426,15 @@ class _ShareSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final s = hub.share;
-    final online = hub.peers.where((p) => p.trusted && p.state == pb.PeerState.connected).toList();
+    final online = hub.peers
+        .where((p) => p.trusted && p.state == pb.PeerState.connected)
+        .toList();
     final what = s == null
         ? ''
         : s.files.isNotEmpty
-        ? (s.files.length == 1 ? s.files.first.name ?? 'Un archivo' : '${s.files.length} archivos')
+        ? (s.files.length == 1
+              ? s.files.first.name ?? 'Un archivo'
+              : '${s.files.length} archivos')
         : 'Texto: «${s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text}»';
     return SafeArea(
       child: Padding(
@@ -394,7 +455,10 @@ class _ShareSheet extends StatelessWidget {
               ),
               const SizedBox(height: Gap.l),
               if (online.isEmpty)
-                Text('Ningún dispositivo conectado. Abre la app en el ordenador.', style: t.bodyMedium)
+                Text(
+                  'Ningún dispositivo conectado. Abre la app en el ordenador.',
+                  style: t.bodyMedium,
+                )
               else
                 for (final p in online)
                   Padding(
@@ -408,7 +472,10 @@ class _ShareSheet extends StatelessWidget {
                       label: Text(p.name),
                     ),
                   ),
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
             ],
           ),
         ),
@@ -426,19 +493,28 @@ class _PairDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final s = Theme.of(context).colorScheme;
-    final code = p.code.length == 6 ? '${p.code.substring(0, 3)} ${p.code.substring(3)}' : p.code;
+    final code = p.code.length == 6
+        ? '${p.code.substring(0, 3)} ${p.code.substring(3)}'
+        : p.code;
     return AlertDialog(
       icon: const Icon(Symbols.link_rounded),
       title: Text('Emparejar con ${p.name}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Comprueba que ${p.name} muestra este mismo código.', style: t.bodyMedium, textAlign: TextAlign.center),
+          Text(
+            'Comprueba que ${p.name} muestra este mismo código.',
+            style: t.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: Gap.l),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: Gap.l),
-            decoration: BoxDecoration(color: s.secondaryContainer, borderRadius: BorderRadius.circular(Radii.tile)),
+            decoration: BoxDecoration(
+              color: s.secondaryContainer,
+              borderRadius: BorderRadius.circular(Radii.tile),
+            ),
             child: Semantics(
               label: 'Código ${p.code.split('').join(' ')}',
               child: ExcludeSemantics(
@@ -457,8 +533,14 @@ class _PairDialog extends StatelessWidget {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No coinciden')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Coinciden')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('No coinciden'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Coinciden'),
+        ),
       ],
     );
   }
@@ -494,22 +576,36 @@ class _OfferDialog extends StatelessWidget {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Rechazar')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Aceptar')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Rechazar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Aceptar'),
+        ),
       ],
     );
   }
 }
 
 /// Asks before destructive actions. Returns true only on explicit confirmation.
-Future<bool> confirm(BuildContext context, String title, String body, String yes) async =>
+Future<bool> confirm(
+  BuildContext context,
+  String title,
+  String body,
+  String yes,
+) async =>
     await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(title),
         content: Text(body),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(c).colorScheme.error,
@@ -525,7 +621,13 @@ Future<bool> confirm(BuildContext context, String title, String body, String yes
 
 /// Page scaffold shared by the screens: title, max width, padding that clears the floating bar.
 class ScreenFrame extends StatelessWidget {
-  const ScreenFrame({super.key, required this.title, required this.children, this.onRefresh, this.trailing});
+  const ScreenFrame({
+    super.key,
+    required this.title,
+    required this.children,
+    this.onRefresh,
+    this.trailing,
+  });
   final String title;
   final List<Widget> children;
   final Future<void> Function()? onRefresh;
@@ -535,7 +637,12 @@ class ScreenFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= wideLayout;
     final list = ListView(
-      padding: EdgeInsets.fromLTRB(wide ? Gap.xxl : Gap.l, Gap.xl, wide ? Gap.xxl : Gap.l, wide ? Gap.xxl : 112),
+      padding: EdgeInsets.fromLTRB(
+        wide ? Gap.xxl : Gap.l,
+        Gap.xl,
+        wide ? Gap.xxl : Gap.l,
+        wide ? Gap.xxl : 112,
+      ),
       children: [
         Align(
           alignment: Alignment.topCenter,
@@ -551,7 +658,9 @@ class ScreenFrame extends StatelessWidget {
                         header: true,
                         child: Text(
                           title,
-                          style: wide ? Theme.of(context).textTheme.headlineMedium : Theme.of(context).textTheme.headlineSmall,
+                          style: wide
+                              ? Theme.of(context).textTheme.headlineMedium
+                              : Theme.of(context).textTheme.headlineSmall,
                         ),
                       ),
                     ),
@@ -559,7 +668,8 @@ class ScreenFrame extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: Gap.l),
-                for (final (i, c) in children.indexed) Reveal(index: i, child: c),
+                for (final (i, c) in children.indexed)
+                  Reveal(index: i, child: c),
               ],
             ),
           ),
@@ -568,7 +678,9 @@ class ScreenFrame extends StatelessWidget {
     );
     return SafeArea(
       bottom: false,
-      child: onRefresh == null || !Platform.isAndroid ? list : RefreshIndicator(onRefresh: onRefresh!, child: list),
+      child: onRefresh == null || !Platform.isAndroid
+          ? list
+          : RefreshIndicator(onRefresh: onRefresh!, child: list),
     );
   }
 }
@@ -586,7 +698,9 @@ class _Drop extends StatefulWidget {
 class _DropState extends State<_Drop> {
   bool _over = false;
 
-  List<pb.Peer> get _online => widget.hub.peers.where((p) => p.trusted && p.state == pb.PeerState.connected).toList();
+  List<pb.Peer> get _online => widget.hub.peers
+      .where((p) => p.trusted && p.state == pb.PeerState.connected)
+      .toList();
 
   Future<void> _done(DropDoneDetails d) async {
     setState(() => _over = false);
@@ -595,11 +709,15 @@ class _DropState extends State<_Drop> {
         if (FileSystemEntity.isFileSync(f.path)) f.path,
     ];
     if (files.length < d.files.length) {
-      widget.hub.messages.add('Las carpetas aún no se pueden enviar; se envían solo los archivos.');
+      widget.hub.messages.add(
+        'Las carpetas aún no se pueden enviar; se envían solo los archivos.',
+      );
     }
     if (files.isEmpty) return;
     final online = _online;
-    if (online.isEmpty) return widget.hub.messages.add('Ningún dispositivo conectado.');
+    if (online.isEmpty) {
+      return widget.hub.messages.add('Ningún dispositivo conectado.');
+    }
     var target = online.first;
     if (online.length > 1) {
       final pick = await showDialog<pb.Peer>(
@@ -607,7 +725,11 @@ class _DropState extends State<_Drop> {
         builder: (c) => SimpleDialog(
           title: const Text('Enviar a…'),
           children: [
-            for (final p in online) SimpleDialogOption(onPressed: () => Navigator.pop(c, p), child: Text(p.name)),
+            for (final p in online)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, p),
+                child: Text(p.name),
+              ),
           ],
         ),
       );
@@ -647,8 +769,15 @@ class _DropState extends State<_Drop> {
                             Container(
                               width: 88,
                               height: 88,
-                              decoration: ShapeDecoration(color: s.primaryContainer, shape: const CookieBorder()),
-                              child: Icon(Symbols.upload_rounded, size: 36, color: s.onPrimaryContainer),
+                              decoration: ShapeDecoration(
+                                color: s.primaryContainer,
+                                shape: const CookieBorder(),
+                              ),
+                              child: Icon(
+                                Symbols.upload_rounded,
+                                size: 36,
+                                color: s.onPrimaryContainer,
+                              ),
                             ),
                             const SizedBox(height: Gap.l),
                             Text(

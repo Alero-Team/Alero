@@ -21,7 +21,14 @@ const tabular = [FontFeature.tabularFigures()];
 
 /// A titled section card: the building block of every screen (title, optional action, content).
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.title, this.icon, this.action, required this.child, this.padding});
+  const Panel({
+    super.key,
+    required this.title,
+    this.icon,
+    this.action,
+    required this.child,
+    this.padding,
+  });
   final String title;
   final IconData? icon;
   final Widget? action;
@@ -33,7 +40,9 @@ class Panel extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Card(
       child: Padding(
-        padding: padding ?? const EdgeInsets.fromLTRB(Gap.l + 4, Gap.m, Gap.m, Gap.l),
+        padding:
+            padding ??
+            const EdgeInsets.fromLTRB(Gap.l + 4, Gap.m, Gap.m, Gap.l),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -41,9 +50,15 @@ class Panel extends StatelessWidget {
               height: 40,
               child: Row(
                 children: [
-                  if (icon != null) ...[Icon(icon, size: 20, color: context.pal.muted), const SizedBox(width: Gap.s)],
+                  if (icon != null) ...[
+                    Icon(icon, size: 20, color: context.pal.muted),
+                    const SizedBox(width: Gap.s),
+                  ],
                   Expanded(
-                    child: Semantics(header: true, child: Text(title, style: t.titleMedium)),
+                    child: Semantics(
+                      header: true,
+                      child: Text(title, style: t.titleMedium),
+                    ),
                   ),
                   ?action,
                 ],
@@ -59,16 +74,39 @@ class Panel extends StatelessWidget {
 }
 
 /// One wording, icon and color per peer state, used everywhere. Color is never the only signal.
-({String label, IconData icon, Color color}) peerStatus(BuildContext context, pb.Peer p) {
+({String label, IconData icon, Color color}) peerStatus(
+  BuildContext context,
+  pb.Peer p,
+) {
   final c = context.pal;
   return switch (p.state) {
-    pb.PeerState.connected => (label: 'Conectado', icon: Symbols.link_rounded, color: c.signal),
-    pb.PeerState.connecting => (label: 'Conectando…', icon: Symbols.sync_rounded, color: c.muted),
-    pb.PeerState.rejected => (label: 'Te quitó de sus dispositivos', icon: Symbols.block_rounded, color: c.danger),
+    pb.PeerState.connected => (
+      label: 'Conectado',
+      icon: Symbols.link_rounded,
+      color: c.signal,
+    ),
+    pb.PeerState.connecting => (
+      label: 'Conectando…',
+      icon: Symbols.sync_rounded,
+      color: c.muted,
+    ),
+    pb.PeerState.rejected => (
+      label: 'Te quitó de sus dispositivos',
+      icon: Symbols.block_rounded,
+      color: c.danger,
+    ),
     pb.PeerState.disconnected =>
       p.trusted
-          ? (label: 'Sin conexión', icon: Symbols.link_off_rounded, color: c.muted)
-          : (label: 'Disponible', icon: Symbols.add_link_rounded, color: c.muted),
+          ? (
+              label: 'Sin conexión',
+              icon: Symbols.link_off_rounded,
+              color: c.muted,
+            )
+          : (
+              label: 'Disponible',
+              icon: Symbols.add_link_rounded,
+              color: c.muted,
+            ),
   };
 }
 
@@ -89,7 +127,9 @@ class StatusLine extends StatelessWidget {
           decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
         ),
         const SizedBox(width: Gap.s),
-        Flexible(child: Text(s.label, style: Theme.of(context).textTheme.labelLarge)),
+        Flexible(
+          child: Text(s.label, style: Theme.of(context).textTheme.labelLarge),
+        ),
       ],
     );
   }
@@ -101,10 +141,33 @@ enum FileKind { image, video, audio, doc, sheet, archive, app, other }
 FileKind fileKind(String name) {
   final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
   return switch (ext) {
-    'jpg' || 'jpeg' || 'png' || 'gif' || 'webp' || 'heic' || 'bmp' || 'svg' || 'avif' => FileKind.image,
+    'jpg' ||
+    'jpeg' ||
+    'png' ||
+    'gif' ||
+    'webp' ||
+    'heic' ||
+    'bmp' ||
+    'svg' ||
+    'avif' => FileKind.image,
     'mp4' || 'mkv' || 'mov' || 'avi' || 'webm' || '3gp' => FileKind.video,
-    'mp3' || 'flac' || 'wav' || 'ogg' || 'm4a' || 'opus' || 'aac' => FileKind.audio,
-    'pdf' || 'doc' || 'docx' || 'odt' || 'txt' || 'md' || 'rtf' || 'ppt' || 'pptx' || 'odp' => FileKind.doc,
+    'mp3' ||
+    'flac' ||
+    'wav' ||
+    'ogg' ||
+    'm4a' ||
+    'opus' ||
+    'aac' => FileKind.audio,
+    'pdf' ||
+    'doc' ||
+    'docx' ||
+    'odt' ||
+    'txt' ||
+    'md' ||
+    'rtf' ||
+    'ppt' ||
+    'pptx' ||
+    'odp' => FileKind.doc,
     'xls' || 'xlsx' || 'ods' || 'csv' => FileKind.sheet,
     'zip' || 'rar' || '7z' || 'tar' || 'gz' || 'xz' => FileKind.archive,
     'apk' || 'exe' || 'msi' || 'deb' || 'appimage' => FileKind.app,
@@ -152,7 +215,10 @@ class FileTile extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: c.bg, borderRadius: BorderRadius.circular(Radii.chip)),
+      decoration: BoxDecoration(
+        color: c.bg,
+        borderRadius: BorderRadius.circular(Radii.chip),
+      ),
       child: ExcludeSemantics(
         child: Icon(fileIcon(name), size: size * 0.5, color: c.fg, fill: 1),
       ),
@@ -177,7 +243,11 @@ class IconTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(Radii.chip),
       ),
       child: ExcludeSemantics(
-        child: Icon(icon, size: size * 0.5, color: tonal ? s.onSecondaryContainer : s.onSurfaceVariant),
+        child: Icon(
+          icon,
+          size: size * 0.5,
+          color: tonal ? s.onSecondaryContainer : s.onSurfaceVariant,
+        ),
       ),
     );
   }
@@ -194,7 +264,9 @@ class TransferRow extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final f = x.size == 0 ? null : (x.done / x.size).clamp(0.0, 1.0);
     final pct = f == null ? '' : '${(f * 100).toStringAsFixed(0)} %';
-    final detail = x.note.isNotEmpty ? x.note : '${size(x.done)} de ${size(x.size)} · ${size(x.rate)}/s';
+    final detail = x.note.isNotEmpty
+        ? x.note
+        : '${size(x.done)} de ${size(x.size)} · ${size(x.rate)}/s';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: Column(
@@ -208,10 +280,18 @@ class TransferRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(x.name, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text(
+                      x.name,
+                      style: t.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     Text(
                       '${x.incoming ? 'Recibiendo de' : 'Enviando a'} ${x.peerName} · $detail',
-                      style: t.bodySmall?.copyWith(color: context.pal.muted, fontFeatures: tabular),
+                      style: t.bodySmall?.copyWith(
+                        color: context.pal.muted,
+                        fontFeatures: tabular,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -248,50 +328,78 @@ class HistoryTile extends StatelessWidget {
     final ok = h.status == 'done';
     final cancelled = h.status == 'cancelled';
     final (label, icon, color) = ok
-        ? (h.incoming ? 'Recibido de' : 'Enviado a', Symbols.check_circle_rounded, c.signal)
+        ? (
+            h.incoming ? 'Recibido de' : 'Enviado a',
+            Symbols.check_circle_rounded,
+            c.signal,
+          )
         : cancelled
-        ? (h.incoming ? 'Cancelado, de' : 'Cancelado, a', Symbols.do_not_disturb_on_rounded, c.muted)
-        : (h.incoming ? 'Falló, de' : 'Falló, a', Symbols.error_rounded, c.danger);
+        ? (
+            h.incoming ? 'Cancelado, de' : 'Cancelado, a',
+            Symbols.do_not_disturb_on_rounded,
+            c.muted,
+          )
+        : (
+            h.incoming ? 'Falló, de' : 'Falló, a',
+            Symbols.error_rounded,
+            c.danger,
+          );
     final when = DateTime.fromMillisecondsSinceEpoch(h.time.toInt() * 1000);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
-      child: Row(
-        children: [
-          FileTile(h.name),
-          const SizedBox(width: Gap.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(h.name, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(
-                  '$label ${h.peerName} · ${size(h.size.toInt())} · ${_date(when)}',
-                  style: t.bodySmall?.copyWith(color: c.muted),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      child: InkWell(
+        onTap: ok ? () => hub.openHistory(h) : null,
+        child: Row(
+          children: [
+            FileTile(h.name),
+            const SizedBox(width: Gap.m),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    h.name,
+                    style: t.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '$label ${h.peerName} · ${size(h.size.toInt())} · ${_date(when)}',
+                    style: t.bodySmall?.copyWith(color: c.muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (!ok && !cancelled)
+                    Text(
+                      Hub.explain(h.code, h.message),
+                      style: t.bodySmall?.copyWith(color: c.danger),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: Gap.s),
+            if (!ok && !h.incoming)
+              TextButton(
+                onPressed: () => hub.retry(h.id),
+                child: const Text('Reintentar'),
+              )
+            else
+              // The status is already in words; the icon only repeats it.
+              Padding(
+                padding: const EdgeInsets.only(right: Gap.s),
+                child: ExcludeSemantics(
+                  child: Icon(icon, size: 18, color: color, fill: 1),
                 ),
-                if (!ok && !cancelled)
-                  Text(Hub.explain(h.code, h.message), style: t.bodySmall?.copyWith(color: c.danger)),
-              ],
+              ),
+            // Only the list entry goes; the file stays where it is.
+            IconButton(
+              tooltip: 'Quitar del historial (no borra el archivo)',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(Symbols.close_rounded, size: 18, color: c.muted),
+              onPressed: () => hub.removeHistory(h.id),
             ),
-          ),
-          const SizedBox(width: Gap.s),
-          if (!ok && !h.incoming)
-            TextButton(onPressed: () => hub.retry(h.id), child: const Text('Reintentar'))
-          else
-            // The status is already in words; the icon only repeats it.
-            Padding(
-              padding: const EdgeInsets.only(right: Gap.s),
-              child: ExcludeSemantics(child: Icon(icon, size: 18, color: color, fill: 1)),
-            ),
-          // Only the list entry goes; the file stays where it is.
-          IconButton(
-            tooltip: 'Quitar del historial (no borra el archivo)',
-            visualDensity: VisualDensity.compact,
-            icon: Icon(Symbols.close_rounded, size: 18, color: c.muted),
-            onPressed: () => hub.removeHistory(h.id),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -300,7 +408,9 @@ class HistoryTile extends StatelessWidget {
     final now = DateTime.now();
     String two(int n) => n.toString().padLeft(2, '0');
     final hm = '${two(d.hour)}:${two(d.minute)}';
-    if (d.year == now.year && d.month == now.month && d.day == now.day) return 'hoy $hm';
+    if (d.year == now.year && d.month == now.month && d.day == now.day) {
+      return 'hoy $hm';
+    }
     return '${two(d.day)}/${two(d.month)} $hm';
   }
 }
@@ -338,7 +448,10 @@ class EmptyState extends StatelessWidget {
               children: [
                 Text(title, style: t.titleSmall),
                 const SizedBox(height: 2),
-                Text(body, style: t.bodyMedium?.copyWith(color: context.pal.muted)),
+                Text(
+                  body,
+                  style: t.bodyMedium?.copyWith(color: context.pal.muted),
+                ),
                 if (action != null) ...[
                   const SizedBox(height: Gap.m),
                   FilledButton.tonal(onPressed: onAction, child: Text(action!)),
@@ -365,7 +478,10 @@ class ErrorBanner extends StatelessWidget {
       liveRegion: true,
       child: Container(
         padding: const EdgeInsets.all(Gap.l),
-        decoration: BoxDecoration(color: s.errorContainer, borderRadius: BorderRadius.circular(Radii.tile)),
+        decoration: BoxDecoration(
+          color: s.errorContainer,
+          borderRadius: BorderRadius.circular(Radii.tile),
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -383,7 +499,14 @@ class ErrorBanner extends StatelessWidget {
 
 /// A setting row with one fixed rhythm (title, optional hint, control), so every panel lines up the same way.
 class SettingTile extends StatelessWidget {
-  const SettingTile({super.key, required this.title, this.subtitle, this.leading, this.trailing, this.onTap});
+  const SettingTile({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.trailing,
+    this.onTap,
+  });
   final String title;
   final String? subtitle;
   final Widget? leading;
@@ -399,7 +522,10 @@ class SettingTile extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Gap.xs, vertical: Gap.s),
+          padding: const EdgeInsets.symmetric(
+            horizontal: Gap.xs,
+            vertical: Gap.s,
+          ),
           child: Row(
             children: [
               if (leading != null) ...[leading!, const SizedBox(width: Gap.m)],
@@ -407,15 +533,26 @@ class SettingTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: weight(t.bodyLarge, 500), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(
+                      title,
+                      style: weight(t.bodyLarge, 500),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
-                      Text(subtitle!, style: t.bodySmall?.copyWith(color: context.pal.muted)),
+                      Text(
+                        subtitle!,
+                        style: t.bodySmall?.copyWith(color: context.pal.muted),
+                      ),
                     ],
                   ],
                 ),
               ),
-              if (trailing != null) ...[const SizedBox(width: Gap.m), trailing!],
+              if (trailing != null) ...[
+                const SizedBox(width: Gap.m),
+                trailing!,
+              ],
             ],
           ),
         ),
@@ -426,7 +563,12 @@ class SettingTile extends StatelessWidget {
 
 /// A switch whose thumb shows a check when on (M3 Expressive), as a [SettingTile] trailing control.
 class AleroSwitch extends StatelessWidget {
-  const AleroSwitch({super.key, required this.value, required this.onChanged, required this.label});
+  const AleroSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.label,
+  });
   final bool value;
   final ValueChanged<bool> onChanged;
   final String label;
@@ -438,7 +580,9 @@ class AleroSwitch extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       thumbIcon: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? const Icon(Symbols.check_rounded, size: 16) : null,
+        (s) => s.contains(WidgetState.selected)
+            ? const Icon(Symbols.check_rounded, size: 16)
+            : null,
       ),
     ),
   );
@@ -458,7 +602,10 @@ class Reveal extends StatelessWidget {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: total,
-      curve: _Delayed(delay.inMilliseconds / total.inMilliseconds, Spring.spatial),
+      curve: _Delayed(
+        delay.inMilliseconds / total.inMilliseconds,
+        Spring.spatial,
+      ),
       child: child,
       builder: (_, v, c) => Opacity(
         opacity: v.clamp(0, 1),
@@ -474,12 +621,18 @@ class _Delayed extends Curve {
   final Curve inner;
 
   @override
-  double transformInternal(double t) => t <= start ? 0 : inner.transform((t - start) / (1 - start));
+  double transformInternal(double t) =>
+      t <= start ? 0 : inner.transform((t - start) / (1 - start));
 }
 
 /// The battery as a drawn glyph: body, nub and a level fill, so it sits on the text baseline whatever the font.
 class BatteryGlyph extends StatelessWidget {
-  const BatteryGlyph(this.level, {super.key, this.charging = false, this.width = 22});
+  const BatteryGlyph(
+    this.level, {
+    super.key,
+    this.charging = false,
+    this.width = 22,
+  });
   final int level;
   final bool charging;
   final double width;
@@ -496,7 +649,13 @@ class BatteryGlyph extends StatelessWidget {
           width: width + 2,
           height: h,
           child: CustomPaint(
-            painter: _Battery(level.clamp(0, 100) / 100, low ? s.error : s.primary, s.onSurfaceVariant, charging, s.surface),
+            painter: _Battery(
+              level.clamp(0, 100) / 100,
+              low ? s.error : s.primary,
+              s.onSurfaceVariant,
+              charging,
+              s.surface,
+            ),
           ),
         ),
       ),
@@ -520,13 +679,22 @@ class _Battery extends CustomPainter {
       ..strokeWidth = 1.4;
     canvas.drawRRect(RRect.fromRectAndRadius(body.deflate(0.7), r), line);
     canvas.drawRRect(
-      RRect.fromLTRBR(s.width - 1.6, s.height * 0.3, s.width, s.height * 0.7, const Radius.circular(1)),
+      RRect.fromLTRBR(
+        s.width - 1.6,
+        s.height * 0.3,
+        s.width,
+        s.height * 0.7,
+        const Radius.circular(1),
+      ),
       Paint()..color = outline,
     );
     final inner = body.deflate(2.4);
     if (f > 0) {
       canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(inner.left, inner.top, inner.width * f, inner.height), Radius.circular(s.height * 0.16)),
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(inner.left, inner.top, inner.width * f, inner.height),
+          Radius.circular(s.height * 0.16),
+        ),
         Paint()..color = fill,
       );
     }
@@ -552,5 +720,9 @@ class _Battery extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_Battery o) => o.f != f || o.fill != fill || o.charging != charging || o.outline != outline;
+  bool shouldRepaint(_Battery o) =>
+      o.f != f ||
+      o.fill != fill ||
+      o.charging != charging ||
+      o.outline != outline;
 }

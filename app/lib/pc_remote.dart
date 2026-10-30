@@ -12,24 +12,51 @@ class PcRemote {
   PcRemote(this.hub);
   final Hub hub;
 
-  void _go(String peer, String kind, Map<String, Object?> body) => hub.sendMessage(peer, kind, body);
+  void _go(String peer, String kind, Map<String, Object?> body) =>
+      hub.sendMessage(peer, kind, body);
 
-  void move(String peer, int dx, int dy) => _go(peer, 'pb.x.remote.move', {'dx': dx, 'dy': dy});
+  void move(String peer, int dx, int dy) =>
+      _go(peer, 'pb.x.remote.move', {'dx': dx, 'dy': dy});
   void click(String peer, {String button = 'left', int count = 1}) =>
       _go(peer, 'pb.x.remote.click', {'button': button, 'count': count});
-  void button(String peer, String button, bool down) => _go(peer, 'pb.x.remote.button', {'button': button, 'down': down});
+  final _held = <String, Set<String>>{};
+  Timer? _buttonTimer;
+  bool buttonHeld(String peer, String button) =>
+      _held[peer]?.contains(button) ?? false;
+  void button(String peer, String button, bool down) {
+    _go(peer, 'pb.x.remote.button', {'button': button, 'down': down});
+    if (down) {
+      (_held[peer] ??= {}).add(button);
+      _buttonTimer ??= Timer.periodic(const Duration(seconds: 2), (_) {
+        for (final id in _held.keys) {
+          _go(id, 'pb.x.remote.keepalive', {});
+        }
+      });
+    } else {
+      _held[peer]?.remove(button);
+      if (_held[peer]?.isEmpty ?? false) _held.remove(peer);
+      if (_held.isEmpty) {
+        _buttonTimer?.cancel();
+        _buttonTimer = null;
+      }
+    }
+  }
 
   /// Notches: positive scrolls up/right.
-  void scroll(String peer, {double dy = 0, double dx = 0}) => _go(peer, 'pb.x.remote.scroll', {'dy': dy, 'dx': dx});
+  void scroll(String peer, {double dy = 0, double dx = 0}) =>
+      _go(peer, 'pb.x.remote.scroll', {'dy': dy, 'dx': dx});
   void key(String peer, String key, {List<String> mods = const []}) =>
       _go(peer, 'pb.x.remote.key', {'key': key, 'mods': mods});
-  void text(String peer, String text) => _go(peer, 'pb.x.remote.text', {'text': text});
+  void text(String peer, String text) =>
+      _go(peer, 'pb.x.remote.text', {'text': text});
 
   /// volume_up, volume_down, mute, toggle, next, prev, stop.
-  void media(String peer, String action) => _go(peer, 'pb.x.remote.media', {'action': action});
+  void media(String peer, String action) =>
+      _go(peer, 'pb.x.remote.media', {'action': action});
 
   /// lock, sleep. The caller asks the user first.
-  void power(String peer, String action) => _go(peer, 'pb.x.remote.power', {'action': action});
+  void power(String peer, String action) =>
+      _go(peer, 'pb.x.remote.power', {'action': action});
 
   /// The computer sends a full-resolution screenshot as a normal file; the Hub shows it when it lands.
   void shot(String peer) {
@@ -82,9 +109,13 @@ class ScreenFeed extends ChangeNotifier {
   int width = 960, fps = 5;
 
   void start() {
+    _keepalive?.cancel();
     running = true;
     hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps});
-    _keepalive = Timer.periodic(const Duration(seconds: 5), (_) => hub.sendMessage(peerId, 'pb.x.screen.keepalive', {}));
+    _keepalive = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => hub.sendMessage(peerId, 'pb.x.screen.keepalive', {}),
+    );
     notifyListeners();
   }
 
@@ -92,11 +123,14 @@ class ScreenFeed extends ChangeNotifier {
   void setQuality({required int width, required int fps}) {
     this.width = width;
     this.fps = fps;
-    if (running) hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps});
+    if (running) {
+      hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps});
+    }
     notifyListeners();
   }
 
   void onFrame(Map<String, dynamic> b) {
+    if (!running) return;
     try {
       frame = base64Decode(b['jpeg'] as String);
     } catch (_) {
@@ -112,6 +146,8 @@ class ScreenFeed extends ChangeNotifier {
     if (!running) return;
     running = false;
     _keepalive?.cancel();
+    _keepalive = null;
+    frame = null;
     hub.sendMessage(peerId, 'pb.x.screen.stop', {});
     notifyListeners();
   }

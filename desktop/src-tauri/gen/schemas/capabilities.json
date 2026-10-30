@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"Main window: events, own commands and the file dialog","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-open"]}}

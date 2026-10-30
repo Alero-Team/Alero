@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720"><title>Alero — identidad simétrica v0.3</title><defs><path id="strand" d="M 18,78 V 30 Q 18,18 30,18 H 47 Q 59,18 59,30 V 42 Q 59,54 71,54 H 100"/><g id="mark" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"><use href="#strand"/><use href="#strand" transform="rotate(180 59 48)"/></g></defs><style>.wordmark{font-family:"Google Sans","Product Sans","Arial",sans-serif;font-size:84px;font-weight:500;letter-spacing:-4px}.label{font-family:"Google Sans","Product Sans","Arial",sans-serif;font-size:18px;font-weight:500;letter-spacing:1.6px}.sub{font-family:"Google Sans","Product Sans","Arial",sans-serif;font-size:16px;font-weight:400}</style>
+<desc>Identidad original de Alero con trazos congruentes por rotación de 180 grados alrededor de (59,48). Se conservan el grosor 10, las curvas cuadráticas de 12 unidades, la silueta entrelazada y la paleta original.</desc>
+<rect width="1200" height="720" fill="#F4F5F6"/>
+<text x="64" y="58" fill="#737984" class="label">ALERO / IDENTIDAD VISUAL</text>
+<text x="1136" y="58" text-anchor="end" fill="#737984" class="sub">Versión simétrica · v0.3</text>
+<rect x="64" y="94" width="1072" height="270" rx="20" fill="#FFFFFF"/>
+<g transform="translate(417.38 155.36) scale(1.18)" color="#111315"><use href="#mark"/></g>
+<text x="572" y="244" fill="#111315" class="wordmark">alero</text>
+<text x="576" y="284" fill="#737984" class="sub">Una conexión. Sin fricción.</text>
+<rect x="64" y="390" width="520" height="210" rx="20" fill="#111315"/>
+<g transform="translate(188.72 437.84) scale(0.92)" color="#F5F5F2"><use href="#mark"/></g>
+<text x="315" y="502" fill="#F5F5F2" class="wordmark" style="font-size:68px;letter-spacing:-3px">alero</text>
+<text x="318" y="536" fill="#B7BBC3" class="sub">Versión oscura</text>
+<rect x="624" y="390" width="210" height="210" rx="36" fill="#111315"/>
+<g transform="translate(668.82 446.04) scale(1.02)" color="#F5F5F2"><use href="#mark"/></g>
+<text x="729" y="631" text-anchor="middle" fill="#737984" class="sub">Icono</text>
+<rect x="874" y="390" width="262" height="210" rx="20" fill="#FFFFFF"/>
+<text x="900" y="428" fill="#737984" class="label" style="font-size:14px">PRUEBA DE TAMAÑO</text>
+<g transform="translate(894.2173913 458.95652174) scale(0.5217391304)" color="#111315"><use href="#mark"/></g>
+<g transform="translate(986.04347826 469.39130435) scale(0.3043478261)" color="#111315"><use href="#mark"/></g>
+<g transform="translate(1046.45652174 474.60869565) scale(0.1956521739)" color="#111315"><use href="#mark"/></g>
+<text x="925" y="548" text-anchor="middle" fill="#737984" class="sub">48 px</text>
+<text x="1004" y="548" text-anchor="middle" fill="#737984" class="sub">28 px</text>
+<text x="1058" y="548" text-anchor="middle" fill="#737984" class="sub">18 px</text>
+<text x="900" y="578" fill="#737984" class="sub" style="font-size:13px">Misma geometría en todos los tamaños.</text>
+<text x="64" y="665" fill="#737984" class="sub">Color base: grafito #111315 · marfil #F5F5F2 · acento configurable por el usuario</text>
+<text x="1136" y="665" text-anchor="end" fill="#737984" class="sub">Google Sans como referencia tipográfica</text></svg>

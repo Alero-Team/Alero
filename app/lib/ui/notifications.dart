@@ -50,7 +50,10 @@ class NotificationsPanel extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: () => showDialog<void>(context: context, builder: (_) => _AllDialog(hub, peerId)),
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => _AllDialog(hub, peerId),
+                ),
                 child: Text('Ver todas (${list.length})'),
               ),
             ),
@@ -61,7 +64,10 @@ class NotificationsPanel extends StatelessWidget {
       title: 'Notificaciones',
       icon: Symbols.notifications_rounded,
       action: list.any((n) => n.clearable)
-          ? TextButton(onPressed: () => hub.clearNotifs(peerId), child: const Text('Borrar todas'))
+          ? TextButton(
+              onPressed: () => hub.clearNotifs(peerId),
+              child: const Text('Borrar todas'),
+            )
           : null,
       child: AnimatedSize(
         duration: motion(context, Spring.spatial.settle),
@@ -89,9 +95,17 @@ class _AllDialog extends StatelessWidget {
           width: 520,
           child: list.isEmpty
               ? const Text('No hay notificaciones.')
-              : ListView(shrinkWrap: true, children: [for (final n in list) _NotifRow(hub, peerId, n)]),
+              : ListView(
+                  shrinkWrap: true,
+                  children: [for (final n in list) _NotifRow(hub, peerId, n)],
+                ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
       );
     },
   );
@@ -116,16 +130,28 @@ class _NotifRow extends StatelessWidget {
               ? ExcludeSemantics(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(hub.appIcons[n.pkg]!, width: 36, height: 36, gaplessPlayback: true),
+                    child: Image.memory(
+                      hub.appIcons[n.pkg]!,
+                      width: 36,
+                      height: 36,
+                      gaplessPlayback: true,
+                    ),
                   ),
                 )
               : Container(
                   width: 36,
                   height: 36,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: s.secondaryContainer, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: s.secondaryContainer,
+                    shape: BoxShape.circle,
+                  ),
                   child: ExcludeSemantics(
-                    child: Icon(Symbols.notifications_rounded, size: 20, color: s.onSecondaryContainer),
+                    child: Icon(
+                      Symbols.notifications_rounded,
+                      size: 20,
+                      color: s.onSecondaryContainer,
+                    ),
                   ),
                 ),
           const SizedBox(width: Gap.m),
@@ -133,9 +159,17 @@ class _NotifRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${n.app} · ${ago(n.time)}', style: t.labelSmall?.copyWith(color: s.onSurfaceVariant)),
+                Text(
+                  '${n.app} · ${ago(n.time)}',
+                  style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
+                ),
                 if (n.title.isNotEmpty)
-                  Text(n.title, style: t.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    n.title,
+                    style: t.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 if (n.text.isNotEmpty)
                   Text(
                     n.text,

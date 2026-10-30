@@ -1,10 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'expressive.dart';
 import 'theme.dart';
 
-/// The Alero mark (docs/design/aero identidad.svg): two rounded paths that interlock into one continuous way.
-/// Same geometry as the Android vectors and tools/make-icons.ps1; monochrome, so it takes any color.
+/// Approved identity: congruent paths rotated 180 degrees around (59, 48).
+/// Source: branding/alero_symbol.svg; Android and desktop icons use the same geometry.
 class AleroMark extends StatelessWidget {
   const AleroMark({super.key, this.size = 40, this.color, this.draw = 1});
   final double size;
@@ -14,11 +16,15 @@ class AleroMark extends StatelessWidget {
   final double draw;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: size,
-    height: size * 70 / 92,
-    child: CustomPaint(
-      painter: _Mark(color ?? Theme.of(context).colorScheme.onSurface, draw),
+  Widget build(BuildContext context) => Semantics(
+    label: 'Alero',
+    image: true,
+    child: SizedBox(
+      width: size,
+      height: size * 70 / 92,
+      child: CustomPaint(
+        painter: _Mark(color ?? Theme.of(context).colorScheme.onSurface, draw),
+      ),
     ),
   );
 }
@@ -35,19 +41,13 @@ class _Mark extends CustomPainter {
     ..quadraticBezierTo(18, 18, 30, 18)
     ..lineTo(47, 18)
     ..quadraticBezierTo(59, 18, 59, 30)
-    ..lineTo(59, 43)
-    ..quadraticBezierTo(59, 55, 71, 55)
-    ..lineTo(100, 55);
+    ..lineTo(59, 42)
+    ..quadraticBezierTo(59, 54, 71, 54)
+    ..lineTo(100, 54);
 
-  static Path _p2() => Path()
-    ..moveTo(100, 30)
-    ..lineTo(100, 66)
-    ..quadraticBezierTo(100, 78, 88, 78)
-    ..lineTo(71, 78)
-    ..quadraticBezierTo(59, 78, 59, 66)
-    ..lineTo(59, 55)
-    ..quadraticBezierTo(59, 43, 47, 43)
-    ..lineTo(18, 43);
+  static Path _p2() => _p1().transform(
+    Float64List.fromList([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 118, 96, 0, 1]),
+  );
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -86,9 +86,18 @@ class AleroLogo extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AleroMark(size: size),
+        ExcludeSemantics(child: AleroMark(size: size)),
         SizedBox(width: size * 0.3),
-        Text('alero', style: weight(t.titleLarge?.copyWith(fontSize: size * 0.85, letterSpacing: -size * 0.04), 500)),
+        Text(
+          'alero',
+          style: weight(
+            t.titleLarge?.copyWith(
+              fontSize: size * 0.85,
+              letterSpacing: -size * 0.04,
+            ),
+            500,
+          ),
+        ),
       ],
     );
   }
@@ -104,6 +113,10 @@ class AleroIntro extends StatelessWidget {
     tween: Tween(begin: 0, end: 1),
     duration: motion(context, const Duration(milliseconds: 900)),
     curve: Curves.easeInOutCubic,
-    builder: (_, v, _) => AleroMark(size: size, draw: v, color: Theme.of(context).colorScheme.primary),
+    builder: (_, v, _) => AleroMark(
+      size: size,
+      draw: v,
+      color: Theme.of(context).colorScheme.primary,
+    ),
   );
 }

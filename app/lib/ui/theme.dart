@@ -2,9 +2,8 @@ import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Design tokens (G5 v3). Colors come from the system: Material You on Android, the accent color on Windows.
-/// Every role below is a Material 3 scheme role, whose tone pairs are built for ≥ 4.5:1 text contrast
-/// (checked for several accents in test/contrast_test.dart).
+/// Neutral graphite surfaces with the user's system accent on actions and status.
+/// Text/background pairs are verified in light, dark and AMOLED modes.
 class Palette extends ThemeExtension<Palette> {
   const Palette({
     required this.bg,
@@ -50,7 +49,8 @@ class Palette extends ThemeExtension<Palette> {
   Palette copyWith() => this;
 
   @override
-  Palette lerp(Palette? other, double t) => t < 0.5 || other == null ? this : other;
+  Palette lerp(Palette? other, double t) =>
+      t < 0.5 || other == null ? this : other;
 }
 
 /// Spacing (4/8 rhythm), radii and sizes.
@@ -66,7 +66,8 @@ class Radii {
 const wideLayout = 840.0;
 
 /// Used when the system offers no color (older Android, Linux without a portal).
-const fallbackSeed = Color(0xFF3F6AD8);
+const brandGraphite = Color(0xFF111315);
+const fallbackSeed = Color(0xFF50565E);
 
 /// Reads the system color once (and again when the app comes back to the front).
 class SystemColor extends ValueNotifier<(Color, DynamicSchemeVariant)> {
@@ -99,10 +100,49 @@ TextStyle? weight(TextStyle? s, int w) => s?.copyWith(
 
 /// The color scheme for a seed. [amoled] (dark only) swaps the grey surfaces for pure black and near-black steps:
 /// the accent colors, text and outline roles are untouched, so contrast and identity stay as in the dark theme.
-ColorScheme schemeFor(Color seed, DynamicSchemeVariant variant, Brightness b, {bool amoled = false}) {
-  final s = ColorScheme.fromSeed(seedColor: seed, brightness: b, dynamicSchemeVariant: variant);
-  if (!amoled || b != Brightness.dark) return s;
-  return s.copyWith(
+ColorScheme schemeFor(
+  Color seed,
+  DynamicSchemeVariant variant,
+  Brightness b, {
+  bool amoled = false,
+}) {
+  final s = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: b,
+    dynamicSchemeVariant: variant,
+  );
+  if (b == Brightness.light) {
+    return s.copyWith(
+      surface: const Color(0xFFF4F5F6),
+      surfaceDim: const Color(0xFFE4E6E8),
+      surfaceBright: Colors.white,
+      surfaceContainerLowest: Colors.white,
+      surfaceContainerLow: Colors.white,
+      surfaceContainer: const Color(0xFFF0F1F2),
+      surfaceContainerHigh: const Color(0xFFE8EAED),
+      surfaceContainerHighest: const Color(0xFFDFE2E6),
+      onSurface: brandGraphite,
+      onSurfaceVariant: const Color(0xFF4C535C),
+      outline: const Color(0xFF707780),
+      outlineVariant: const Color(0xFFCDD1D6),
+    );
+  }
+  final neutral = s.copyWith(
+    surface: brandGraphite,
+    surfaceDim: brandGraphite,
+    surfaceBright: const Color(0xFF353A40),
+    surfaceContainerLowest: const Color(0xFF0B0D0F),
+    surfaceContainerLow: const Color(0xFF181B1F),
+    surfaceContainer: const Color(0xFF1E2226),
+    surfaceContainerHigh: const Color(0xFF262A2F),
+    surfaceContainerHighest: const Color(0xFF30353B),
+    onSurface: const Color(0xFFF5F5F2),
+    onSurfaceVariant: const Color(0xFFB8BEC6),
+    outline: const Color(0xFF858D98),
+    outlineVariant: const Color(0xFF353B43),
+  );
+  if (!amoled) return neutral;
+  return neutral.copyWith(
     surface: Colors.black,
     surfaceDim: Colors.black,
     surfaceBright: const Color(0xFF242424),
@@ -112,14 +152,24 @@ ColorScheme schemeFor(Color seed, DynamicSchemeVariant variant, Brightness b, {b
     surfaceContainerHigh: const Color(0xFF1B1B1B),
     surfaceContainerHighest: const Color(0xFF242424),
     // Hairlines must stay visible against black.
-    outlineVariant: Color.lerp(s.outlineVariant, Colors.white, 0.12),
+    outlineVariant: const Color(0xFF383838),
   );
 }
 
-ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bool amoled = false}) {
+ThemeData buildTheme(
+  Color seed,
+  DynamicSchemeVariant variant,
+  Brightness b, {
+  bool amoled = false,
+}) {
   final scheme = schemeFor(seed, variant, b, amoled: amoled);
   final p = Palette.of(scheme);
-  final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b, fontFamily: font);
+  final base = ThemeData(
+    useMaterial3: true,
+    colorScheme: scheme,
+    brightness: b,
+    fontFamily: font,
+  );
   final t = base.textTheme;
   // Material 3 type scale (not enlarged); emphasis comes from weight, as in M3 Expressive.
   final text = t
@@ -137,13 +187,21 @@ ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bo
         bodySmall: weight(t.bodySmall, 400),
       )
       .apply(bodyColor: p.ink, displayColor: p.ink, fontFamily: font);
-  final pill = RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.pill));
-  const tap = Size(40, 40);
+  final pill = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(Radii.pill),
+  );
+  const tap = Size(48, 48);
   return base.copyWith(
     extensions: [p],
     scaffoldBackgroundColor: p.bg,
     textTheme: text,
-    iconTheme: IconThemeData(color: p.ink, size: 20, weight: 400, fill: 0, opticalSize: 20),
+    iconTheme: IconThemeData(
+      color: p.ink,
+      size: 20,
+      weight: 400,
+      fill: 0,
+      opticalSize: 20,
+    ),
     dividerTheme: DividerThemeData(color: p.line, space: 1, thickness: 1),
     cardTheme: CardThemeData(
       color: p.surface,
@@ -174,7 +232,11 @@ ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bo
       ),
     ),
     textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(minimumSize: tap, shape: pill, textStyle: text.labelLarge),
+      style: TextButton.styleFrom(
+        minimumSize: tap,
+        shape: pill,
+        textStyle: text.labelLarge,
+      ),
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(minimumSize: tap, foregroundColor: p.ink),
@@ -182,12 +244,18 @@ ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bo
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: p.alt,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.tile), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(Radii.tile),
+        borderSide: BorderSide.none,
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(Radii.tile),
         borderSide: BorderSide(color: p.primary, width: 2),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: Gap.l, vertical: Gap.m),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: Gap.l,
+        vertical: Gap.m,
+      ),
     ),
     listTileTheme: ListTileThemeData(
       iconColor: p.ink,
@@ -202,14 +270,20 @@ ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bo
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surfaceContainerHigh,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.card)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Radii.card),
+      ),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: scheme.inverseSurface,
-      contentTextStyle: text.bodyMedium?.copyWith(color: scheme.onInverseSurface),
+      contentTextStyle: text.bodyMedium?.copyWith(
+        color: scheme.onInverseSurface,
+      ),
       actionTextColor: scheme.inversePrimary,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.tile)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Radii.tile),
+      ),
     ),
     tooltipTheme: TooltipThemeData(
       waitDuration: const Duration(milliseconds: 500),
@@ -217,14 +291,14 @@ ThemeData buildTheme(Color seed, DynamicSchemeVariant variant, Brightness b, {bo
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.transparent,
-      indicatorColor: p.accent,
+      indicatorColor: p.alt,
       height: 68,
       elevation: 0,
       labelTextStyle: WidgetStatePropertyAll(text.labelMedium),
       iconTheme: WidgetStateProperty.resolveWith(
         (s) => IconThemeData(
           size: 22,
-          color: s.contains(WidgetState.selected) ? p.onAccent : p.muted,
+          color: s.contains(WidgetState.selected) ? p.ink : p.muted,
           fill: s.contains(WidgetState.selected) ? 1 : 0,
         ),
       ),

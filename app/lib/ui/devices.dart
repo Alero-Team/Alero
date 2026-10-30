@@ -78,11 +78,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(p.name, style: t.titleSmall),
-                              Text(p.addr, style: t.bodySmall?.copyWith(color: s.onSurfaceVariant)),
+                              Text(
+                                p.addr,
+                                style: t.bodySmall?.copyWith(
+                                  color: s.onSurfaceVariant,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        FilledButton.tonal(onPressed: () => hub.pair(p.id), child: const Text('Emparejar')),
+                        FilledButton.tonal(
+                          onPressed: () => hub.pair(p.id),
+                          child: const Text('Emparejar'),
+                        ),
                       ],
                     ),
                   ),
@@ -116,7 +124,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
           : Row(
               children: [
                 if (hub.myId.isNotEmpty)
-                  QrView(hub.qrPayload, size: 156, label: 'Código QR para emparejar este equipo'),
+                  QrView(
+                    hub.qrPayload,
+                    size: 156,
+                    label: 'Código QR para emparejar este equipo',
+                  ),
                 const SizedBox(width: Gap.xl),
                 Expanded(
                   child: Column(
@@ -126,7 +138,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
                       const SizedBox(height: Gap.xs),
                       Text(
                         'En la app del teléfono: Dispositivos › Escanear. Sirve aunque el teléfono no vea este equipo en la lista. Solo tendrás que confirmar aquí.',
-                        style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+                        style: t.bodyMedium?.copyWith(
+                          color: s.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -144,7 +158,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
           Expanded(
             child: TextField(
               controller: _addr,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Dirección IP del otro dispositivo',
                 hintText: '192.168.1.20',
@@ -156,7 +172,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
           const SizedBox(width: Gap.s),
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: FilledButton.tonal(onPressed: () => hub.pairAddr(_addr.text), child: const Text('Emparejar')),
+            child: FilledButton.tonal(
+              onPressed: () => hub.pairAddr(_addr.text),
+              child: const Text('Emparejar'),
+            ),
           ),
         ],
       ),
@@ -168,10 +187,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
     // A phone sees what each connected computer reports and can do with it (advanced controls).
     final details = Platform.isAndroid
         ? [
-            for (final p in paired.where((p) => p.state == pb.PeerState.connected && (hub.info[p.id]?.phone != true))) ...[
-              PcDetails(hub, p),
-              gap,
-            ],
+            for (final p in paired.where(
+              (p) =>
+                  p.state == pb.PeerState.connected &&
+                  (hub.info[p.id]?.phone != true),
+            )) ...[PcDetails(hub, p), gap],
           ]
         : const <Widget>[];
     return ScreenFrame(
@@ -182,13 +202,30 @@ class _DevicesScreenState extends State<DevicesScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: Column(children: [pairedPanel, gap, nearbyPanel])),
+                  Expanded(
+                    child: Column(children: [pairedPanel, gap, nearbyPanel]),
+                  ),
                   gap,
-                  Expanded(child: Column(children: [qrPanel, gap, cablePanel, gap, ipPanel])),
+                  Expanded(
+                    child: Column(
+                      children: [qrPanel, gap, cablePanel, gap, ipPanel],
+                    ),
+                  ),
                 ],
               ),
             ]
-          : [...details, pairedPanel, gap, qrPanel, gap, nearbyPanel, gap, cablePanel, gap, ipPanel],
+          : [
+              ...details,
+              pairedPanel,
+              gap,
+              qrPanel,
+              gap,
+              nearbyPanel,
+              gap,
+              cablePanel,
+              gap,
+              ipPanel,
+            ],
     );
   }
 }
@@ -204,7 +241,11 @@ class _Paired extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final connected = p.state == pb.PeerState.connected;
     final info = hub.info[p.id];
-    final facts = [info?.osLabel ?? '', p.addr, es(p.detail)].where((x) => x.isNotEmpty).join(' · ');
+    final facts = [
+      info?.osLabel ?? '',
+      p.addr,
+      es(p.detail),
+    ].where((x) => x.isNotEmpty).join(' · ');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: Row(
@@ -212,7 +253,9 @@ class _Paired extends StatelessWidget {
           IconTile(
             info == null
                 ? Symbols.devices_rounded
-                : (info.phone ? Symbols.smartphone_rounded : Symbols.computer_rounded),
+                : (info.phone
+                      ? Symbols.smartphone_rounded
+                      : Symbols.computer_rounded),
             tonal: connected,
           ),
           const SizedBox(width: Gap.m),
@@ -239,7 +282,10 @@ class _Paired extends StatelessWidget {
               icon: const Icon(Symbols.upload_rounded),
             ),
           if (p.state == pb.PeerState.rejected)
-            TextButton(onPressed: () => hub.pair(p.id), child: const Text('Emparejar de nuevo')),
+            TextButton(
+              onPressed: () => hub.pair(p.id),
+              child: const Text('Emparejar de nuevo'),
+            ),
           IconButton(
             tooltip: 'Olvidar ${p.name}',
             icon: Icon(Symbols.delete_rounded, color: s.error),

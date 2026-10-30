@@ -10,7 +10,12 @@ import 'widgets.dart';
 /// send action and the recent items, so nothing on the screen behind it changes size when the history grows
 /// (the old split button gained an arrow after the first send and pushed the layout down).
 class ClipboardButton extends StatelessWidget {
-  const ClipboardButton(this.hub, this.peerId, {super.key, this.enabled = true});
+  const ClipboardButton(
+    this.hub,
+    this.peerId, {
+    super.key,
+    this.enabled = true,
+  });
   final Hub hub;
   final String peerId;
   final bool enabled;
@@ -23,12 +28,13 @@ class ClipboardButton extends StatelessWidget {
   );
 }
 
-Future<void> openClipboard(BuildContext context, Hub hub, String peerId) => showModalBottomSheet<void>(
-  context: context,
-  isScrollControlled: true,
-  showDragHandle: true,
-  builder: (_) => _Sheet(hub, peerId),
-);
+Future<void> openClipboard(BuildContext context, Hub hub, String peerId) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _Sheet(hub, peerId),
+    );
 
 class _Sheet extends StatelessWidget {
   const _Sheet(this.hub, this.peerId);
@@ -43,7 +49,9 @@ class _Sheet extends StatelessWidget {
       listenable: hub,
       builder: (context, _) => SafeArea(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+          ),
           child: ListView(
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(Gap.xl, 0, Gap.xl, Gap.xl),
@@ -62,17 +70,23 @@ class _Sheet extends StatelessWidget {
               ),
               const SizedBox(height: Gap.l),
               if (hub.clips.isEmpty)
-                Text('Aún no hay nada reciente.', style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant))
+                Text(
+                  'Aún no hay nada reciente.',
+                  style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+                )
               else
                 for (final c in hub.clips.take(10))
                   SettingTile(
                     leading: Icon(
-                      c.incoming ? Symbols.south_west_rounded : Symbols.north_east_rounded,
+                      c.incoming
+                          ? Symbols.south_west_rounded
+                          : Symbols.north_east_rounded,
                       size: 20,
                       color: s.onSurfaceVariant,
                     ),
                     title: c.text.replaceAll('\n', ' '),
-                    subtitle: '${c.incoming ? 'De' : 'A'} ${c.peerName} · ${ago(c.time)}',
+                    subtitle:
+                        '${c.incoming ? 'De' : 'A'} ${c.peerName} · ${ago(c.time)}',
                     trailing: IconButton(
                       tooltip: 'Copiar',
                       icon: const Icon(Symbols.content_copy_rounded, size: 18),

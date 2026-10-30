@@ -1,36 +1,20 @@
-# Obsidian: versionar solo la config compartida
-docs/.obsidian/workspace*.json
-docs/.obsidian/cache
-
-# Herramientas de desarrollo instaladas localmente (decisión de versionado pendiente, ver ADR)
-.claude/skills/ui-ux-pro-max/
-
-# Secretos y artefactos
+# Local build output and dependencies
+target/
+build/
+dist/
+third_party/
+.dart_tool/
+.gradle/
+.idea/
+.vscode/
+*.iml
+*.log
+*.tmp
+*.pdb
+.flutter-plugins-dependencies
+local.properties
 *.jks
 *.keystore
 *.pem
 *.key
-local.properties
 .env
-build/
-node_modules/
-target/
-.gradle/
-
-# Android: generated or local
-android/.gradle/
-android/build/
-android/app/build/
-android/local.properties
-# Built from the Rust core by android/build-core.ps1
-android/app/src/main/jniLibs/
-android/app/src/main/java/uniffi/
-
-# Alpha builds for hand testing (not versioned)
-alpha/
-
-# Third-party design shots: local reference only, not ours to publish.
-docs/design/references/externas/
-
-# Downloaded by tools/fetch-scrcpy.ps1 (pinned, hash-checked); not committed.
-third_party/

@@ -28,7 +28,9 @@ class TransfersScreen extends StatelessWidget {
           Panel(
             title: 'En curso',
             icon: Symbols.sync_rounded,
-            child: Column(children: [for (final x in hub.active) TransferRow(x, hub)]),
+            child: Column(
+              children: [for (final x in hub.active) TransferRow(x, hub)],
+            ),
           ),
           const SizedBox(height: Gap.l),
         ],
@@ -58,12 +60,15 @@ class TransfersScreen extends StatelessWidget {
                       ? 'Envía un archivo desde Inicio o compártelo desde cualquier app.'
                       : 'Envía un archivo desde Inicio o suéltalo sobre esta ventana.',
                 )
-              : Column(children: [for (final h in history) HistoryTile(h, hub)]),
+              : Column(
+                  children: [for (final h in history) HistoryTile(h, hub)],
+                ),
         ),
         const SizedBox(height: Gap.m),
         Text(
           'Los archivos recibidos se guardan en ${hub.downloads}.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: context.pal.muted),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: context.pal.muted),
         ),
       ],
     );

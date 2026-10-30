@@ -1,8 +1,7 @@
 [workspace]
-members = ["core", "cli", "ffi", "desktop/src-tauri", "app/rust", "daemon"]
+members = ["core", "app/rust", "daemon"]
 resolver = "2"
 
-# Shipped binaries should be small and quick to start.
 [profile.release]
 opt-level = "s"
 lto = true

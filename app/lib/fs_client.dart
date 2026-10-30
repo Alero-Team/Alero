@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'hub.dart';
+import 'native.dart';
 
 class FsRoot {
   FsRoot(Map j)
@@ -23,7 +24,9 @@ class FsEntry {
     : name = j['name'] as String? ?? '',
       dir = j['dir'] == true,
       size = (j['size'] as num?)?.toInt() ?? 0,
-      mtime = DateTime.fromMillisecondsSinceEpoch(((j['mtime'] as num?)?.toInt() ?? 0) * 1000),
+      mtime = DateTime.fromMillisecondsSinceEpoch(
+        ((j['mtime'] as num?)?.toInt() ?? 0) * 1000,
+      ),
       mime = j['mime'] as String? ?? '',
       id = j['id'] as String? ?? '',
       path = j['path'] as String? ?? '';
@@ -100,7 +103,11 @@ class FsClient extends ChangeNotifier {
     final r = root;
     if (r == null || peerId == null) return;
     loading = true;
-    hub.sendMessage(peerId!, 'pb.x.fs.list', {'root': r, 'path': path, 'offset': offset});
+    hub.sendMessage(peerId!, 'pb.x.fs.list', {
+      'root': r,
+      'path': path,
+      'offset': offset,
+    });
     _arm();
     notifyListeners();
   }
@@ -143,9 +150,8 @@ class FsClient extends ChangeNotifier {
   }
 
   void refresh() {
-    if (root == null) return _requestRoots();
     error = null;
-    _list();
+    _requestRoots();
   }
 
   void setSort(String s) {
@@ -195,7 +201,10 @@ class FsClient extends ChangeNotifier {
       _wanted.remove(key);
       final i = key.indexOf('|');
       _inflightThumbs++;
-      hub.sendMessage(peerId!, 'pb.x.fs.thumb', {'root': key.substring(0, i), 'id': key.substring(i + 1)});
+      hub.sendMessage(peerId!, 'pb.x.fs.thumb', {
+        'root': key.substring(0, i),
+        'id': key.substring(i + 1),
+      });
       // A phone that never answers must not hold a slot forever.
       Timer(const Duration(seconds: 6), () {
         if (_inflightThumbs > 0) _inflightThumbs--;
@@ -210,7 +219,11 @@ class FsClient extends ChangeNotifier {
   void download(Iterable<FsEntry> files, {bool openWhenDone = false}) {
     for (final f in files.where((f) => !f.dir)) {
       hub.expectFromPhone(f.name, open: openWhenDone);
-      hub.sendMessage(peerId!, 'pb.x.fs.get', {'root': root, 'id': f.id, 'name': f.name});
+      hub.sendMessage(peerId!, 'pb.x.fs.get', {
+        'root': root,
+        'id': f.id,
+        'name': f.name,
+      });
     }
   }
 
@@ -221,13 +234,20 @@ class FsClient extends ChangeNotifier {
     switch (kind) {
       case 'pb.x.fs.roots':
         _timeout?.cancel();
-        roots = [for (final r in (b['roots'] as List? ?? [])) if (r is Map) FsRoot(r)];
+        roots = [
+          for (final r in (b['roots'] as List? ?? []))
+            if (r is Map) FsRoot(r),
+        ];
         error = null;
         loading = false;
         if (root == null || !roots.any((r) => r.id == root)) {
           // ALERO_FS_ROOT=alero (etc.) picks the first location: for screenshots and manual checks.
           final want = Platform.environment['ALERO_FS_ROOT'];
-          final first = roots.where((r) => r.ok && (want == null || r.id == want)).firstOrNull ?? roots.where((r) => r.ok).firstOrNull;
+          final first =
+              roots
+                  .where((r) => r.ok && (want == null || r.id == want))
+                  .firstOrNull ??
+              roots.where((r) => r.ok).firstOrNull;
           if (first != null) {
             selectRoot(first.id);
             return;
@@ -240,7 +260,10 @@ class FsClient extends ChangeNotifier {
         if (b['root'] != root || (b['path'] as String? ?? '') != path) return;
         _timeout?.cancel();
         final offset = (b['offset'] as num?)?.toInt() ?? 0;
-        final page = [for (final e in (b['entries'] as List? ?? [])) if (e is Map) FsEntry(e)];
+        final page = [
+          for (final e in (b['entries'] as List? ?? []))
+            if (e is Map) FsEntry(e),
+        ];
         entries = offset == 0 ? page : [...entries, ...page];
         total = (b['total'] as num?)?.toInt() ?? entries.length;
         loading = false;
@@ -269,13 +292,7 @@ class FsClient extends ChangeNotifier {
   }
 
   /// Opens a downloaded file with the system's default app (a picture viewer, a player…).
-  static Future<void> openFile(String path) async {
-    if (Platform.isWindows) {
-      await Process.start('cmd', ['/c', 'start', '', path], mode: ProcessStartMode.detached);
-    } else {
-      await Process.start('xdg-open', [path], mode: ProcessStartMode.detached);
-    }
-  }
+  static Future<void> openFile(String path) => Native.openFile(path);
 
   @override
   void dispose() {

@@ -1,16 +1,26 @@
-name: ci
-on: [push, pull_request]
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+  checks:
+    runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - run: cargo test -p pb-core -p pb-cli -p pb-ffi
-      # The vectors file must be exactly what the independent Python generator produces.
-      - if: matrix.os == 'ubuntu-latest'
-        run: |
-          python3 -I protocol/vectors/generate_framing.py
-          git diff --exit-code protocol/vectors/framing.json
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.8'
+          channel: stable
+          cache: true
+      - run: cargo test --locked --workspace
+      - run: flutter pub get --enforce-lockfile
+        working-directory: app
+      - run: flutter analyze --no-pub
+        working-directory: app
+      - run: flutter test --no-pub
+        working-directory: app

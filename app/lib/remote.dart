@@ -14,7 +14,8 @@ class ScreenShape {
 
   static ScreenShape? from(Object? j) {
     if (j is! Map) return null;
-    final w = (j['w'] as num?)?.toInt() ?? 0, h = (j['h'] as num?)?.toInt() ?? 0;
+    final w = (j['w'] as num?)?.toInt() ?? 0,
+        h = (j['h'] as num?)?.toInt() ?? 0;
     if (w <= 0 || h <= 0) return null;
     final c = j['cutout'];
     return ScreenShape(
@@ -22,7 +23,12 @@ class ScreenShape {
       h,
       (j['radius'] as num?)?.toInt() ?? 0,
       c is Map
-          ? ((c['x'] as num).toInt(), (c['y'] as num).toInt(), (c['w'] as num).toInt(), (c['h'] as num).toInt())
+          ? (
+              (c['x'] as num).toInt(),
+              (c['y'] as num).toInt(),
+              (c['w'] as num).toInt(),
+              (c['h'] as num).toInt(),
+            )
           : null,
     );
   }
@@ -40,8 +46,10 @@ class PeerInfo {
   String get osLabel => [os, osVersion].where((s) => s.isNotEmpty).join(' ');
   int get battery => ((j['battery'] as Map?)?['level'] as num?)?.toInt() ?? -1;
   bool get charging => (j['battery'] as Map?)?['charging'] == true;
-  int get storageFree => ((j['storage'] as Map?)?['free'] as num?)?.toInt() ?? 0;
-  int get storageTotal => ((j['storage'] as Map?)?['total'] as num?)?.toInt() ?? 0;
+  int get storageFree =>
+      ((j['storage'] as Map?)?['free'] as num?)?.toInt() ?? 0;
+  int get storageTotal =>
+      ((j['storage'] as Map?)?['total'] as num?)?.toInt() ?? 0;
   bool get notifAccess => j['notifAccess'] == true;
 
   /// A computer's remote-control capabilities (the "remote" field of its pb.x.info). Absent on phones and old versions.
@@ -86,7 +94,9 @@ class PhoneNotif {
       pkg = j['pkg'] as String? ?? '',
       title = j['title'] as String? ?? '',
       text = j['text'] as String? ?? '',
-      time = DateTime.fromMillisecondsSinceEpoch((j['time'] as num?)?.toInt() ?? 0),
+      time = DateTime.fromMillisecondsSinceEpoch(
+        (j['time'] as num?)?.toInt() ?? 0,
+      ),
       clearable = j['clearable'] != false;
   final String key, app, pkg, title, text;
   final DateTime time;
@@ -106,17 +116,28 @@ class MediaState {
       at = (j['at'] as num?)?.toInt() ?? 0,
       volume = (j['volume'] as num?)?.toInt() ?? 0,
       volumeMax = (j['volumeMax'] as num?)?.toInt() ?? 0,
+      speed = (j['speed'] as num?)?.toDouble() ?? 1,
+      actions = (j['actions'] as num?)?.toInt(),
+      receivedAt = DateTime.now().millisecondsSinceEpoch,
       art = _art(j['art']);
   final bool active, playing;
   final String app, title, artist, album;
   final int duration, position, at, volume, volumeMax;
   final Uint8List? art;
+  final double speed;
+  final int? actions;
+  final int receivedAt;
+  bool supports(int flag) => actions == null || (actions! & flag) != 0;
 
   /// Position now, extrapolated from the last report while playing (the phone does not stream it).
   int get positionNow {
-    if (!playing || at == 0) return position;
-    final p = position + DateTime.now().millisecondsSinceEpoch - at;
-    return duration > 0 ? p.clamp(0, duration) : p;
+    if (!playing) return position;
+    final elapsed = (DateTime.now().millisecondsSinceEpoch - receivedAt).clamp(
+      0,
+      5000,
+    );
+    final p = position + (elapsed * speed).round();
+    return duration > 0 ? p.clamp(0, duration) : p.clamp(0, 1 << 53);
   }
 
   static Uint8List? _art(Object? s) {
@@ -139,8 +160,11 @@ class ClipItem {
 /// The engine speaks English in a few details; the UI is Spanish. Unknown texts pass through unchanged.
 String es(String m) {
   if (m.isEmpty) return m;
-  final retry = RegExp(r'^(.*); retrying in (\d+)s \((\d+)/(\d+)\)$').firstMatch(m);
-  if (retry != null) return 'Sin conexión; reintento en ${retry[2]} s (${retry[3]} de ${retry[4]})';
+  final retry = RegExp(r'^(.*); retrying in (\d+)s \((\d+)/(\d+)\)$')
+      .firstMatch(m);
+  if (retry != null) {
+    return 'Sin conexión; reintento en ${retry[2]} s (${retry[3]} de ${retry[4]})';
+  }
   if (m.startsWith('cannot reach ')) {
     return 'No se puede conectar; comprueba que el otro dispositivo tenga la app abierta';
   }
@@ -149,10 +173,13 @@ String es(String m) {
   return switch (m) {
     'connection lost' => 'Se perdió la conexión',
     'the other device no longer trusts this one' ||
-    'the other device does not trust this one' => 'El otro dispositivo ya no confía en este',
+    'the other device does not trust this one' =>
+      'El otro dispositivo ya no confía en este',
     'that device is not paired' => 'Ese dispositivo no está emparejado',
-    'that device has not been seen on the network' => 'Ese dispositivo no está en la red ahora',
-    'this transfer cannot be retried' => 'Esta transferencia no se puede reintentar',
+    'that device has not been seen on the network' =>
+      'Ese dispositivo no está en la red ahora',
+    'this transfer cannot be retried' =>
+      'Esta transferencia no se puede reintentar',
     'file name not allowed' => 'Nombre de archivo no permitido',
     'checksum mismatch' => 'El archivo llegó dañado',
     'message too large' => 'El contenido es demasiado grande',

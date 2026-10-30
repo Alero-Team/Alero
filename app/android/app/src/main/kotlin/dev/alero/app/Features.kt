@@ -88,7 +88,8 @@ object Features {
                 when (kind) {
                     "pb.x.info.request" -> hello(peer)
                     "pb.x.clip" -> setClipboard(body.optString("text"))
-                    "pb.x.media.cmd" -> NotifListener.command(body)
+                    "pb.x.media.cmd" -> main.post { NotifListener.command(body) }
+                    "pb.x.media.request" -> NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }
                     "pb.x.notif.dismiss" -> NotifListener.dismiss(body.optString("key"))
                 }
             }
@@ -139,6 +140,14 @@ object Features {
                 o.put("cutout", JSONObject().put("x", it.left).put("y", it.top).put("w", it.width()).put("h", it.height()))
             }
         }
+        if (!o.has("w")) {
+            val metrics = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(metrics)
+            o.put("w", minOf(metrics.widthPixels, metrics.heightPixels)).put("h", maxOf(metrics.widthPixels, metrics.heightPixels))
+        }
+        if (Build.MODEL.equals("Pixel 9a", true)) {
+            o.put("bodyWidthMm", 73.3).put("bodyHeightMm", 154.7).put("depthMm", 8.9)
+        }
         o.put("density", ctx.resources.displayMetrics.density.toDouble())
         return o
     }
@@ -176,8 +185,19 @@ object Features {
 
     /** Small JPEG that fits in one app message (64 KiB after base64). */
     private fun wallpaperMessage(): JSONObject? {
-        val f = wallpaperFile()
-        if (!f.exists()) return null
+        val f = File(ctx.cacheDir, "stock-wallpaper.jpg")
+        if (!f.exists()) {
+            try {
+                val drawable = ctx.getSystemService(WallpaperManager::class.java).getBuiltInDrawable() ?: return null
+                val width = 320
+                val height = (width.toFloat() * drawable.intrinsicHeight / maxOf(1, drawable.intrinsicWidth)).toInt().coerceIn(1, 960)
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                drawable.setBounds(0, 0, width, height)
+                drawable.draw(android.graphics.Canvas(bitmap))
+                f.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 78, it) }
+                bitmap.recycle()
+            } catch (_: Exception) { return null }
+        }
         return JSONObject().put("jpeg", Base64.encodeToString(f.readBytes(), Base64.NO_WRAP))
     }
 

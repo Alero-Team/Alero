@@ -44,9 +44,12 @@ class Hub extends ChangeNotifier {
   PhoneNotif _notif(Map j) {
     final n = PhoneNotif(j);
     final icon = j['icon'] as String? ?? '';
-    if (n.pkg.isNotEmpty && icon.isNotEmpty) appIcons[n.pkg] = base64Decode(icon);
+    if (n.pkg.isNotEmpty && icon.isNotEmpty) {
+      appIcons[n.pkg] = base64Decode(icon);
+    }
     return n;
   }
+
   final media = <String, MediaState>{};
   final wallpaper = <String, Uint8List>{};
 
@@ -58,9 +61,12 @@ class Hub extends ChangeNotifier {
   final _expected = <String, (bool, DateTime)>{};
 
   void expectFromPhone(String name, {bool open = false}) {
-    _expected.removeWhere((_, v) => DateTime.now().difference(v.$2) > const Duration(minutes: 10));
+    _expected.removeWhere(
+      (_, v) => DateTime.now().difference(v.$2) > const Duration(minutes: 10),
+    );
     _expected[name] = (open, DateTime.now());
   }
+
   ScreenFeed? screen;
 
   /// The computer we asked for a screenshot, and the one that arrived (the UI shows it, then clears it).
@@ -84,7 +90,7 @@ class Hub extends ChangeNotifier {
 
   /// Libraries Android lets this app read in full ('images', 'video', 'audio'), and whether only some photos are shared.
   Set<String> filesMedia = const {};
-  bool filesLimited = false;
+  bool filesLimited = false, allFiles = false;
 
   /// Files/text another Android app shared with us, waiting for the user to pick a device.
   Shared? share;
@@ -97,10 +103,16 @@ class Hub extends ChangeNotifier {
   String get theme => themeMode.value;
 
   late File _settings;
-  final _fds = <String, int>{}; // transfer id -> Android descriptor to close when it ends
+  final _fds =
+      <
+        String,
+        int
+      >{}; // transfer id -> Android descriptor to close when it ends
 
   Future<void> start() async {
-    final data = Directory('${(await getApplicationSupportDirectory()).path}/pb');
+    final data = Directory(
+      '${(await getApplicationSupportDirectory()).path}/pb',
+    );
     final dl = Platform.isAndroid
         ? '${(await getApplicationSupportDirectory()).path}/incoming' // moved to Downloads by Native.publish
         : '${(await getDownloadsDirectory())!.path}${Platform.pathSeparator}Alero';
@@ -142,7 +154,8 @@ class Hub extends ChangeNotifier {
 
   bool _readRemote() {
     try {
-      return (jsonDecode(_remoteFile.readAsStringSync()) as Map)['allow'] == true;
+      return (jsonDecode(_remoteFile.readAsStringSync()) as Map)['allow'] ==
+          true;
     } catch (_) {
       return false; // missing or unreadable: control stays off
     }
@@ -169,23 +182,37 @@ class Hub extends ChangeNotifier {
 
   void _saveSettings() {
     _settings.parent.createSync(recursive: true);
-    _settings.writeAsStringSync(jsonEncode({'name': name, 'autoAccept': autoAccept, 'theme': theme, 'amoled': amoled.value}));
+    _settings.writeAsStringSync(
+      jsonEncode({
+        'name': name,
+        'autoAccept': autoAccept,
+        'theme': theme,
+        'amoled': amoled.value,
+      }),
+    );
   }
 
   Future<void> refresh() async {
     if (myId.isEmpty) return notifyListeners();
     peers = _sorted(await pb.peers());
-    history = (await pb.history())..sort((a, b) => b.time.compareTo(a.time)); // newest first
+    history = (await pb.history())
+      ..sort((a, b) => b.time.compareTo(a.time)); // newest first
     diagnostics = await pb.diagnostics();
     notifyListeners();
   }
 
-  static bool _online(pb.Peer p) => p.trusted && p.state == pb.PeerState.connected;
+  static bool _online(pb.Peer p) =>
+      p.trusted && p.state == pb.PeerState.connected;
 
-  String _peerName(String id) => peers.where((p) => p.id == id).firstOrNull?.name ?? 'otro dispositivo';
+  String _peerName(String id) =>
+      peers.where((p) => p.id == id).firstOrNull?.name ?? 'otro dispositivo';
 
-  List<pb.Peer> _sorted(List<pb.Peer> l) =>
-      l..sort((a, b) => a.trusted != b.trusted ? (a.trusted ? -1 : 1) : a.name.compareTo(b.name));
+  List<pb.Peer> _sorted(List<pb.Peer> l) => l
+    ..sort(
+      (a, b) => a.trusted != b.trusted
+          ? (a.trusted ? -1 : 1)
+          : a.name.compareTo(b.name),
+    );
 
   void _on(pb.Event e) {
     switch (e) {
@@ -206,7 +233,10 @@ class Hub extends ChangeNotifier {
         messages.add('El equipo no coincide con el QR. Vuelve a escanearlo.');
       case pb.Event_PairRequest():
         pairPrompt = e;
-        Native.alert('Solicitud de emparejamiento', '${e.name} quiere emparejarse. Código ${e.code}');
+        Native.alert(
+          'Solicitud de emparejamiento',
+          '${e.name} quiere emparejarse. Código ${e.code}',
+        );
       case pb.Event_PairFinished():
         pairPrompt = null;
         messages.add(
@@ -214,21 +244,31 @@ class Hub extends ChangeNotifier {
               ? 'Emparejado con ${e.name}'
               : switch (e.code) {
                   'DECLINED' => 'Emparejamiento cancelado',
-                  'DECLINED_BY_PEER' => 'El otro dispositivo no aceptó el emparejamiento',
-                  _ => 'No se pudo emparejar: ${e.message}. Comprueba que ambos estén en la misma red.',
+                  'DECLINED_BY_PEER' =>
+                    'El otro dispositivo no aceptó el emparejamiento',
+                  _ =>
+                    'No se pudo emparejar: ${e.message}. Comprueba que ambos estén en la misma red.',
                 },
         );
         refresh();
-      case pb.Event_TransferOffer() when _expected.containsKey(e.name) && peers.any((p) => p.id == e.peerId && p.trusted):
+      case pb.Event_TransferOffer()
+          when _expected.containsKey(e.name) &&
+              peers.any((p) => p.id == e.peerId && p.trusted):
         // A file we asked a phone for (explorer): no question.
         pb.respondTransfer(id: e.id, accept: true);
         return;
       case pb.Event_TransferOffer():
         offer = e;
-        Native.alert('Archivo entrante', '${e.peerName} quiere enviarte ${e.name}');
+        Native.alert(
+          'Archivo entrante',
+          '${e.peerName} quiere enviarte ${e.name}',
+        );
       case pb.Event_TransferStarted():
         if (offer?.id == e.id) offer = null;
-        active = [...active, Xfer(e.id, e.peerName, e.name, e.size.toInt(), e.incoming)];
+        active = [
+          ...active,
+          Xfer(e.id, e.peerName, e.name, e.size.toInt(), e.incoming),
+        ];
       case pb.Event_TransferProgress():
         for (final x in active.where((x) => x.id == e.id)) {
           x.done = e.done.toInt();
@@ -262,25 +302,39 @@ class Hub extends ChangeNotifier {
     var where = '';
     // A screenshot we asked for: read it before the platform moves it to Downloads, so it can be shown at once.
     Shot? arrived;
-    if (e.ok && x?.incoming == true && e.path.isNotEmpty && (x?.name ?? '').startsWith('Captura-PC-')) {
+    if (e.ok &&
+        x?.incoming == true &&
+        e.path.isNotEmpty &&
+        (x?.name ?? '').startsWith('Captura-PC-')) {
       try {
         arrived = Shot(File(e.path).readAsBytesSync(), x!.name, x.peerName);
       } catch (_) {
         // unreadable: it is still saved, only the preview is missing
       }
     }
-    if (e.ok && x?.incoming == true && e.path.isNotEmpty) where = await Native.publish(e.path);
+    if (e.ok && x?.incoming == true && e.path.isNotEmpty) {
+      where = await Native.publish(e.path);
+    }
     final n = x?.name ?? 'archivo';
     messages.add(switch (e) {
-      _ when e.ok && x?.incoming == true => 'Recibido: $n (${where.isEmpty ? downloads : where})',
+      _ when e.ok && x?.incoming == true =>
+        'Recibido: $n (${where.isEmpty ? downloads : where})',
       _ when e.ok => 'Enviado: $n',
       _ when e.code == 'CANCELLED' => 'Cancelado: $n',
       _ => 'Falló $n: ${explain(e.code, e.message)}',
     });
-    final want = x != null && e.ok && x.incoming ? _expected.remove(x.name) : null;
+    final want = x != null && e.ok && x.incoming
+        ? _expected.remove(x.name)
+        : null;
     if (want != null) {
       messages.add('Descargado: ${x!.name}');
-      if (want.$1 && e.path.isNotEmpty) FsClient.openFile(e.path);
+      if (want.$1 && e.path.isNotEmpty) {
+        try {
+          await Native.openFile(e.path);
+        } catch (_) {
+          messages.add('No se pudo abrir ${x.name}.');
+        }
+      }
     } else if (!e.ok && x != null) {
       _expected.remove(x.name);
     }
@@ -305,16 +359,26 @@ class Hub extends ChangeNotifier {
   // --- app messages (pb.x.*) ---------------------------------------------------------------------------
 
   Future<void> _send(String peerId, String kind, Map<String, Object?> body) =>
-      _run(() => pb.sendMessage(peerId: peerId, kind: kind, body: jsonEncode(body)));
+      _run(
+        () =>
+            pb.sendMessage(peerId: peerId, kind: kind, body: jsonEncode(body)),
+      );
 
-  Future<void> sendMessage(String peerId, String kind, Map<String, Object?> body) => _send(peerId, kind, body);
+  Future<void> sendMessage(
+    String peerId,
+    String kind,
+    Map<String, Object?> body,
+  ) => _send(peerId, kind, body);
 
   /// On connect: ask for the other side's info (a computer's own info comes from its daemon, a phone's from its
   /// service; each answers by itself when it sees us connect, this covers a window opened later).
   void _hello(String peerId) => _send(peerId, 'pb.x.info.request', {});
 
   /// How we reach a paired device, in words: a USB cable shows up as a loopback address.
-  String routeOf(pb.Peer p) => p.addr.startsWith('127.0.0.1') || p.addr.startsWith('[::1]') ? 'Cable USB' : 'Red local';
+  String routeOf(pb.Peer p) =>
+      p.addr.startsWith('127.0.0.1') || p.addr.startsWith('[::1]')
+      ? 'Cable USB'
+      : 'Red local';
 
   void _message(String peerId, String kind, String raw) {
     final Map<String, dynamic> b;
@@ -337,12 +401,20 @@ class Hub extends ChangeNotifier {
         if (why == 'not_allowed') {
           final cur = info[peerId];
           if (cur != null) info[peerId] = cur.withAllowed(false);
-          messages.add('Ese ordenador no permite el control remoto. Actívalo en Alero › Ajustes del ordenador.');
+          messages.add(
+            'Ese ordenador no permite el control remoto. Actívalo en Alero › Ajustes del ordenador.',
+          );
         } else {
-          messages.add(why == 'unsupported' ? 'Este ordenador no admite esa función todavía.' : 'No se pudo completar la acción en el ordenador.');
+          messages.add(
+            why == 'unsupported'
+                ? 'Este ordenador no admite esa función todavía.'
+                : 'No se pudo completar la acción en el ordenador.',
+          );
         }
       case 'pb.x.remote.power.result':
-        messages.add(b['ok'] == true ? 'Hecho' : 'El ordenador no pudo hacerlo');
+        messages.add(
+          b['ok'] == true ? 'Hecho' : 'El ordenador no pudo hacerlo',
+        );
         return;
       case 'pb.x.screen.frame':
         screen?.onFrame(b); // notifies by itself: the whole app does not repaint five times a second
@@ -356,7 +428,10 @@ class Hub extends ChangeNotifier {
         ];
       case 'pb.x.notif.posted':
         final n = _notif(b);
-        notifs[peerId] = [n, ...?notifs[peerId]?.where((o) => o.key != n.key)].take(100).toList();
+        notifs[peerId] = [
+          n,
+          ...?notifs[peerId]?.where((o) => o.key != n.key),
+        ].take(100).toList();
       case 'pb.x.notif.removed':
         notifs[peerId] = [...?notifs[peerId]?.where((o) => o.key != b['key'])];
       case 'pb.x.wallpaper':
@@ -390,7 +465,8 @@ class Hub extends ChangeNotifier {
     if (clips.length > 30) clips.removeLast();
   }
 
-  Future<void> requestInfo(String peerId) => _send(peerId, 'pb.x.info.request', {});
+  Future<void> requestInfo(String peerId) =>
+      _send(peerId, 'pb.x.info.request', {});
 
   /// Sends this device's clipboard text. Android allows reading it only while the app is in front.
   Future<void> sendClipboard(String peerId) async {
@@ -400,7 +476,9 @@ class Hub extends ChangeNotifier {
   }
 
   Future<void> sendText(String peerId, String text) async {
-    await _send(peerId, 'pb.x.clip', {'text': text.length > 60000 ? text.substring(0, 60000) : text});
+    await _send(peerId, 'pb.x.clip', {
+      'text': text.length > 60000 ? text.substring(0, 60000) : text,
+    });
     _clip(ClipItem(text, _peerName(peerId), false));
     messages.add('Portapapeles enviado a ${_peerName(peerId)}');
     notifyListeners();
@@ -413,8 +491,16 @@ class Hub extends ChangeNotifier {
   }
 
   /// `action`: toggle, play, pause, next, prev, seek (with [position] ms), volume (with [value]).
-  Future<void> mediaCmd(String peerId, String action, {int? position, int? value}) =>
-      _send(peerId, 'pb.x.media.cmd', {'action': action, 'position': ?position, 'value': ?value});
+  Future<void> mediaCmd(
+    String peerId,
+    String action, {
+    int? position,
+    int? value,
+  }) => _send(peerId, 'pb.x.media.cmd', {
+    'action': action,
+    'position': ?position,
+    'value': ?value,
+  });
 
   Future<void> dismissNotif(String peerId, String key) async {
     notifs[peerId] = [...?notifs[peerId]?.where((n) => n.key != key)];
@@ -454,8 +540,19 @@ class Hub extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> openHistory(pb.HistoryItem h) async {
+    try {
+      await Native.openFile(h.path, id: h.id);
+    } catch (e) {
+      messages.add(
+        'No se pudo abrir ${h.name}. Comprueba que el archivo sigue disponible y tienes una app compatible.',
+      );
+    }
+  }
+
   Future<void> checkPermissions() async {
     if (!Platform.isAndroid) return;
+    allFiles = await Native.allFiles();
     notifAccess = await Native.notifAccess();
     notifPermission = await Native.notifPermission();
     background = await Native.background();
@@ -481,7 +578,9 @@ class Hub extends ChangeNotifier {
     final blocked = await Native.requestMedia();
     await checkPermissions();
     if (blocked) {
-      messages.add('Android ya no puede preguntar: concede Fotos y vídeos o Música y audio en los permisos de la app.');
+      messages.add(
+        'Android ya no puede preguntar: concede Fotos y vídeos o Música y audio en los permisos de la app.',
+      );
       await Native.openPermissions();
     }
   }
@@ -532,21 +631,34 @@ class Hub extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> pair(String peerId) => _run(() => pb.pairWithPeer(peerId: peerId));
+  Future<void> pair(String peerId) =>
+      _run(() => pb.pairWithPeer(peerId: peerId));
 
   String? _qrId;
 
-  String _diag(String prefix) =>
-      diagnostics.firstWhere((l) => l.startsWith(prefix), orElse: () => prefix).substring(prefix.length).trim();
+  String _diag(String prefix) => diagnostics
+      .firstWhere((l) => l.startsWith(prefix), orElse: () => prefix)
+      .substring(prefix.length)
+      .trim();
 
   /// What this computer shows as a QR: where to reach it and the identity the phone must find there.
-  String get qrPayload => 'pb:pair?h=${_diag('local address:')}&p=${_diag('listening on TCP')}&id=$myId';
+  String get qrPayload =>
+      'pb:pair?h=${_diag('local address:')}&p=${_diag('listening on TCP')}&id=$myId';
 
   /// Phone: pair with the computer in a scanned QR.
   Future<void> pairQr(String text) async {
     final u = Uri.tryParse(text);
-    final (h, p, id) = (u?.queryParameters['h'], u?.queryParameters['p'], u?.queryParameters['id']);
-    if (u == null || u.scheme != 'pb' || h == null || p == null || id == null || id.length < 32) {
+    final (h, p, id) = (
+      u?.queryParameters['h'],
+      u?.queryParameters['p'],
+      u?.queryParameters['id'],
+    );
+    if (u == null ||
+        u.scheme != 'pb' ||
+        h == null ||
+        p == null ||
+        id == null ||
+        id.length < 32) {
       return messages.add('Ese QR no es de esta app.');
     }
     _qrId = id;
@@ -556,7 +668,10 @@ class Hub extends ChangeNotifier {
   /// Desktop: connect to the phone through the USB cable (no Wi-Fi). Pairs first if they have never met.
   Future<void> connectCable() async {
     messages.add('Buscando el teléfono por el cable…');
-    final err = await Scrcpy.cable(phonePort: pb.defaultPort() + 1, pcPort: pb.defaultPort());
+    final err = await Scrcpy.cable(
+      phonePort: pb.defaultPort() + 1,
+      pcPort: pb.defaultPort(),
+    );
     if (err != null) return messages.add(err);
     await pairAddr('127.0.0.1:${pb.defaultPort() + 1}');
   }
@@ -585,7 +700,9 @@ class Hub extends ChangeNotifier {
     await refresh();
   });
   Future<void> cancel(String id) => _run(() => pb.cancelTransfer(id: id));
-  Future<void> retry(String historyId) => _run(() => pb.retry(historyId: historyId));
+  Future<void> retry(String historyId) =>
+      _run(() => pb.retry(historyId: historyId));
+
   /// Drops one record from the list (the file on disk stays). The list updates before the store answers.
   Future<void> removeHistory(String id) => _run(() async {
     history = history.where((h) => h.id != id).toList();
@@ -600,7 +717,8 @@ class Hub extends ChangeNotifier {
   });
 
   /// Desktop: real paths. Android: picks content URIs and sends their descriptors (no copy).
-  Future<void> send(String peerId) async => _sendPicked(peerId, await Native.pickFiles());
+  Future<void> send(String peerId) async =>
+      _sendPicked(peerId, await Native.pickFiles());
 
   /// Desktop drag and drop: plain paths.
   Future<void> sendPaths(String peerId, List<String> paths) =>
@@ -609,8 +727,15 @@ class Hub extends ChangeNotifier {
   Future<void> _sendPicked(String peerId, List<Picked> files) async {
     for (final f in files) {
       try {
-        final id = await pb.sendFile(peerId: peerId, path: f.path, displayName: f.name);
-        if (f.fd != null) _fds[id] = f.fd!;
+        final id = await pb.sendFile(
+          peerId: peerId,
+          path: f.path,
+          displayName: f.name,
+        );
+        if (f.fd != null) {
+          _fds[id] = f.fd!;
+          await Native.rememberFile(id, f.fd!);
+        }
       } catch (e) {
         if (f.fd != null) Native.closeFd(f.fd!);
         messages.add('No se pudo enviar: ${es('$e')}');
@@ -639,7 +764,8 @@ class Hub extends ChangeNotifier {
     'NETWORK' => 'se perdió la conexión. Se reintenta sola; comprueba que ambos estén en la misma red Wi-Fi',
     'INTEGRITY' => 'el archivo llegó dañado. Vuelve a enviarlo',
     'REJECTED' => 'el otro dispositivo no lo aceptó',
-    'PROTOCOL' => 'versiones incompatibles. Actualiza la app en ambos dispositivos',
+    'PROTOCOL' =>
+      'versiones incompatibles. Actualiza la app en ambos dispositivos',
     'INVALID_NAME' => 'el nombre del archivo no es válido',
     'CANCELLED' => 'cancelado',
     _ => message.isEmpty ? code : es(message),

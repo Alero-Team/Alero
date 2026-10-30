@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="opened_file" path="opened-files/" />
+    <files-path name="incoming" path="incoming/" />
+    <files-path name="flutter_incoming" path="../app_flutter/incoming/" />
+</paths>
