@@ -45,7 +45,10 @@ android {
     buildTypes {
         release {
             // Alpha builds keep the installed identity; CI supplies the same identity through encrypted secrets.
-            signingConfig = signingConfigs.findByName("aleroRelease") ?: signingConfigs.getByName("debug")
+            // Never accidentally ship a Play-Protect-untrusted debug fallback.
+            // CI supplies the existing keystore, preserving update compatibility.
+            signingConfig = signingConfigs.findByName("aleroRelease")
+                ?: error("ALERO_ANDROID_KEYSTORE is required for release packages")
             // Smaller and faster to load: R8 shrinks code, unused resources go. Rules keep the JNI entry points.
             isMinifyEnabled = true
             isShrinkResources = true

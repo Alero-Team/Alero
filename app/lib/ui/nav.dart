@@ -108,7 +108,10 @@ class _AleroNavBarState extends State<AleroNavBar>
           return AnimatedBuilder(
             animation: _c,
             builder: (context, _) {
-              final t = _c.value;
+              // Orion's spatial spring, shared by every tab width: the
+              // selected pill expands as the previous one contracts.
+              // Clamping keeps narrow layouts within their exact width.
+              final t = Spring.spatial.transform(_c.value).clamp(0.0, 1.0);
               return Row(
                 children: [
                   for (var i = 0; i < n; i++)
@@ -166,8 +169,7 @@ class _Item extends StatelessWidget {
       button: true,
       selected: selected,
       label: data.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: OrionPress(
         onTap: onTap,
         child: SizedBox(
           width: width < 0 ? 0 : width,

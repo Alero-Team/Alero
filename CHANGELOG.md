@@ -1,5 +1,14 @@
 # Cambios
 
+## 0.1.6 — 2026-11-01
+
+- Animaciones Orion Store adaptadas a Flutter en Windows y Android: transición entre pantallas con opacidad y escala de 98 % a 100 %, reversible al salir.
+- Pulsación elástica en navegación lateral y barra flotante; selección de pestaña con muelle espacial, respetando los ajustes de movimiento reducido.
+- Firma Android: las compilaciones release exigen la identidad de firma configurada en los secretos de GitHub; queda prohibido generar por accidente una versión release con la clave de depuración. Se conserva la identidad usada para actualizar instalaciones existentes.
+- Distribución: paquetes de Windows y Android generados en GitHub Actions con pruebas y hashes SHA-256.
+- Play Protect sigue decidiendo de forma independiente la aceptación de instalaciones externas. Las advertencias por permisos sensibles, escaneos o reputación de firma no pueden eliminarse desde el APK sin aprobación de Google.
+
+
 ## 0.1.5 — 2026-11-01
 
 - Emparejar por QR ya no falla con «No route to host»: el QR del PC se actualiza cuando cambia su red (Wi-Fi ↔ cable) y el teléfono usa la dirección desde la que oye al PC si el QR es viejo.

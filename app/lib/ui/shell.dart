@@ -181,18 +181,14 @@ class _ShellState extends State<Shell>
     listenable: hub,
     builder: (context, _) => LayoutBuilder(
       builder: (context, box) {
-        // Fade through: the Material transition between top-level destinations. Pages keep their own
-        // layout (top-aligned), so nothing jumps while the old page fades out.
+        // Adapted from Orion Store's AnimatedContent(tab): 0.98 -> 1 scale
+        // and effect fade, reversed naturally when the destination leaves.
+        // Both Windows and Android use this same transition.
         final page = PageTransitionSwitcher(
-          duration: motion(context, const Duration(milliseconds: 300)),
+          duration: motion(context, const Duration(milliseconds: 320)),
           layoutBuilder: (entries) =>
               Stack(alignment: Alignment.topCenter, children: entries),
-          transitionBuilder: (child, a, b) => FadeThroughTransition(
-            animation: a,
-            secondaryAnimation: b,
-            fillColor: Colors.transparent,
-            child: child,
-          ),
+          transitionBuilder: orionTabTransition,
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         return box.maxWidth >= wideLayout ? _wide(page) : _narrow(page);
@@ -339,8 +335,7 @@ class _NavItemState extends State<_NavItem> {
           cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+          child: OrionPress(
             onTap: widget.onTap,
             child: AnimatedContainer(
               duration: motion(context, Spring.spatial.settle),

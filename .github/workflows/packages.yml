@@ -1,5 +1,7 @@
 name: Packages
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish:
@@ -49,6 +51,16 @@ jobs:
           ./gradlew.bat :app:testDebugUnitTest
           if ($LASTEXITCODE -ne 0) { throw 'Android tests failed' }
           Pop-Location
+      - name: Verify signed release APK
+        shell: pwsh
+        run: |
+          $apk = Get-ChildItem dist -Filter '*-android-arm64.apk' | Select-Object -First 1
+          if (!$apk) { throw 'Android APK missing' }
+          $tool = Get-ChildItem "$env:ANDROID_HOME/build-tools" -Filter apksigner.bat -Recurse |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$tool) { throw 'Android apksigner unavailable' }
+          & $tool.FullName verify --verbose --print-certs $apk.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed' }
       - name: Install packaging tools
         run: choco install innosetup --yes --no-progress
       - name: Windows package
@@ -68,7 +80,7 @@ jobs:
           $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
           if (Test-Path -LiteralPath $keyFile) { Remove-Item -LiteralPath $keyFile }
   publish:
-    if: inputs.publish
+    if: github.event_name == 'push' || inputs.publish
     needs: packages
     runs-on: ubuntu-latest
     permissions:

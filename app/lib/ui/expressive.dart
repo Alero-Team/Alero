@@ -65,6 +65,68 @@ class Spring extends Curve {
 Duration motion(BuildContext c, Duration d) =>
     MediaQuery.of(c).disableAnimations ? Duration.zero : d;
 
+/// The small springy press used throughout Orion Store's navigation and cards.
+/// It stays a normal InkWell: keyboard, hover, focus and accessibility still work.
+class OrionPress extends StatefulWidget {
+  const OrionPress({
+    super.key,
+    required this.onTap,
+    required this.child,
+    this.radius = Radii.pill,
+  });
+
+  final VoidCallback onTap;
+  final Widget child;
+  final double radius;
+
+  @override
+  State<OrionPress> createState() => _OrionPressState();
+}
+
+class _OrionPressState extends State<OrionPress> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    type: MaterialType.transparency,
+    child: InkWell(
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(widget.radius),
+      onHighlightChanged: (value) {
+        if (mounted) setState(() => _pressed = value);
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.94 : 1,
+        duration: motion(context, Spring.fast.settle),
+        curve: Spring.fast,
+        child: widget.child,
+      ),
+    ),
+  );
+}
+
+/// Orion Store's destination motion: the new page rises from 98% scale
+/// while fading in, and the outgoing page plays the exact inverse.
+/// No full-screen spring bounce or arbitrary direction-dependent slide.
+Widget orionTabTransition(
+  Widget child,
+  Animation<double> animation,
+  Animation<double> secondaryAnimation,
+) {
+  final fx = CurvedAnimation(
+    parent: animation,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+  return FadeTransition(
+    opacity: fx,
+    child: ScaleTransition(
+      scale: Tween<double>(begin: 0.98, end: 1).animate(fx),
+      child: child,
+    ),
+  );
+}
+
 /// Wavy linear progress (M3 Expressive). The wave travels while active; still with reduced motion.
 class WavyProgress extends StatefulWidget {
   const WavyProgress({
