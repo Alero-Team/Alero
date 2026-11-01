@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'device_image.dart';
 import 'fs_client.dart';
 import 'native.dart';
 import 'pc_remote.dart';
@@ -37,6 +38,21 @@ class Hub extends ChangeNotifier {
   /// What paired devices report about themselves (`pb.x.*`), by peer id.
   final info = <String, PeerInfo>{};
   final notifs = <String, List<PhoneNotif>>{};
+  final _replies = <String, (String, String, Completer<void>)>{};
+  int _replyId = 0;
+  bool setupDone = false;
+
+  void finishSetup() {
+    setupDone = true;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void reopenSetup() {
+    setupDone = false;
+    _saveSettings();
+    notifyListeners();
+  }
 
   /// App icon (PNG) by package: the phone sends it once per app, so later rows reuse it.
   final appIcons = <String, Uint8List>{};
@@ -52,6 +68,30 @@ class Hub extends ChangeNotifier {
 
   final media = <String, MediaState>{};
   final wallpaper = <String, Uint8List>{};
+
+  /// Commercial name and picture of each connected phone (computer side), by peer id.
+  final look = <String, DeviceLook>{};
+  final _lookKey = <String, String>{};
+  DeviceImages images = DeviceImages(() async {
+    final d = Directory(
+      '${(await getApplicationSupportDirectory()).path}/device-images',
+    );
+    return d.create(recursive: true);
+  });
+
+  /// Cache answers at once and the network fills in later; the connection never waits for it.
+  void _resolveLook(String peerId, PeerInfo i) {
+    if (Platform.isAndroid || !i.phone) return;
+    final id = i.phoneId;
+    if (_lookKey[peerId] == id.key) return;
+    _lookKey[peerId] = id.key;
+    look[peerId] = DeviceLook(id.localName); // stale picture of a previous phone must not linger
+    images.look(id).then((l) {
+      if (_lookKey[peerId] != id.key) return; // another phone connected meanwhile
+      look[peerId] = l;
+      notifyListeners();
+    });
+  }
 
   /// Phone side: drives a paired computer (mouse, keys, volume, media, screenshots, its screen).
   late final remote = PcRemote(this);
@@ -121,6 +161,7 @@ class Hub extends ChangeNotifier {
     final s = _readSettings();
     name = s['name'] as String? ?? await Native.deviceName();
     autoAccept = s['autoAccept'] as bool? ?? true;
+    setupDone = s['setupDone'] == true;
     themeMode.value = s['theme'] as String? ?? 'system';
     amoled.value = s['amoled'] as bool? ?? false;
     remoteAllow = _readRemote();
@@ -184,6 +225,8 @@ class Hub extends ChangeNotifier {
     _settings.parent.createSync(recursive: true);
     _settings.writeAsStringSync(
       jsonEncode({
+        ..._readSettings(),
+        'setupDone': setupDone,
         'name': name,
         'autoAccept': autoAccept,
         'theme': theme,
@@ -220,8 +263,13 @@ class Hub extends ChangeNotifier {
         final was = peers.where((p) => p.id == peer.id).firstOrNull;
         peers = _sorted([...peers.where((p) => p.id != peer.id), peer]);
         if (_online(peer) && (was == null || !_online(was))) _hello(peer.id);
-        if (!_online(peer)) media.remove(peer.id);
+        if (!_online(peer)) {
+          media.remove(peer.id);
+          _failReplies(peer.id, 'El teléfono está sin conexión.');
+        }
       case pb.Event_PeerGone(:final id):
+        media.remove(id);
+        _failReplies(id, 'El teléfono está sin conexión.');
         peers = peers.where((p) => p.id != id).toList();
       case pb.Event_PairRequest() when _qrId != null && e.peerId == _qrId:
         // Scanned QR: the TLS identity matches the one shown on the other screen, so the code check is done.
@@ -391,6 +439,10 @@ class Hub extends ChangeNotifier {
     switch (kind) {
       case 'pb.x.info':
         info[peerId] = PeerInfo(b);
+        _resolveLook(peerId, info[peerId]!);
+      case 'pb.x.power':
+        final cur = info[peerId];
+        if (cur != null) info[peerId] = cur.withPower(b);
       case 'pb.x.info.request':
         return; // the daemon (computer) or the service (phone) answers, window or not
       case 'pb.x.remote.state':
@@ -421,6 +473,9 @@ class Hub extends ChangeNotifier {
         return;
       case 'pb.x.pcmedia.state':
         media[peerId] = MediaState(b);
+      case 'pb.x.notif.reply.result':
+        onNotifReplyResult(peerId, b);
+        return;
       case 'pb.x.notif.snapshot':
         notifs[peerId] = [
           for (final n in (b['items'] as List? ?? []))
@@ -433,6 +488,11 @@ class Hub extends ChangeNotifier {
           ...?notifs[peerId]?.where((o) => o.key != n.key),
         ].take(100).toList();
       case 'pb.x.notif.removed':
+        _failReplies(
+          peerId,
+          'La notificación ya no está disponible.',
+          key: b['key'] as String?,
+        );
         notifs[peerId] = [...?notifs[peerId]?.where((o) => o.key != b['key'])];
       case 'pb.x.wallpaper':
         final jpeg = b['jpeg'] as String? ?? '';
@@ -502,6 +562,67 @@ class Hub extends ChangeNotifier {
     'value': ?value,
   });
 
+  Future<void> replyNotif(String peerId, String key, String text) async {
+    if (!peers.any((p) => p.id == peerId && _online(p))) {
+      throw StateError('El teléfono está sin conexión.');
+    }
+    if (!(notifs[peerId]?.any((n) => n.key == key && n.replyable) ?? false)) {
+      throw StateError('La notificación ya no permite respuestas.');
+    }
+    if (text.trim().isEmpty || text.length > 4000) {
+      throw StateError('Escribe una respuesta de hasta 4000 caracteres.');
+    }
+    final request = '${DateTime.now().microsecondsSinceEpoch}:${_replyId++}';
+    final done = Completer<void>();
+    _replies[request] = (peerId, key, done);
+    // Attach the timeout before sending so an immediate disconnect cannot leave an unhandled future.
+    final waiting = done.future.timeout(const Duration(seconds: 12));
+    try {
+      unawaited(
+        sendMessage(peerId, 'pb.x.notif.reply', {
+          'key': key,
+          'text': text,
+          'request': request,
+        }),
+      );
+      await waiting;
+    } finally {
+      _replies.remove(request);
+    }
+  }
+
+  void onNotifReplyResult(String peerId, Map<String, dynamic> b) {
+    final pending = _replies[b['request']];
+    if (pending == null ||
+        pending.$1 != peerId ||
+        pending.$2 != b['key'] ||
+        pending.$3.isCompleted) {
+      return;
+    }
+    if (b['ok'] == true) {
+      pending.$3.complete();
+    } else {
+      pending.$3.completeError(
+        StateError(switch (b['error']) {
+          'expired' => 'La notificación caducó o fue descartada.',
+          'no_access' => 'Falta acceso a las notificaciones en el teléfono.',
+          'invalid_text' => 'La respuesta no es válida.',
+          _ => 'La app del teléfono no aceptó la respuesta.',
+        }),
+      );
+    }
+  }
+
+  void _failReplies(String peerId, String reason, {String? key}) {
+    for (final pending in _replies.values) {
+      if (pending.$1 == peerId &&
+          (key == null || pending.$2 == key) &&
+          !pending.$3.isCompleted) {
+        pending.$3.completeError(StateError(reason));
+      }
+    }
+  }
+
   Future<void> dismissNotif(String peerId, String key) async {
     notifs[peerId] = [...?notifs[peerId]?.where((n) => n.key != key)];
     notifyListeners();
@@ -545,7 +666,9 @@ class Hub extends ChangeNotifier {
       await Native.openFile(h.path, id: h.id);
     } catch (e) {
       messages.add(
-        'No se pudo abrir ${h.name}. Comprueba que el archivo sigue disponible y tienes una app compatible.',
+        e is PlatformException
+            ? (e.message ?? 'No se pudo abrir el archivo.')
+            : 'No se pudo abrir ${h.name}. Comprueba que sigue disponible.',
       );
     }
   }

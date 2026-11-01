@@ -22,7 +22,7 @@ pub(crate) fn push(e: &core::Event) {
     let keep = match e {
         core::Event::Message { kind, .. } => {
             kind.starts_with("pb.x.fs.")
-                || matches!(kind.as_str(), "pb.x.info.request" | "pb.x.clip" | "pb.x.media.cmd" | "pb.x.notif.dismiss")
+                || matches!(kind.as_str(), "pb.x.info.request" | "pb.x.clip" | "pb.x.media.cmd" | "pb.x.notif.dismiss" | "pb.x.notif.reply" | "pb.x.media.request")
         }
         // PeerChanged/Gone: who is connected. TransferFinished: the service closes the file it opened for a send.
         core::Event::PeerChanged { .. } | core::Event::PeerGone { .. } | core::Event::TransferFinished { .. } => true,

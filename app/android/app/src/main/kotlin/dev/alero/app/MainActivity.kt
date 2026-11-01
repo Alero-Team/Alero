@@ -2,6 +2,9 @@ package dev.alero.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.widget.Toast
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
@@ -30,6 +33,8 @@ class MainActivity : FlutterActivity() {
     private var wallpaperResult: MethodChannel.Result? = null
     private var treeResult: MethodChannel.Result? = null
     private var mediaResult: MethodChannel.Result? = null
+    private var pendingInstall: Intent? = null
+    private var leftForInstall = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,8 +42,33 @@ class MainActivity : FlutterActivity() {
         Notifier.init(this)
         Features.start(this)
         if (Prefs.background(this)) PbService.update(this, emptyList()) // no service unless asked or a computer is connected
-        if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         shared = intent
+        if (Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener { it.remove() }
+    }
+
+    override fun onPause() {
+        if (pendingInstall != null) leftForInstall = true
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!leftForInstall) return
+        leftForInstall = false
+        val open = pendingInstall ?: return
+        pendingInstall = null
+        if (!packageManager.canRequestPackageInstalls()) {
+            Toast.makeText(this, "No se concedió permiso para instalar apps desde Alero.", Toast.LENGTH_LONG).show()
+            return
+        }
+        try { startActivity(open) }
+        catch (_: ActivityNotFoundException) { Toast.makeText(this, "No hay un instalador de paquetes disponible.", Toast.LENGTH_LONG).show() }
+        catch (_: Exception) { Toast.makeText(this, "El archivo ya no está disponible para el instalador.", Toast.LENGTH_LONG).show() }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        Files.trimMemory()
     }
 
     /** Answers Dart with `blocked`: something was denied and Android will not ask again (only system settings can grant it). */
@@ -62,6 +92,21 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pb/android")
         channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
+                "firstLaunch" -> {
+                    val prefs = getSharedPreferences("startup", MODE_PRIVATE)
+                    val first = !prefs.getBoolean("introSeen", false)
+                    prefs.edit().putBoolean("introSeen", true).apply()
+                    result.success(first)
+                }
+                "installPermission" -> result.success(packageManager.canRequestPackageInstalls())
+                "requestInstallPermission" -> {
+                    startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                    result.success(null)
+                }
+                "requestNotifications" -> {
+                    if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+                    result.success(null)
+                }
                 "lockEnabled" -> result.success(security.enabled())
                 "authenticate" -> security.authenticate(result)
                 "setLock" -> security.authenticate(result, call.arguments as Boolean)
@@ -86,11 +131,25 @@ class MainActivity : FlutterActivity() {
                         try {
                             val intent = fileIntent(path, id)
                             runOnUiThread {
-                                try { startActivity(intent); result.success(null) }
-                                catch (_: Exception) { result.error("open_file", "No hay una app compatible para abrir el archivo.", null) }
+                                try {
+                                    if (intent.type == FileOpening.APK && !packageManager.canRequestPackageInstalls()) {
+                                        pendingInstall = intent
+                                        Toast.makeText(this, "Permite instalar apps desde Alero. Al volver se abrirá el instalador.", Toast.LENGTH_LONG).show()
+                                        startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                                    } else startActivity(intent)
+                                    result.success(null)
+                                } catch (_: ActivityNotFoundException) {
+                                    pendingInstall = null
+                                    result.error("no_handler", if (intent.type == FileOpening.APK) "No hay un instalador de paquetes disponible." else "No hay una app compatible para este tipo de archivo.", null)
+                                } catch (_: SecurityException) {
+                                    pendingInstall = null
+                                    result.error("open_permission", "Android no permite abrir este archivo. Revisa los permisos de Alero.", null)
+                                } catch (_: Exception) {
+                                    result.error("file_unavailable", "El archivo ya no está disponible.", null)
+                                }
                             }
                         } catch (_: Exception) {
-                            runOnUiThread { result.error("open_file", "No se pudo abrir el archivo. Comprueba que sigue disponible.", null) }
+                            runOnUiThread { result.error("file_unavailable", "El archivo no está disponible o no se puede leer.", null) }
                         }
                     }.start()
                 }
@@ -305,7 +364,9 @@ class MainActivity : FlutterActivity() {
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return path
-            contentResolver.openOutputStream(uri)!!.use { out -> src.inputStream().use { it.copyTo(out) } }
+            contentResolver.openOutputStream(uri)!!.use { out -> src.inputStream().use {
+                require(it.copyTo(out) == src.length()) { "incomplete file" }
+            } }
             cv.clear()
             cv.put(MediaStore.Downloads.IS_PENDING, 0)
             contentResolver.update(uri, cv, null, null)
@@ -331,23 +392,34 @@ class MainActivity : FlutterActivity() {
         }
         if (uri == null) {
             val file = File(path)
-            require(file.isFile) { "missing file" }
-            uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+            require(file.isFile && file.canRead()) { "missing file" }
+            uri = try { androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file) }
+            catch (_: IllegalArgumentException) { Uri.fromFile(file) }
         }
         if (uri?.scheme == "file") {
             val source = File(uri!!.path!!)
             val folder = File(cacheDir, "opened-files").apply { mkdirs() }
             val cached = File(folder, source.path.hashCode().toUInt().toString(16) + "-" + source.name)
             if (!cached.exists() || cached.length() != source.length() || cached.lastModified() != source.lastModified()) {
-                source.copyTo(cached, overwrite = true)
-                cached.setLastModified(source.lastModified())
+                val temporary = File.createTempFile("open-", ".part", folder)
+                try {
+                    source.copyTo(temporary, overwrite = true)
+                    require(temporary.length() == source.length()) { "incomplete file" }
+                    require(temporary.renameTo(cached)) { "cache publish failed" }
+                    cached.setLastModified(source.lastModified())
+                } finally { temporary.delete() }
             }
             uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", cached)
         }
-        val mime = contentResolver.getType(uri!!) ?: MimeTypeMap.getSingleton()
-            .getMimeTypeFromExtension(File(path).extension.lowercase()) ?: "application/octet-stream"
+        contentResolver.openAssetFileDescriptor(uri!!, "r")?.use {
+            require(it.length != 0L) { "empty file" }
+        } ?: error("unreadable file")
+        val name = displayName(uri!!)
+        val mime = FileOpening.mime(if (File(path).extension.equals("apk", true)) path else name,
+            contentResolver.getType(uri!!), MimeTypeMap.getSingleton().getMimeTypeFromExtension(File(name).extension.lowercase()))
         return Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            .apply { clipData = ClipData.newRawUri("archivo", uri) }
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     companion object {

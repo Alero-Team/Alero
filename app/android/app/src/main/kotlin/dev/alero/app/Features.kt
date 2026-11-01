@@ -34,6 +34,10 @@ object Features {
     private lateinit var ctx: Context
     private val main = Handler(Looper.getMainLooper())
     private var lastBattery = -1 to false
+    private var lastMw = 0
+    private var powerAt = 0L
+    private val marketName by lazy { prop("ro.product.marketname").ifEmpty { prop("ro.product.vendor.marketname") } }
+    private val replyResults = ReplyTargets<JSONObject>(100, 60_000)
     private val online = LinkedHashMap<String, String>() // paired computers connected now: id -> name
 
     fun onlineNames(): List<String> = synchronized(online) { online.values.toList() }
@@ -56,8 +60,11 @@ object Features {
     }
 
     private fun loop() {
+        marketName // spawns getprop once, here and not on the main thread
         while (true) {
-            val line = try { Bridge.next(5000) } catch (_: Throwable) { null } ?: continue
+            val line = try { Bridge.next(5000) } catch (_: Throwable) { null }
+            try { powerTick() } catch (_: Exception) { /* a missing reading must not stop the loop */ }
+            if (line == null) continue
             try {
                 handle(JSONObject(line))
             } catch (_: Exception) {
@@ -91,6 +98,15 @@ object Features {
                     "pb.x.media.cmd" -> main.post { NotifListener.command(body) }
                     "pb.x.media.request" -> NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }
                     "pb.x.notif.dismiss" -> NotifListener.dismiss(body.optString("key"))
+                    "pb.x.notif.reply" -> main.post {
+                        val request = body.optString("request").take(200)
+                        val key = "$peer|$request"
+                        val now = android.os.SystemClock.elapsedRealtime()
+                        val result = (if (request.isEmpty()) null else replyResults.get(key, now)) ?: NotifListener.reply(body).also {
+                            if (request.isNotEmpty()) replyResults.put(key, it, now)
+                        }
+                        Bridge.sendTo(peer, "pb.x.notif.reply.result", result)
+                    }
                 }
             }
         }
@@ -111,6 +127,31 @@ object Features {
         val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
         return (if (level < 0) -1 else level * 100 / scale) to plugged
     }
+
+    /** Milliwatts going into the battery now (see [ChargePower]); 0 when not charging. */
+    private fun power(): Int {
+        val i = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return 0
+        val charging = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING
+        val raw = ctx.getSystemService(BatteryManager::class.java).getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        return ChargePower.milliwatts(raw, i.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0), charging)
+    }
+
+    /** Charging power moves without the level changing, so it has its own small message: every 5 s, real changes only. */
+    private fun powerTick() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - powerAt < 5000 || onlineNames().isEmpty()) return
+        powerAt = now
+        val mw = power()
+        if (Math.abs(mw - lastMw) >= 300 || (mw == 0) != (lastMw == 0)) {
+            lastMw = mw
+            Bridge.broadcast("pb.x.power", JSONObject().put("mw", mw))
+        }
+    }
+
+    /** A system property any app may read (`getprop`); empty if the device does not define it. */
+    private fun prop(name: String): String = try {
+        Runtime.getRuntime().exec(arrayOf("getprop", name)).inputStream.bufferedReader().use { it.readText().trim() }
+    } catch (_: Exception) { "" }
 
     private fun network(): String {
         val cm = ctx.getSystemService(ConnectivityManager::class.java)
@@ -159,9 +200,13 @@ object Features {
             .put("kind", "phone")
             .put("manufacturer", Build.MANUFACTURER ?: "")
             .put("model", Build.MODEL ?: "")
+            .put("brand", Build.BRAND ?: "")
+            .put("device", Build.DEVICE ?: "")
+            .put("product", Build.PRODUCT ?: "")
+            .put("marketName", marketName)
             .put("os", "Android")
             .put("osVersion", Build.VERSION.RELEASE ?: "")
-            .put("battery", JSONObject().put("level", level).put("charging", charging))
+            .put("battery", JSONObject().put("level", level).put("charging", charging).put("mw", power()))
             .put("storage", JSONObject().put("free", fs.availableBytes).put("total", fs.totalBytes))
             .put("network", network())
             .put("screen", screen())

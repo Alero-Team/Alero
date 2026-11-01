@@ -5,6 +5,7 @@ import 'package:animations/animations.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
@@ -44,7 +45,13 @@ final _dests = [
 /// App frame: side navigation on wide windows, floating glass bar on phones. Owns the questions the engine
 /// asks the user (pairing code, incoming file), the share sheet and the toast messages. Reads Hub, never decides.
 class Shell extends StatefulWidget {
-  const Shell(this.hub, {super.key, this.onResume});
+  const Shell(
+    this.hub, {
+    super.key,
+    this.onResume,
+    this.initialSection = Section.home,
+  });
+  final Section initialSection;
   final Hub hub;
   final VoidCallback? onResume;
 
@@ -52,14 +59,15 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> with WidgetsBindingObserver {
+class _ShellState extends State<Shell>
+    with WidgetsBindingObserver, WindowListener {
   Hub get hub => widget.hub;
   // ALERO_SECTION=explorer (etc.) opens that screen first: handy for screenshots and manual checks.
-  Section _section =
+  late Section _section =
       Section.values
           .where((s) => s.name == Platform.environment['ALERO_SECTION'])
           .firstOrNull ??
-      Section.home;
+      widget.initialSection;
   late final StreamSubscription<String> _msgs;
   bool _shareOpen = false, _shotOpen = false;
 
@@ -67,6 +75,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (Platform.isWindows) windowManager.addListener(this);
     _msgs = hub.messages.stream.listen((m) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -78,6 +87,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (Platform.isWindows) windowManager.removeListener(this);
     _msgs.cancel();
     hub.removeListener(_questions);
     super.dispose();
@@ -86,11 +96,24 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   /// Back from system settings or another app: permissions, shares and the system color may have changed.
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
+    hub.remote.mediaForeground(s == AppLifecycleState.resumed);
     if (s == AppLifecycleState.resumed) {
       hub.checkPermissions();
       hub.takeShare();
       widget.onResume?.call();
     }
+  }
+
+  @override
+  void onWindowMinimize() {
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    hub.remote.mediaForeground(false);
+  }
+
+  @override
+  void onWindowRestore() {
+    hub.remote.mediaForeground(true);
   }
 
   void _go(Section s) => setState(() => _section = s);

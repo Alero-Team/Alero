@@ -67,6 +67,8 @@ class HomeScreen extends StatelessWidget {
           gap,
           ControlCard(hub, main),
           gap,
+          MediaPanel(hub, main.id, computer: true),
+          gap,
           _Recent(hub, go: go),
         ],
       );
@@ -168,17 +170,18 @@ class _Hero extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final online = p.state == pb.PeerState.connected;
     final phone = info?.phone ?? !Platform.isAndroid;
+    final look = hub.look[p.id];
     final facts = [
-      info?.model ?? '',
+      look?.name ?? info?.model ?? '',
       info?.osLabel ?? '',
       info?.network ?? '',
       if (online) hub.routeOf(p),
     ].where((x) => x.isNotEmpty).join(' · ');
     final picture = phone
-        ? PhoneMockup(
+        ? PhoneArt(
             info: info,
             wallpaper: hub.wallpaper[p.id],
-            width: 72,
+            look: look,
             online: online,
           )
         : LaptopMockup(info: info, wallpaper: hub.wallpaper[p.id], width: 104);
@@ -191,7 +194,18 @@ class _Hero extends StatelessWidget {
           children: [
             Row(
               children: [
-                picture,
+                Semantics(
+                  button: true,
+                  label: 'Ver ${p.name} en Dispositivos',
+                  child: InkWell(
+                    onTap: () => go(Section.devices),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(Gap.s),
+                      child: picture,
+                    ),
+                  ),
+                ),
                 const SizedBox(width: Gap.xl),
                 Expanded(
                   child: Column(
@@ -239,6 +253,15 @@ class _Hero extends StatelessWidget {
                             ),
                         ],
                       ),
+                      if (look?.file != null && look!.credit.isNotEmpty) ...[
+                        const SizedBox(height: Gap.xs),
+                        Text(
+                          'Imagen: ${look.credit}',
+                          style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                       if (!online) ...[
                         const SizedBox(height: Gap.s),
                         Text(
@@ -307,7 +330,7 @@ class BatteryLine extends StatelessWidget {
         BatteryGlyph(info.battery, charging: info.charging),
         const SizedBox(width: Gap.xs + 2),
         Text(
-          '${info.battery} %${info.charging ? ' · cargando' : ''}',
+          '${info.battery} %${info.charging ? ' · cargando' : ''}${info.chargeWatts == null ? '' : ' a ${info.chargeWattsLabel}'}',
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
         ),
@@ -395,6 +418,13 @@ class _StatusPanel extends StatelessWidget {
                 charging: info.charging,
                 width: 20,
               ),
+            ),
+          if (info.chargeWatts != null)
+            row(
+              Symbols.bolt_rounded,
+              'Potencia de carga (medida)',
+              info.chargeWattsLabel,
+              null,
             ),
           if (used != null)
             row(

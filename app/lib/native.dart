@@ -36,6 +36,21 @@ class Native {
     return ok;
   }
 
+  static Future<bool> firstLaunch() async =>
+      !_android || (await _ch.invokeMethod<bool>('firstLaunch') ?? false);
+  static Future<void> requestNotifications() async =>
+      _ch.invokeMethod('requestNotifications');
+  static Future<bool> installPermission() async =>
+      _android && (await _ch.invokeMethod<bool>('installPermission') ?? false);
+  static Future<void> requestInstallPermission() async =>
+      _ch.invokeMethod('requestInstallPermission');
+  static Future<bool> startupEnabled() async =>
+      await const MethodChannel('pb/windows')
+          .invokeMethod<bool>('startupEnabled') ??
+      false;
+  static Future<void> setStartup(bool on) async =>
+      const MethodChannel('pb/windows').invokeMethod('setStartup', on);
+
   static Future<bool> allFiles() async =>
       _android && (await _ch.invokeMethod<bool>('allFiles') ?? false);
   static Future<void> requestAllFiles() async =>

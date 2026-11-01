@@ -47,6 +47,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   @override
   void dispose() {
     hub.removeListener(_ensure);
+    fs.close();
     super.dispose();
   }
 
@@ -535,7 +536,7 @@ class _GridTile extends StatelessWidget {
                 style: t.bodySmall,
               ),
               Text(
-                e.dir ? '${e.size} elementos' : size(e.size),
+                e.dir ? e.itemCount : size(e.size),
                 maxLines: 1,
                 textAlign: TextAlign.center,
                 style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
@@ -611,7 +612,7 @@ class _Row extends StatelessWidget {
               SizedBox(
                 width: 90,
                 child: Text(
-                  e.dir ? '${e.size} elem.' : size(e.size),
+                  e.dir ? e.itemCount : size(e.size),
                   textAlign: TextAlign.end,
                   style: t.bodySmall?.copyWith(
                     color: s.onSurfaceVariant,

@@ -1,0 +1,256 @@
+{
+  "units": "MiB",
+  "windows": "900x680; procesos reci\u00e9n iniciados; Android 0.1.3 en ambos lados de la comparaci\u00f3n Windows",
+  "scenarios": {
+    "idle": {
+      "before": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 173.3,
+            "privateMiB": 171.3
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.1,
+            "privateMiB": 3.7
+          }
+        },
+        "android": {
+          "pssMiB": 110.3,
+          "rssMiB": 188.2,
+          "swapPssMiB": 33.4
+        }
+      },
+      "after": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 183.0,
+            "privateMiB": 187.6
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.1,
+            "privateMiB": 3.6
+          }
+        },
+        "android": {
+          "pssMiB": 108.4,
+          "rssMiB": 151.8,
+          "swapPssMiB": 61.1
+        }
+      }
+    },
+    "explorer": {
+      "before": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 183.0,
+            "privateMiB": 181.2
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.1,
+            "privateMiB": 3.6
+          }
+        },
+        "android": {
+          "pssMiB": 109.3,
+          "rssMiB": 157.4,
+          "swapPssMiB": 60.9
+        }
+      },
+      "after": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 196.8,
+            "privateMiB": 194.5
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.2,
+            "privateMiB": 3.6
+          }
+        },
+        "android": {
+          "pssMiB": 106.7,
+          "rssMiB": 149.6,
+          "swapPssMiB": 61.5
+        }
+      }
+    },
+    "thousands": {
+      "before": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 187.9,
+            "privateMiB": 185.2
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.4,
+            "privateMiB": 3.8
+          }
+        },
+        "android": {
+          "pssMiB": 105.6,
+          "rssMiB": 156.5,
+          "swapPssMiB": 53.5
+        }
+      },
+      "after": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 247.4,
+            "privateMiB": 243.7
+          },
+          "alero_daemon": {
+            "workingSetMiB": 16.8,
+            "privateMiB": 4.2
+          }
+        },
+        "android": {
+          "pssMiB": 100.2,
+          "rssMiB": 159.1,
+          "swapPssMiB": 52.8
+        }
+      }
+    },
+    "minimized": {
+      "before": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 183.0,
+            "privateMiB": 181.2
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.1,
+            "privateMiB": 3.6
+          }
+        },
+        "android": {
+          "pssMiB": 106.5,
+          "rssMiB": 154.4,
+          "swapPssMiB": 61.0
+        }
+      },
+      "after": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 203.4,
+            "privateMiB": 200.0
+          },
+          "alero_daemon": {
+            "workingSetMiB": 18.2,
+            "privateMiB": 3.6
+          }
+        },
+        "android": {
+          "pssMiB": 105.7,
+          "rssMiB": 147.6,
+          "swapPssMiB": 62.2
+        }
+      }
+    },
+    "transfer": {
+      "before": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 185.1,
+            "privateMiB": 182.7
+          },
+          "alero_daemon": {
+            "workingSetMiB": 19.3,
+            "privateMiB": 4.8
+          }
+        },
+        "android": {
+          "pssMiB": 107.5,
+          "rssMiB": 155.4,
+          "swapPssMiB": 61.0
+        }
+      },
+      "after": {
+        "windows": {
+          "alero": {
+            "workingSetMiB": 202.6,
+            "privateMiB": 200.1
+          },
+          "alero_daemon": {
+            "workingSetMiB": 19.4,
+            "privateMiB": 5.0
+          }
+        },
+        "android": {
+          "pssMiB": 107.1,
+          "rssMiB": 149.1,
+          "swapPssMiB": 62.0
+        }
+      }
+    }
+  },
+  "original012Android": {
+    "idle": {
+      "windows": {
+        "alero": {
+          "workingSetMiB": 307.5,
+          "privateMiB": 301.0
+        },
+        "alero_daemon": {
+          "workingSetMiB": 16.7,
+          "privateMiB": 3.6
+        }
+      },
+      "android": {
+        "pssMiB": 74.0,
+        "rssMiB": 142.1,
+        "swapPssMiB": 42.7
+      }
+    },
+    "explorer": {
+      "windows": {
+        "alero": {
+          "workingSetMiB": 310.7,
+          "privateMiB": 305.4
+        },
+        "alero_daemon": {
+          "workingSetMiB": 16.8,
+          "privateMiB": 3.5
+        }
+      },
+      "android": {
+        "pssMiB": 74.8,
+        "rssMiB": 141.2,
+        "swapPssMiB": 42.0
+      }
+    },
+    "minimized": {
+      "windows": {
+        "alero": {
+          "workingSetMiB": 314.3,
+          "privateMiB": 309.0
+        },
+        "alero_daemon": {
+          "workingSetMiB": 16.8,
+          "privateMiB": 3.9
+        }
+      },
+      "android": {
+        "pssMiB": 77.3,
+        "rssMiB": 145.4,
+        "swapPssMiB": 40.4
+      }
+    },
+    "transfer": {
+      "windows": {
+        "alero": {
+          "workingSetMiB": 325.8,
+          "privateMiB": 319.9
+        },
+        "alero_daemon": {
+          "workingSetMiB": 18.2,
+          "privateMiB": 5.1
+        }
+      },
+      "android": {
+        "pssMiB": 77.1,
+        "rssMiB": 151.2,
+        "swapPssMiB": 38.7
+      }
+    }
+  }
+}

@@ -31,6 +31,36 @@ bool FlutterWindow::OnCreate() {
   file_channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
       flutter_controller_->engine()->messenger(), "pb/windows", &flutter::StandardMethodCodec::GetInstance());
   file_channel_->SetMethodCallHandler([](const auto& call, auto result) {
+    if (call.method_name() == "startupEnabled" || call.method_name() == "setStartup") {
+      constexpr auto key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+      if (call.method_name() == "startupEnabled") {
+        DWORD size = 0;
+        result->Success(flutter::EncodableValue(RegGetValueW(HKEY_CURRENT_USER, key, L"Alero", RRF_RT_REG_SZ, nullptr, nullptr, &size) == ERROR_SUCCESS));
+        return;
+      }
+      const auto* enabled = std::get_if<bool>(call.arguments());
+      if (!enabled) { result->Error("argument", "Valor no válido"); return; }
+      HKEY run = nullptr;
+      auto status = RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &run, nullptr);
+      if (status == ERROR_SUCCESS) {
+        if (*enabled) {
+          wchar_t path[32768];
+          const auto length = GetModuleFileNameW(nullptr, path, 32768);
+          if (!length || length >= 32768) status = ERROR_INSUFFICIENT_BUFFER;
+          else {
+            const auto command = L"\"" + std::wstring(path, length) + L"\"";
+            status = RegSetValueExW(run, L"Alero", 0, REG_SZ, reinterpret_cast<const BYTE*>(command.c_str()), static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t)));
+          }
+        } else {
+          status = RegDeleteValueW(run, L"Alero");
+          if (status == ERROR_FILE_NOT_FOUND) status = ERROR_SUCCESS;
+        }
+        RegCloseKey(run);
+      }
+      if (status == ERROR_SUCCESS) result->Success();
+      else result->Error("startup", "Windows no permitió cambiar el inicio de Alero");
+      return;
+    }
     if (call.method_name() != "openFile") { result->NotImplemented(); return; }
     const auto* path = std::get_if<std::string>(call.arguments());
     if (!path || path->empty()) { result->Error("path", "Archivo no disponible"); return; }

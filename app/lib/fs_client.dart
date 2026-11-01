@@ -36,6 +36,11 @@ class FsEntry {
   /// Bytes for a file; number of items for a folder.
   final int size;
   final DateTime mtime;
+  String get itemCount => size < 0
+      ? '—'
+      : size >= 1000
+      ? '999+ elementos'
+      : '$size elementos';
 }
 
 /// The computer's side of browsing a phone's files (ADR-0011). It only asks (`pb.x.fs.*`): the phone decides what
@@ -63,15 +68,42 @@ class FsClient extends ChangeNotifier {
 
   final _thumbs = <String, Uint8List>{};
   final _wanted = <String>{};
-  int _inflightThumbs = 0;
+  final _thumbTimers = <String, Timer>{};
   Timer? _timeout, _debounce;
 
   Uint8List? thumb(String key) => _thumbs[key];
+
+  void _clearPreviews() {
+    for (final timer in _thumbTimers.values) {
+      timer.cancel();
+    }
+    _thumbTimers.clear();
+    _thumbs.clear();
+    _wanted.clear();
+  }
+
+  /// Leaving the explorer releases its full listing and ignores late pages.
+  void close() {
+    _timeout?.cancel();
+    _debounce?.cancel();
+    _clearPreviews();
+    peerId = null;
+    root = null;
+    path = '';
+    roots = [];
+    entries = [];
+    crumbs.clear();
+    selected.clear();
+    total = 0;
+    loading = false;
+    error = null;
+  }
 
   // --- session ----------------------------------------------------------------------------------------
 
   void open(String peer) {
     if (peerId == peer && roots.isNotEmpty && error == null) return;
+    _clearPreviews();
     peerId = peer;
     error = null;
     roots = [];
@@ -115,6 +147,7 @@ class FsClient extends ChangeNotifier {
   // --- navigation -------------------------------------------------------------------------------------
 
   void selectRoot(String id) {
+    _clearPreviews();
     root = id;
     path = '';
     crumbs.clear();
@@ -126,6 +159,7 @@ class FsClient extends ChangeNotifier {
 
   void enter(FsEntry e) {
     if (!e.dir) return;
+    _clearPreviews();
     crumbs.add((e.name, e.path));
     path = e.path;
     entries = [];
@@ -140,6 +174,7 @@ class FsClient extends ChangeNotifier {
 
   /// `depth` 0 is the root, 1 the first folder…
   void goTo(int depth) {
+    _clearPreviews();
     while (crumbs.length > depth) {
       crumbs.removeLast();
     }
@@ -191,23 +226,27 @@ class FsClient extends ChangeNotifier {
   /// Asks for a picture's thumbnail once; at most four requests in flight so a big folder does not flood the phone.
   void wantThumb(FsEntry e) {
     final key = '$root|${e.id}';
-    if (e.dir || _thumbs.containsKey(key) || !_wanted.add(key)) return;
+    if (e.dir ||
+        _thumbs.containsKey(key) ||
+        _thumbTimers.containsKey(key) ||
+        !_wanted.add(key)) {
+      return;
+    }
     _pump();
   }
 
   void _pump() {
-    while (_inflightThumbs < 4 && _wanted.isNotEmpty && peerId != null) {
+    while (_thumbTimers.length < 4 && _wanted.isNotEmpty && peerId != null) {
       final key = _wanted.first;
       _wanted.remove(key);
       final i = key.indexOf('|');
-      _inflightThumbs++;
       hub.sendMessage(peerId!, 'pb.x.fs.thumb', {
         'root': key.substring(0, i),
         'id': key.substring(i + 1),
       });
       // A phone that never answers must not hold a slot forever.
-      Timer(const Duration(seconds: 6), () {
-        if (_inflightThumbs > 0) _inflightThumbs--;
+      _thumbTimers[key] = Timer(const Duration(seconds: 6), () {
+        _thumbTimers.remove(key);
         _pump();
       });
     }
@@ -276,7 +315,7 @@ class FsClient extends ChangeNotifier {
         } catch (_) {
           // damaged: the placeholder stays
         }
-        if (_inflightThumbs > 0) _inflightThumbs--;
+        _thumbTimers.remove(key)?.cancel();
         _pump();
       case 'pb.x.fs.denied':
         _timeout?.cancel();
@@ -296,8 +335,7 @@ class FsClient extends ChangeNotifier {
 
   @override
   void dispose() {
-    _timeout?.cancel();
-    _debounce?.cancel();
+    close();
     super.dispose();
   }
 }

@@ -64,7 +64,7 @@ object Files {
             val relative = file.relativeTo(base).invariantSeparatorsPath
             try {
                 val safe = storageFile(relative)
-                entry(safe.name, safe.isDirectory, if (safe.isDirectory) 0 else safe.length(),
+                entry(safe.name, safe.isDirectory, if (safe.isDirectory) StoragePaths.count(safe) else safe.length(),
                     safe.lastModified() / 1000,
                     android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(safe.extension.lowercase()) ?: "",
                     relative, if (safe.isDirectory) relative else "")
@@ -310,6 +310,17 @@ object Files {
         return out
     }
 
+    private fun treeCount(tree: Uri, doc: String): Long = try {
+        ctx.contentResolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(tree, doc),
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID), null, null, null)?.use { c ->
+            var count = 0L
+            while (count < 1000 && c.moveToNext()) count++
+            count
+        } ?: -1L
+    } catch (_: Exception) { -1L }
+
+    fun trimMemory() { synchronized(cache) { cache.clear() } }
+
     private fun listTree(root: String, path: String): List<JSONObject> {
         val tree = trees().getOrNull(root.substring(5).toIntOrNull() ?: -1) ?: return emptyList()
         val doc = path.ifEmpty { DocumentsContract.getTreeDocumentId(tree) }
@@ -325,7 +336,7 @@ object Files {
             while (c.moveToNext()) {
                 val mime = c.getString(4) ?: ""
                 val dir = mime == DocumentsContract.Document.MIME_TYPE_DIR
-                out += entry(c.getString(1) ?: "?", dir, if (c.isNull(2)) 0 else c.getLong(2), c.getLong(3) / 1000, mime, c.getString(0), if (dir) c.getString(0) else "")
+                out += entry(c.getString(1) ?: "?", dir, if (dir) treeCount(tree, c.getString(0)) else if (c.isNull(2)) 0 else c.getLong(2), c.getLong(3) / 1000, mime, c.getString(0), if (dir) c.getString(0) else "")
             }
         }
         return out.sortedWith(compareBy({ !it.getBoolean("dir") }, { it.getString("name").lowercase() }))
@@ -343,9 +354,10 @@ object Files {
             root == "images" || root == "video" -> listMediaFlat(root)
             root == "audio" -> listMedia(root, path)
             else -> emptyList()
-        }.also { synchronized(cache) { cache[key] = it } }
+        }.also { synchronized(cache) { if (it.size > PAGE) cache[key] = it } }
         val a = JSONArray()
-        all.drop(offset).take(PAGE).forEach { a.put(it) }
+        for (i in offset until minOf(all.size, offset + PAGE)) a.put(all[i])
+        if (offset.toLong() + PAGE >= all.size) synchronized(cache) { cache.remove(key) }
         Bridge.sendTo(
             peer, "pb.x.fs.entries",
             JSONObject().put("root", root).put("path", path).put("offset", offset).put("total", all.size).put("entries", a),
@@ -359,7 +371,7 @@ object Files {
         val uri = uriFor(root, id) ?: return
         val bmp = try { ctx.contentResolver.loadThumbnail(uri, Size(192, 192), null) } catch (_: Exception) { return }
         val out = ByteArrayOutputStream()
-        bmp.compress(Bitmap.CompressFormat.JPEG, 72, out)
+        try { bmp.compress(Bitmap.CompressFormat.JPEG, 72, out) } finally { bmp.recycle() }
         Bridge.sendTo(peer, "pb.x.fs.thumb.data", JSONObject().put("root", root).put("id", id).put("jpeg", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)))
     }
 

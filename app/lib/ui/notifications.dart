@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -45,7 +48,8 @@ class NotificationsPanel extends StatelessWidget {
     } else {
       body = Column(
         children: [
-          for (final n in list.take(_shown)) _NotifRow(hub, peerId, n),
+          for (final n in list.take(_shown))
+            _NotifRow(hub, peerId, n, key: ValueKey((peerId, n.key))),
           if (list.length > _shown)
             Align(
               alignment: Alignment.centerLeft,
@@ -97,7 +101,10 @@ class _AllDialog extends StatelessWidget {
               ? const Text('No hay notificaciones.')
               : ListView(
                   shrinkWrap: true,
-                  children: [for (final n in list) _NotifRow(hub, peerId, n)],
+                  children: [
+                    for (final n in list)
+                      _NotifRow(hub, peerId, n, key: ValueKey((peerId, n.key))),
+                  ],
                 ),
         ),
         actions: [
@@ -111,11 +118,62 @@ class _AllDialog extends StatelessWidget {
   );
 }
 
-class _NotifRow extends StatelessWidget {
-  const _NotifRow(this.hub, this.peerId, this.n);
+class _NotifRow extends StatefulWidget {
+  const _NotifRow(this.hub, this.peerId, this.n, {super.key});
   final Hub hub;
   final String peerId;
   final PhoneNotif n;
+  @override
+  State<_NotifRow> createState() => _NotifRowState();
+}
+
+class _NotifRowState extends State<_NotifRow> {
+  final _text = TextEditingController();
+  bool _sending = false;
+  String? _status;
+  Hub get hub => widget.hub;
+  String get peerId => widget.peerId;
+  PhoneNotif get n => widget.n;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reply() async {
+    if (_sending || _text.text.trim().isEmpty) return;
+    setState(() {
+      _sending = true;
+      _status = 'Enviando…';
+    });
+    try {
+      await hub.replyNotif(peerId, n.key, _text.text);
+      if (mounted) {
+        setState(() {
+          _status = 'Enviado al teléfono';
+          _text.clear();
+        });
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(
+          () => _status =
+              'Sin confirmación. Comprueba el teléfono antes de repetir.',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _status = e is StateError
+              ? e.message.toString()
+              : 'No se pudo enviar la respuesta.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,6 +235,38 @@ class _NotifRow extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                if (Platform.isWindows && n.replyable) ...[
+                  const SizedBox(height: Gap.s),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _text,
+                          enabled: !_sending,
+                          maxLength: 4000,
+                          decoration: const InputDecoration(
+                            labelText: 'Responder',
+                            counterText: '',
+                          ),
+                          onChanged: (_) => setState(() {}),
+                          onSubmitted: (_) => _reply(),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Enviar respuesta',
+                        onPressed: _sending || _text.text.trim().isEmpty
+                            ? null
+                            : _reply,
+                        icon: const Icon(Symbols.send_rounded),
+                      ),
+                    ],
+                  ),
+                  if (_status != null)
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(_status!, style: t.bodySmall),
+                    ),
+                ],
               ],
             ),
           ),

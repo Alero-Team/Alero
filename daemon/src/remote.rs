@@ -210,6 +210,10 @@ impl Remote {
             self.push_info(engine, Some(peer));
             return true;
         }
+        if kind == "pb.x.pcmedia.unwatch" {
+            self.watchers.lock().unwrap().remove(peer);
+            return true;
+        }
         let ours = kind.starts_with("pb.x.remote.")
             || kind.starts_with("pb.x.screen.")
             || kind == "pb.x.shot.request"
@@ -439,7 +443,7 @@ impl Remote {
                 };
                 let state = match sys::media_state() {
                     Some(m) => json!({"active": true, "app": m.app, "title": m.title, "artist": m.artist, "playing": m.playing,
-                        "position": m.position_ms, "duration": m.duration_ms, "at": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)}),
+                        "position": m.position_ms, "duration": m.duration_ms, "actions": m.actions, "speed": m.speed, "at": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)}),
                     None => json!({"active": false}),
                 };
                 // Position moves every second by itself; compare the rest, and refresh the clock every 10 s.

@@ -18,6 +18,8 @@ pub struct Media {
     pub playing: bool,
     pub position_ms: i64,
     pub duration_ms: i64,
+    pub actions: u64,
+    pub speed: f64,
 }
 
 #[cfg(windows)]
@@ -300,7 +302,14 @@ mod win {
         let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok()?.join().ok()?;
         let s = mgr.GetCurrentSession().ok()?;
         let props = s.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
-        let playing = s.GetPlaybackInfo().ok()?.PlaybackStatus().ok()? == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+        let playback = s.GetPlaybackInfo().ok()?;
+        let playing = playback.PlaybackStatus().ok()? == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+        let controls = playback.Controls().ok()?;
+        let actions = (if controls.IsPreviousEnabled().unwrap_or(false) { 16 } else { 0 })
+            | (if controls.IsNextEnabled().unwrap_or(false) { 32 } else { 0 })
+            | (if controls.IsPlayEnabled().unwrap_or(false) { 4 } else { 0 })
+            | (if controls.IsPauseEnabled().unwrap_or(false) { 2 } else { 0 })
+            | (if controls.IsPlayPauseToggleEnabled().unwrap_or(false) { 512 } else { 0 });
         let (position_ms, duration_ms) = s
             .GetTimelineProperties()
             .ok()
@@ -316,6 +325,8 @@ mod win {
             playing,
             position_ms,
             duration_ms,
+            actions,
+            speed: playback.PlaybackRate().ok().and_then(|rate| rate.Value().ok()).unwrap_or(1.0),
         })
     }
 }

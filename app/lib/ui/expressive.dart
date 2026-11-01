@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
+import '../device_image.dart';
 import '../remote.dart';
 import 'theme.dart';
 
@@ -315,6 +316,67 @@ class _MorphButtonState extends State<MorphButton> {
   }
 }
 
+/// The connected phone's picture: its real photo or render when a verified one exists for that exact model, else
+/// the drawn outline below (generic: it claims no model). Swaps with a cross-fade when another phone connects.
+class PhoneArt extends StatelessWidget {
+  const PhoneArt({
+    super.key,
+    this.info,
+    this.wallpaper,
+    this.look,
+    this.online = true,
+    this.height = 176,
+  });
+  final PeerInfo? info;
+  final Uint8List? wallpaper;
+  final DeviceLook? look;
+  final bool online;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final file = look?.file;
+    final outline = PhoneMockup(
+      key: const ValueKey('outline'),
+      info: info,
+      wallpaper: wallpaper,
+      width: 72,
+      online: online,
+    );
+    return AnimatedSwitcher(
+      duration: motion(context, const Duration(milliseconds: 350)),
+      child: file == null
+          ? outline
+          : Semantics(
+              key: ValueKey(file.path),
+              image: true,
+              label: look!.name,
+              child: Opacity(
+                opacity: online ? 1 : .55,
+                // A photo (jpg) has its own background: it reads better as a rounded card than as a cut-out.
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    file.path.endsWith('.png') ? 0 : 16,
+                  ),
+                  child: Image.file(
+                    file,
+                    height: height,
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.medium,
+                    // Decoded at the size it is shown: a 1000 px render does not stay in RAM at full size.
+                    cacheHeight:
+                        (height * MediaQuery.devicePixelRatioOf(context))
+                            .round(),
+                    excludeFromSemantics: true,
+                    errorBuilder: (_, _, _) => outline,
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
 /// Faithful outline of the connected phone, drawn from the geometry it reports (screen ratio, corner radius,
 /// camera cutout) over its real wallpaper: the image the user chose in the phone's settings, else the wallpaper's
 /// own colours (Android gives those to any app). No manufacturer artwork: any model, no image rights issues.
@@ -347,27 +409,41 @@ class _PhoneMockupState extends State<PhoneMockup> {
   @override
   void didUpdateWidget(PhoneMockup o) {
     super.didUpdateWidget(o);
-    if (!identical(o.wallpaper, widget.wallpaper)) _decode();
+    if (!identical(o.wallpaper, widget.wallpaper) || o.width != widget.width) {
+      _decode();
+    }
   }
 
   Future<void> _decode() async {
     final bytes = widget.wallpaper;
+    final width = (widget.width * 3).ceil();
     if (bytes == null || bytes.isEmpty) {
-      if (_img != null) setState(() => _img = null);
+      final previous = _img;
+      if (previous != null) {
+        setState(() => _img = null);
+        previous.dispose();
+      }
       return;
     }
     try {
-      // Decode at the size it is drawn, not the size it was sent.
-      final codec = await instantiateImageCodec(
-        bytes,
-        targetWidth: (widget.width * 3).ceil(),
-      );
-      final f = await codec.getNextFrame();
-      if (mounted && identical(bytes, widget.wallpaper)) {
-        setState(() => _img = f.image);
+      final codec = await instantiateImageCodec(bytes, targetWidth: width);
+      final FrameInfo frame;
+      try {
+        frame = await codec.getNextFrame();
+      } finally {
+        codec.dispose();
       }
+      if (!mounted ||
+          !identical(bytes, widget.wallpaper) ||
+          width != (widget.width * 3).ceil()) {
+        frame.image.dispose();
+        return;
+      }
+      final previous = _img;
+      setState(() => _img = frame.image);
+      previous?.dispose();
     } catch (_) {
-      // A damaged image falls back to the wallpaper colours.
+      // A damaged image keeps the previous preview or the wallpaper colours.
     }
   }
 

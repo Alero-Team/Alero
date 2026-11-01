@@ -1,5 +1,9 @@
 package dev.alero.app
 
+import android.app.PendingIntent
+import android.app.RemoteInput
+import android.content.Intent
+import android.os.Bundle
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
@@ -61,6 +65,7 @@ class NotifListener : NotificationListenerService() {
         main.removeCallbacks(poll)
         controller = null
         me = null
+        replies.clear()
         Bridge.broadcast("pb.x.media.state", JSONObject().put("active", false))
     }
 
@@ -69,6 +74,7 @@ class NotifListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        replies.remove(sbn.key)
         if (worth(sbn)) Bridge.broadcast("pb.x.notif.removed", JSONObject().put("key", sbn.key))
     }
 
@@ -153,7 +159,7 @@ class NotifListener : NotificationListenerService() {
             d.setBounds(0, 0, 64, 64)
             d.draw(android.graphics.Canvas(b))
             val out = ByteArrayOutputStream()
-            b.compress(Bitmap.CompressFormat.PNG, 100, out)
+            try { b.compress(Bitmap.CompressFormat.PNG, 100, out) } finally { b.recycle() }
             Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
         } catch (_: Exception) {
             ""
@@ -166,8 +172,12 @@ class NotifListener : NotificationListenerService() {
         val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
         val text = (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString() ?: ""
         if (title.isEmpty() && text.isEmpty()) return null
+        val action = sbn.notification.actions?.firstOrNull { a -> a.actionIntent != null && a.remoteInputs?.any { it.allowFreeFormInput } == true }
+        if (action == null) replies.remove(sbn.key)
+        else replies.put(sbn.key, ReplyTarget(action.actionIntent, action.remoteInputs), SystemClock.elapsedRealtime())
         return JSONObject()
             .put("key", sbn.key)
+            .put("replyable", action != null)
             .put("app", appName(sbn.packageName))
             .put("pkg", sbn.packageName)
             .put("icon", if (withIcon) icon(sbn.packageName) else "")
@@ -180,6 +190,36 @@ class NotifListener : NotificationListenerService() {
     companion object {
         private var me: NotifListener? = null
         private val icons = HashMap<String, String>()
+        private data class ReplyTarget(val intent: PendingIntent, val inputs: Array<RemoteInput>)
+        private val replies = ReplyTargets<ReplyTarget>()
+
+        fun reply(body: JSONObject): JSONObject {
+            val key = body.optString("key")
+            val text = body.optString("text")
+            val result = JSONObject().put("key", key).put("request", body.optString("request"))
+            fun fail(reason: String) = result.put("ok", false).put("error", reason)
+            if (text.isBlank() || text.length > 4000 || key.length > 2048) return fail("invalid_text")
+            val service = me ?: return fail("no_access")
+            val available = try { service.activeNotifications.orEmpty().any { it.key == key } }
+                catch (_: Exception) { return fail("no_access") }
+            if (!available) {
+                replies.remove(key)
+                return fail("expired")
+            }
+            val target = replies.get(key, SystemClock.elapsedRealtime()) ?: return fail("expired")
+            return try {
+                val results = Bundle()
+                target.inputs.filter { it.allowFreeFormInput }.forEach { results.putCharSequence(it.resultKey, text) }
+                val intent = Intent()
+                RemoteInput.addResultsToIntent(target.inputs, intent, results)
+                if (android.os.Build.VERSION.SDK_INT >= 28) RemoteInput.setResultsSource(intent, RemoteInput.SOURCE_FREE_FORM_INPUT)
+                target.intent.send(service, 0, intent)
+                result.put("ok", true)
+            } catch (_: PendingIntent.CanceledException) {
+                replies.remove(key)
+                fail("expired")
+            } catch (_: Exception) { fail("send_failed") }
+        }
 
         fun enabled(c: Context): Boolean =
             Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners")?.contains(c.packageName) == true

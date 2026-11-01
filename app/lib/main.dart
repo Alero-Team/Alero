@@ -6,32 +6,50 @@ import 'hub.dart';
 import 'native.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/shell.dart';
+import 'ui/brand.dart';
+import 'ui/setup.dart';
 import 'ui/app_lock.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerAleroLicenses();
-  await RustLib.init();
   final color = SystemColor();
-  await color.load(); // before the first frame, so the window opens in the user's colors
-  await Native.initDesktop();
-  await Native.loadLock();
   final hub = Hub();
-  runApp(App(hub, color));
-  await hub
-      .start(); // after the first frame is queued, so the window shows at once
+  final boot = ValueNotifier<String?>('');
+  final animate = await Native.firstLaunch();
+  runApp(App(hub, color, boot: boot, animate: animate));
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    try {
+      await RustLib.init();
+      await color.load();
+      await Native.initDesktop();
+      await Native.loadLock();
+      await hub.start();
+      boot.value = null;
+    } catch (e) {
+      boot.value = 'No se pudo iniciar Alero: $e';
+    }
+  });
 }
 
 class App extends StatelessWidget {
-  const App(this.hub, this.color, {super.key});
+  const App(
+    this.hub,
+    this.color, {
+    super.key,
+    required this.boot,
+    required this.animate,
+  });
+  final ValueNotifier<String?> boot;
+  final bool animate;
   final Hub hub;
   final SystemColor color;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     // Only theme inputs rebuild the app; engine events rebuild the screens below.
-    listenable: Listenable.merge([color, hub.themeMode, hub.amoled]),
+    listenable: Listenable.merge([color, hub.themeMode, hub.amoled, boot]),
     builder: (_, _) {
       final (seed, variant) = color.value;
       return MaterialApp(
@@ -68,12 +86,54 @@ class App extends StatelessWidget {
             data: th.copyWith(snackBarTheme: toast),
             child: MediaQuery.withClampedTextScaling(
               maxScaleFactor: 1.5,
-              child: AppLock(child: child!),
+              child: boot.value == null ? AppLock(child: child!) : child!,
             ),
           );
         },
-        home: Shell(hub, onResume: color.load),
+        home: boot.value != null
+            ? Scaffold(
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: boot.value!.isNotEmpty
+                        ? SelectableText(boot.value!)
+                        : animate
+                        ? const AleroIntro(size: 72)
+                        : const AleroMark(size: 72),
+                  ),
+                ),
+              )
+            : _ReadyHome(hub, color),
       );
     },
+  );
+}
+
+class _ReadyHome extends StatefulWidget {
+  const _ReadyHome(this.hub, this.color);
+  final Hub hub;
+  final SystemColor color;
+  @override
+  State<_ReadyHome> createState() => _ReadyHomeState();
+}
+
+class _ReadyHomeState extends State<_ReadyHome> {
+  Section _initial = Section.home;
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.hub,
+    builder: (_, _) => widget.hub.setupDone
+        ? Shell(
+            widget.hub,
+            onResume: widget.color.load,
+            initialSection: _initial,
+          )
+        : SetupScreen(
+            widget.hub,
+            onDone: (pair) {
+              _initial = pair ? Section.devices : Section.home;
+              widget.hub.finishSetup();
+            },
+          ),
   );
 }

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' show Color;
 
+import 'device_image.dart';
+
 /// Plain views of the app messages a paired device sends (`pb.x.*`, Protocol.md §6). Parsing only: unknown or
 /// missing fields fall back to empty values, because the other side may be an older or newer version.
 
@@ -41,11 +43,37 @@ class PeerInfo {
   bool get phone => j['kind'] == 'phone';
   String get manufacturer => j['manufacturer'] as String? ?? '';
   String get model => j['model'] as String? ?? '';
+
+  /// What identifies the exact model (`ro.product.*`); absent from older phones, then only manufacturer and model.
+  PhoneId get phoneId => PhoneId(
+    manufacturer: manufacturer,
+    brand: j['brand'] as String? ?? '',
+    model: model,
+    device: j['device'] as String? ?? '',
+    product: j['product'] as String? ?? '',
+    marketName: j['marketName'] as String? ?? '',
+  );
   String get os => j['os'] as String? ?? '';
   String get osVersion => j['osVersion'] as String? ?? '';
   String get osLabel => [os, osVersion].where((s) => s.isNotEmpty).join(' ');
   int get battery => ((j['battery'] as Map?)?['level'] as num?)?.toInt() ?? -1;
   bool get charging => (j['battery'] as Map?)?['charging'] == true;
+
+  /// Power going into the battery now, measured by the phone (voltage × current); null if unplugged or unknown.
+  double? get chargeWatts {
+    final mw = (j['battery'] as Map?)?['mw'];
+    return charging && mw is num && mw > 0 ? mw / 1000 : null;
+  }
+
+  /// Spanish decimal comma, one decimal: "9,0 W".
+  String get chargeWattsLabel =>
+      '${chargeWatts?.toStringAsFixed(1).replaceAll('.', ',')} W';
+
+  /// Same info with a fresh power reading (`pb.x.power`, sent between battery-level changes).
+  PeerInfo withPower(Map<String, dynamic> p) => PeerInfo({
+    ...j,
+    'battery': {...?(j['battery'] as Map?), 'mw': p['mw']},
+  });
   int get storageFree =>
       ((j['storage'] as Map?)?['free'] as num?)?.toInt() ?? 0;
   int get storageTotal =>
@@ -97,10 +125,11 @@ class PhoneNotif {
       time = DateTime.fromMillisecondsSinceEpoch(
         (j['time'] as num?)?.toInt() ?? 0,
       ),
-      clearable = j['clearable'] != false;
+      clearable = j['clearable'] != false,
+      replyable = j['replyable'] == true;
   final String key, app, pkg, title, text;
   final DateTime time;
-  final bool clearable;
+  final bool clearable, replyable;
 }
 
 class MediaState {
@@ -134,7 +163,7 @@ class MediaState {
     if (!playing) return position;
     final elapsed = (DateTime.now().millisecondsSinceEpoch - receivedAt).clamp(
       0,
-      5000,
+      15000,
     );
     final p = position + (elapsed * speed).round();
     return duration > 0 ? p.clamp(0, duration) : p.clamp(0, 1 << 53);

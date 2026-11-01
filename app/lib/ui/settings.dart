@@ -93,6 +93,11 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => _rename(context),
           ),
           SettingTile(title: 'Dirección en la red', subtitle: _ip),
+          SettingTile(
+            title: 'Configuración inicial',
+            subtitle: 'Revisar nombre, permisos y emparejamiento.',
+            onTap: hub.reopenSetup,
+          ),
         ],
       ),
     );
@@ -320,6 +325,13 @@ class SettingsScreen extends StatelessWidget {
                   body: 'Permiso especial: muestra tus notificaciones en el ordenador y deja controlar la música desde él.',
                   ok: hub.notifAccess,
                   onFix: hub.openNotifAccess,
+                ),
+                _Perm(
+                  icon: Symbols.install_mobile_rounded,
+                  title: 'Instalar apps recibidas',
+                  body: 'Permite abrir el instalador al tocar un APK. Cada instalación requiere confirmación de Android.',
+                  ok: null,
+                  onFix: Native.requestInstallPermission,
                 ),
                 _Perm(
                   icon: Symbols.cast_rounded,

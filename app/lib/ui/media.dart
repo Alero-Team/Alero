@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../remote.dart';
+import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -19,7 +20,14 @@ String _clock(int ms) {
 
 /// "Reproduciendo": what the phone is playing, with transport controls. A panel on Home, not a destination.
 class MediaPanel extends StatefulWidget {
-  const MediaPanel(this.hub, this.peerId, {super.key});
+  const MediaPanel(
+    this.hub,
+    this.peerId, {
+    super.key,
+    this.computer = false,
+    this.hideInactive = true,
+  });
+  final bool computer, hideInactive;
   final Hub hub;
   final String peerId;
 
@@ -27,20 +35,90 @@ class MediaPanel extends StatefulWidget {
   State<MediaPanel> createState() => _MediaPanelState();
 }
 
-class _MediaPanelState extends State<MediaPanel> {
+class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
+  bool _foreground = true;
   Timer? _tick;
   double? _seek, _vol;
   @override
   void initState() {
     super.initState();
-    widget.hub.sendMessage(widget.peerId, 'pb.x.media.request', {});
+    WidgetsBinding.instance.addObserver(this);
+    _watch();
+  }
+
+  void _watchRefresh() {
+    if (widget.computer) {
+      widget.hub.sendMessage(widget.peerId, 'pb.x.pcmedia.watch', {});
+    } else {
+      widget.hub.sendMessage(widget.peerId, 'pb.x.media.request', {});
+    }
+  }
+
+  void _watch() {
+    if (widget.computer) {
+      widget.hub.remote.watchMedia(widget.peerId);
+    } else {
+      widget.hub.sendMessage(widget.peerId, 'pb.x.media.request', {});
+    }
+  }
+
+  @override
+  void didUpdateWidget(MediaPanel old) {
+    super.didUpdateWidget(old);
+    if (old.peerId != widget.peerId ||
+        old.hub != widget.hub ||
+        old.computer != widget.computer) {
+      if (old.computer) old.hub.remote.unwatchMedia(old.peerId);
+      _watch();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
+    if (widget.computer) widget.hub.remote.unwatchMedia(widget.peerId);
     super.dispose();
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    setState(() => _foreground = state == AppLifecycleState.resumed);
+  }
+
+  void _command(String action, {int? position, int? value}) {
+    if (widget.computer) {
+      widget.hub.remote.media(widget.peerId, action);
+    } else {
+      widget.hub.mediaCmd(
+        widget.peerId,
+        action,
+        position: position,
+        value: value,
+      );
+    }
+  }
+
+  Widget _pcVolume() => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      IconButton(
+        tooltip: 'Bajar volumen',
+        onPressed: () => _command('volume_down'),
+        icon: const Icon(Symbols.volume_down_rounded),
+      ),
+      IconButton(
+        tooltip: 'Silenciar',
+        onPressed: () => _command('mute'),
+        icon: const Icon(Symbols.volume_off_rounded),
+      ),
+      IconButton(
+        tooltip: 'Subir volumen',
+        onPressed: () => _command('volume_up'),
+        icon: const Icon(Symbols.volume_up_rounded),
+      ),
+    ],
+  );
 
   /// Rebuild once a second while playing, so the extrapolated position moves.
   void _ticking(bool playing) {
@@ -59,8 +137,19 @@ class _MediaPanelState extends State<MediaPanel> {
   Widget build(BuildContext context) {
     final hub = widget.hub, id = widget.peerId;
     final m = hub.media[id];
-    final access = hub.info[id]?.notifAccess ?? false;
-    _ticking(m?.playing ?? false);
+    final access = widget.computer || (hub.info[id]?.notifAccess ?? false);
+    final online = hub.peers.any(
+      (p) => p.id == id && p.state == pb.PeerState.connected,
+    );
+    _ticking(
+      _foreground && (m?.playing ?? false) && (!widget.computer || online),
+    );
+    if (widget.computer &&
+        (!online ||
+            hub.info[id]?.remoteAllowed != true ||
+            (widget.hideInactive && m?.active != true))) {
+      return const SizedBox.shrink();
+    }
     final t = Theme.of(context).textTheme;
     final s = Theme.of(context).colorScheme;
 
@@ -73,11 +162,18 @@ class _MediaPanelState extends State<MediaPanel> {
         body: 'Abre la app en el teléfono y pulsa «Activar» en el aviso de acceso a notificaciones.',
       );
     } else if (m == null || !m.active) {
-      body = const EmptyState(
-        card: false,
-        icon: Symbols.music_note_rounded,
-        title: 'No suena nada',
-        body: 'Reproduce música o un vídeo en el teléfono y aparecerá aquí.',
+      body = Column(
+        children: [
+          EmptyState(
+            card: false,
+            icon: Symbols.music_note_rounded,
+            title: 'No suena nada',
+            body: widget.computer
+                ? 'Reproduce música o un vídeo en el ordenador.'
+                : 'Reproduce música o un vídeo en el teléfono y aparecerá aquí.',
+          ),
+          if (widget.computer) _pcVolume(),
+        ],
       );
     } else {
       final pos = _seek?.round() ?? m.positionNow;
@@ -109,9 +205,7 @@ class _MediaPanelState extends State<MediaPanel> {
               ),
               IconButton(
                 tooltip: 'Anterior',
-                onPressed: m.supports(16)
-                    ? () => hub.mediaCmd(id, 'prev')
-                    : null,
+                onPressed: m.supports(16) ? () => _command('prev') : null,
                 icon: const Icon(Symbols.skip_previous_rounded, fill: 1),
               ),
               const SizedBox(width: Gap.xs),
@@ -123,15 +217,13 @@ class _MediaPanelState extends State<MediaPanel> {
                 on: m.playing,
                 size: 48,
                 onPressed: m.supports(512 | (m.playing ? 2 : 4))
-                    ? () => hub.mediaCmd(id, 'toggle')
+                    ? () => _command('toggle')
                     : null,
               ),
               const SizedBox(width: Gap.xs),
               IconButton(
                 tooltip: 'Siguiente',
-                onPressed: m.supports(32)
-                    ? () => hub.mediaCmd(id, 'next')
-                    : null,
+                onPressed: m.supports(32) ? () => _command('next') : null,
                 icon: const Icon(Symbols.skip_next_rounded, fill: 1),
               ),
             ],
@@ -156,11 +248,11 @@ class _MediaPanelState extends State<MediaPanel> {
                       value: pos.clamp(0, m.duration).toDouble(),
                       max: m.duration.toDouble(),
                       semanticFormatterCallback: (v) => _clock(v.round()),
-                      onChanged: m.supports(256)
+                      onChanged: !widget.computer && m.supports(256)
                           ? (v) => setState(() => _seek = v)
                           : null,
                       onChangeEnd: (v) {
-                        hub.mediaCmd(id, 'seek', position: v.round());
+                        _command('seek', position: v.round());
                         setState(() => _seek = null);
                       },
                     ),
@@ -173,7 +265,8 @@ class _MediaPanelState extends State<MediaPanel> {
               ],
             ),
           ],
-          if (m.volumeMax > 0)
+          if (widget.computer) _pcVolume(),
+          if (!widget.computer && m.volumeMax > 0)
             Row(
               children: [
                 Icon(
@@ -200,7 +293,7 @@ class _MediaPanelState extends State<MediaPanel> {
                           'Volumen ${v.round()} de ${m.volumeMax}',
                       onChanged: (v) => setState(() => _vol = v),
                       onChangeEnd: (v) {
-                        hub.mediaCmd(id, 'volume', value: v.round());
+                        _command('volume', value: v.round());
                         setState(() => _vol = null);
                       },
                     ),
@@ -221,7 +314,7 @@ class _MediaPanelState extends State<MediaPanel> {
       icon: Symbols.music_note_rounded,
       action: IconButton(
         tooltip: 'Sincronizar reproducción',
-        onPressed: () => hub.sendMessage(id, 'pb.x.media.request', {}),
+        onPressed: _watchRefresh,
         icon: const Icon(Symbols.refresh_rounded),
       ),
       child: AnimatedSize(

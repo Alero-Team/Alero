@@ -5,6 +5,7 @@ import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'pc_screen.dart';
 import 'remote_ui.dart';
+import 'media.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -112,9 +113,7 @@ class PcDetails extends StatelessWidget {
             ),
           ] else ...[
             const Divider(height: Gap.xl),
-            Text('Reproduciendo', style: t.labelLarge),
-            const SizedBox(height: Gap.s),
-            PcMediaControls(hub, peer.id),
+            MediaPanel(hub, peer.id, computer: true, hideInactive: false),
             const Divider(height: Gap.xl),
             Wrap(
               spacing: Gap.s,

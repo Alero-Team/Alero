@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'hub.dart';
+import 'src/rust/api/engine.dart' as pb;
 
 /// The phone side of controlling a computer (ADR-0011): every action is a `pb.x.remote.*` message to a paired
 /// computer. The computer carries it out only if its owner switched "Control remoto" on there; otherwise it
@@ -68,21 +69,48 @@ class PcRemote {
 
   final _watchers = <String, int>{};
   Timer? _watchTimer;
+  bool _mediaForeground = true;
+
+  void _watchMedia(String peer) {
+    if (_mediaForeground &&
+        hub.peers.any(
+          (p) => p.id == peer && p.trusted && p.state == pb.PeerState.connected,
+        ) &&
+        hub.info[peer]?.remoteAllowed == true) {
+      _go(peer, 'pb.x.pcmedia.watch', {});
+    }
+  }
 
   void watchMedia(String peer) {
     _watchers[peer] = (_watchers[peer] ?? 0) + 1;
-    _go(peer, 'pb.x.pcmedia.watch', {});
+    _watchMedia(peer);
     _watchTimer ??= Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!_mediaForeground) return;
       for (final p in _watchers.keys) {
-        _go(p, 'pb.x.pcmedia.watch', {});
+        _watchMedia(p);
       }
     });
+  }
+
+  void mediaForeground(bool foreground) {
+    if (_mediaForeground == foreground) return;
+    _mediaForeground = foreground;
+    if (foreground) {
+      for (final p in _watchers.keys) {
+        _watchMedia(p);
+      }
+    } else {
+      for (final p in _watchers.keys) {
+        _go(p, 'pb.x.pcmedia.unwatch', {});
+      }
+    }
   }
 
   void unwatchMedia(String peer) {
     final n = (_watchers[peer] ?? 1) - 1;
     if (n <= 0) {
       _watchers.remove(peer);
+      _go(peer, 'pb.x.pcmedia.unwatch', {});
     } else {
       _watchers[peer] = n;
     }
