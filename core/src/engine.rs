@@ -385,6 +385,11 @@ impl Inner {
                 p.next_try = Instant::now();
                 moved = addr;
             }
+            if p.seen.elapsed() > Duration::from_secs(25) {
+                // Back after a silence (Wi-Fi rejoined, computer restarted): redial now, not after the old backoff.
+                p.next_try = Instant::now();
+                p.backoff = Duration::from_secs(1);
+            }
             p.seen = Instant::now();
             c
         });

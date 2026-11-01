@@ -153,13 +153,16 @@ impl Remote {
         let _ = (engine, what);
     }
 
-    fn deny(&self, engine: &Engine, peer: &str) {
+    fn deny(&self, engine: &Engine, peer: &str, reason: &str) {
         let mut d = self.denied.lock().unwrap();
-        if d.get(peer).is_some_and(|t| t.elapsed() < Duration::from_secs(5)) {
+        let key = format!("{peer}/{reason}");
+        // A UAC prompt or a locked screen can last minutes: remind rarely.
+        let every = Duration::from_secs(if reason == "secure_desktop" { 20 } else { 5 });
+        if d.get(&key).is_some_and(|t| t.elapsed() < every) {
             return;
         }
-        d.insert(peer.to_string(), Instant::now());
-        let _ = engine.send_message(peer, "pb.x.remote.denied", json!({"reason": "not_allowed"}));
+        d.insert(key, Instant::now());
+        let _ = engine.send_message(peer, "pb.x.remote.denied", json!({"reason": reason}));
     }
 
     /// Pushes this computer's info to every connected paired phone whose copy is outdated.
@@ -222,8 +225,12 @@ impl Remote {
             return false;
         }
         if !self.allowed() {
-            self.deny(engine, peer);
+            self.deny(engine, peer, "not_allowed");
             return true;
+        }
+        if kind.starts_with("pb.x.remote.") && kind != "pb.x.remote.keepalive" && sys::secure_desktop() {
+            // A UAC prompt: Windows drops our input until the user answers it on the computer. Say so.
+            self.deny(engine, peer, "secure_desktop");
         }
         let f = |k: &str| b[k].as_f64().unwrap_or(0.0);
         let s = |k: &str| b[k].as_str().unwrap_or("");
@@ -356,6 +363,12 @@ impl Remote {
                 }
             };
             let started = Instant::now();
+            if sys::secure_desktop() {
+                // Nothing to capture until the prompt closes; the phone keeps the last picture and is told why.
+                self.deny(engine, &peer, "secure_desktop");
+                thread::sleep(Duration::from_millis(500));
+                continue;
+            }
             if let Some((w, h, rgb)) = sys::capture(width) {
                 let print = fingerprint(&rgb);
                 // Unchanged picture: send nothing (the phone keeps showing the last one), except a refresh now and then.

@@ -107,3 +107,12 @@ Las APIs de instalación y splash siguen la documentación de [PackageManager](h
 - Android: bloqueos de Wi-Fi y multicast mientras el servicio vive, y espera de 10 min tras una caída (antes 20 s). Compila y se instala; el efecto con la pantalla apagada no se midió.
 - Instalador: tarea «Permitir Alero en el Firewall de Windows» (regla de entrada para `alero_daemon.exe`, pide administrador). Compila; la regla no se probó porque exige confirmar el aviso de Windows. La instalación del 31 de octubre se hizo con `/MERGETASKS=!firewall`.
 - Versión 0.1.4+5; misma firma Android que 0.1.2.
+
+## 0.1.5 — Emparejamiento, reconexión y UAC (1 de noviembre de 2026)
+
+- Causa del «No route to host (os error 113)»: el QR del PC mostraba 192.168.18.27 (su Wi-Fi ya desconectado) porque la dirección local solo se refrescaba con algunos eventos; el PC estaba en 192.168.18.33 por cable. Desde el Pixel, `ping` a .27 daba «Destination Host Unreachable» y TCP a .33:41420 abría. Ahora la app refresca la dirección cada 5 s y, al escanear, usa la dirección desde la que oye al PC.
+- Emparejado desde el teléfono en una red nueva (PC 192.0.2.30, Pixel 192.0.2.29): el teléfono listó el PC con su IP correcta y el emparejamiento terminó en «Conectado».
+- Reconexión (Pixel 9a, Android 17, Windows 11): Wi-Fi del teléfono apagado 40 s → 6 s; pantalla apagada y Wi-Fi apagado 130 s → 8 s; Alero cerrado en el PC 120 s y reabierto → 6 s. `dumpsys wifi` muestra el MulticastLock `alero:ui` con la app abierta.
+- UAC: simulado con `SwitchDesktop` a un escritorio vacío durante 6 s (mismo efecto que el aviso de UAC para un proceso normal). El teléfono mostró el aviso de pantalla protegida, conservó la última imagen y al volver siguieron la imagen y el ratón (cursor movido desde el teléfono). Prueba `normal_desktop_is_not_secure`. No se probó con un aviso UAC real porque deja el PC esperando una respuesta. Contestar el UAC desde el teléfono exigiría un servicio con privilegios de sistema y no se incluye.
+- Botones de clic con icono de ratón y el botón correspondiente relleno, revisado en el Pixel.
+- Versión 0.1.5+6; misma firma Android que 0.1.4. Instalación de Windows con `/MERGETASKS=!firewall`.

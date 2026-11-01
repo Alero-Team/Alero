@@ -187,6 +187,16 @@ class Hub extends ChangeNotifier {
       startError = 'No se pudo iniciar: $e';
     }
     await refresh();
+    // The local address (shown in the QR) changes when Wi-Fi or a cable comes and goes: a stale one made the phone
+    // dial an address nobody answers ("No route to host").
+    Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (myId.isEmpty) return;
+      final d = await pb.diagnostics();
+      if (!listEquals(d, diagnostics)) {
+        diagnostics = d;
+        notifyListeners();
+      }
+    });
     await takeShare();
     await checkPermissions();
     // A window opened later missed what phones sent on connect: ask again.
@@ -472,6 +482,10 @@ class Hub extends ChangeNotifier {
           if (cur != null) info[peerId] = cur.withAllowed(false);
           messages.add(
             'Ese ordenador no permite el control remoto. Actívalo en Alero › Ajustes del ordenador.',
+          );
+        } else if (why == 'secure_desktop') {
+          messages.add(
+            'Windows muestra una pantalla protegida (permiso de administrador o bloqueo). Respóndela en el ordenador; el control vuelve solo.',
           );
         } else {
           messages.add(
@@ -802,7 +816,11 @@ class Hub extends ChangeNotifier {
       return messages.add('Ese QR no es de esta app.');
     }
     _qrId = id;
-    await pairAddr('$h:$p');
+    // An unpaired device is only listed while its announcements arrive, so that address is live; a QR may be old.
+    final heard = peers
+        .where((x) => x.id == id && !x.trusted && x.addr.isNotEmpty)
+        .firstOrNull;
+    await pairAddr(heard?.addr ?? '$h:$p');
   }
 
   /// Desktop: connect to the phone through the USB cable (no Wi-Fi). Pairs first if they have never met.

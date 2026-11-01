@@ -8,6 +8,7 @@ import android.widget.Toast
 import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
@@ -26,6 +27,10 @@ import java.io.File
  */
 class MainActivity : FlutterActivity() {
     private val security by lazy { AppSecurity(this) }
+    // Without it Android filters broadcasts, so the open app never heard the computer at its new address.
+    private val multicast by lazy {
+        (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager).createMulticastLock("alero:ui").apply { setReferenceCounted(false) }
+    }
     private val fileLocations by lazy { getSharedPreferences("file_locations", MODE_PRIVATE) }
     private val sourceUris = HashMap<Int, Uri>()
     private var pickResult: MethodChannel.Result? = null
@@ -47,12 +52,14 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        try { multicast.release() } catch (_: Exception) {}
         if (pendingInstall != null) leftForInstall = true
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        try { multicast.acquire() } catch (_: Exception) {}
         if (!leftForInstall) return
         leftForInstall = false
         val open = pendingInstall ?: return

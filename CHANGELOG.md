@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.1.5 — 2026-11-01
+
+- Emparejar por QR ya no falla con «No route to host»: el QR del PC se actualiza cuando cambia su red (Wi-Fi ↔ cable) y el teléfono usa la dirección desde la que oye al PC si el QR es viejo.
+- Reconexión: con la app abierta el teléfono oye los anuncios del PC aunque el servicio no esté activo, y al volver a oír a un equipo tras un silencio se reintenta al instante en vez de esperar el último intervalo (hasta 30 s).
+- Control remoto: cuando Windows muestra una pantalla protegida (permiso de administrador/UAC o bloqueo) el teléfono avisa de que hay que responderla en el PC; la imagen y el control vuelven solos al cerrarla.
+- Botones de clic: icono de mouse con el botón izquierdo o derecho pintado.
+
 ## 0.1.4 — 2026-10-31
 
 - Emparejar por QR: el teléfono ahora muestra el mismo código que pide el PC (antes aceptaba en silencio y había que adivinarlo).

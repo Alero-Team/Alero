@@ -358,7 +358,7 @@ class _MouseActionBarState extends State<MouseActionBar>
     super.dispose();
   }
 
-  Widget _button(String button, String label, IconData icon) => Expanded(
+  Widget _button(String button, String label) => Expanded(
     child: Semantics(
       label: 'Clic $label',
       button: true,
@@ -380,7 +380,7 @@ class _MouseActionBarState extends State<MouseActionBar>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 22),
+                MouseButtonIcon(left: button == 'left'),
                 const SizedBox(height: Gap.xs),
                 Text(
                   _held.contains(button)
@@ -415,9 +415,9 @@ class _MouseActionBarState extends State<MouseActionBar>
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      _button('left', 'Izquierdo', Symbols.mouse_rounded),
+      _button('left', 'Izquierdo'),
       const SizedBox(width: Gap.s),
-      _button('right', 'Derecho', Symbols.right_click_rounded),
+      _button('right', 'Derecho'),
       const SizedBox(width: Gap.s),
       Expanded(
         child: FilledButton.tonal(
@@ -435,6 +435,66 @@ class _MouseActionBarState extends State<MouseActionBar>
       ),
     ],
   );
+}
+
+/// A mouse outline with the left or right button filled in, in the current icon colour.
+class MouseButtonIcon extends StatelessWidget {
+  const MouseButtonIcon({super.key, required this.left, this.size = 24});
+  final bool left;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size.square(size),
+    painter: _MousePainter(
+      left,
+      IconTheme.of(context).color ?? Theme.of(context).colorScheme.onSurface,
+    ),
+  );
+}
+
+class _MousePainter extends CustomPainter {
+  _MousePainter(this.left, this.color);
+  final bool left;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final stroke = s.width * 0.08;
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        s.width * 0.22,
+        s.height * 0.06,
+        s.width * 0.56,
+        s.height * 0.88,
+      ),
+      Radius.circular(s.width * 0.28),
+    );
+    final split = body.top + body.height * 0.42;
+    final half = left
+        ? Rect.fromLTRB(body.left, body.top, body.center.dx, split)
+        : Rect.fromLTRB(body.center.dx, body.top, body.right, split);
+    canvas.save();
+    canvas.clipRRect(body);
+    canvas.drawRect(half, Paint()..color = color);
+    canvas.restore();
+    final line = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawRRect(body, line);
+    canvas.drawLine(Offset(body.left, split), Offset(body.right, split), line);
+    canvas.drawLine(
+      Offset(body.center.dx, body.top),
+      Offset(body.center.dx, split),
+      line,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_MousePainter old) =>
+      old.left != left || old.color != color;
 }
 
 class PointerSensitivity extends StatelessWidget {

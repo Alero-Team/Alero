@@ -55,6 +55,9 @@ mod other {
         None
     }
     pub fn keep_com_alive() {}
+    pub fn secure_desktop() -> bool {
+        false
+    }
 }
 
 #[cfg(windows)]
@@ -295,6 +298,22 @@ mod win {
         }
     }
 
+    /// True while Windows shows the secure desktop (UAC prompt, Ctrl+Alt+Del, lock screen). Nothing a normal user
+    /// process does reaches it: capture sees nothing and input is dropped until it closes.
+    pub fn secure_desktop() -> bool {
+        use windows::Win32::System::StationsAndDesktops::{
+            CloseDesktop, GetUserObjectInformationW, OpenInputDesktop, DESKTOP_CONTROL_FLAGS, DESKTOP_READOBJECTS, UOI_NAME,
+        };
+        unsafe {
+            let Ok(desk) = OpenInputDesktop(DESKTOP_CONTROL_FLAGS(0), false, DESKTOP_READOBJECTS) else { return true };
+            let mut name = [0u16; 64];
+            let ok = GetUserObjectInformationW(windows::Win32::Foundation::HANDLE(desk.0), UOI_NAME, Some(name.as_mut_ptr().cast()), (name.len() * 2) as u32, None).is_ok();
+            let _ = CloseDesktop(desk);
+            let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+            ok && !String::from_utf16_lossy(&name[..len]).eq_ignore_ascii_case("Default")
+        }
+    }
+
     /// Keeps the process-wide COM multithreaded apartment alive. windows-rs caches WinRT factories, and the
     /// media watcher thread (the only one that initialised COM) exits when nobody watches: the apartment was then
     /// torn down under the cached factory and the next `media_state` crashed the daemon (0xc0000005).
@@ -406,6 +425,12 @@ mod tests {
             .join()
             .unwrap();
         }
+    }
+
+    /// On the normal desktop input must not be reported as blocked (that would nag the phone on every move).
+    #[test]
+    fn normal_desktop_is_not_secure() {
+        assert!(!secure_desktop());
     }
 
     /// The media watcher thread exits when nobody watches; the next one must not hit a dead factory.
