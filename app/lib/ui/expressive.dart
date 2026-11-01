@@ -6,6 +6,7 @@ import 'dart:ui' as ui show Image;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../device_image.dart';
 import '../remote.dart';
@@ -316,63 +317,44 @@ class _MorphButtonState extends State<MorphButton> {
   }
 }
 
-/// The connected phone's picture: its real photo or render when a verified one exists for that exact model, else
-/// the drawn outline below (generic: it claims no model). Swaps with a cross-fade when another phone connects.
-class PhoneArt extends StatelessWidget {
-  const PhoneArt({
-    super.key,
-    this.info,
-    this.wallpaper,
-    this.look,
-    this.online = true,
-    this.height = 176,
-  });
-  final PeerInfo? info;
-  final Uint8List? wallpaper;
+/// The back cover of the exact connected model, as a small icon; the generic phone icon until one is verified.
+class PhoneCover extends StatelessWidget {
+  const PhoneCover(this.look, this.label, {super.key});
   final DeviceLook? look;
-  final bool online;
-  final double height;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final file = look?.file;
-    final outline = PhoneMockup(
-      key: const ValueKey('outline'),
-      info: info,
-      wallpaper: wallpaper,
-      width: 72,
-      online: online,
+    const icon = Icon(
+      Symbols.smartphone_rounded,
+      key: ValueKey('icon'),
+      size: 20,
     );
-    return AnimatedSwitcher(
-      duration: motion(context, const Duration(milliseconds: 350)),
-      child: file == null
-          ? outline
-          : Semantics(
-              key: ValueKey(file.path),
-              image: true,
-              label: look!.name,
-              child: Opacity(
-                opacity: online ? 1 : .55,
-                // A photo (jpg) has its own background: it reads better as a rounded card than as a cut-out.
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    file.path.endsWith('.png') ? 0 : 16,
-                  ),
-                  child: Image.file(
-                    file,
-                    height: height,
-                    fit: BoxFit.contain,
-                    filterQuality: FilterQuality.medium,
-                    // Decoded at the size it is shown: a 1000 px render does not stay in RAM at full size.
-                    cacheHeight:
-                        (height * MediaQuery.devicePixelRatioOf(context))
-                            .round(),
-                    excludeFromSemantics: true,
-                    errorBuilder: (_, _, _) => outline,
-                  ),
+    return Semantics(
+      image: true,
+      label: 'Tapa trasera de ${look?.name ?? label}',
+      child: Tooltip(
+        message: file == null ? '' : 'Imagen: ${look!.credit}',
+        child: AnimatedSwitcher(
+          duration: motion(context, const Duration(milliseconds: 300)),
+          child: file == null
+              ? icon
+              : Image.file(
+                  file,
+                  key: ValueKey(file.path),
+                  width: 28,
+                  height: 40,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.medium,
+                  // Decoded at icon size: the 480 px download does not stay in RAM.
+                  cacheHeight: (40 * MediaQuery.devicePixelRatioOf(context))
+                      .round(),
+                  excludeFromSemantics: true,
+                  errorBuilder: (_, _, _) => icon,
                 ),
-              ),
-            ),
+        ),
+      ),
     );
   }
 }

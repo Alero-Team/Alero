@@ -129,11 +129,33 @@ pub fn start(config: Config) -> Result<String, String> {
             discovery_port: config.discovery_port,
             auto_accept: config.auto_accept,
         };
-        let b = if REMOTE { connect(cfg)? } else { Backend::Local(Arc::new(core::Engine::start(cfg, Arc::new(Forward))?)) };
+        let b = if REMOTE {
+            let b = connect(cfg.clone())?;
+            watch_daemon(cfg);
+            b
+        } else { Backend::Local(Arc::new(core::Engine::start(cfg, Arc::new(Forward))?)) };
         *slot = Some(Arc::new(b));
     }
     drop(slot);
     get(Cmd::DeviceId)
+}
+
+/// If the daemon dies (a crash, a task manager kill) the window would stay "disconnected" for good: every call
+/// would fail. Check it every few seconds and start it again; the window re-reads its state on the Log below.
+fn watch_daemon(cfg: core::Config) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        if BACKEND.lock().unwrap().is_none() {
+            return; // shutdown
+        }
+        if call(Cmd::DeviceId).is_ok() {
+            continue;
+        }
+        if let Ok(b) = connect(cfg.clone()) {
+            *BACKEND.lock().unwrap() = Some(Arc::new(b));
+            emit(Event::Log { message: "service-restarted".into() });
+        }
+    });
 }
 
 /// Connects to a running daemon, or starts one with `cfg` (the window's settings) and waits for it.

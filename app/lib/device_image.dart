@@ -297,7 +297,10 @@ class _Cand {
     final tokens = titleTokens(title);
     if (tokens.any(_notAPhonePicture.contains)) return null;
     final hit = wanted.where((w) => matchesModel(tokens, w)).firstOrNull;
-    if (hit == null) return null;
+    // The icon is the back cover.
+    if (hit == null || !tokens.any(_backWords.contains)) {
+      return null;
+    }
     // Some word of the maker must appear in the title, description or categories ("ZX-1.jpg" alone could be anything).
     final evidence = nameTokens(
       '$title ${m('ImageDescription')} ${m('Categories')}',
@@ -321,11 +324,12 @@ class _Cand {
     final w = (info['width'] as num?)?.toInt() ?? 0;
     final h = (info['height'] as num?)?.toInt() ?? 0;
     final svg = mime == 'image/svg+xml';
-    // Transparent formats first, then portrait views, then explicit front views; short titles are plainer.
+    // A 28 px icon needs a clean render: shop photos with hands and cables are not accepted.
+    if (!svg && mime != 'image/png') return null;
+    // Portrait views first, then backs shown alone; short titles are plainer.
     final score =
-        (svg || mime == 'image/png' ? 4 : 0) +
         (h > w ? 2 : 0) +
-        (tokens.contains('front') ? 1 : 0) -
+        (tokens.contains('front') ? 0 : 1) -
         tokens.length ~/ 6;
     final author = m('Artist');
     return _Cand(
@@ -339,6 +343,9 @@ class _Cand {
     );
   }
 }
+
+/// Words that say the file shows the back of the phone.
+const _backWords = {'back', 'rear', 'backside', 'reverse'};
 
 /// Words that mean the file is about something else than the phone itself.
 const _notAPhonePicture = {

@@ -65,14 +65,37 @@ class PeerInfo {
     return charging && mw is num && mw > 0 ? mw / 1000 : null;
   }
 
-  /// Spanish decimal comma, one decimal: "9,0 W".
-  String get chargeWattsLabel =>
-      '${chargeWatts?.toStringAsFixed(1).replaceAll('.', ',')} W';
+  /// Battery voltage measured with it, in volts (the charger's own voltage is not visible to apps).
+  double? get chargeVolts {
+    final mv = (j['battery'] as Map?)?['mv'];
+    return mv is num && mv > 0 ? mv / 1000 : null;
+  }
+
+  /// "Buena" from 10 W (a phone charger), "Mala" from 5 W, "Deficiente" below (a weak port or cable).
+  String get chargeState => switch (chargeWatts) {
+    null => 'en pausa',
+    final w when w >= 10 => 'Buena',
+    final w when w >= 5 => 'Mala',
+    _ => 'Deficiente',
+  };
+
+  /// "9,0 W · 4,31 V" for the Home status; null when the phone is not charging or cannot measure it.
+  String? get chargeLabel {
+    final mw = (j['battery'] as Map?)?['mw'];
+    if (!charging || mw is! num) return null;
+    final w = chargeWatts;
+    if (w == null) return 'Batería mantenida';
+    String n(double v, int d) => v.toStringAsFixed(d).replaceAll('.', ',');
+    return [
+      '${n(w, 1)} W',
+      if (chargeVolts != null) '${n(chargeVolts!, 2)} V',
+    ].join(' · ');
+  }
 
   /// Same info with a fresh power reading (`pb.x.power`, sent between battery-level changes).
   PeerInfo withPower(Map<String, dynamic> p) => PeerInfo({
     ...j,
-    'battery': {...?(j['battery'] as Map?), 'mw': p['mw']},
+    'battery': {...?(j['battery'] as Map?), 'mw': p['mw'], 'mv': p['mv']},
   });
   int get storageFree =>
       ((j['storage'] as Map?)?['free'] as num?)?.toInt() ?? 0;

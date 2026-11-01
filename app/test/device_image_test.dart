@@ -94,7 +94,7 @@ void main() {
   test('a model only matches its own words, not a bigger sibling', () {
     bool m(String title, String name) =>
         matchesModel(titleTokens(title), nameTokens(name));
-    expect(m('File:Google Pixel 9 (Obsidian) front.svg', 'Pixel 9'), isTrue);
+    expect(m('File:Google Pixel 9 (Obsidian) back.svg', 'Pixel 9'), isTrue);
     expect(m('File:Google Pixel 9 Pro XL.jpg', 'Pixel 9'), isFalse);
     expect(m('File:Google Pixel 8a.jpg', 'Pixel 8'), isFalse);
     expect(m('File:Samsung Galaxy S24 Ultra.jpg', 'Galaxy S24'), isFalse);
@@ -109,12 +109,12 @@ void main() {
   test('Pixel 8 and Pixel 9 each get their own picture', () async {
     final net = Net({
       'Google Pixel 8': [
-        file('Google Pixel 9 front.png'),
-        file('Google Pixel 8 front.png'),
+        file('Google Pixel 9 back.png'),
+        file('Google Pixel 8 back.png'),
       ],
       'Google Pixel 9': [
         file('Google Pixel 9 Pro.png'),
-        file('Google Pixel 9 front.png'),
+        file('Google Pixel 9 back.png'),
       ],
     });
     final a = await images(net).look(pixel8);
@@ -130,7 +130,7 @@ void main() {
     'a cached model needs no network, even in a new session and offline',
     () async {
       final net = Net({
-        'Google Pixel 8': [file('Google Pixel 8 front.png')],
+        'Google Pixel 8': [file('Google Pixel 8 back.png')],
       });
       await images(net).look(pixel8);
       final offline = Net({}, down: true);
@@ -148,7 +148,7 @@ void main() {
       expect(l.name, 'Google Pixel 8');
       expect(l.file, isNull);
       net.down = false;
-      net.files['Google Pixel 8'] = [file('Google Pixel 8 front.png')];
+      net.files['Google Pixel 8'] = [file('Google Pixel 8 back.png')];
       expect((await images(net).look(pixel8)).file, isNotNull);
     },
   );
@@ -156,8 +156,13 @@ void main() {
   test('no verified picture: generic fallback, remembered so we do not keep asking', () async {
     final net = Net({
       'Google Pixel 8': [
-        file('Google Pixel 8 launch event.jpg'),
-        file('Google Pixel 8 front.png', license: 'All rights reserved'),
+        file('Google Pixel 8 launch event back.png'),
+        file('Google Pixel 8 back.png', license: 'All rights reserved'),
+        file(
+          'Google Pixel 8 back.jpg',
+          mime: 'image/jpeg',
+        ), // a shop photo is no icon
+        file('Google Pixel 8 front.png'), // not the back
       ],
     });
     final l = await images(net).look(pixel8);
@@ -174,8 +179,8 @@ void main() {
       final net = Net(
         {
           'Samsung Galaxy S24': [
-            file('Samsung Galaxy S24 Ultra.jpg'),
-            file('Samsung Galaxy S24 front.png'),
+            file('Samsung Galaxy S24 Ultra back.png'),
+            file('Samsung Galaxy S24 back.png'),
           ],
         },
         rows: [
@@ -192,12 +197,12 @@ void main() {
       final l = await images(net).look(s24);
       expect(l.name, 'Samsung Galaxy S24');
       expect(l.file, isNotNull);
-      expect(net.urls.any((u) => u.contains('Ultra.jpg')), isFalse);
+      expect(net.urls.any((u) => u.contains('Ultra%20back')), isFalse);
 
       final redmi = Net(
         {
           'Redmi Redmi Note 13'.replaceFirst('Redmi ', ''): [
-            file('Redmi Note 13.png'),
+            file('Redmi Note 13 back.png'),
           ],
         },
         rows: [
@@ -222,11 +227,7 @@ void main() {
           desc: 'View of a model from the Samsung Galaxy S24 series.',
         ),
         file('Samsung Galaxy S24 back.png', cats: 'Samsung Galaxy S24 Ultra'),
-        file(
-          'Samsung Galaxy S24 01.jpg',
-          mime: 'image/jpeg',
-          cats: 'Samsung Galaxy S24',
-        ),
+        file('Samsung Galaxy S24 01 back.png', cats: 'Samsung Galaxy S24'),
       ],
     });
     const s24 = PhoneId(
@@ -238,9 +239,11 @@ void main() {
     );
     final l = await images(net).look(s24);
     expect(l.file, isNotNull);
-    expect(net.urls.any((u) => u.contains('S24%2001.jpg')), isTrue);
+    expect(net.urls.any((u) => u.contains('S24%2001%20back.png')), isTrue);
     expect(
-      net.urls.where((u) => u.contains('webtekno') || u.contains('back')),
+      net.urls.where(
+        (u) => u.contains('webtekno') || u.contains('S24%20back.png'),
+      ),
       isEmpty,
     );
   });
@@ -248,11 +251,7 @@ void main() {
   test('titles without the maker or the 5G still match their model', () async {
     final net = Net({
       'moto g54 5G': [
-        file(
-          'Moto G54 5G.jpg',
-          mime: 'image/jpeg',
-          desc: 'Motorola smartphone',
-        ),
+        file('Moto G54 5G back.png', desc: 'Motorola smartphone'),
       ],
     });
     const moto = PhoneId(
@@ -267,8 +266,8 @@ void main() {
 
   test('a model code alone is never searched: unknown phones get the generic fallback', () async {
     final net = Net({
-      'Foo ZX-1': [file('ZX-1.jpg', mime: 'image/jpeg')],
-      'ZX-1': [file('ZX-1.jpg', mime: 'image/jpeg')],
+      'Foo ZX-1': [file('ZX-1 back.png')],
+      'ZX-1': [file('ZX-1 back.png')],
     });
     const foo = PhoneId(
       manufacturer: 'Foo',
@@ -292,8 +291,15 @@ void main() {
       'battery': {'level': 75, 'charging': true, 'mw': 8996},
     });
     expect(i.phoneId.device, 'tegu');
-    expect(i.chargeWattsLabel, '9,0 W');
-    expect(i.withPower({'mw': 18250}).chargeWattsLabel, '18,3 W');
+    expect(i.chargeLabel, '9,0 W');
+    expect(i.chargeState, 'Mala');
+    expect(
+      i.withPower({'mw': 18250, 'mv': 4313}).chargeLabel,
+      '18,3 W · 4,31 V',
+    );
+    expect(i.withPower({'mw': 18250}).chargeState, 'Buena');
+    expect(i.withPower({'mw': 2400}).chargeState, 'Deficiente');
+    expect(i.withPower({'mw': 0}).chargeLabel, 'Batería mantenida');
     expect(i.withPower({'mw': 0}).chargeWatts, isNull);
     expect(
       PeerInfo({

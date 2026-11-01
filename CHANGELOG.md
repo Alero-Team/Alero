@@ -10,9 +10,10 @@
 - Conteos reales y acotados de carpetas, incluido SAF; «—» para desconocidos y «999+» al alcanzar el límite.
 - `.trash-storage` oculta y acceso directo denegado, sin borrar su contenido.
 - Liberación de listados, miniaturas, timers, codecs e imágenes reemplazadas y bitmaps temporales. Medición documentada; sin reducción global de RAM demostrada.
-- Imagen del teléfono en Inicio de Windows: nombre comercial y foto o render del modelo exacto (Wikimedia Commons, solo licencias libres, con autor y licencia a la vista). Sin imagen verificable se dibuja el teléfono genérico. Caché local con uso sin conexión; nada de esto interviene en la conexión.
-- Windows muestra la potencia real de carga del teléfono en vatios (tensión × corriente de la batería, medida en el teléfono); se oculta si está en mantenimiento o no es medible.
-- El teléfono envía además `brand`, `device`, `product` y `marketName` en `pb.x.info`, y `pb.x.power` (campos opcionales; las versiones anteriores los ignoran).
+- Windows: el panel lateral muestra el nombre comercial del teléfono y su tapa trasera exacta como icono (render PNG/SVG de Wikimedia Commons, solo licencias libres; autor y licencia en el tooltip). Sin render verificable queda el icono genérico. Caché local, también sin conexión. El cuadro de Inicio no cambia.
+- Windows: «Estado» muestra la carga con vatios reales, voltaje de batería y un estado (Buena ≥ 10 W, Mala ≥ 5 W, Deficiente); «Batería mantenida» si el teléfono la retiene (p. ej. límite del 80 %).
+- Conexión más estable: el túnel USB habla con el servidor adb que ya esté en marcha en vez de lanzar su propio `adb` (dos versiones se mataban el servidor) y se reabre solo si se pierde; el ordenador sigue marcando la última dirección del teléfono cada ≤ 30 s en lugar de rendirse a los 90 s; el tiempo de silencio tolerado sube de 30 a 60 s; la app vuelve a lanzar el servicio en segundo plano si se cierra por un fallo; el hilo COM del daemon se mantiene vivo.
+- El teléfono envía además `brand`, `device`, `product`, `marketName` en `pb.x.info` y `pb.x.power` (campos opcionales; las versiones anteriores los ignoran).
 - Regresiones Flutter/Kotlin, compilaciones release y compatibilidad con 0.1.2 verificadas. Véase `packaging/VALIDATION-0.1.3.md` para cifras y pruebas manuales pendientes.
 
 ## 0.1.2 — 2026-10-30

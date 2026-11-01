@@ -136,6 +136,9 @@ object Features {
         return ChargePower.milliwatts(raw, i.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0), charging)
     }
 
+    private fun millivolts(): Int =
+        ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+
     /** Charging power moves without the level changing, so it has its own small message: every 5 s, real changes only. */
     private fun powerTick() {
         val now = android.os.SystemClock.elapsedRealtime()
@@ -144,7 +147,7 @@ object Features {
         val mw = power()
         if (Math.abs(mw - lastMw) >= 300 || (mw == 0) != (lastMw == 0)) {
             lastMw = mw
-            Bridge.broadcast("pb.x.power", JSONObject().put("mw", mw))
+            Bridge.broadcast("pb.x.power", JSONObject().put("mw", mw).put("mv", millivolts()))
         }
     }
 
@@ -206,7 +209,7 @@ object Features {
             .put("marketName", marketName)
             .put("os", "Android")
             .put("osVersion", Build.VERSION.RELEASE ?: "")
-            .put("battery", JSONObject().put("level", level).put("charging", charging).put("mw", power()))
+            .put("battery", JSONObject().put("level", level).put("charging", charging).put("mw", power()).put("mv", millivolts()))
             .put("storage", JSONObject().put("free", fs.availableBytes).put("total", fs.totalBytes))
             .put("network", network())
             .put("screen", screen())

@@ -141,6 +141,7 @@ fn main() {
     });
     #[cfg(windows)]
     win::register_app();
+    sys::keep_com_alive();
     let engine = match Engine::start(launch.config, Arc::new(Sink(ui.clone()))) {
         Ok(e) => Arc::new(e),
         Err(e) => fail(e),

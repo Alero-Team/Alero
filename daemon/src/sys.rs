@@ -54,6 +54,7 @@ mod other {
     pub fn media_state() -> Option<Media> {
         None
     }
+    pub fn keep_com_alive() {}
 }
 
 #[cfg(windows)]
@@ -294,6 +295,20 @@ mod win {
         }
     }
 
+    /// Keeps the process-wide COM multithreaded apartment alive. windows-rs caches WinRT factories, and the
+    /// media watcher thread (the only one that initialised COM) exits when nobody watches: the apartment was then
+    /// torn down under the cached factory and the next `media_state` crashed the daemon (0xc0000005).
+    pub fn keep_com_alive() {
+        let _ = std::thread::Builder::new().name("com-mta".into()).spawn(|| {
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            }
+            loop {
+                std::thread::park();
+            }
+        });
+    }
+
     /// What the system's current media session (any player) reports. None when nothing is open.
     pub fn media_state() -> Option<Media> {
         unsafe {
@@ -377,4 +392,26 @@ pub fn screen_size() -> (i32, i32) {
     }
     #[cfg(not(windows))]
     (0, 0)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    fn churn() {
+        for _ in 0..6 {
+            std::thread::spawn(|| {
+                let _ = media_state();
+            })
+            .join()
+            .unwrap();
+        }
+    }
+
+    /// The media watcher thread exits when nobody watches; the next one must not hit a dead factory.
+    #[test]
+    fn media_state_survives_its_thread_exiting() {
+        keep_com_alive();
+        churn();
+    }
 }

@@ -256,7 +256,7 @@ class _ShellState extends State<Shell>
                         onTap: () => _go(d.section),
                       ),
                     const Spacer(),
-                    _PhoneChip(online, onTap: () => _go(Section.devices)),
+                    _PhoneChip(online, hub, onTap: () => _go(Section.devices)),
                     const SizedBox(height: Gap.m),
                   ],
                 ),
@@ -385,14 +385,16 @@ class _NavItemState extends State<_NavItem> {
 
 /// "Mi teléfono" from the concept: who is connected; one tap to Devices.
 class _PhoneChip extends StatelessWidget {
-  const _PhoneChip(this.online, {required this.onTap});
+  const _PhoneChip(this.online, this.hub, {required this.onTap});
   final List<pb.Peer> online;
+  final Hub hub;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
+    final look = online.isEmpty ? null : hub.look[online.first.id];
     return Material(
       color: s.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(Radii.tile),
@@ -403,11 +405,15 @@ class _PhoneChip extends StatelessWidget {
           padding: const EdgeInsets.all(Gap.m),
           child: Row(
             children: [
-              Icon(
-                online.isEmpty
-                    ? Symbols.mobile_off_rounded
-                    : Symbols.smartphone_rounded,
-                size: 20,
+              // The exact back cover when Alero found one; the plain phone icon otherwise.
+              SizedBox(
+                width: 28,
+                height: 40,
+                child: Center(
+                  child: online.isEmpty
+                      ? const Icon(Symbols.mobile_off_rounded, size: 20)
+                      : PhoneCover(look, online.first.name),
+                ),
               ),
               const SizedBox(width: Gap.m),
               Expanded(
@@ -415,7 +421,9 @@ class _PhoneChip extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      online.isEmpty ? 'Sin conexión' : online.first.name,
+                      online.isEmpty
+                          ? 'Sin conexión'
+                          : look?.name ?? online.first.name,
                       style: t.labelLarge,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

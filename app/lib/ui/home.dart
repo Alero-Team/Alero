@@ -170,18 +170,17 @@ class _Hero extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final online = p.state == pb.PeerState.connected;
     final phone = info?.phone ?? !Platform.isAndroid;
-    final look = hub.look[p.id];
     final facts = [
-      look?.name ?? info?.model ?? '',
+      info?.model ?? '',
       info?.osLabel ?? '',
       info?.network ?? '',
       if (online) hub.routeOf(p),
     ].where((x) => x.isNotEmpty).join(' · ');
     final picture = phone
-        ? PhoneArt(
+        ? PhoneMockup(
             info: info,
             wallpaper: hub.wallpaper[p.id],
-            look: look,
+            width: 72,
             online: online,
           )
         : LaptopMockup(info: info, wallpaper: hub.wallpaper[p.id], width: 104);
@@ -253,15 +252,6 @@ class _Hero extends StatelessWidget {
                             ),
                         ],
                       ),
-                      if (look?.file != null && look!.credit.isNotEmpty) ...[
-                        const SizedBox(height: Gap.xs),
-                        Text(
-                          'Imagen: ${look.credit}',
-                          style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
                       if (!online) ...[
                         const SizedBox(height: Gap.s),
                         Text(
@@ -330,7 +320,7 @@ class BatteryLine extends StatelessWidget {
         BatteryGlyph(info.battery, charging: info.charging),
         const SizedBox(width: Gap.xs + 2),
         Text(
-          '${info.battery} %${info.charging ? ' · cargando' : ''}${info.chargeWatts == null ? '' : ' a ${info.chargeWattsLabel}'}',
+          '${info.battery} %${info.charging ? ' · cargando' : ''}',
           style: Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
         ),
@@ -419,11 +409,11 @@ class _StatusPanel extends StatelessWidget {
                 width: 20,
               ),
             ),
-          if (info.chargeWatts != null)
+          if (info.chargeLabel != null)
             row(
               Symbols.bolt_rounded,
-              'Potencia de carga (medida)',
-              info.chargeWattsLabel,
+              'Carga: ${info.chargeState}',
+              info.chargeLabel!,
               null,
             ),
           if (used != null)

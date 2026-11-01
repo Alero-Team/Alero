@@ -69,12 +69,12 @@ class Hub extends ChangeNotifier {
   final media = <String, MediaState>{};
   final wallpaper = <String, Uint8List>{};
 
-  /// Commercial name and picture of each connected phone (computer side), by peer id.
+  /// Commercial name and back cover of each connected phone (computer side), by peer id.
   final look = <String, DeviceLook>{};
   final _lookKey = <String, String>{};
   DeviceImages images = DeviceImages(() async {
     final d = Directory(
-      '${(await getApplicationSupportDirectory()).path}/device-images',
+      '${(await getApplicationSupportDirectory()).path}/device-covers',
     );
     return d.create(recursive: true);
   });
@@ -85,9 +85,13 @@ class Hub extends ChangeNotifier {
     final id = i.phoneId;
     if (_lookKey[peerId] == id.key) return;
     _lookKey[peerId] = id.key;
-    look[peerId] = DeviceLook(id.localName); // stale picture of a previous phone must not linger
+    look[peerId] = DeviceLook(
+      id.localName,
+    ); // stale picture of a previous phone must not linger
     images.look(id).then((l) {
-      if (_lookKey[peerId] != id.key) return; // another phone connected meanwhile
+      if (_lookKey[peerId] != id.key) {
+        return; // another phone connected meanwhile
+      }
       look[peerId] = l;
       notifyListeners();
     });
@@ -329,7 +333,9 @@ class Hub extends ChangeNotifier {
         }
       case pb.Event_TransferFinished():
         _finished(e);
-      case pb.Event_Log():
+      case pb.Event_Log(:final message):
+        // The bridge started the background service again after it died: read everything again.
+        if (message == 'service-restarted') refresh();
         return;
       case pb.Event_Message():
         _message(e.peerId, e.kind, e.body);
@@ -797,6 +803,36 @@ class Hub extends ChangeNotifier {
     );
     if (err != null) return messages.add(err);
     await pairAddr('127.0.0.1:${pb.defaultPort() + 1}');
+    _keepCable();
+  }
+
+  Timer? _cableKeeper;
+  bool _cableBusy = false;
+
+  /// Another adb on this PC (Android Studio, an old `adb.exe`) restarts the shared server and with it forgets the
+  /// tunnels, which looked like the cable "disconnecting by itself". While the cable is in use, reopen them quietly.
+  void _keepCable() {
+    _cableKeeper ??= Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (_cableBusy) return;
+      _cableBusy = true;
+      try {
+        final phone = pb.defaultPort() + 1, pc = pb.defaultPort();
+        if (await Scrcpy.tunnelUp(phonePort: phone, pcPort: pc)) return;
+        final err = await Scrcpy.cable(
+          phonePort: phone,
+          pcPort: pc,
+          startServer: false,
+        );
+        if (err == null) {
+          // Dials the paired phone at once.
+          await pb.pairWithAddr(addr: '127.0.0.1:$phone');
+        }
+      } catch (_) {
+        // no phone or no adb right now: try again at the next tick
+      } finally {
+        _cableBusy = false;
+      }
+    });
   }
 
   Future<void> pairAddr(String addr) => _run(() => pb.pairWithAddr(addr: addr));

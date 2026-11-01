@@ -44,6 +44,13 @@ const MAX_SEND_ATTEMPTS: u32 = 6;
 /// A peer silent for this long is not dialed any more (it is off or away); hearing it again resumes at once.
 const STALE_PEER: Duration = Duration::from_secs(90);
 const MSG_IDLE: Duration = Duration::from_secs(60);
+/// A control connection that hears nothing for this long is dropped. Wi-Fi sleeps and roams for tens of seconds;
+/// TCP rides those out, so the app should not give up first (pings go every PING_EVERY).
+const CONTROL_IDLE: Duration = Duration::from_secs(60);
+/// A computer keeps dialing a paired phone's last known address (every 30 s at most) even when it has not been
+/// heard for a while: Windows blocks unsolicited UDP on "Public" networks, so hearing it again may never happen.
+/// Phones stop instead (battery; they cannot reach a computer that is off).
+const KEEP_DIALING: bool = !cfg!(target_os = "android");
 /// Phones announce rarely once settled (see discovery_loop).
 const QUIET_DISCOVERY: bool = cfg!(target_os = "android");
 
@@ -622,7 +629,7 @@ impl Inner {
             p.wait_since = None;
         });
         self.set_state(&peer_id, PeerState::Connected, "");
-        tls.timeouts(Duration::from_secs(30));
+        tls.timeouts(CONTROL_IDLE);
         let r = if initiator { self.control_dialer(tls, &peer_id, gen) } else { self.control_listener(tls, &peer_id) };
         let mine = {
             let mut conns = lk(&self.conns);
@@ -689,7 +696,8 @@ impl Inner {
                         return None;
                     }
                     let addr = p.addr?;
-                    if p.seen.elapsed() > STALE_PEER {
+                    let stale = p.seen.elapsed() > STALE_PEER;
+                    if stale && !KEEP_DIALING {
                         return None; // off or away: wait to hear it instead of dialing a dead address forever
                     }
                     let now = Instant::now();
@@ -700,19 +708,22 @@ impl Inner {
                         return None;
                     }
                     p.busy = true;
-                    Some(addr)
+                    Some((addr, stale))
                 });
-                if let Some(addr) = go {
-                    self.set_state(&id, PeerState::Connecting, "");
+                if let Some((addr, quiet)) = go {
+                    if !quiet {
+                        self.set_state(&id, PeerState::Connecting, "");
+                    }
                     let me = self.clone();
-                    thread::spawn(move || me.dial_control(id, addr));
+                    thread::spawn(move || me.dial_control(id, addr, quiet));
                 }
             }
             thread::sleep(Duration::from_millis(1000));
         }
     }
 
-    fn dial_control(self: Arc<Self>, id: String, addr: SocketAddr) {
+    /// `quiet`: a blind retry of a device not heard for a while; its failure is not news for the UI.
+    fn dial_control(self: Arc<Self>, id: String, addr: SocketAddr, quiet: bool) {
         let r = (|| {
             let mut tls = self.dial(addr, Some(&id))?;
             self.hello_out(&mut tls, "control")?;
@@ -733,7 +744,7 @@ impl Inner {
             p.backoff = if ok { Duration::from_secs(1) } else { (p.backoff * 2).min(Duration::from_secs(30)) };
             p.next_try = Instant::now() + p.backoff;
         });
-        if self.view(&id).state != PeerState::Connected {
+        if !(quiet && !ok) && self.view(&id).state != PeerState::Connected {
             self.set_state(&id, state.0, &state.1);
         }
     }
