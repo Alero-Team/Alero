@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.1.7 — 2026-11-01
+
+- Configuración inicial en Windows y Android: el campo «Nombre del dispositivo» presenta la etiqueta por encima del cuadro, texto alineado verticalmente y una ayuda separada; evita la superposición con nombres largos y la tipografía variable.
+- Se añade una prueba de regresión del diseño en anchos de móvil y escritorio.
+- **Se mantienen todas las funciones Android**, incluido el acceso a notificaciones y controles multimedia; un único APK con el mismo nombre de paquete y la misma identidad de firma que la versión anterior.
+- Google Play Protect puede bloquear la instalación directa desde GitHub por el acceso legítimo a notificaciones; la firma correcta del APK no elimina esta restricción. Para instalaciones con Play Protect activado, evaluar el canal de pruebas internas de Google Play o la apelación oficial. El bloqueo **no se declara resuelto**.
+
 ## 0.1.6 — 2026-11-01
 
 - Animaciones Orion Store adaptadas a Flutter en Windows y Android: transición entre pantallas con opacidad y escala de 98 % a 100 %, reversible al salir.

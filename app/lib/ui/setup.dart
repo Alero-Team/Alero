@@ -115,13 +115,34 @@ class _SetupScreenState extends State<SetupScreen> {
                     'Conecta tu teléfono y tu ordenador por Wi-Fi o USB. Tus archivos viajan directamente entre dispositivos emparejados.',
                   ),
                   const SizedBox(height: Gap.xl),
+                  // Keep the label OUTSIDE the filled field. Flutter's floating
+                  // label overlaid the default device name on both platforms,
+                  // especially with Google Sans Flex and larger text scaling.
+                  Text(
+                    'Nombre del dispositivo',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: Gap.s),
                   TextField(
                     controller: _name,
                     maxLength: 64,
+                    textAlignVertical: TextAlignVertical.center,
+                    textInputAction: TextInputAction.done,
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
-                      labelText: 'Nombre del dispositivo',
-                      helperText: 'Así aparecerá en el otro equipo.',
+                      counterText: '',
+                      hintText: 'Escribe el nombre del equipo',
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: Gap.l,
+                        vertical: Gap.l,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: Gap.s),
+                  Text(
+                    'Así aparecerá en el otro equipo.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],

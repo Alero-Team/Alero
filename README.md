@@ -2,7 +2,7 @@
 
 Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
 
-**Alpha software · 0.1.5.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
+**Alpha software · 0.1.7.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
 
 ## Use
 
@@ -36,11 +36,11 @@ cd ..
 
 The build scripts create packages and SHA-256 files in `dist/`. scrcpy is downloaded from its pinned upstream release and checked against its SHA-256 hash. Third-party notices and source licenses are bundled with both apps.
 
-The GitHub **Checks** workflow runs static analysis and regression tests. The manual **Packages** workflow builds both installers, keeps the Android signing identity in encrypted repository secrets, and optionally publishes a preliminary release. It refuses publication without the configured signing key.
+The GitHub **Checks** workflow runs static analysis and regression tests. The **Packages** workflow runs on main and builds both installers, keeps the Android signing identity in encrypted repository secrets, and optionally publishes a preliminary release. It refuses publication without the configured signing key.
 
 ## Signing and limitations
 
-This alpha retains the existing Android development signing identity so it can update the test installation. It is not a production signing certificate. The Windows installer has no commercial Authenticode signature. Android installation and opening apps remain subject to the operating system's normal prompts.
+This alpha retains the existing Android signing identity so it can update test installations. It is not a production signing certificate. The Android build retains notification mirroring and playback control through a notification-listener service. Google Play Protect may automatically block APKs downloaded from GitHub because they declare this sensitive service, even if the APK is signed correctly. For testing with Play Protect enabled, consider [Google Play internal testing](https://google.play/business/internal-testing/) or [appealing a Play Protect classification](https://developers.google.com/android/play-protect/warning-dev-guidance?hl=es-419). The Windows installer has no commercial Authenticode signature. Android installation and opening apps remain subject to the operating system's normal prompts.
 
 Linux is not packaged in this release. Full phone-to-PC control requires Windows. Device authentication and storage permission prompts must be completed on the phone by its owner.
 

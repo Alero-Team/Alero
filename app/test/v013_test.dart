@@ -324,6 +324,33 @@ void main() {
     },
   );
 
+  testWidgets('device name stays aligned at phone and desktop widths', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final width in [320.0, 960.0]) {
+      tester.view.physicalSize = Size(width, 720);
+      final hub = TestHub()..name = 'Mi equipo';
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: testTheme,
+          home: SetupScreen(hub, onDone: (_) {}),
+        ),
+      );
+      await tester.pump();
+      final label = find.text('Nombre del dispositivo');
+      final field = find.byType(TextField);
+      expect(label, findsOneWidget);
+      expect(field, findsOneWidget);
+      expect(tester.widget<TextField>(field).decoration?.labelText, isNull);
+      expect(tester.getBottomLeft(label).dy, lessThan(tester.getTopLeft(field).dy));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
+
   if (Platform.isWindows) {
     testWidgets(
       'reply drafts belong to one phone even when notification keys match',
