@@ -194,6 +194,8 @@ struct Peer {
     backoff: Duration,
     wait_since: Option<Instant>,
     busy: bool,
+    /// Last time we answered its announcement (see discovery_loop).
+    replied: Option<Instant>,
 }
 
 struct ConnHandle {
@@ -361,6 +363,7 @@ impl Inner {
             backoff: Duration::from_secs(1),
             wait_since: None,
             busy: false,
+            replied: None,
         });
         f(p)
     }
@@ -371,6 +374,7 @@ impl Inner {
             return false;
         }
         let name = clean(name);
+        let mut moved = None;
         let changed = self.with_peer(id, |p| {
             let c = (!name.is_empty() && p.name != name) || (addr.is_some() && p.addr != addr) || p.seen.elapsed() > Duration::from_secs(25);
             if !name.is_empty() {
@@ -379,14 +383,35 @@ impl Inner {
             if addr.is_some() && p.addr != addr {
                 p.addr = addr;
                 p.next_try = Instant::now();
+                moved = addr;
             }
             p.seen = Instant::now();
             c
         });
+        if let Some(a) = moved {
+            self.remember_addr(id, a);
+        }
         if changed {
             self.changed(id);
         }
         changed
+    }
+
+    /// Keeps the last address of a paired device on disk. A USB tunnel (loopback) is not an address worth keeping.
+    fn remember_addr(&self, id: &str, addr: SocketAddr) {
+        if addr.ip().is_loopback() || !self.is_trusted(id) {
+            return;
+        }
+        let mut list = self.store.peers();
+        let text = addr.to_string();
+        if let Some(r) = list.iter_mut().find(|r| r.id == id) {
+            if r.addr.as_deref() != Some(text.as_str()) {
+                r.addr = Some(text);
+                if let Err(e) = self.store.save_peers(&list) {
+                    self.log(format!("could not save peers: {e}"));
+                }
+            }
+        }
     }
 
     fn set_state(&self, id: &str, state: PeerState, detail: &str) {
@@ -407,7 +432,8 @@ impl Inner {
         }
         let mut list = self.store.peers();
         list.retain(|p| p.id != id);
-        list.push(PeerRecord { id: id.into(), name: clean(name) });
+        let addr = self.with_peer(id, |p| p.addr).filter(|a| !a.ip().is_loopback()).map(|a| a.to_string());
+        list.push(PeerRecord { id: id.into(), name: clean(name), addr });
         if let Err(e) = self.store.save_peers(&list) {
             self.log(format!("could not save peers: {e}"));
         }
@@ -944,7 +970,18 @@ impl Inner {
                     continue;
                 }
                 // Someone new (or back after a silence): answer at once so they find us without waiting our slow cadence.
-                if self.note_peer(id, b["name"].as_str().unwrap_or(""), Some(SocketAddr::new(from.ip(), port as u16))) {
+                // A paired device we are not connected to is answered every time (at most every 5 s): Windows lets a
+                // unicast reply to its broadcast in for 3 s even on a "Public" network, and nothing else gets in.
+                let new = self.note_peer(id, b["name"].as_str().unwrap_or(""), Some(SocketAddr::new(from.ip(), port as u16)));
+                let again = self.is_trusted(id)
+                    && self.with_peer(id, |p| {
+                        let due = p.state != PeerState::Connected && p.replied.map_or(true, |t| t.elapsed() > Duration::from_secs(5));
+                        if due {
+                            p.replied = Some(Instant::now());
+                        }
+                        due
+                    });
+                if new || again {
                     announce(SocketAddr::new(from.ip(), self.discovery_port));
                 }
             }
@@ -1032,6 +1069,15 @@ impl Engine {
                 });
             }
         });
+        // Paired devices come back with the address they had: dial it before anything is heard on the network.
+        for r in inner.store.peers() {
+            if let Some(a) = r.addr.as_deref().and_then(|a| a.parse::<SocketAddr>().ok()) {
+                inner.with_peer(&r.id, |p| {
+                    p.name = r.name.clone();
+                    p.addr = Some(a);
+                });
+            }
+        }
         let me = inner.clone();
         thread::spawn(move || me.connector_loop());
         let me = inner.clone();

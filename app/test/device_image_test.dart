@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pb_app/device_image.dart';
+import 'package:pb_app/hub.dart';
+import 'package:pb_app/src/rust/api/engine.dart' as pb;
 import 'package:pb_app/remote.dart';
 
 Map<String, Object?> file(
@@ -313,5 +315,22 @@ void main() {
       }).chargeWatts,
       isNull,
     ); // old phone
+  });
+
+  test('after a QR scan the phone shows the same code as the computer', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final hub = Hub();
+    const request = pb.Event_PairRequest(
+      peerId: 'pc',
+      name: 'PC',
+      code: '123456',
+      incoming: false,
+    );
+    hub.expectedQr = 'pc';
+    hub.onEvent(request);
+    expect(
+      hub.pairPrompt?.code,
+      '123456',
+    ); // it used to accept silently, leaving the code only on the computer
   });
 }

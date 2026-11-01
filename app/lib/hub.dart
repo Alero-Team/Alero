@@ -261,6 +261,12 @@ class Hub extends ChangeNotifier {
           : a.name.compareTo(b.name),
     );
 
+  @visibleForTesting
+  void onEvent(pb.Event e) => _on(e);
+
+  @visibleForTesting
+  set expectedQr(String? id) => _qrId = id;
+
   void _on(pb.Event e) {
     switch (e) {
       case pb.Event_PeerChanged(:final peer):
@@ -276,9 +282,14 @@ class Hub extends ChangeNotifier {
         _failReplies(id, 'El teléfono está sin conexión.');
         peers = peers.where((p) => p.id != id).toList();
       case pb.Event_PairRequest() when _qrId != null && e.peerId == _qrId:
-        // Scanned QR: the TLS identity matches the one shown on the other screen, so the code check is done.
+        // Scanned QR: the TLS identity matches the one on the other screen. The code is still shown here, so it can
+        // be compared with the one the computer asks to confirm instead of guessing.
         _qrId = null;
-        pb.respondPair(peerId: e.peerId, accept: true);
+        pairPrompt = e;
+        Native.alert(
+          'Solicitud de emparejamiento',
+          'Comprueba que ${e.name} muestra el código ${e.code}',
+        );
       case pb.Event_PairRequest() when _qrId != null && !e.incoming:
         _qrId = null;
         pb.respondPair(peerId: e.peerId, accept: false);

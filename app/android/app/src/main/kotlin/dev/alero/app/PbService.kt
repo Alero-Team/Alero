@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -72,7 +73,36 @@ object Notifier {
  * notification and the engine stops announcing itself. Not sticky: the system never revives it on its own.
  */
 class PbService : Service() {
+    private var wifi: WifiManager.WifiLock? = null
+    private var multicast: WifiManager.MulticastLock? = null
+
     override fun onBind(i: Intent?): IBinder? = null
+
+    /**
+     * While the service lives the Wi-Fi radio stays awake and broadcasts reach the engine: with the screen off the
+     * phone otherwise stops hearing the computer's announcements and its sockets stall, which looked like random
+     * disconnections.
+     */
+    override fun onCreate() {
+        super.onCreate()
+        running = true
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            @Suppress("DEPRECATION")
+            val mode = if (Build.VERSION.SDK_INT >= 29) WifiManager.WIFI_MODE_FULL_LOW_LATENCY else WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            wifi = wm.createWifiLock(mode, "alero:wifi").apply { setReferenceCounted(false); acquire() }
+            multicast = wm.createMulticastLock("alero:multicast").apply { setReferenceCounted(false); acquire() }
+        } catch (_: Exception) {
+            // no Wi-Fi (or the system refuses): the connection works as before, just less eagerly
+        }
+    }
+
+    override fun onDestroy() {
+        running = false
+        try { wifi?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
+        try { multicast?.takeIf { it.isHeld }?.release() } catch (_: Exception) {}
+        super.onDestroy()
+    }
 
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
         Notifier.init(this)
@@ -84,7 +114,10 @@ class PbService : Service() {
     companion object {
         private const val TEXT = "text"
         private const val WAITING = "Esperando a tu ordenador"
-        private const val GRACE_MS = 20_000L // a Wi-Fi blip must not make the notification flicker
+        // After the computer drops the service waits this long for it to come back (a router restart, a roam, the PC
+        // waking up). Stopping after 20 s left the process free to be frozen and nothing could reconnect.
+        private const val GRACE_MS = 10 * 60_000L
+        @Volatile private var running = false
         private val main = Handler(Looper.getMainLooper())
         private var stopper: Runnable? = null
 
@@ -103,6 +136,12 @@ class PbService : Service() {
                         // connection simply lives as long as the process does.
                     }
                 } else {
+                    if (running) {
+                        // Say so: the notification must not keep claiming a connection that is gone.
+                        try {
+                            app.startForegroundService(Intent(app, PbService::class.java).putExtra(TEXT, WAITING))
+                        } catch (_: Exception) {}
+                    }
                     stopper = Runnable { app.stopService(Intent(app, PbService::class.java)) }.also { main.postDelayed(it, GRACE_MS) }
                 }
             }

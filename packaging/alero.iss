@@ -38,6 +38,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; Flags: unchecked
+Name: "firewall"; Description: "Permitir Alero en el Firewall de Windows (pide permiso de administrador; sin esto el teléfono puede tardar en encontrar el ordenador en redes Públicas)"
 
 [Files]
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Excludes: "app_icon.ico"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -47,4 +48,6 @@ Name: "{group}\Alero"; Filename: "{app}\alero.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\Alero"; Filename: "{app}\alero.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Alero"""; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Alero"" dir=in action=allow program=""{app}\alero_daemon.exe"" profile=any enable=yes"; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."
 Filename: "{app}\alero.exe"; Description: "Abrir Alero"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent

@@ -13,6 +13,9 @@ use crate::identity::{device_id_from_cert, Identity};
 pub struct PeerRecord {
     pub id: String,
     pub name: String,
+    /// Last address it was reached at, so a restart can dial it before anything is heard (older files lack it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addr: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -107,5 +110,19 @@ impl Store {
 
     pub fn clear_history(&self) -> Result<(), String> {
         self.save::<HistoryEntry>("history.json", &[])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn peers_file_from_before_addresses_still_loads_and_stays_compatible() {
+        let old: Vec<PeerRecord> = serde_json::from_str(r#"[{"id":"a","name":"Pixel"}]"#).unwrap();
+        assert_eq!(old[0].addr, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("addr")); // older versions read what we write
+        let new: Vec<PeerRecord> = serde_json::from_str(r#"[{"id":"a","name":"Pixel","addr":"192.168.1.5:41421"}]"#).unwrap();
+        assert_eq!(new[0].addr.as_deref(), Some("192.168.1.5:41421"));
     }
 }

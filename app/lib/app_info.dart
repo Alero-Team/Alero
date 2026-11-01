@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-const aleroVersion = '0.1.3';
+const aleroVersion = '0.1.4';
 
 /// Flutter supplies Dart package notices; native components are bundled alongside them.
 void registerAleroLicenses() {

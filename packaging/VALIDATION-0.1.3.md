@@ -98,3 +98,12 @@ Las APIs de instalación y splash siguen la documentación de [PackageManager](h
 - Pixel 9a (Android 17): «Google Pixel 9a» y su tapa en el panel lateral; el cuadro de Inicio sin cambios. El Pixel al 80 % marca ±5 mA (se mostraba 23 W por tomar mA); ahora «Batería mantenida». 8,996 W calculados de la lectura real 2,086 A × 4,313 V.
 - Causas de desconexión halladas: (1) el `adb` incluido (1.0.41) y el del sistema (1.0.32) se mataban el servidor al ejecutarse y con él los túneles USB — comprobado con `forward --list` vacío; ahora el túnel se abre y repara con el protocolo del servidor ya activo (probado contra ambas versiones); (2) en una red «Pública» Windows bloquea el UDP entrante y no hay reglas de firewall de Alero: el PC dejaba de marcar al teléfono a los 90 s; ahora reintenta la última dirección cada ≤ 30 s; (3) `alero_daemon.exe` terminó 4 veces hoy con 0xc0000005 en la llamada WinRT de multimedia; se mantiene un hilo MTA vivo (no pude reproducir el fallo aislado, así que no está demostrado que sea la única causa) y la app relanza el daemon si muere (probado: daemon terminado, relanzado en menos de 10 s y teléfono otra vez «Conectado»).
 - Pendiente: probar la reconexión tras un corte largo de Wi-Fi con la versión final (el teléfono en ese momento no respondía en Wi-Fi: RSSI −68 dBm, 2,4 GHz).
+
+## 0.1.4 — QR y conectividad (31 de octubre de 2026)
+
+- QR: el teléfono aceptaba el emparejamiento en silencio tras escanear (la identidad ya coincidía) y solo el PC mostraba el código. Ahora el teléfono muestra el mismo código; prueba `after a QR scan the phone shows the same code as the computer`. No se pudo probar el escaneo físico de la cámara.
+- Dirección guardada: `peers.json` guarda `addr` (los ficheros antiguos siguen cargando; prueba Rust). Reinicio completo del PC: el Pixel vuelve a «Conectado» en 8 s sin intervención.
+- Descubrimiento en red Pública: un equipo emparejado y desconectado recibe respuesta a cada anuncio (máx. cada 5 s). Sin dirección guardada conectó en 15 s; antes no conectaba en 60 s.
+- Android: bloqueos de Wi-Fi y multicast mientras el servicio vive, y espera de 10 min tras una caída (antes 20 s). Compila y se instala; el efecto con la pantalla apagada no se midió.
+- Instalador: tarea «Permitir Alero en el Firewall de Windows» (regla de entrada para `alero_daemon.exe`, pide administrador). Compila; la regla no se probó porque exige confirmar el aviso de Windows. La instalación del 31 de octubre se hizo con `/MERGETASKS=!firewall`.
+- Versión 0.1.4+5; misma firma Android que 0.1.2.
