@@ -1,6 +1,6 @@
 # Cambios
 
-## 0.1.3 — 2026-10-31 (preparada localmente)
+## 0.1.3 — 2026-10-31
 
 - Apertura de APK recibidos: MIME correcto, permiso especial explicado, reintento al volver y errores diferenciados.
 - Respuesta a notificaciones desde Windows mediante RemoteInput, con capacidad opcional, ack, expiración y estados de envío.
