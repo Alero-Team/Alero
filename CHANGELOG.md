@@ -1,5 +1,13 @@
 # Cambios
 
+## 0.1.12 — 2026-11-02
+
+- **Independencia:** Alero Desktop solicita nuevas tareas de apps en la pantalla secundaria y verifica que Android realmente las registre allí, en lugar de afirmar éxito si se redirigen al teléfono.
+- **Inicio:** nuevo launcher Android exclusivo para pantallas virtuales y botón «Ir a Inicio», evitando depender de KEYCODE_HOME que el Pixel puede ignorar.
+- Se preserva el launcher predeterminado del Pixel. Alero no fuerza cambios del sistema ni permisos adicionales.
+- Es necesario actualizar el APK de Android y el instalador Windows juntos. Pruebas unitarias de destino y errores añadidas.
+- **Pendiente prueba práctica:** Android puede rechazar ejecutar determinadas apps en una pantalla secundaria; el código no puede anular esa restricción del firmware.
+
 ## 0.1.11 — 2026-11-02
 
 - **scrcpy actualizado:** runtime Windows pasa de 4.1 a 5.0.1, con hash SHA-256 oficial verificado para mayor compatibilidad con Android 17. La elegibilidad de un display virtual para ventanas libres sigue determinada por Android.

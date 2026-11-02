@@ -208,6 +208,16 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
           ? 'Se abrió el visor. Elige la nueva pantalla Android en el selector; no se enviarán apps a la pantalla física automáticamente.'
           : 'Alero Desktop listo en la pantalla ${_displayId!}. Las ventanas nativas dependen del Pixel.';
       });
+      if (_displayId != null) {
+        try {
+          await Scrcpy.openDesktopHome(widget.serial, _displayId!);
+          if (mounted) setState(() => _status =
+            'Inicio independiente abierto en pantalla ${_displayId!}.');
+        } catch (e) {
+          if (mounted) setState(() => _status =
+            'Pantalla creada, pero Inicio no está disponible: $e');
+        }
+      }
       await _refreshTasks();
     });
   }
@@ -218,19 +228,12 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
       return;
     }
     await _perform('Abriendo $package…', () async {
-      final out = await Scrcpy.launchApp(
-        widget.serial, package,
-        displayId: _displayId!,
-        freeform: _support == Desktop.ready,
-      );
-      if (out.contains('Error:') || out.contains('Exception') ||
-          out.contains('unable to resolve Intent')) {
-        throw StateError('Android rechazó el inicio: $out');
-      }
+      await Scrcpy.launchDesktopApp(widget.serial, package, _displayId!,
+        freeform: _support == Desktop.ready);
       if (!mounted) return;
       setState(() {
         _opened.add(package);
-        _status = 'Android recibió la solicitud de abrir $package en la pantalla ${_displayId!}.';
+        _status = 'Tarea verificada de $package en pantalla virtual ${_displayId!}.';
       });
       await _refreshTasks();
     });
@@ -239,10 +242,10 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
   Future<void> _showDesktop() async {
     if (_displayId == null) return;
     await _perform('Mostrando el escritorio…', () async {
-      await Scrcpy.displayKey(widget.serial, _displayId!, Keys.home);
+      await Scrcpy.openDesktopHome(widget.serial, _displayId!);
       if (mounted) {
         setState(() => _status =
-          'Inicio enviado a la pantalla secundaria. En modo escritorio nativo puedes minimizar cada ventana desde su barra.');
+          'Inicio de Alero solicitado en la pantalla secundaria.');
       }
     });
   }
@@ -437,7 +440,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
               if (live) ...[
                 const SizedBox(width: 8),
                 Tooltip(
-                  message: 'Mostrar escritorio de Android (Inicio)',
+                  message: 'Inicio independiente de Alero',
                   child: IconButton(
                     onPressed: canLaunch ? _showDesktop : null,
                     icon: const Icon(Icons.minimize_rounded),
@@ -561,7 +564,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
             OutlinedButton.icon(
               onPressed: canLaunch ? _showDesktop : null,
               icon: const Icon(Icons.minimize_rounded),
-              label: const Text('Mostrar escritorio'),
+              label: const Text('Ir a Inicio'),
             ),
           ]),
           const Divider(height: 30),

@@ -71,6 +71,15 @@ void main() {
       (1920, 1080));
   });
 
+  test('independent desktop launches must never target display zero', () {
+    expect(desktopAppLaunchArgs('org.mozilla.firefox', 2),
+      containsAllInOrder(['--display','2','-f','0x18000000']));
+    expect(() => desktopAppLaunchArgs('org.mozilla.firefox', 0), throwsFormatException);
+    expect(desktopHomeLaunchArgs(2), contains('dev.alero.app/.DesktopHomeActivity'));
+    expect(() => desktopHomeLaunchArgs(0), throwsFormatException);
+    expect(desktopLaunchRejected('Permission Denial'), isTrue);
+  });
+
   test('scrcpy can start supported virtual desktops and select real screens', () {
     final virtual = scrcpyArgs('ABC', 'Alero',
       const SessionOptions(desktop: true, desktopSize: '2560x1440',

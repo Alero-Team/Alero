@@ -5,6 +5,24 @@ import 'dart:io';
 import 'phone_control.dart';
 import 'desktop_workspace.dart';
 
+/// Independent desktop activity launch arguments. Display 0 is prohibited.
+List<String> desktopAppLaunchArgs(String package, int displayId, {bool freeform = false}) {
+  if (!validAndroidPackage(package) || displayId < 1 || displayId > 255) {
+    throw const FormatException('Pantalla o paquete inválido');
+  }
+  return ['am','start','-W','--display','$displayId','-f','0x18000000',
+    if (freeform) ...['--windowingMode','5'],
+    '-a','android.intent.action.MAIN','-c','android.intent.category.LAUNCHER','-p',package];
+}
+List<String> desktopHomeLaunchArgs(int displayId) {
+  if (displayId < 1 || displayId > 255) throw const FormatException('Pantalla virtual inválida');
+  return ['am','start','-W','--display','$displayId','-f','0x18000000',
+    '-n','dev.alero.app/.DesktopHomeActivity'];
+}
+bool desktopLaunchRejected(String value) => RegExp(
+  r'(Error:|Exception|unable to resolve|Permission Denial|SecurityException|does not exist|not found)',
+  caseSensitive:false).hasMatch(value);
+
 /// Desktop wrapper around the bundled scrcpy + adb (Apache-2.0, ADR-0008). The phone must have wireless
 /// debugging on (Developer options); this is the "ADB" permission class in the project rules, chosen by the user
 /// and explained in the UI. Nothing here touches the engine or the trust store.
@@ -185,6 +203,35 @@ class Scrcpy {
       '-c', 'android.intent.category.LAUNCHER',
       '-p', package,
     ]);
+  }
+
+  /// Android may silently route an app to the physical screen. Never report
+  /// success unless ActivityTaskManager confirms it on the virtual display.
+  static Future<void> launchDesktopApp(String serial, String package,
+      int displayId, {bool freeform = false}) async {
+    if (displayId == 0 || !(await displays(serial)).any((d) => d.id == displayId)) {
+      throw StateError('Pantalla secundaria no disponible.');
+    }
+    final result = await _checked(serial,
+      desktopAppLaunchArgs(package, displayId, freeform: freeform));
+    if (desktopLaunchRejected(result)) throw StateError('Android rechazó: $result');
+    for (var i=0; i<4; i++) {
+      if ((await desktopTasks(serial, displayId)).containsKey(package)) return;
+      await Future<void>.delayed(const Duration(milliseconds:300));
+    }
+    throw StateError('Android no confirmó la app en la pantalla virtual. '
+      'Puede haberla enviado al Pixel. Intenta desde Inicio de Alero.');
+  }
+
+  /// A real secondary-display Activity, not a HOME key event.
+  static Future<void> openDesktopHome(String serial, int displayId) async {
+    if (displayId == 0 || !(await displays(serial)).any((d) => d.id == displayId)) {
+      throw StateError('Selecciona una pantalla virtual activa.');
+    }
+    final result = await _checked(serial, desktopHomeLaunchArgs(displayId));
+    if (desktopLaunchRejected(result)) {
+      throw StateError('Actualiza Alero en el Pixel a 0.1.12: $result');
+    }
   }
 
   /// Only confirmed activity tasks on the requested secondary display.
