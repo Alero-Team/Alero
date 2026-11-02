@@ -111,8 +111,9 @@ class _OrionPressState extends State<OrionPress> {
 ///
 /// PageTransitionSwitcher drives the leaving page with [secondaryAnimation]
 /// (its primary stays at 1), so the exit must read it or the old page stays
-/// opaque under the new one. The exit finishes in the first half, so quick
-/// taps never stack more than two visible pages. drive() instead of
+/// opaque under the new one. The exit starts fast and ends in the first 35%
+/// (as Material's fade-through), so a page interrupted mid-entry clears at
+/// once and quick taps never stack visible pages. drive() instead of
 /// CurvedAnimation: the switcher calls this on every rebuild, and
 /// CurvedAnimation registers a status listener it never removes.
 Widget orionTabTransition(
@@ -122,7 +123,7 @@ Widget orionTabTransition(
 ) {
   final enter = animation.drive(CurveTween(curve: Curves.easeOutCubic));
   final exit = secondaryAnimation.drive(
-    CurveTween(curve: const Interval(0, 0.5, curve: Curves.easeInCubic)),
+    CurveTween(curve: const Interval(0, 0.35, curve: Curves.easeOutCubic)),
   );
   return _Leaving(
     leaving: secondaryAnimation,

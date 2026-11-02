@@ -298,6 +298,13 @@ pub fn retry(history_id: String) -> Result<String, String> {
 
 /// Sends an app message; `body` is JSON text.
 pub fn send_message(peer_id: String, kind: String, body: String) -> Result<(), String> {
+    // shortcut: local engine commands ride this function so the generated bindings stay as they are; give them
+    // their own functions the next time flutter_rust_bridge_codegen is run. Never sent to the other device.
+    match kind.as_str() {
+        "pb.local.disconnect" => return call(Cmd::Disconnect { id: peer_id }).map(drop),
+        "pb.local.connect" => return call(Cmd::Connect { id: peer_id }).map(drop),
+        _ => {}
+    }
     let body = serde_json::from_str(&body).map_err(|e| e.to_string())?;
     call(Cmd::SendMessage { peer: peer_id, kind, body }).map(drop)
 }

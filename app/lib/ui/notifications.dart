@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -127,13 +128,22 @@ class _NotifRow extends StatefulWidget {
   State<_NotifRow> createState() => _NotifRowState();
 }
 
+/// Unsent replies by (phone, notification): the row is rebuilt when the window switches layout, the list
+/// refreshes or the "Ver todas" dialog opens, and a long reply must not be lost on the way.
+final _drafts = <(String, String), String>{};
+
+/// Tests start from no drafts.
+@visibleForTesting
+void clearReplyDrafts() => _drafts.clear();
+
 class _NotifRowState extends State<_NotifRow> {
-  final _text = TextEditingController();
+  late final _text = TextEditingController(text: _drafts[_draftKey] ?? '');
   bool _sending = false;
   String? _status;
   Hub get hub => widget.hub;
   String get peerId => widget.peerId;
   PhoneNotif get n => widget.n;
+  (String, String) get _draftKey => (widget.peerId, widget.n.key);
 
   @override
   void dispose() {
@@ -149,9 +159,13 @@ class _NotifRowState extends State<_NotifRow> {
     });
     try {
       await hub.replyNotif(peerId, n.key, _text.text);
+      _drafts.remove(_draftKey);
       if (mounted) {
         setState(() {
-          _status = 'Enviado al teléfono';
+          // Android only confirms that the app's reply action took the text.
+          _status =
+              'Android entregó la respuesta a ${n.app.isEmpty ? 'la app' : n.app}. '
+              'Alero no puede confirmar que el destinatario la haya recibido.';
           _text.clear();
         });
       }
@@ -159,7 +173,7 @@ class _NotifRowState extends State<_NotifRow> {
       if (mounted) {
         setState(
           () => _status =
-              'Sin confirmación. Comprueba el teléfono antes de repetir.',
+              'Sin confirmación del teléfono. El texto sigue aquí: comprueba el chat antes de repetir.',
         );
       }
     } catch (e) {
@@ -238,26 +252,57 @@ class _NotifRowState extends State<_NotifRow> {
                 if (Platform.isWindows && n.replyable) ...[
                   const SizedBox(height: Gap.s),
                   Row(
+                    // The send button stays beside the last line as the field grows.
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: _text,
-                          enabled: !_sending,
-                          maxLength: 4000,
-                          decoration: const InputDecoration(
-                            labelText: 'Responder',
-                            counterText: '',
+                        // Enter sends; Shift+Enter is a line break (the field's own behaviour).
+                        child: CallbackShortcuts(
+                          bindings: {
+                            const SingleActivator(LogicalKeyboardKey.enter):
+                                _reply,
+                            const SingleActivator(
+                              LogicalKeyboardKey.numpadEnter,
+                            ): _reply,
+                          },
+                          // No maxLength: the phone and the messaging app set the real limits.
+                          child: TextField(
+                            controller: _text,
+                            readOnly: _sending,
+                            minLines: 1,
+                            maxLines: 6,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            decoration: const InputDecoration(
+                              labelText: 'Responder',
+                              helperText:
+                                  'Intro envía · Mayús+Intro añade un salto de línea',
+                            ),
+                            onChanged: (v) {
+                              _drafts[_draftKey] = v;
+                              setState(() {});
+                            },
                           ),
-                          onChanged: (_) => setState(() {}),
-                          onSubmitted: (_) => _reply(),
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Enviar respuesta',
-                        onPressed: _sending || _text.text.trim().isEmpty
-                            ? null
-                            : _reply,
-                        icon: const Icon(Symbols.send_rounded),
+                      const SizedBox(width: Gap.s),
+                      Padding(
+                        // Lines the button up with the field, above the helper text.
+                        padding: const EdgeInsets.only(bottom: 22),
+                        child: IconButton.filled(
+                          tooltip: 'Enviar respuesta',
+                          onPressed: _sending || _text.text.trim().isEmpty
+                              ? null
+                              : _reply,
+                          icon: _sending
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Symbols.send_rounded),
+                        ),
                       ),
                     ],
                   ),

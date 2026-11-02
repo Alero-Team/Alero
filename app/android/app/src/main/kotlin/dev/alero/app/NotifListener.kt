@@ -198,7 +198,8 @@ class NotifListener : NotificationListenerService() {
             val text = body.optString("text")
             val result = JSONObject().put("key", key).put("request", body.optString("request"))
             fun fail(reason: String) = result.put("ok", false).put("error", reason)
-            if (text.isBlank() || text.length > 4000 || key.length > 2048) return fail("invalid_text")
+            // No length cap of our own: the message frame already bounds it, and the app decides what it accepts.
+            replyTextError(text, key)?.let { return fail(it) }
             val service = me ?: return fail("no_access")
             val available = try { service.activeNotifications.orEmpty().any { it.key == key } }
                 catch (_: Exception) { return fail("no_access") }
@@ -215,11 +216,19 @@ class NotifListener : NotificationListenerService() {
                 if (android.os.Build.VERSION.SDK_INT >= 28) RemoteInput.setResultsSource(intent, RemoteInput.SOURCE_FREE_FORM_INPUT)
                 target.intent.send(service, 0, intent)
                 result.put("ok", true)
-            } catch (_: PendingIntent.CanceledException) {
+            } catch (e: PendingIntent.CanceledException) {
+                // Binder refuses a too-large transaction this way too; that one is not an expired notification.
+                if (e.cause is android.os.TransactionTooLargeException) return fail("too_large")
                 replies.remove(key)
                 fail("expired")
+            } catch (_: android.os.TransactionTooLargeException) {
+                fail("too_large")
             } catch (_: Exception) { fail("send_failed") }
         }
+
+        /** Why a reply cannot be sent, or null. Only empty text and an absurd key are refused, never length. */
+        fun replyTextError(text: String, key: String): String? =
+            if (text.isBlank() || key.isEmpty() || key.length > 2048) "invalid_text" else null
 
         fun enabled(c: Context): Boolean =
             Settings.Secure.getString(c.contentResolver, "enabled_notification_listeners")?.contains(c.packageName) == true

@@ -642,6 +642,14 @@ class Hub extends ChangeNotifier {
     'value': ?value,
   });
 
+  /// The only limit on a reply is the protocol's: one app message carries 256 KiB of JSON (core frame.rs
+  /// MAX_APP_BODY), less room for the key and request id. That is tens of thousands of characters even with
+  /// emoji. A longer reply is refused with a clear message, never cut.
+  static const maxReplyBytes = 240 * 1024;
+
+  /// Size the reply takes inside the message, as the engine measures it (UTF-8 JSON).
+  static int replyBytes(String text) => utf8.encode(jsonEncode(text)).length;
+
   Future<void> replyNotif(String peerId, String key, String text) async {
     if (!peers.any((p) => p.id == peerId && _online(p))) {
       throw StateError('El teléfono está sin conexión.');
@@ -649,8 +657,13 @@ class Hub extends ChangeNotifier {
     if (!(notifs[peerId]?.any((n) => n.key == key && n.replyable) ?? false)) {
       throw StateError('La notificación ya no permite respuestas.');
     }
-    if (text.trim().isEmpty || text.length > 4000) {
-      throw StateError('Escribe una respuesta de hasta 4000 caracteres.');
+    if (text.trim().isEmpty) throw StateError('Escribe una respuesta.');
+    final size = replyBytes(text);
+    if (size > maxReplyBytes) {
+      throw StateError(
+        'La respuesta ocupa ${(size / 1024).ceil()} KB y el máximo que Alero puede llevar al teléfono '
+        'en un mensaje es ${maxReplyBytes ~/ 1024} KB. No se ha enviado ni recortado.',
+      );
     }
     final request = '${DateTime.now().microsecondsSinceEpoch}:${_replyId++}';
     final done = Completer<void>();
@@ -687,6 +700,8 @@ class Hub extends ChangeNotifier {
           'expired' => 'La notificación caducó o fue descartada.',
           'no_access' => 'Falta acceso a las notificaciones en el teléfono.',
           'invalid_text' => 'La respuesta no es válida.',
+          'too_large' =>
+            'Android rechazó la respuesta por su tamaño. No se envió; acórtala e inténtalo de nuevo.',
           _ => 'La app del teléfono no aceptó la respuesta.',
         }),
       );
@@ -952,6 +967,26 @@ class Hub extends ChangeNotifier {
 
   Future<void> forget(String peerId) => _run(() async {
     await pb.revoke(peerId: peerId);
+    await refresh();
+  });
+
+  /// "Desconectar": ends the connection and this device's control sessions with it, keeping the pairing.
+  /// The engine does not reconnect (not even after a restart) until [reconnect].
+  Future<void> disconnect(String peerId) => _run(() async {
+    for (final s in [
+      for (final e in _controlled.entries)
+        if (e.value == peerId) e.key,
+    ]) {
+      PhoneSessions.instance.stop(s);
+    }
+    // A local engine command, never sent to the other device (see the bridge's send_message).
+    await pb.sendMessage(peerId: peerId, kind: 'pb.local.disconnect', body: '{}');
+    await refresh();
+  });
+
+  /// "Conectar": dials a paired device again now.
+  Future<void> reconnect(String peerId) => _run(() async {
+    await pb.sendMessage(peerId: peerId, kind: 'pb.local.connect', body: '{}');
     await refresh();
   });
   Future<void> cancel(String id) => _run(() => pb.cancelTransfer(id: id));

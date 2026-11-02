@@ -224,6 +224,10 @@ String es(String m) {
   if (m.startsWith('bad address')) return 'Dirección no válida';
   return switch (m) {
     'connection lost' => 'Se perdió la conexión',
+    'paused' => 'Pulsa Conectar para volver a usarlo',
+    'paused_remote' => 'Se volverá a conectar cuando lo conecten desde allí',
+    'that device is disconnected: connect it first' =>
+      'Ese dispositivo está desconectado; conéctalo primero',
     'the other device no longer trusts this one' ||
     'the other device does not trust this one' =>
       'El otro dispositivo ya no confía en este',

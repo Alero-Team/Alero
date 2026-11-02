@@ -53,6 +53,10 @@ const CONTROL_IDLE: Duration = Duration::from_secs(60);
 const KEEP_DIALING: bool = !cfg!(target_os = "android");
 /// Phones announce rarely once settled (see discovery_loop).
 const QUIET_DISCOVERY: bool = cfg!(target_os = "android");
+/// PeerView.detail of a paired device the user disconnected on purpose (not a network loss).
+pub const PAUSED: &str = "paused";
+/// PeerView.detail when the other device was disconnected on purpose by its user.
+pub const PAUSED_REMOTE: &str = "paused_remote";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PeerState {
@@ -252,6 +256,8 @@ struct Inner {
     disco_status: Mutex<String>,
     /// One ordered queue (and one kept-open connection) per peer for app messages.
     msg_queues: Mutex<HashMap<String, Sender<Value>>>,
+    /// Paired devices the user disconnected: no control, message or file connection either way.
+    paused: RwLock<HashSet<String>>,
 }
 
 fn lk<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -315,6 +321,29 @@ impl Inner {
 
     fn is_trusted(&self, id: &str) -> bool {
         self.trusted.read().map_or(false, |t| t.contains(id))
+    }
+
+    fn is_paused(&self, id: &str) -> bool {
+        self.paused.read().map_or(false, |t| t.contains(id))
+    }
+
+    /// Remembers the choice on disk, so a restart does not reconnect a device the user disconnected.
+    fn set_paused(&self, id: &str, on: bool) -> Result<(), String> {
+        if let Ok(mut p) = self.paused.write() {
+            if on {
+                p.insert(id.to_string());
+            } else {
+                p.remove(id);
+            }
+        }
+        let mut list = self.store.peers();
+        if let Some(r) = list.iter_mut().find(|r| r.id == id) {
+            if r.paused != on {
+                r.paused = on;
+                self.store.save_peers(&list)?;
+            }
+        }
+        Ok(())
     }
 
     fn hello(&self, kind: &str) -> Value {
@@ -438,7 +467,10 @@ impl Inner {
         let mut list = self.store.peers();
         list.retain(|p| p.id != id);
         let addr = self.with_peer(id, |p| p.addr).filter(|a| !a.ip().is_loopback()).map(|a| a.to_string());
-        list.push(PeerRecord { id: id.into(), name: clean(name), addr });
+        list.push(PeerRecord { id: id.into(), name: clean(name), addr, paused: false });
+        if let Ok(mut p) = self.paused.write() {
+            p.remove(id); // pairing again is an explicit choice to connect
+        }
         if let Err(e) = self.store.save_peers(&list) {
             self.log(format!("could not save peers: {e}"));
         }
@@ -525,6 +557,10 @@ impl Inner {
             let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"NOT_TRUSTED"}}));
             return Ok(());
         }
+        if kind != "pair" && self.is_paused(&peer_id) {
+            let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PAUSED"}}));
+            return Ok(());
+        }
         write_frame(&mut tls, &self.hello(&kind)).map_err(|e| e.code().to_string())?;
         let addr = (port > 0 && port < 65536).then(|| SocketAddr::new(ip, port as u16));
         self.note_peer(&peer_id, &name, addr);
@@ -561,6 +597,9 @@ impl Inner {
 
     /// Sends one message over the kept-open connection, opening it first if needed.
     fn msg_once(&self, conn: &mut Option<Tls>, peer_id: &str, m: &Value) -> Result<(), String> {
+        if self.is_paused(peer_id) {
+            return Err("PAUSED".into());
+        }
         if conn.is_none() {
             let addr = self.with_peer(peer_id, |p| p.addr).ok_or("that device has not been seen on the network")?;
             let mut tls = self.dial(addr, Some(peer_id))?;
@@ -723,7 +762,7 @@ impl Inner {
             let ids: Vec<String> = self.trusted.read().map(|t| t.iter().cloned().collect()).unwrap_or_default();
             for id in ids {
                 let go = self.with_peer(&id, |p| {
-                    if p.busy || p.state == PeerState::Connected || p.state == PeerState::Rejected {
+                    if p.busy || p.state == PeerState::Connected || p.state == PeerState::Rejected || self.is_paused(&id) {
                         return None;
                     }
                     let addr = p.addr?;
@@ -765,6 +804,8 @@ impl Inner {
         if let Err(e) = &r {
             if e == "NOT_TRUSTED" {
                 state = (PeerState::Rejected, "the other device no longer trusts this one".into());
+            } else if e == "PAUSED" {
+                state.1 = PAUSED_REMOTE.into();
             } else if !self.stop.load(Ordering::Relaxed) {
                 state.1 = format!("cannot reach {addr}: {e}");
             }
@@ -772,10 +813,16 @@ impl Inner {
         self.with_peer(&id, |p| {
             p.busy = false;
             p.wait_since = None;
-            p.backoff = if ok { Duration::from_secs(1) } else { (p.backoff * 2).min(Duration::from_secs(30)) };
+            p.backoff = if ok {
+                Duration::from_secs(1)
+            } else if state.1 == PAUSED_REMOTE {
+                Duration::from_secs(10) // cheap refusal; picks up "Conectar" on the other side within seconds
+            } else {
+                (p.backoff * 2).min(Duration::from_secs(30))
+            };
             p.next_try = Instant::now() + p.backoff;
         });
-        if !(quiet && !ok) && self.view(&id).state != PeerState::Connected {
+        if !(quiet && !ok && state.1 != PAUSED_REMOTE) && self.view(&id).state != PeerState::Connected && !self.is_paused(&id) {
             self.set_state(&id, state.0, &state.1);
         }
     }
@@ -1027,6 +1074,7 @@ impl Engine {
         let store = Store::open(&cfg.data_dir)?;
         let id = store.identity(&cfg.name)?;
         let trusted = Arc::new(RwLock::new(store.peers().into_iter().map(|p| p.id).collect::<HashSet<_>>()));
+        let store_paused = store.peers().into_iter().filter(|p| p.paused).map(|p| p.id).collect::<HashSet<_>>();
         let server_cfg = server_config(&id, Verifier::shared(trusted.clone(), true)).map_err(|e| e.to_string())?;
         let listener = TcpListener::bind(("0.0.0.0", cfg.port)).map_err(|e| format!("cannot listen on TCP {}: {e}", cfg.port))?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
@@ -1053,6 +1101,7 @@ impl Engine {
             inflight: AtomicUsize::new(0),
             disco_status: Mutex::new(if cfg.discovery_port == 0 { "discovery off".into() } else { "starting".into() }),
             msg_queues: Mutex::new(HashMap::new()),
+            paused: RwLock::new(store_paused),
         });
         let me = inner.clone();
         thread::spawn(move || {
@@ -1081,6 +1130,9 @@ impl Engine {
                     p.name = r.name.clone();
                     p.addr = Some(a);
                 });
+            }
+            if r.paused {
+                inner.with_peer(&r.id, |p| p.detail = PAUSED.into());
             }
         }
         let me = inner.clone();
@@ -1173,6 +1225,9 @@ impl Engine {
         if let Ok(mut t) = self.inner.trusted.write() {
             t.remove(peer_id);
         }
+        if let Ok(mut p) = self.inner.paused.write() {
+            p.remove(peer_id);
+        }
         let mut list = self.inner.store.peers();
         list.retain(|p| p.id != peer_id);
         self.inner.store.save_peers(&list)?;
@@ -1184,10 +1239,52 @@ impl Engine {
         Ok(())
     }
 
+    /// "Desconectar": closes the connection, cancels its transfers and stops reconnecting either way, keeping
+    /// the pairing. Survives restarts until [`Engine::connect`]. The detail tells the UI it was the user's choice.
+    pub fn disconnect(&self, peer_id: &str) -> Result<(), String> {
+        if !self.inner.is_trusted(peer_id) {
+            return Err("that device is not paired".into());
+        }
+        self.inner.set_paused(peer_id, true)?;
+        lk(&self.inner.msg_queues).remove(peer_id); // its worker ends and closes the message connection
+        if let Some(c) = lk(&self.inner.conns).remove(peer_id) {
+            let _ = c.sock.shutdown(std::net::Shutdown::Both);
+        }
+        let active: Vec<String> = lk(&self.inner.xfers).values().filter(|x| x.peer_id == peer_id).map(|x| x.id.clone()).collect();
+        for id in active {
+            self.cancel_transfer(&id);
+        }
+        self.inner.set_state(peer_id, PeerState::Disconnected, PAUSED);
+        Ok(())
+    }
+
+    /// "Conectar": a paired device the user disconnected (or that went away) is dialed again now.
+    pub fn connect(&self, peer_id: &str) -> Result<(), String> {
+        if !self.inner.is_trusted(peer_id) {
+            return Err("that device is not paired".into());
+        }
+        self.inner.set_paused(peer_id, false)?;
+        self.inner.with_peer(peer_id, |p| {
+            p.next_try = Instant::now();
+            p.backoff = Duration::from_secs(1);
+            p.wait_since = None;
+            p.seen = Instant::now(); // dial even a device not heard for a while: the user asked
+            if p.state == PeerState::Rejected {
+                p.state = PeerState::Disconnected;
+            }
+        });
+        let state = self.inner.view(peer_id).state;
+        self.inner.set_state(peer_id, state, "");
+        Ok(())
+    }
+
     /// Queue a file for a trusted peer. `display_name` overrides the name the receiver sees.
     pub fn send_file(&self, peer_id: &str, path: &Path, display_name: Option<&str>) -> Result<String, String> {
         if !self.inner.is_trusted(peer_id) {
             return Err("that device is not paired".into());
+        }
+        if self.inner.is_paused(peer_id) {
+            return Err("that device is disconnected: connect it first".into());
         }
         let name = match display_name {
             Some(n) => n.to_string(),
@@ -1223,6 +1320,9 @@ impl Engine {
         }
         if !self.inner.is_trusted(peer_id) {
             return Err("that device is not paired".into());
+        }
+        if self.inner.is_paused(peer_id) {
+            return Err("that device is disconnected: connect it first".into());
         }
         self.inner.with_peer(peer_id, |p| p.addr).ok_or("that device has not been seen on the network")?;
         let m = json!({"type": kind, "body": body});

@@ -212,11 +212,15 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
       if (_displayId != null) {
         try {
           await Scrcpy.openDesktopHome(widget.serial, _displayId!);
-          if (mounted) setState(() => _status =
-            'Inicio independiente abierto en pantalla ${_displayId!}.');
+          if (mounted) {
+            setState(() => _status =
+              'Inicio independiente abierto en pantalla ${_displayId!}.');
+          }
         } catch (e) {
-          if (mounted) setState(() => _status =
-            'Pantalla creada, pero Inicio no está disponible: $e');
+          if (mounted) {
+            setState(() => _status =
+              'Pantalla creada, pero Inicio no está disponible: $e');
+          }
         }
       }
       await _refreshTasks();
