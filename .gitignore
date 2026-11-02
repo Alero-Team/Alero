@@ -18,3 +18,5 @@ local.properties
 *.pem
 *.key
 .env
+# graphify knowledge-graph output
+graphify-out/
