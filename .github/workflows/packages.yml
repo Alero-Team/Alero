@@ -41,6 +41,18 @@ jobs:
           "ALERO_ANDROID_KEY_ALIAS=$env:SIGNING_ALIAS" >> $env:GITHUB_ENV
           "ALERO_ANDROID_KEY_PASSWORD=$env:SIGNING_KEY_PASSWORD" >> $env:GITHUB_ENV
       - run: cargo fetch --locked
+      # The release is published only if every test passes (Checks runs separately and does not gate it).
+      - run: cargo test --locked --workspace
+      - name: Flutter analyze and tests
+        shell: pwsh
+        working-directory: app
+        run: |
+          flutter pub get --enforce-lockfile
+          if ($LASTEXITCODE -ne 0) { throw 'pub get failed' }
+          flutter analyze --no-pub
+          if ($LASTEXITCODE -ne 0) { throw 'analyze failed' }
+          flutter test --no-pub
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter tests failed' }
       - run: rustup target add aarch64-linux-android
       - name: Android package and storage tests
         shell: pwsh
