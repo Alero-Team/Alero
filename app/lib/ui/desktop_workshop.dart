@@ -136,8 +136,12 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       return;
     }
     await _run('Abriendo $package…', () async {
-      final out = await Scrcpy.launchApp(widget.serial, package,
-        displayId: _display, freeform: _display > 0);
+      if (_display > 0) {
+        // Verified: throws if Android put it on the phone instead.
+        await Scrcpy.launchDesktopApp(widget.serial, package, _display, freeform: true);
+        return;
+      }
+      final out = await Scrcpy.launchApp(widget.serial, package);
       if (out.contains('Error:') || out.contains('Exception:')) {
         throw StateError(out);
       }
@@ -179,8 +183,11 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       final errors = <String>[];
       for (final package in preset.packages) {
         try {
-          final result = await Scrcpy.launchApp(widget.serial, package,
-            displayId: _display, freeform: _display > 0);
+          if (_display > 0) {
+            await Scrcpy.launchDesktopApp(widget.serial, package, _display, freeform: true);
+            continue;
+          }
+          final result = await Scrcpy.launchApp(widget.serial, package);
           if (result.contains('Error:') || result.contains('Exception:')) {
             errors.add(package);
           }

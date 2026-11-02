@@ -25,6 +25,7 @@
         <activity
             android:name=".DesktopHomeActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:excludeFromRecents="true"
             android:taskAffinity="dev.alero.app.desktop"

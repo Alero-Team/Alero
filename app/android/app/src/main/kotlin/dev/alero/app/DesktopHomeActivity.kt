@@ -5,6 +5,7 @@ import android.app.ActivityOptions
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.Display
 import android.view.Gravity
@@ -15,10 +16,14 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.window.OnBackInvokedDispatcher
 
 /** Non-privileged launcher for virtual Android displays. Never replaces Pixel HOME. */
 class DesktopHomeActivity : Activity() {
-    private fun currentDisplayId(): Int = display?.displayId ?: Display.DEFAULT_DISPLAY
+    // Activity.getDisplay() is API 30; below that the window manager's display is this activity's.
+    private fun currentDisplayId(): Int =
+        if (Build.VERSION.SDK_INT >= 30) display?.displayId ?: Display.DEFAULT_DISPLAY
+        else @Suppress("DEPRECATION") windowManager.defaultDisplay.displayId
     private fun dp(value: Int): Int = (resources.displayMetrics.density * value).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,7 +33,14 @@ class DesktopHomeActivity : Activity() {
             return
         }
         buildHome()
+        // Back on the desktop's home has nothing to return to: closing it would leave a black display.
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) {}
+        }
     }
+
+    @Deprecated("Kept for Android 12 and older")
+    override fun onBackPressed() {}
 
     override fun onResume() {
         super.onResume()

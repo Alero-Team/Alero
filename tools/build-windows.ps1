@@ -101,6 +101,13 @@ try {
         foreach ($required in @('alero.exe','alero_daemon.exe','pb_bridge.dll','flutter_windows.dll','msvcp140.dll','vcruntime140.dll','vcruntime140_1.dll','data\icudtl.dat','data\app.so','scrcpy\adb.exe','scrcpy\scrcpy.exe','scrcpy\scrcpy-server')) {
             if (!(Test-Path -LiteralPath (Join-Path $bundle $required))) { throw "Missing runtime file: $required" }
         }
+        # Every native binary must be x64: the installer is x64-only, so a stray 32-bit or ARM64 file would ship broken.
+        $wrongArch = Get-ChildItem -LiteralPath $bundle -Recurse -File -Include *.exe,*.dll | Where-Object {
+            $b = [IO.File]::ReadAllBytes($_.FullName)
+            $pe = [BitConverter]::ToInt32($b, 0x3C)
+            [BitConverter]::ToUInt16($b, $pe + 4) -ne 0x8664
+        }
+        if ($wrongArch) { throw ('Non-x64 binaries in the bundle: ' + ($wrongArch.Name -join ', ')) }
         $versionLine = Get-Content -LiteralPath (Join-Path $root 'app\pubspec.yaml') | Where-Object { $_ -match '^version:' } | Select-Object -First 1
         $version = ($versionLine -replace '^version:\s*','').Split('+')[0].Trim()
         Invoke-Checked $IsccPath @('/Q', "/DAppVersion=$version", "/DBundleDir=$bundle", "/DOutputDir=$OutputDirectory", (Join-Path $root 'packaging\alero.iss'))

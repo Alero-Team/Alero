@@ -22,6 +22,15 @@ pub struct Media {
     pub speed: f64,
 }
 
+/// Size and hotspot of the pointer drawn into a shared frame: 82% of the real pointer (which already follows the
+/// system DPI and the accessibility pointer size), never under 12 px. The hotspot shrinks with it, so the drawn tip
+/// stays exactly where the click lands. Only the picture changes; the Windows pointer itself is never touched.
+pub fn stream_pointer(native: i32, hot_x: i32, hot_y: i32) -> (i32, i32, i32) {
+    let px = ((native.max(1) as f64 * 0.82).round() as i32).max(12);
+    let k = px as f64 / native.max(1) as f64;
+    (px, (hot_x as f64 * k).round() as i32, (hot_y as f64 * k).round() as i32)
+}
+
 #[cfg(windows)]
 pub use win::*;
 #[cfg(not(windows))]
@@ -65,7 +74,8 @@ mod win {
     use std::mem::size_of;
 
     use windows::Win32::Graphics::Gdi::{
-        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits, ReleaseDC, SelectObject,
+        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits, GetObjectW, ReleaseDC,
+        SelectObject, BITMAP,
         SetStretchBltMode, StretchBlt, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CAPTUREBLT, DIB_RGB_COLORS, HALFTONE, SRCCOPY,
     };
     use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
@@ -73,8 +83,8 @@ mod win {
     use windows::Win32::System::Shutdown::LockWorkStation;
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     use windows::Win32::UI::WindowsAndMessaging::{
-        DrawIconEx, GetCursorInfo, GetSystemMetrics, SetProcessDPIAware, CURSORINFO, CURSOR_SHOWING, DI_NORMAL, SM_CXSCREEN,
-        SM_CYSCREEN,
+        DrawIconEx, GetCursorInfo, GetIconInfo, GetSystemMetrics, SetProcessDPIAware, CURSORINFO, CURSOR_SHOWING, DI_NORMAL,
+        HICON, ICONINFO, SM_CXCURSOR, SM_CXSCREEN, SM_CYSCREEN,
     };
     use windows::Media::Control::{GlobalSystemMediaTransportControlsSessionManager, GlobalSystemMediaTransportControlsSessionPlaybackStatus};
 
@@ -267,7 +277,25 @@ mod win {
                 let mut ci = CURSORINFO { cbSize: size_of::<CURSORINFO>() as u32, ..Default::default() };
                 if GetCursorInfo(&mut ci).is_ok() && (ci.flags.0 & CURSOR_SHOWING.0) != 0 {
                     let (x, y) = ((ci.ptScreenPos.x as i64 * dw as i64 / sw as i64) as i32, (ci.ptScreenPos.y as i64 * dh as i64 / sh as i64) as i32);
-                    let _ = DrawIconEx(mem, x, y, windows::Win32::UI::WindowsAndMessaging::HICON(ci.hCursor.0), 0, 0, 0, None, DI_NORMAL);
+                    let icon = HICON(ci.hCursor.0);
+                    let (mut native, mut hx, mut hy) = (GetSystemMetrics(SM_CXCURSOR), 0, 0);
+                    let mut ii = ICONINFO::default();
+                    if GetIconInfo(icon, &mut ii).is_ok() {
+                        (hx, hy) = (ii.xHotspot as i32, ii.yHotspot as i32);
+                        // Real pointer width (a monochrome cursor's mask is twice as tall, never wider).
+                        let b = if ii.hbmColor.is_invalid() { ii.hbmMask } else { ii.hbmColor };
+                        let mut bm = BITMAP::default();
+                        if GetObjectW(b.into(), size_of::<BITMAP>() as i32, Some((&mut bm as *mut BITMAP).cast())) != 0 && bm.bmWidth > 0 {
+                            native = bm.bmWidth;
+                        }
+                        for h in [ii.hbmColor, ii.hbmMask] {
+                            if !h.is_invalid() {
+                                let _ = DeleteObject(h.into());
+                            }
+                        }
+                    }
+                    let (px, ox, oy) = super::stream_pointer(native, hx, hy);
+                    let _ = DrawIconEx(mem, x - ox, y - oy, icon, px, px, 0, None, DI_NORMAL);
                 }
                 let mut bi = BITMAPINFO {
                     bmiHeader: BITMAPINFOHEADER {
@@ -411,6 +439,24 @@ pub fn screen_size() -> (i32, i32) {
     }
     #[cfg(not(windows))]
     (0, 0)
+}
+
+#[cfg(test)]
+mod pointer_tests {
+    use super::stream_pointer;
+
+    #[test]
+    fn stream_pointer_is_smaller_and_keeps_the_tip() {
+        // 100% (32 px), 150% (48 px) and 200% (64 px) pointers: 15-20% smaller.
+        for n in [32, 48, 64] {
+            let (px, _, _) = stream_pointer(n, 0, 0);
+            let r = px as f64 / n as f64;
+            assert!((0.80..=0.85).contains(&r), "{n} -> {px}");
+        }
+        // The I-beam/hand hotspot scales with the picture, so the click point does not drift.
+        assert_eq!(stream_pointer(48, 24, 24), (39, 20, 20));
+        assert_eq!(stream_pointer(4, 2, 2).0, 12);
+    }
 }
 
 #[cfg(all(test, windows))]

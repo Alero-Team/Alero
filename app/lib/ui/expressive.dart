@@ -108,23 +108,55 @@ class _OrionPressState extends State<OrionPress> {
 /// Orion Store's destination motion: the new page rises from 98% scale
 /// while fading in, and the outgoing page plays the exact inverse.
 /// No full-screen spring bounce or arbitrary direction-dependent slide.
+///
+/// PageTransitionSwitcher drives the leaving page with [secondaryAnimation]
+/// (its primary stays at 1), so the exit must read it or the old page stays
+/// opaque under the new one. The exit finishes in the first half, so quick
+/// taps never stack more than two visible pages. drive() instead of
+/// CurvedAnimation: the switcher calls this on every rebuild, and
+/// CurvedAnimation registers a status listener it never removes.
 Widget orionTabTransition(
   Widget child,
   Animation<double> animation,
   Animation<double> secondaryAnimation,
 ) {
-  final fx = CurvedAnimation(
-    parent: animation,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
+  final enter = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+  final exit = secondaryAnimation.drive(
+    CurveTween(curve: const Interval(0, 0.5, curve: Curves.easeInCubic)),
   );
-  return FadeTransition(
-    opacity: fx,
-    child: ScaleTransition(
-      scale: Tween<double>(begin: 0.98, end: 1).animate(fx),
-      child: child,
+  return _Leaving(
+    leaving: secondaryAnimation,
+    child: FadeTransition(
+      opacity: enter,
+      child: FadeTransition(
+        opacity: ReverseAnimation(exit),
+        child: ScaleTransition(
+          scale: enter.drive(Tween(begin: 0.98, end: 1)),
+          child: ScaleTransition(
+            scale: exit.drive(Tween(begin: 1, end: 0.98)),
+            child: RepaintBoundary(child: child),
+          ),
+        ),
+      ),
     ),
   );
+}
+
+/// A page on its way out takes no taps, keys or focus, so a quick second tap
+/// always reaches the page that is arriving.
+class _Leaving extends AnimatedWidget {
+  const _Leaving({required Animation<double> leaving, required this.child})
+    : super(listenable: leaving);
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final out = (listenable as Animation<double>).value > 0;
+    return IgnorePointer(
+      ignoring: out,
+      child: ExcludeFocus(excluding: out, child: child),
+    );
+  }
 }
 
 /// Wavy linear progress (M3 Expressive). The wave travels while active; still with reduced motion.
