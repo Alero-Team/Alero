@@ -108,6 +108,9 @@ try {
             [BitConverter]::ToUInt16($b, $pe + 4) -ne 0x8664
         }
         if ($wrongArch) { throw ('Non-x64 binaries in the bundle: ' + ($wrongArch.Name -join ', ')) }
+        foreach ($exe in 'alero.exe','alero_daemon.exe') {
+            if ((Get-Item -LiteralPath (Join-Path $bundle $exe)).VersionInfo.ProductName -cne 'Alero') { throw "$exe lacks the Alero version info" }
+        }
         $versionLine = Get-Content -LiteralPath (Join-Path $root 'app\pubspec.yaml') | Where-Object { $_ -match '^version:' } | Select-Object -First 1
         $version = ($versionLine -replace '^version:\s*','').Split('+')[0].Trim()
         Invoke-Checked $IsccPath @('/Q', "/DAppVersion=$version", "/DBundleDir=$bundle", "/DOutputDir=$OutputDirectory", (Join-Path $root 'packaging\alero.iss'))
