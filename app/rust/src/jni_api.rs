@@ -7,7 +7,7 @@ use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
 use jni::objects::{JClass, JString};
-use jni::sys::{jlong, jstring};
+use jni::sys::{jboolean, jlong, jstring};
 use jni::JNIEnv;
 use pb_core::engine as core;
 use pb_core::ipc::Cmd;
@@ -24,8 +24,14 @@ pub(crate) fn push(e: &core::Event) {
             kind.starts_with("pb.x.fs.")
                 || matches!(kind.as_str(), "pb.x.info.request" | "pb.x.clip" | "pb.x.media.cmd" | "pb.x.notif.dismiss" | "pb.x.notif.reply" | "pb.x.media.request")
         }
-        // PeerChanged/Gone: who is connected. TransferFinished: the service closes the file it opened for a send.
-        core::Event::PeerChanged { .. } | core::Event::PeerGone { .. } | core::Event::TransferFinished { .. } => true,
+        // PeerChanged/Gone: who is connected. Transfers: the notifications and widgets, and the service closes the
+        // file it opened for a send when it finishes (Kotlin redraws progress at most once a second).
+        core::Event::PeerChanged { .. }
+        | core::Event::PeerGone { .. }
+        | core::Event::TransferOffer { .. }
+        | core::Event::TransferStarted { .. }
+        | core::Event::TransferProgress { .. }
+        | core::Event::TransferFinished { .. } => true,
         _ => false,
     };
     if !keep {
@@ -77,6 +83,20 @@ pub extern "system" fn Java_dev_alero_app_Bridge_sendFile(mut env: JNIEnv, _: JC
         Err(e) => format!("!{e}"),
     };
     out(&mut env, Some(s))
+}
+
+/// Answers an incoming file offer from a notification. The engine ignores an answer to an offer already gone.
+#[no_mangle]
+pub extern "system" fn Java_dev_alero_app_Bridge_respondTransfer(mut env: JNIEnv, _: JClass, id: JString, accept: jboolean) {
+    let id = text(&mut env, &id);
+    let _ = crate::api::engine::call(Cmd::RespondTransfer { id, accept: accept != 0 });
+}
+
+/// Cancels an active transfer from a notification.
+#[no_mangle]
+pub extern "system" fn Java_dev_alero_app_Bridge_cancelTransfer(mut env: JNIEnv, _: JClass, id: JString) {
+    let id = text(&mut env, &id);
+    let _ = crate::api::engine::call(Cmd::Cancel { id });
 }
 
 /// JSON array of peers, or null if the engine is not running.

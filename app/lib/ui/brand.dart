@@ -75,7 +75,7 @@ class _Mark extends CustomPainter {
   bool shouldRepaint(_Mark o) => o.color != color || o.draw != draw;
 }
 
-/// Mark plus the lowercase wordmark, as in the identity sheet.
+/// Mark plus the wordmark. The trade name is always written "Alero".
 class AleroLogo extends StatelessWidget {
   const AleroLogo({super.key, this.size = 28});
   final double size;
@@ -89,7 +89,7 @@ class AleroLogo extends StatelessWidget {
         ExcludeSemantics(child: AleroMark(size: size)),
         SizedBox(width: size * 0.3),
         Text(
-          'alero',
+          'Alero',
           style: weight(
             t.titleLarge?.copyWith(
               fontSize: size * 0.85,

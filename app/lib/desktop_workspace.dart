@@ -150,24 +150,107 @@ List<DesktopWindowBounds> desktopWindowBounds(
   return [];
 }
 
-/// AOSP 'dumpsys activity top' identifies task IDs for a specific package
-/// and display. Never resize a task unless both identifiers match exactly.
-Map<String, int> parseDesktopTasks(String dump, int displayId) {
-  final result = <String, int>{};
-  final pattern = RegExp(
-    r'^\s*TASK \d+:([A-Za-z0-9_.]+) id=(\d+)\s+userId=\d+\s+displayId=(\d+)',
-    multiLine: true,
-  );
-  for (final match in pattern.allMatches(dump)) {
-    final package = match.group(1)!;
-    final task = int.tryParse(match.group(2)!);
-    final display = int.tryParse(match.group(3)!);
-    if (task != null && task > 0 && task < 100000000 &&
-        display == displayId && validAndroidPackage(package)) {
-      result[package] = task;
+/// One visible task from `dumpsys activity top`. AOSP prints
+/// `TASK <uid:affinity> id=N userId=U displayId=D(type=…)` and then
+/// `ACTIVITY <package>/<class> …`; only visible root tasks are listed.
+class TopTask {
+  const TopTask(this.package, this.id, this.display);
+  final String package;
+  final int id, display;
+}
+
+final _taskLine = RegExp(
+  r'^\s*TASK (?:\d+:)?(\S+) id=(\d+)\s+userId=\d+\s+displayId=(\d+)',
+);
+final _activityLine = RegExp(r'^\s*ACTIVITY ([A-Za-z0-9_.]+)/');
+
+/// The package comes from the task's first ACTIVITY line (its affinity can be
+/// anything an app declares), falling back to the affinity.
+List<TopTask> parseTopTasks(String dump) {
+  final tasks = <TopTask>[];
+  var named = true;
+  for (final line in dump.split('\n')) {
+    final t = _taskLine.firstMatch(line);
+    if (t != null) {
+      final id = int.tryParse(t[2]!), display = int.tryParse(t[3]!);
+      named = true;
+      if (id != null && id > 0 && id < 100000000 && display != null) {
+        tasks.add(TopTask(t[1]!, id, display));
+        named = false;
+      }
+      continue;
+    }
+    final a = _activityLine.firstMatch(line);
+    if (a != null && !named) {
+      final last = tasks.removeLast();
+      tasks.add(TopTask(a[1]!, last.id, last.display));
+      named = true;
     }
   }
-  return result;
+  return tasks.where((t) => validAndroidPackage(t.package)).toList();
+}
+
+/// Task IDs on one display. Never resize a task unless package and display match.
+Map<String, int> parseDesktopTasks(String dump, int displayId) => {
+  for (final t in parseTopTasks(dump))
+    if (t.display == displayId) t.package: t.id,
+};
+
+/// Where Android actually put an app after a launch aimed at a virtual display.
+enum DesktopLaunch {
+  /// Only on the virtual display.
+  desktop,
+
+  /// Android moved the window the phone was showing (one instance per app).
+  movedFromPhone,
+
+  /// On the virtual display, and a new window also appeared on the phone.
+  alsoOnPhone,
+
+  /// Android sent it to the phone screen instead.
+  phone,
+
+  /// Android did not show it anywhere visible (yet).
+  unconfirmed,
+}
+
+/// Compares the visible tasks before and after `am start`. Display 0 is the
+/// phone's own screen.
+DesktopLaunch judgeDesktopLaunch(
+  String package,
+  int displayId,
+  List<TopTask> before,
+  List<TopTask> after, {
+  String amOutput = '',
+}) {
+  final phoneBefore = {
+    for (final t in before)
+      if (t.package == package && t.display == 0) t.id,
+  };
+  final mine = after.where((t) => t.package == package).toList();
+  final onDesk = mine.where((t) => t.display == displayId).toList();
+  final onPhone = mine.where((t) => t.display == 0).toList();
+  final newOnPhone = onPhone.any((t) => !phoneBefore.contains(t.id));
+  if (onDesk.isEmpty) {
+    final broughtUp = onPhone.isNotEmpty &&
+        amOutput.contains('brought to the front');
+    return newOnPhone || broughtUp ? DesktopLaunch.phone : DesktopLaunch.unconfirmed;
+  }
+  if (newOnPhone) return DesktopLaunch.alsoOnPhone;
+  if (onDesk.any((t) => phoneBefore.contains(t.id))) {
+    return DesktopLaunch.movedFromPhone;
+  }
+  return DesktopLaunch.desktop;
+}
+
+/// `dumpsys display` lists each logical display as `mDisplayId=N`. Null when
+/// the dump has no such lines (unknown format): callers then ask scrcpy.
+bool? displayListed(String dump, int displayId) {
+  final ids = RegExp(r'^\s*mDisplayId=(\d+)\s*$', multiLine: true)
+      .allMatches(dump)
+      .map((m) => int.parse(m[1]!))
+      .toSet();
+  return ids.isEmpty ? null : ids.contains(displayId);
 }
 
 class DesktopDiagnostics {

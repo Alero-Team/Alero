@@ -54,9 +54,10 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
     super.initState();
     PhoneSessions.instance.addListener(_sessionChanged);
     _load();
+    // Only the cheap task dump: listing displays starts a scrcpy server on the phone.
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (!_busy && PhoneSessions.instance.running(widget.serial)) {
-        _refreshDisplays();
+        _refreshTasks();
       }
     });
   }
@@ -187,7 +188,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
           maxSize: 0,
           bitRate: 16,
           maxFps: 60,
-          startApp: 'com.android.settings',
+          // No --start-app: an app the phone already shows would be moved off the phone.
         ),
         peerId: widget.peerId,
       );
@@ -211,11 +212,15 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
       if (_displayId != null) {
         try {
           await Scrcpy.openDesktopHome(widget.serial, _displayId!);
-          if (mounted) setState(() => _status =
-            'Inicio independiente abierto en pantalla ${_displayId!}.');
+          if (mounted) {
+            setState(() => _status =
+              'Inicio independiente abierto en pantalla ${_displayId!}.');
+          }
         } catch (e) {
-          if (mounted) setState(() => _status =
-            'Pantalla creada, pero Inicio no está disponible: $e');
+          if (mounted) {
+            setState(() => _status =
+              'Pantalla creada, pero Inicio no está disponible: $e');
+          }
         }
       }
       await _refreshTasks();
@@ -227,13 +232,41 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
       setState(() => _status = 'Selecciona primero la pantalla virtual creada por Alero Desktop.');
       return;
     }
+    final displayId = _displayId!;
+    List<TopTask> before;
+    try {
+      before = await Scrcpy.topTasks(widget.serial);
+    } catch (e) {
+      setState(() => _status = 'No se pudo consultar el teléfono: $e');
+      return;
+    }
+    // Most apps allow one window: Android would move the phone's one here.
+    if (before.any((t) => t.package == package && t.display == 0)) {
+      if (!mounted) return;
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('La app está abierta en el teléfono'),
+          content: Text('$package se está mostrando en la pantalla del teléfono. '
+            'Si la app solo admite una ventana, Android la moverá al escritorio virtual '
+            'y dejará de verse en el teléfono. ¿Abrirla aquí?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Abrir aquí')),
+          ],
+        ),
+      ) ?? false;
+      if (!go || !mounted) return;
+    }
     await _perform('Abriendo $package…', () async {
-      await Scrcpy.launchDesktopApp(widget.serial, package, _displayId!,
-        freeform: _support == Desktop.ready);
+      final verdict = await Scrcpy.launchDesktopApp(widget.serial, package, displayId,
+        freeform: _support == Desktop.ready, before: before);
       if (!mounted) return;
       setState(() {
         _opened.add(package);
-        _status = 'Tarea verificada de $package en pantalla virtual ${_displayId!}.';
+        _status = desktopLaunchMessage(verdict, package, displayId);
       });
       await _refreshTasks();
     });
@@ -245,7 +278,8 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
       await Scrcpy.openDesktopHome(widget.serial, _displayId!);
       if (mounted) {
         setState(() => _status =
-          'Inicio de Alero solicitado en la pantalla secundaria.');
+          'Inicio de Alero abierto en la pantalla ${_displayId!}. '
+          'El botón Inicio del propio visor abre el inicio del sistema, no el de Alero.');
       }
     });
   }
@@ -282,25 +316,40 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
     });
   }
 
-  Future<void> _closeApp(String package) async {
-    final approved = await showDialog<bool>(
+  Future<void> _closeApp(String package, int task) async {
+    final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Forzar detención de la aplicación'),
-        content: Text(
-          'Android no permite cerrar una ventana específica mediante ADB en todos los modelos. '
-          'Forzar la detención de $package cerrará también sus actividades en el teléfono '
-          'y puede interrumpir sus notificaciones. ¿Continuar?',
+        title: Text('Cerrar $package'),
+        content: const Text(
+          'Cerrar ventana quita solo esta ventana del escritorio virtual, como deslizarla en Recientes; '
+          'la app sigue abierta en el teléfono si también está allí. '
+          'Forzar detención cierra la app en todas las pantallas y puede interrumpir sus notificaciones.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
+          TextButton(onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Forzar cierre')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'stop'),
+            child: const Text('Forzar detención')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'close'),
+            child: const Text('Cerrar ventana')),
         ],
       ),
-    ) ?? false;
-    if (!approved || !mounted) return;
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 'close') {
+      await _perform('Cerrando la ventana de $package…', () async {
+        await Scrcpy.closeDesktopTask(widget.serial, package, task, _displayId ?? 0);
+        if (mounted) {
+          setState(() {
+            _opened.remove(package);
+            _status = 'Android cerró la ventana de $package en el escritorio virtual.';
+          });
+        }
+        await _refreshTasks();
+      });
+      return;
+    }
     await _perform('Cerrando $package…', () async {
       if (!_apps.contains(package)) {
         throw StateError('Por seguridad solo se pueden detener aplicaciones instaladas por el usuario.');
@@ -443,7 +492,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                   message: 'Inicio independiente de Alero',
                   child: IconButton(
                     onPressed: canLaunch ? _showDesktop : null,
-                    icon: const Icon(Icons.minimize_rounded),
+                    icon: const Icon(Icons.home_rounded),
                   ),
                 ),
               ],
@@ -563,7 +612,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
             ),
             OutlinedButton.icon(
               onPressed: canLaunch ? _showDesktop : null,
-              icon: const Icon(Icons.minimize_rounded),
+              icon: const Icon(Icons.home_rounded),
               label: const Text('Ir a Inicio'),
             ),
           ]),
@@ -592,8 +641,8 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                   icon: const Icon(Icons.crop_square_rounded),
                 ),
                 IconButton(
-                  tooltip: 'Forzar cierre (requiere confirmación)',
-                  onPressed: canLaunch ? () => _closeApp(e.key) : null,
+                  tooltip: 'Cerrar ventana',
+                  onPressed: canLaunch ? () => _closeApp(e.key, e.value) : null,
                   icon: const Icon(Icons.close_rounded),
                 ),
               ]),

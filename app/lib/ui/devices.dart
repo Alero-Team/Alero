@@ -286,6 +286,24 @@ class _Paired extends StatelessWidget {
               onPressed: () => hub.pair(p.id),
               child: const Text('Emparejar de nuevo'),
             ),
+          if (connected || p.state == pb.PeerState.connecting)
+            Padding(
+              padding: const EdgeInsets.only(left: Gap.s),
+              child: OutlinedButton.icon(
+                onPressed: () => hub.disconnect(p.id),
+                icon: const Icon(Symbols.link_off_rounded),
+                label: const Text('Desconectar'),
+              ),
+            ),
+          if (p.state == pb.PeerState.disconnected)
+            Padding(
+              padding: const EdgeInsets.only(left: Gap.s),
+              child: FilledButton.tonalIcon(
+                onPressed: () => hub.reconnect(p.id),
+                icon: const Icon(Symbols.link_rounded),
+                label: const Text('Conectar'),
+              ),
+            ),
           IconButton(
             tooltip: 'Olvidar ${p.name}',
             icon: Icon(Symbols.delete_rounded, color: s.error),
@@ -293,7 +311,8 @@ class _Paired extends StatelessWidget {
               final ok = await confirm(
                 context,
                 '¿Olvidar ${p.name}?',
-                'Dejará de conectarse. Para volver a usarlo tendréis que emparejaros otra vez.',
+                'Se borra el emparejamiento. Para volver a usarlo tendréis que emparejaros otra vez con el código QR. '
+                    'Si solo quieres dejar de usarlo por ahora, pulsa Desconectar.',
                 'Olvidar',
               );
               if (ok) await hub.forget(p.id);

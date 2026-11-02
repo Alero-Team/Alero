@@ -12,6 +12,15 @@ AppId={{7B446786-D4EC-4974-88C5-AC332BA9BF33}
 AppName=Alero
 AppVersion={#AppVersion}
 AppPublisher=Alero
+AppVerName=Alero {#AppVersion}
+AppPublisherURL=https://github.com/Alero-Team/Alero
+; The setup program itself is Inno Setup's 32-bit loader (Windows lists it as "32 bits"); it installs the
+; 64-bit Alero in 64-bit mode. x64compatible = x64 Windows, and Windows 11 on ARM through its x64 emulation.
+VersionInfoVersion={#AppVersion}
+VersionInfoProductName=Alero
+VersionInfoProductVersion={#AppVersion}
+VersionInfoDescription=Instalador de Alero para Windows x64
+VersionInfoCompany=Alero
 DefaultDirName={localappdata}\Programs\Alero
 DefaultGroupName=Alero
 DisableProgramGroupPage=yes

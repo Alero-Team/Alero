@@ -4,7 +4,9 @@
 
 use windows::core::{HSTRING, PCWSTR};
 use windows::Data::Xml::Dom::XmlDocument;
-use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
+use windows::core::{IInspectable, Interface, Ref};
+use windows::Foundation::TypedEventHandler;
+use windows::UI::Notifications::{ToastActivatedEventArgs, ToastNotification, ToastNotificationManager};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
@@ -85,6 +87,86 @@ pub fn toast_icon(title: &str, body: &str, pkg: &str, icon_b64: &str) {
     }
 }
 
+/// A toast button: opens a `file:` URI with the shell, or calls the toast's handler with its argument.
+pub enum Button {
+    Open(String, std::path::PathBuf),
+    Call(String, String),
+}
+
+/// File types Windows would run instead of open: a toast never offers to "open" one of these.
+pub fn runs_code(path: &std::path::Path) -> bool {
+    const RISKY: &[&str] = &[
+        "exe", "msi", "msix", "msixbundle", "appx", "appxbundle", "bat", "cmd", "com", "scr", "pif", "ps1", "psm1",
+        "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "cpl", "msc", "jar", "lnk", "url", "reg", "inf", "dll", "sys",
+        "appref-ms", "application", "gadget", "settingcontent-ms",
+    ];
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| RISKY.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// `file:///C:/…` with everything but plain path characters percent-encoded (spaces, accents, `#`, `%`).
+pub fn file_uri(path: &std::path::Path) -> String {
+    let s = path.to_string_lossy().replace('\\', "/");
+    let mut out = String::from("file:///");
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' | b':' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+/// Toasts with buttons stay referenced here so their click handler outlives `Show` (a handful at most).
+static LIVE: std::sync::Mutex<Vec<ToastNotification>> = std::sync::Mutex::new(Vec::new());
+
+/// Toast with buttons. `Call` buttons reach `on_click` while this process runs (the tray daemon always does);
+/// `Open` buttons hand a file or folder to Explorer, which opens it with the user's default app.
+pub fn toast_buttons(title: &str, body: &str, buttons: &[Button], on_click: impl Fn(&str) + Send + 'static) {
+    let actions: String = buttons
+        .iter()
+        .map(|b| match b {
+            Button::Open(label, path) => format!(
+                "<action content=\"{}\" activationType=\"protocol\" arguments=\"{}\"/>",
+                esc(label),
+                esc(&file_uri(path))
+            ),
+            Button::Call(label, arg) => {
+                format!("<action content=\"{}\" activationType=\"foreground\" arguments=\"{}\"/>", esc(label), esc(arg))
+            }
+        })
+        .collect();
+    let r = (|| -> windows::core::Result<()> {
+        let xml = XmlDocument::new()?;
+        xml.LoadXml(&HSTRING::from(format!(
+            "<toast><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual><actions>{actions}</actions></toast>",
+            esc(title),
+            esc(body)
+        )))?;
+        let n = ToastNotification::CreateToastNotification(&xml)?;
+        n.Activated(&TypedEventHandler::<ToastNotification, IInspectable>::new(
+            move |_: Ref<ToastNotification>, args: Ref<IInspectable>| {
+                if let Some(a) = args.as_ref().and_then(|a| a.cast::<ToastActivatedEventArgs>().ok()) {
+                    let arg = a.Arguments()?.to_string();
+                    if !arg.is_empty() {
+                        on_click(&arg);
+                    }
+                }
+                Ok(())
+            },
+        ))?;
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(AUMID))?.Show(&n)?;
+        let mut live = LIVE.lock().unwrap_or_else(|e| e.into_inner());
+        if live.len() >= 8 {
+            live.remove(0);
+        }
+        live.push(n);
+        Ok(())
+    })();
+    if let Err(e) = r {
+        eprintln!("toast: {e}");
+    }
+}
+
 pub fn set_clipboard(text: &str) {
     let w = wide(text);
     unsafe {
@@ -109,4 +191,17 @@ pub fn set_clipboard(text: &str) {
 pub fn os_version() -> String {
     let v = windows_version::OsVersion::current();
     if v.build >= 22000 { "11".into() } else { v.major.to_string() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn received_file_buttons_are_safe() {
+        assert_eq!(file_uri(Path::new(r"C:\Users\Nicolás\Downloads\Alero\a b#1.pdf")), "file:///C:/Users/Nicol%C3%A1s/Downloads/Alero/a%20b%231.pdf");
+        assert!(runs_code(Path::new("setup.EXE")) && runs_code(Path::new("x.ps1")) && runs_code(Path::new("a.lnk")));
+        assert!(!runs_code(Path::new("foto.jpg")) && !runs_code(Path::new("doc.pdf")) && !runs_code(Path::new("sin_extension")));
+    }
 }

@@ -1,5 +1,58 @@
 # Cambios
 
+## 0.1.13 — 2026-11-02
+
+Instala juntos el APK de Android y el instalador de Windows de esta versión: la desconexión voluntaria, las acciones de transferencia y el Inicio de Alero Desktop necesitan ambos lados actualizados.
+
+### Errores corregidos
+
+- **Animaciones entre apartados:** la página que salía nunca se desvanecía (el conmutador anima la salida con una animación que la transición ignoraba), así que quedaba opaca debajo de la nueva y, al cambiar rápido, se apilaban varias. Ahora la salida es la inversa de la entrada inspirada en Orion Store (escala 1 → 0,98 y fundido), termina en el primer tercio para que una página interrumpida desaparezca enseguida, y la página que se va deja de recibir toques, teclado y foco. Se eliminó además una fuga de *listeners* que crecía con cada actualización del estado. Respeta «reducir movimiento» del sistema.
+- **Cursor al compartir pantalla:** el puntero del ordenador se dibujaba a tamaño completo después de reducir la imagen y sin tener en cuenta su punto activo. Ahora ocupa un 18 % menos, sigue la escala DPI y el tamaño de puntero de accesibilidad de Windows, y la punta coincide con el punto real del clic (I-beam y mano incluidos). El cursor del sistema no se modifica.
+- **Alero Desktop:**
+  - Ya no se abre Ajustes al iniciar el escritorio (podía mover los Ajustes que el Pixel tenía abiertos).
+  - Cada app se comprueba después de abrirla: Alero mira en qué pantalla y tarea la colocó Android e informa si se abrió solo en el escritorio, si Android movió la ventana que estaba en el Pixel, si apareció también en el Pixel o si la envió al Pixel en lugar del escritorio. Esto último ya no se da por abierto.
+  - Si la app está abierta en el teléfono, se pregunta antes de abrirla en el escritorio (muchas apps solo admiten una ventana).
+  - Nunca se lanza una app en una pantalla virtual que ya no existe, porque Android la redirigiría al teléfono.
+  - **Inicio:** el botón Inicio abre siempre el mismo lanzador de Alero en la pantalla virtual (antes apilaba una copia en cada pulsación), se comprueba que aparezca y el botón Atrás ya no lo cierra dejando una pantalla negra. El lanzador ya no falla en Android 8–10.
+  - **Cerrar ventana** quita solo la ventana del escritorio virtual (como deslizarla en Recientes) sin cerrar la app en el teléfono. «Forzar detención» sigue disponible con su advertencia.
+  - El sondeo cada 5 s ya no arranca un servidor scrcpy en el teléfono; solo consulta las tareas (menos CPU y batería).
+  - Las apps de «Espacios guardados» abiertas en una pantalla virtual también se verifican.
+  - Se corrigió la lectura de la lista de pantallas de scrcpy (unía dos líneas con un «\n» literal).
+- **Widgets de Android:** existían en el código, pero nunca se integraron en `main`, por eso no aparecían en el selector de widgets. Ya están integrados y registrados. Además, dos diseños usaban una vista que los widgets no admiten («No se puede cargar el widget») y el servicio no recibía los eventos de inicio y progreso de las transferencias, así que el widget de transferencias se habría quedado vacío.
+- **Nombre comercial:** el logotipo mostraba «alero» en minúsculas; ahora dice «Alero». El proceso en segundo plano de Windows aparece como «Alero (segundo plano)» en el Administrador de tareas en lugar de `alero_daemon.exe`. Paquete Android, identificadores y rutas sin cambios.
+- **Respuestas a notificaciones sin límite artificial:** Alero cortaba la escritura en 4000 caracteres (en el campo, al enviar y en el teléfono). Ahora no hay límite propio: el único es el del mensaje del protocolo, 240 KB (decenas de miles de caracteres, incluso con emojis); si se supera se avisa y no se envía ni se recorta nada.
+- **Pruebas en CI:** las pruebas de Alero Desktop de 0.1.12 no compilaban (faltaba una importación), por lo que las comprobaciones de `main` no podían pasar.
+
+### Funciones nuevas
+
+- **Desconectar sin olvidar:** botón **Desconectar** visible en Dispositivos. Cierra la conexión, detiene las sesiones de control con ese dispositivo y cancela sus transferencias, pero conserva el emparejamiento por QR. No se reconecta solo (tampoco al reiniciar) hasta que pulses **Conectar**. El estado distingue «Desconectado por ti», «Desconectado desde el otro dispositivo» y «Sin conexión / Se perdió la conexión». **Olvidar** sigue pidiendo confirmación.
+- **Transferencias desde las notificaciones:**
+  - Android: «Aceptar descarga» / «Rechazar» para archivos entrantes que requieren confirmación, progreso real con «Cancelar», aviso de archivo recibido con «Abrir en Alero» y «Descargas», y acción «Enviar archivo» en la notificación de conexión.
+  - Windows (con la ventana cerrada, desde la bandeja): «Aceptar» / «Rechazar» en la notificación de archivo entrante y «Abrir» / «Abrir carpeta» al recibirlo. Para archivos que Windows ejecutaría (.exe, .msi, scripts…) solo se ofrece la carpeta.
+  - Nada se descarga ni se abre sin una pulsación del usuario; pulsar varias veces no duplica la transferencia.
+- **Campo de respuesta Material 3 Expressive:** crece hasta 6 líneas y luego se desplaza; Intro envía y Mayús+Intro añade un salto de línea; el botón de envío sigue visible y muestra el progreso; el borrador se conserva al cambiar de diseño o de foco y si el envío falla. Tras enviar dice que Android entregó la respuesta a la app, sin afirmar que el destinatario la recibió.
+- **Widgets:** dispositivos, estado, control remoto (con estado de la conexión), transferencias (botón Enviar, progreso y recientes), multimedia del ordenador y panel compacto de Alero. Colores dinámicos de Material You en Android 12+, tema claro/oscuro, esquinas del launcher, redimensionables. Se actualizan solo con eventos reales (máximo una vez por segundo), sin temporizadores.
+
+### Arquitecturas de Windows (auditoría)
+
+- **La aplicación es x64 nativa.** El instalador lo genera Inno Setup 6, cuyo programa de instalación siempre es un ejecutable de 32 bits; por eso Windows lo muestra como «32 bits». Instala Alero en modo de 64 bits y solo en Windows x64 o Windows 11 ARM (mediante su emulación x64). No era un error de compilación.
+- El script de compilación comprueba ahora que **todos** los binarios del paquete son x64 y que llevan la información de versión «Alero».
+- **ARM64 nativo: no se publica.** Flutter no compila Windows ARM64 de forma cruzada desde x64, GitHub no ofrece ejecutores Windows ARM64 para repositorios privados y scrcpy no publica binarios ARM64 para Windows. El instalador x64 funciona en Windows 11 ARM mediante emulación.
+- **x86 de 32 bits: no es posible.** Flutter no admite Windows de 32 bits.
+
+### Limitaciones que siguen
+
+- Android decide si una app puede abrirse en otra pantalla y si admite dos ventanas a la vez; Alero lo detecta y lo informa, no lo puede forzar sin root.
+- El botón Inicio del propio visor de scrcpy (o la tecla Inicio) abre el inicio del sistema en la pantalla virtual, no el de Alero; usa el botón Inicio del panel de Alero Desktop.
+- Minimizar y redimensionar ventanas individuales dependen de las decoraciones de ventana libre que ofrezca Android en esa pantalla.
+- Las notificaciones interactivas de Windows funcionan con la ventana de Alero cerrada (desde la bandeja); con la ventana abierta, la oferta se responde en el diálogo de la app.
+- Android no confirma la entrega al destinatario de una respuesta, solo que la app la aceptó; algunas apps de mensajería tienen su propio límite de longitud.
+
+### Verificación
+
+- Automatizada (local y en GitHub Actions): pruebas de Rust (emparejamiento → desconexión → sin reconexión automática → reinicio → reconexión; respuesta de 10 000 emojis a través del protocolo; tamaño y punto activo del cursor; seguridad de las acciones de las notificaciones), pruebas de Flutter (60: navegación rápida entre apartados, reducir movimiento, toques durante la transición; respuestas de 100, 500, 1000, 5000 y 10 000 caracteres, párrafos, emojis, texto pegado, Intro/Mayús+Intro, borradores; lectura de tareas y veredicto de cada lanzamiento de Alero Desktop) y pruebas unitarias Kotlin (textos de widgets, validación de respuestas). APK firmado verificado con `apksigner` e instalador comprobado (arquitectura e información de versión).
+- **Pendiente de prueba en un Pixel real:** Alero Desktop en Android 17, aparición de los widgets en el selector, notificaciones de transferencia y respuestas largas en WhatsApp/Telegram.
+
 ## 0.1.12 — 2026-11-02
 
 - **Independencia:** Alero Desktop solicita nuevas tareas de apps en la pantalla secundaria y verifica que Android realmente las registre allí, en lugar de afirmar éxito si se redirigen al teléfono.

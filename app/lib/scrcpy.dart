@@ -14,11 +14,27 @@ List<String> desktopAppLaunchArgs(String package, int displayId, {bool freeform 
     if (freeform) ...['--windowingMode','5'],
     '-a','android.intent.action.MAIN','-c','android.intent.category.LAUNCHER','-p',package];
 }
+/// NEW_TASK only: DesktopHomeActivity is singleTask with its own affinity, so
+/// Home brings back the one desktop launcher instead of stacking a new copy.
 List<String> desktopHomeLaunchArgs(int displayId) {
   if (displayId < 1 || displayId > 255) throw const FormatException('Pantalla virtual inválida');
-  return ['am','start','-W','--display','$displayId','-f','0x18000000',
+  return ['am','start','-W','--display','$displayId','-f','0x10000000',
     '-n','dev.alero.app/.DesktopHomeActivity'];
 }
+
+/// What the user is told after each launch; never claims more than Android showed.
+String desktopLaunchMessage(DesktopLaunch r, String package, int displayId) => switch (r) {
+  DesktopLaunch.desktop => 'Android confirmó $package en la pantalla virtual $displayId.',
+  DesktopLaunch.movedFromPhone =>
+    'Android movió $package desde el Pixel a la pantalla virtual $displayId: esta app solo admite una ventana.',
+  DesktopLaunch.alsoOnPhone =>
+    '$package se abrió en la pantalla virtual $displayId, pero Android también mostró una ventana en el Pixel.',
+  DesktopLaunch.phone =>
+    'Android abrió $package en la pantalla del Pixel en lugar del escritorio virtual. '
+    'Esta app o tu versión de Android no permiten abrirla en otra pantalla.',
+  DesktopLaunch.unconfirmed =>
+    'Android no mostró $package en la pantalla virtual $displayId. No se ha dado por abierta.',
+};
 bool desktopLaunchRejected(String value) => RegExp(
   r'(Error:|Exception|unable to resolve|Permission Denial|SecurityException|does not exist|not found)',
   caseSensitive:false).hasMatch(value);
@@ -178,7 +194,7 @@ class Scrcpy {
       environment: {'ADB': _adb},
     ).timeout(const Duration(seconds: 20));
     if (r.exitCode != 0) throw StateError('${r.stderr}');
-    final found = DesktopDisplay.parse('${r.stdout}\\n${r.stderr}');
+    final found = DesktopDisplay.parse('${r.stdout}\n${r.stderr}');
     return found.isEmpty ? [const DesktopDisplay(0, 'Pantalla principal')] : found;
   }
 
@@ -205,33 +221,81 @@ class Scrcpy {
     ]);
   }
 
-  /// Android may silently route an app to the physical screen. Never report
-  /// success unless ActivityTaskManager confirms it on the virtual display.
-  static Future<void> launchDesktopApp(String serial, String package,
-      int displayId, {bool freeform = false}) async {
-    if (displayId == 0 || !(await displays(serial)).any((d) => d.id == displayId)) {
-      throw StateError('Pantalla secundaria no disponible.');
+  /// Cheap check that a display still exists (`dumpsys display`), so a launch
+  /// never targets a destroyed display, which Android would reroute to the
+  /// phone. Falls back to scrcpy's list only if the dump format is unknown.
+  static Future<bool> displayAlive(String serial, int displayId) async {
+    if (displayId <= 0 || displayId > 255) return false;
+    final listed = displayListed(
+      await _checked(serial, ['dumpsys', 'display']), displayId);
+    return listed ?? (await displays(serial)).any((d) => d.id == displayId);
+  }
+
+  /// Visible tasks on every display (phone screen = display 0).
+  static Future<List<TopTask>> topTasks(String serial) async =>
+      parseTopTasks(await _checked(serial, ['dumpsys', 'activity', 'top']));
+
+  /// Launches on the virtual display, then checks where Android really put
+  /// the app. Returns the verdict for warnings; throws when the app did not
+  /// land on the virtual display, so nothing is reported as opened there.
+  static Future<DesktopLaunch> launchDesktopApp(String serial, String package,
+      int displayId, {bool freeform = false, List<TopTask>? before}) async {
+    if (!await displayAlive(serial, displayId)) {
+      throw StateError('La pantalla virtual $displayId ya no existe. Vuelve a iniciar Alero Desktop.');
     }
+    final prior = before ?? await topTasks(serial);
     final result = await _checked(serial,
       desktopAppLaunchArgs(package, displayId, freeform: freeform));
     if (desktopLaunchRejected(result)) throw StateError('Android rechazó: $result');
-    for (var i=0; i<4; i++) {
-      if ((await desktopTasks(serial, displayId)).containsKey(package)) return;
-      await Future<void>.delayed(const Duration(milliseconds:300));
+    var verdict = DesktopLaunch.unconfirmed;
+    for (var i = 0; i < 6; i++) {
+      verdict = judgeDesktopLaunch(package, displayId, prior,
+        await topTasks(serial), amOutput: result);
+      if (verdict != DesktopLaunch.unconfirmed) break;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     }
-    throw StateError('Android no confirmó la app en la pantalla virtual. '
-      'Puede haberla enviado al Pixel. Intenta desde Inicio de Alero.');
+    if (verdict == DesktopLaunch.phone || verdict == DesktopLaunch.unconfirmed) {
+      throw StateError(desktopLaunchMessage(verdict, package, displayId));
+    }
+    return verdict;
   }
 
-  /// A real secondary-display Activity, not a HOME key event.
+  /// Closes one window (task) of the virtual display, as swiping it away in
+  /// Recents would. The app keeps running if it has other windows, such as
+  /// one on the phone. Refuses tasks that are not on that display.
+  static Future<void> closeDesktopTask(
+      String serial, String package, int taskId, int displayId) async {
+    if (displayId <= 0 || taskId <= 0) {
+      throw const FormatException('Tarea o pantalla no válida');
+    }
+    if ((await desktopTasks(serial, displayId))[package] != taskId) {
+      throw StateError('La ventana ya no está en esa pantalla.');
+    }
+    await _checked(serial, ['am', 'stack', 'remove', '$taskId']);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if ((await desktopTasks(serial, displayId)).containsValue(taskId)) {
+      throw StateError('Android no cerró la ventana.');
+    }
+  }
+
+  /// A real secondary-display Activity, not a HOME key event: Android sends
+  /// HOME on a virtual display to the system's own secondary launcher.
   static Future<void> openDesktopHome(String serial, int displayId) async {
-    if (displayId == 0 || !(await displays(serial)).any((d) => d.id == displayId)) {
+    if (!await displayAlive(serial, displayId)) {
       throw StateError('Selecciona una pantalla virtual activa.');
     }
     final result = await _checked(serial, desktopHomeLaunchArgs(displayId));
     if (desktopLaunchRejected(result)) {
-      throw StateError('Actualiza Alero en el Pixel a 0.1.12: $result');
+      throw StateError('Instala en el teléfono la misma versión de Alero que en Windows: $result');
     }
+    for (var i = 0; i < 5; i++) {
+      if ((await topTasks(serial)).any((t) =>
+          t.package == 'dev.alero.app' && t.display == displayId)) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    throw StateError('Android no mostró el Inicio de Alero en la pantalla $displayId.');
   }
 
   /// Only confirmed activity tasks on the requested secondary display.

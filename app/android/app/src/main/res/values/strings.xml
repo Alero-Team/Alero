@@ -1,2 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources><string name="app_name">Alero</string></resources>
+<resources>
+    <string name="app_name">Alero</string>
+    <string name="w_devices_label">Dispositivos</string>
+    <string name="w_devices_desc">Tus ordenadores emparejados, su conexión y su batería.</string>
+    <string name="w_status_label">Estado</string>
+    <string name="w_status_desc">El ordenador conectado, su batería y la de este teléfono.</string>
+    <string name="w_actions_label">Control remoto</string>
+    <string name="w_actions_desc">Estado de la conexión y accesos a control, pantalla, archivos y portapapeles.</string>
+    <string name="w_transfer_label">Transferencias</string>
+    <string name="w_transfer_desc">Enviar un archivo, el progreso de la transferencia activa y las recientes.</string>
+    <string name="w_media_label">Multimedia del ordenador</string>
+    <string name="w_media_desc">Lo que suena en tu ordenador, con reproducir, pausa y pistas.</string>
+    <string name="w_panel_label">Panel de Alero</string>
+    <string name="w_panel_desc">Ordenador, batería, transferencia y accesos rápidos en uno.</string>
+</resources>

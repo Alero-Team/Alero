@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widgets. -->
+<resources>
+    <color name="w_bg">@android:color/system_neutral1_900</color>
+    <color name="w_tile">@android:color/system_neutral2_800</color>
+    <color name="w_on">@android:color/system_neutral1_50</color>
+    <color name="w_muted">@android:color/system_neutral2_200</color>
+    <color name="w_accent">@android:color/system_accent1_200</color>
+    <color name="w_container">@android:color/system_accent1_700</color>
+    <color name="w_on_container">@android:color/system_accent1_100</color>
+</resources>

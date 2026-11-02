@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pb_app/desktop_workspace.dart';
 import 'package:pb_app/phone_control.dart';
+import 'package:pb_app/scrcpy.dart';
 
 void main() {
   test('Dextop-inspired displays enumerate only real Android display IDs', () {
@@ -76,6 +77,8 @@ void main() {
       containsAllInOrder(['--display','2','-f','0x18000000']));
     expect(() => desktopAppLaunchArgs('org.mozilla.firefox', 0), throwsFormatException);
     expect(desktopHomeLaunchArgs(2), contains('dev.alero.app/.DesktopHomeActivity'));
+    // Home reuses the one desktop launcher (singleTask) instead of stacking copies.
+    expect(desktopHomeLaunchArgs(2), containsAllInOrder(['-f', '0x10000000']));
     expect(() => desktopHomeLaunchArgs(0), throwsFormatException);
     expect(desktopLaunchRejected('Permission Denial'), isTrue);
   });
@@ -95,5 +98,59 @@ void main() {
       const SessionOptions(displayId: 2));
     expect(physical, contains('--display-id=2'));
     expect(physical.any((v) => v.startsWith('--new-display=')), isFalse);
+  });
+
+  // Real `dumpsys activity top` shape (AOSP ActivityTaskManagerService.dumpActivity).
+  const dump = '''
+TASK 10174:com.whatsapp id=63 userId=0 displayId=0(type=INTERNAL)
+  ACTIVITY com.whatsapp/.Main 1a2b pid=1234
+TASK 10200:org.mozilla.firefox id=70 userId=0 displayId=2(type=VIRTUAL)
+  ACTIVITY org.mozilla.firefox/.App 3c4d pid=4321
+TASK 10300:custom.affinity id=71 userId=0 displayId=2(type=VIRTUAL)
+  ACTIVITY com.example.notes/.Main 5e6f pid=99
+TASK null id=72 userId=0 displayId=N/A
+''';
+
+  test('visible tasks are read per display, package from the ACTIVITY line', () {
+    final t = parseTopTasks(dump);
+    expect(t.map((e) => (e.package, e.id, e.display)), [
+      ('com.whatsapp', 63, 0),
+      ('org.mozilla.firefox', 70, 2),
+      ('com.example.notes', 71, 2),
+    ]);
+    expect(parseDesktopTasks(dump, 2), {'org.mozilla.firefox': 70, 'com.example.notes': 71});
+    expect(parseDesktopTasks(dump, 0), {'com.whatsapp': 63});
+  });
+
+  test('every launch is checked: redirects to the phone are never reported as success', () {
+    const desk = TopTask('com.app', 80, 2);
+    const phoneOld = TopTask('com.app', 50, 0);
+    // Opened only on the virtual display.
+    expect(judgeDesktopLaunch('com.app', 2, [], [desk]), DesktopLaunch.desktop);
+    // Android moved the phone's window (single-instance app).
+    expect(judgeDesktopLaunch('com.app', 2, [phoneOld], [const TopTask('com.app', 50, 2)]),
+      DesktopLaunch.movedFromPhone);
+    // A new window also appeared on the phone.
+    expect(judgeDesktopLaunch('com.app', 2, [], [desk, const TopTask('com.app', 81, 0)]),
+      DesktopLaunch.alsoOnPhone);
+    // Sent to the phone instead.
+    expect(judgeDesktopLaunch('com.app', 2, [], [const TopTask('com.app', 81, 0)]),
+      DesktopLaunch.phone);
+    expect(judgeDesktopLaunch('com.app', 2, [phoneOld], [phoneOld],
+      amOutput: 'Warning: Activity not started, its current task has been brought to the front'),
+      DesktopLaunch.phone);
+    // Not visible anywhere yet.
+    expect(judgeDesktopLaunch('com.app', 2, [phoneOld], [phoneOld]), DesktopLaunch.unconfirmed);
+    for (final r in DesktopLaunch.values) {
+      expect(desktopLaunchMessage(r, 'com.app', 2), isNotEmpty);
+    }
+    expect(desktopLaunchMessage(DesktopLaunch.phone, 'com.app', 2), contains('en lugar del escritorio'));
+  });
+
+  test('a launch never targets a display that is gone', () {
+    const d = 'Display Devices: size=2\n  mDisplayId=0\n  mDisplayId=2\n';
+    expect(displayListed(d, 2), isTrue);
+    expect(displayListed(d, 3), isFalse);
+    expect(displayListed('unknown format', 2), isNull);
   });
 }

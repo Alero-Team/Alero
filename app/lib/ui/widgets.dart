@@ -95,6 +95,16 @@ class Panel extends StatelessWidget {
       icon: Symbols.block_rounded,
       color: c.danger,
     ),
+    pb.PeerState.disconnected when p.trusted && p.detail == 'paused' => (
+      label: 'Desconectado por ti',
+      icon: Symbols.pause_circle_rounded,
+      color: c.muted,
+    ),
+    pb.PeerState.disconnected when p.trusted && p.detail == 'paused_remote' => (
+      label: 'Desconectado desde el otro dispositivo',
+      icon: Symbols.pause_circle_rounded,
+      color: c.muted,
+    ),
     pb.PeerState.disconnected =>
       p.trusted
           ? (

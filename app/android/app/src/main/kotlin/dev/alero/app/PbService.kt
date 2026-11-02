@@ -55,7 +55,7 @@ object Notifier {
 
     private fun open(c: Context) = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
 
-    fun status(c: Context, text: String): Notification =
+    fun status(c: Context, text: String, connected: Boolean = false): Notification =
         Notification.Builder(c, QUIET)
             .setSmallIcon(R.drawable.ic_stat_alero)
             .setContentTitle("Alero")
@@ -63,6 +63,15 @@ object Notifier {
             .setContentIntent(open(c))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .apply {
+                // Opens Alero's file picker for the connected computer (same path as the widgets' Enviar).
+                if (connected) addAction(Notification.Action.Builder(null, "Enviar archivo", PendingIntent.getActivity(
+                    c, "notice-send".hashCode(),
+                    Intent(c, MainActivity::class.java).putExtra(MainActivity.WIDGET, "send")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )).build())
+            }
             .build()
 
     private const val CONTROLLED = 2
@@ -136,7 +145,8 @@ class PbService : Service() {
 
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
         Notifier.init(this)
-        val n = Notifier.status(this, i?.getStringExtra(TEXT) ?: WAITING)
+        val text = i?.getStringExtra(TEXT) ?: WAITING
+        val n = Notifier.status(this, text, connected = text != WAITING)
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
         return START_NOT_STICKY
     }

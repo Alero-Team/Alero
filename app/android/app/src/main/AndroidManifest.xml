@@ -25,6 +25,7 @@
         <activity
             android:name=".DesktopHomeActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:excludeFromRecents="true"
             android:taskAffinity="dev.alero.app.desktop"
@@ -104,6 +105,32 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <receiver android:name=".StopControl" android:exported="false" />
+        <receiver android:name=".TransferAction" android:exported="false" />
+        <receiver android:name=".DevicesWidget" android:exported="true" android:label="@string/w_devices_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_devices" />
+        </receiver>
+        <receiver android:name=".StatusWidget" android:exported="true" android:label="@string/w_status_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_status" />
+        </receiver>
+        <receiver android:name=".ActionsWidget" android:exported="true" android:label="@string/w_actions_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_actions" />
+        </receiver>
+        <receiver android:name=".TransferWidget" android:exported="true" android:label="@string/w_transfer_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_transfer" />
+        </receiver>
+        <receiver android:name=".MediaWidget" android:exported="true" android:label="@string/w_media_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_media" />
+        </receiver>
+        <receiver android:name=".PanelWidget" android:exported="true" android:label="@string/w_panel_label">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_panel" />
+        </receiver>
+        <receiver android:name=".WidgetMedia" android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

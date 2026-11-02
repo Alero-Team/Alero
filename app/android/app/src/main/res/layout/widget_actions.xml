@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/w_bg"
+    android:orientation="vertical"
+    android:padding="10dp">
+    <TextView android:id="@+id/a_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:layout_marginEnd="6dp" android:layout_marginBottom="2dp" android:ellipsize="end" android:maxLines="1" android:text="Sin ordenador emparejado" android:textColor="@color/w_on" android:textSize="13sp" android:fontFamily="sans-serif-medium" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <LinearLayout android:id="@+id/a_connect" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Conectar" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_link" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Conectar" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/a_send" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Enviar" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_send" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Enviar" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/a_files" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Archivos" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_folder" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Archivos" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+        <LinearLayout android:id="@+id/a_clip" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Portapapeles" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_clip" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Portapapeles" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/a_control" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Control" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_mouse" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Control" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/a_screen" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Pantalla" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_cast" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Pantalla" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

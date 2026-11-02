@@ -41,6 +41,18 @@ jobs:
           "ALERO_ANDROID_KEY_ALIAS=$env:SIGNING_ALIAS" >> $env:GITHUB_ENV
           "ALERO_ANDROID_KEY_PASSWORD=$env:SIGNING_KEY_PASSWORD" >> $env:GITHUB_ENV
       - run: cargo fetch --locked
+      # The release is published only if every test passes (Checks runs separately and does not gate it).
+      - run: cargo test --locked --workspace
+      - name: Flutter analyze and tests
+        shell: pwsh
+        working-directory: app
+        run: |
+          flutter pub get --enforce-lockfile
+          if ($LASTEXITCODE -ne 0) { throw 'pub get failed' }
+          flutter analyze --no-pub
+          if ($LASTEXITCODE -ne 0) { throw 'analyze failed' }
+          flutter test --no-pub
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter tests failed' }
       - run: rustup target add aarch64-linux-android
       - name: Android package and storage tests
         shell: pwsh
@@ -97,4 +109,18 @@ jobs:
         shell: bash
         run: |
           version=$(sed -n 's/^version: \([^+]*\).*/\1/p' app/pubspec.yaml)
-          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "Alero $version" --prerelease --notes-file CHANGELOG.md
+          # One checksum list for every package (the per-file .sha256 sidecars are folded into it).
+          rm -f dist/*.sha256
+          (cd dist && sha256sum -- * > SHA256SUMS.txt)
+          {
+            # This version's section of the changelog, then the hashes.
+            awk -v v="## $version " 'index($0, v) == 1 {on=1; next} on && /^## / {exit} on' CHANGELOG.md
+            echo
+            echo '### SHA-256'
+            echo
+            echo '| Archivo | SHA-256 |'
+            echo '| --- | --- |'
+            while read -r hash file; do echo "| \`${file#\*}\` | \`$hash\` |"; done < dist/SHA256SUMS.txt
+          } > notes.md
+          grep -q 'SHA-256' notes.md && grep -q 'Errores corregidos' notes.md
+          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "Alero $version" --prerelease --notes-file notes.md

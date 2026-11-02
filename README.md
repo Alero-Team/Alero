@@ -2,11 +2,11 @@
 
 Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
 
-**Alpha software · 0.1.11.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
+**Alpha software · 0.1.13.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
 
 ## Use
 
-1. Install the Android ARM64 APK and the Windows x64 installer from the same release.
+1. Install the Android ARM64 APK and the Windows x64 installer from the same release. The installer program itself is 32-bit (Inno Setup); it installs the 64-bit app. Windows 11 on ARM runs it through x64 emulation; native ARM64 and 32-bit x86 builds are not available (see CHANGELOG 0.1.13).
 2. Open Alero on both devices, use the same Wi-Fi network and pair them in **Devices**. Alternatively, scan the computer's QR code.
 3. Allow remote control on Windows and grant only the phone permissions needed for the features you use.
 
@@ -26,7 +26,7 @@ En **Windows → Controlar teléfono → Iniciar Alero Desktop**, conecta el Pix
 
 - **Apps en la pantalla virtual:** el panel identifica la pantalla creada antes de enviar comandos. Si hay varias pantallas secundarias, escoge explícitamente la virtual; no se redirige a la pantalla del teléfono por error.
 - **Ventanas reales:** mover, redimensionar, minimizar y cerrar una ventana mediante su barra de título depende del modo escritorio nativo de Android y de la elegibilidad del display virtual. No todos los Pixel, ROM o versiones lo ofrecen. Abrir el visor no implica automáticamente disponer de multitarea libre.
-- **Cerrar desde el panel:** la X solicita autorización para **forzar la detención de la app**; esto afecta a todas sus actividades y notificaciones, no equivale a cerrar una sola ventana. Si Android ofrece la barra de título nativa, usa sus controles para un cierre de ventana normal.
+- **Cerrar desde el panel:** la X ofrece **Cerrar ventana** (quita solo la ventana del escritorio virtual; la app sigue en el teléfono) o **Forzar detención** (cierra la app en todas las pantallas). Cada app abierta se verifica: Alero indica si Android la colocó en el escritorio, la movió desde el Pixel o la abrió en el Pixel.
 - **Visor separado:** el contenido Android está en la ventana SDL de scrcpy; el panel Flutter es un lanzador y gestor de escritorio, no una sustitución del compositor Android. Las aplicaciones, interfaz y datos son reales, no una simulación.
 - No requiere root, modificar configuraciones globales ni permisos Android adicionales. La pantalla virtual se cierra al detener la sesión. Usa la firma existente para actualizar el APK.
 
