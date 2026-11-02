@@ -7,9 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 
 class Shared {
-  Shared(this.files, this.text);
+  Shared(this.files, this.text, {this.widget = ''});
   final List<Picked> files;
   final String text;
+
+  /// A home-screen widget opened the app: what to open (`send`, `control`, …).
+  final String widget;
 }
 
 class Picked {
@@ -102,6 +105,8 @@ class Native {
     if (!_android) return null;
     final m = await _ch.invokeMapMethod<String, Object?>('takeShared');
     if (m == null) return null;
+    final widget = m['widget'] as String? ?? '';
+    if (widget.isNotEmpty) return Shared(const [], '', widget: widget);
     final files = [
       for (final f in (m['files'] as List? ?? []))
         if (f is Map)

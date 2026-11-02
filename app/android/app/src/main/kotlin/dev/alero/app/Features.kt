@@ -46,6 +46,7 @@ object Features {
         if (::ctx.isInitialized) return
         ctx = c.applicationContext
         Files.init(ctx)
+        WidgetData.init(ctx)
         Thread(::loop, "pb-features").apply { isDaemon = true }.start()
         ctx.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
@@ -64,6 +65,7 @@ object Features {
         while (true) {
             val line = try { Bridge.next(5000) } catch (_: Throwable) { null }
             try { powerTick() } catch (_: Exception) { /* a missing reading must not stop the loop */ }
+            try { WidgetData.tick() } catch (_: Throwable) {}
             if (line == null) continue
             try {
                 handle(JSONObject(line))
@@ -77,8 +79,9 @@ object Features {
         when (e.optString("type")) {
             "PeerChanged" -> {
                 val p = e.getJSONObject("peer")
-                if (!p.optBoolean("trusted")) return
                 val id = p.getString("id")
+                if (!p.optBoolean("trusted")) return WidgetData.forget(id)
+                WidgetData.peer(id, p.optString("name"), p.optString("state") == "Connected")
                 val fresh = synchronized(online) {
                     if (p.optString("state") == "Connected") online.put(id, p.optString("name")) == null else { online.remove(id); false }
                 }
@@ -87,7 +90,12 @@ object Features {
                 // The foreground service (and its notification) exists only while a computer is connected.
                 PbService.update(ctx, onlineNames())
             }
-            "TransferFinished" -> Files.finished(e.getString("id"))
+            "TransferStarted" -> WidgetData.transferStarted(e)
+            "TransferProgress" -> WidgetData.transferProgress(e)
+            "TransferFinished" -> {
+                WidgetData.transferFinished(e)
+                Files.finished(e.getString("id"))
+            }
             "Message" -> {
                 val peer = e.getString("peer_id")
                 val body = e.optJSONObject("body") ?: JSONObject()
@@ -95,6 +103,8 @@ object Features {
                 if (kind.startsWith("pb.x.fs.")) return Files.handle(peer, kind, body)
                 when (kind) {
                     "pb.x.info.request" -> hello(peer)
+                    "pb.x.info" -> WidgetData.info(peer, body)
+                    "pb.x.pcmedia.state" -> WidgetData.media(body)
                     "pb.x.phonecontrol" -> Notifier.controlled(peer, synchronized(online) { online[peer] } ?: "Un ordenador", body.optBoolean("active"))
                     "pb.x.clip" -> setClipboard(body.optString("text"))
                     "pb.x.media.cmd" -> main.post { NotifListener.command(body) }
@@ -121,6 +131,8 @@ object Features {
         NotifListener.snapshot()?.let { Bridge.sendTo(peer, "pb.x.notif.snapshot", it) }
         NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }
     }
+
+    fun phoneBattery(): Pair<Int, Boolean> = if (::ctx.isInitialized) battery() else -1 to false
 
     private fun battery(): Pair<Int, Boolean> {
         val i = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return -1 to false

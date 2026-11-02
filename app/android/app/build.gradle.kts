@@ -48,12 +48,18 @@ android {
             // Never accidentally ship a Play-Protect-untrusted debug fallback.
             // CI supplies the existing keystore, preserving update compatibility.
             signingConfig = signingConfigs.findByName("aleroRelease")
-                ?: error("ALERO_ANDROID_KEYSTORE is required for release packages")
             // Smaller and faster to load: R8 shrinks code, unused resources go. Rules keep the JNI entry points.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+}
+
+// A release package without the release identity must never be built; debug builds (local checks) need no keystore.
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.contains("Release") } && android.signingConfigs.findByName("aleroRelease") == null) {
+        error("ALERO_ANDROID_KEYSTORE is required for release packages")
     }
 }
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/m_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/w_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+    <TextView android:id="@+id/m_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_on" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
+    <TextView android:id="@+id/m_artist" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="13sp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:orientation="horizontal">
+        <ImageView android:id="@+id/m_prev" android:layout_width="44dp" android:layout_height="44dp" android:layout_marginHorizontal="6dp" android:background="@drawable/w_pill" android:contentDescription="Anterior" android:padding="10dp" android:src="@drawable/ic_w_prev" />
+        <ImageView android:id="@+id/m_play" android:layout_width="52dp" android:layout_height="52dp" android:layout_marginHorizontal="6dp" android:background="@drawable/w_pill" android:contentDescription="Reproducir" android:padding="10dp" android:src="@drawable/ic_w_play" />
+        <ImageView android:id="@+id/m_next" android:layout_width="44dp" android:layout_height="44dp" android:layout_marginHorizontal="6dp" android:background="@drawable/w_pill" android:contentDescription="Siguiente" android:padding="10dp" android:src="@drawable/ic_w_next" />
+    </LinearLayout>
+</LinearLayout>

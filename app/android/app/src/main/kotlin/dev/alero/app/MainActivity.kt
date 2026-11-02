@@ -278,6 +278,7 @@ class MainActivity : FlutterActivity() {
     private fun takeShared(): Map<String, Any>? {
         val i = shared ?: return null
         shared = null
+        i.getStringExtra(WIDGET)?.let { return mapOf("widget" to it) }
         if (i.action != Intent.ACTION_SEND && i.action != Intent.ACTION_SEND_MULTIPLE) return null
         val uris = mutableListOf<Uri>()
         if (i.action == Intent.ACTION_SEND) {
@@ -430,6 +431,8 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        /** Intent extra set by the home-screen widgets: what to open (see Hub.widgetAction). */
+        const val WIDGET = "alero.widget"
         private var channel: MethodChannel? = null
         private var shared: Intent? = null
         private const val PICK = 41

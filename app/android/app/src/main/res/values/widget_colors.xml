@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widgets. -->
+<resources>
+    <color name="w_bg">#FFF7F7FC</color>
+    <color name="w_tile">#FFE7E5F0</color>
+    <color name="w_on">#FF1B1B21</color>
+    <color name="w_muted">#FF47464F</color>
+    <color name="w_accent">#FF5A5A90</color>
+    <color name="w_container">#FFE2E0F9</color>
+    <color name="w_on_container">#FF17164A</color>
+</resources>

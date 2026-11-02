@@ -10,11 +10,13 @@ import 'package:window_manager/window_manager.dart';
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'brand.dart';
+import 'clipboard.dart';
 import 'devices.dart';
 import 'explorer.dart';
 import 'expressive.dart';
 import 'home.dart';
 import 'nav.dart';
+import 'pc_control.dart';
 import 'pc_screen.dart';
 import 'settings.dart';
 import 'theme.dart';
@@ -122,7 +124,41 @@ class _ShellState extends State<Shell>
   /// engine no longer waits for an answer (the other side answered, it timed out, or it was answered by code).
   DialogRoute<bool>? _pairRoute, _offerRoute;
 
+  /// A home-screen widget's button: the same screens the app's own buttons open.
+  void _widgetAction() {
+    final a = hub.widgetAction;
+    if (a == null) return;
+    final pc = hub.peers
+        .where((p) => p.trusted && p.state == pb.PeerState.connected)
+        .firstOrNull;
+    if (pc == null && const {'send', 'clip', 'control', 'screen'}.contains(a)) {
+      if (!hub.widgetWaited) return; // still connecting
+      hub.widgetAction = null;
+      _go(Section.devices);
+      hub.messages.add('Tu ordenador no está conectado.');
+      return;
+    }
+    hub.widgetAction = null;
+    switch (a) {
+      case 'devices':
+        _go(Section.devices);
+      case 'files':
+        _go(Section.files);
+      case 'send':
+        hub.send(pc!.id);
+      case 'clip':
+        openClipboard(context, hub, pc!.id);
+      case 'control':
+        openPcControl(context, hub, pc!.id, pc.name);
+      case 'screen':
+        openPcScreen(context, hub, pc!.id, pc.name);
+      default:
+        _go(Section.home);
+    }
+  }
+
   void _questions() {
+    _widgetAction();
     final p = hub.pairPrompt;
     if (p != null && _pairRoute == null) {
       final route = _pairRoute = DialogRoute<bool>(

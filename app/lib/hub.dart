@@ -717,8 +717,26 @@ class Hub extends ChangeNotifier {
 
   // --- Android share menu, permissions, folders, theme -------------------------------------------------
 
+  /// What a home-screen widget asked to open; the shell carries it out once a computer is connected.
+  String? widgetAction;
+
+  /// True when the computer did not connect soon after a widget asked for something that needs it.
+  bool widgetWaited = false;
+
   Future<void> takeShare() async {
     final s = await Native.takeShared();
+    if (s != null && s.widget.isNotEmpty) {
+      final a = widgetAction = s.widget;
+      widgetWaited = false;
+      // A cold start: the computer usually reconnects in a few seconds.
+      Timer(const Duration(seconds: 12), () {
+        if (widgetAction == a) {
+          widgetWaited = true;
+          notifyListeners();
+        }
+      });
+      return notifyListeners();
+    }
     if (s == null || (s.files.isEmpty && s.text.isEmpty)) return;
     share = s;
     notifyListeners();

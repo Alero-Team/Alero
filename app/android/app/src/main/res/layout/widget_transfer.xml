@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/t_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/w_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+        <ImageView android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/w_pill" android:padding="9dp" android:src="@drawable/ic_w_swap" android:importantForAccessibility="no" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:id="@+id/t_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Sin transferencias" android:textColor="@color/w_on" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
+            <TextView android:id="@+id/t_state" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="13sp" />
+        </LinearLayout>
+        <ImageView android:id="@+id/t_send" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:background="@drawable/w_pill" android:padding="12dp" android:src="@drawable/ic_w_send" android:contentDescription="Enviar archivo" />
+    </LinearLayout>
+    <ProgressBar android:id="@+id/t_progress" style="@android:style/Widget.Material.ProgressBar.Horizontal" android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="8dp" android:max="1000" android:progressTint="@color/w_accent" android:progressBackgroundTint="@color/w_tile" />
+    <TextView android:id="@+id/t_recent" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:ellipsize="end" android:maxLines="2" android:lineSpacingExtra="2dp" android:textColor="@color/w_muted" android:textSize="12sp" android:visibility="gone" />
+</LinearLayout>
