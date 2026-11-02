@@ -258,8 +258,11 @@ class Scrcpy {
     _scrcpy,
     args,
     environment: {'ADB': _adb},
-    // Detached: no console window. Its stdout closing tells us the window was closed.
-    mode: ProcessStartMode.detachedWithStdio,
+    // Attached stdio uses CREATE_NO_WINDOW for Windows console programs in
+    // Dart's process launcher. This hides scrcpy's auxiliary console but
+    // keeps its SDL phone window visible. It also exposes the real exit code
+    // so the session ends when scrcpy exits, not when a pipe happens to close.
+    mode: ProcessStartMode.normal,
   );
 }
 

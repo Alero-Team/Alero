@@ -117,9 +117,13 @@ class PhoneSessions extends ChangeNotifier {
     stop(serial);
     final p = await Scrcpy.launch(scrcpyArgs(serial, title, o));
     _running[serial] = p;
+    // Drain both pipes so scrcpy cannot block if its logs fill the buffers.
     p.stderr.drain<void>();
-    p.stdout.drain<void>().whenComplete(() {
-      // The window was closed (or scrcpy failed): forget it, unless a newer session took its place.
+    p.stdout.drain<void>();
+    // Use the actual process exit, not stdout closing (which is unreliable
+    // when native subprocesses inherit a pipe). Scrcpy's SDL window closing
+    // terminates scrcpy; Alero's Stop button also kills this same process.
+    p.exitCode.then((_) {
       if (_running[serial] == p) {
         _running.remove(serial);
         notifyListeners();

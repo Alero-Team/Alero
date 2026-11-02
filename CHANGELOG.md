@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.1.10 — 2026-11-01
+
+- Windows: el control del teléfono inicia scrcpy sin mostrar la consola auxiliar ADB/scrcpy; la ventana de imagen y los controles del teléfono siguen disponibles.
+- El estado de la sesión ahora se actualiza según la finalización real del proceso scrcpy, sin deducirla del cierre de stdout. Se conserva la finalización desde «Detener» y al salir de Alero.
+- Se mantiene la conexión USB/Wi-Fi, el control de escritorio y las herramientas Dextop incorporadas en 0.1.9. No se requieren nuevos permisos en Android.
+- Versión visible sincronizada con la del instalador y APK. Corrección pendiente de comprobación en un Pixel conectado a Windows.
+
 ## 0.1.9 — 2026-11-01
 
 - Alero amplía el control de Windows a Android con un **taller de escritorio** inspirado en Dextop: lista dinámica de aplicaciones instaladas mediante ADB autorizado, búsqueda y apertura de aplicaciones.
