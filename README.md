@@ -2,7 +2,7 @@
 
 Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
 
-**Alpha software · 0.1.10.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
+**Alpha software · 0.1.11.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
 
 ## Use
 
@@ -17,6 +17,18 @@ The file browser's Music section excludes audio lasting 5 seconds or less, ringt
 Android's optional **Security** setting unlocks the app with the system fingerprint or device PIN. It locks the interface when returning from the background; previously paired connections can continue working in the background. Alero never stores the PIN or biometric data.
 
 Device previews use the reported screen geometry, hardware identity and built-in system wallpaper. Verified hardware profiles: Google Pixel 9a and Lenovo V15 G4 IAH. Other models use the geometry the device reports. Windows uses its installed stock Windows wallpaper; OEM-specific artwork is not bundled.
+
+## Alero Desktop (0.1.11)
+
+La versión Windows incluye **scrcpy 5.0.1** (paquete oficial x64 con SHA-256 fijo), para mejorar la compatibilidad de pantallas virtuales con Android 17.
+
+En **Windows → Controlar teléfono → Iniciar Alero Desktop**, conecta el Pixel por USB o Wi-Fi mediante depuración autorizada y pulsa **Iniciar Alero Desktop**. Aparecerá un visor de scrcpy con una **pantalla Android virtual independiente** y un panel Alero Desktop con buscador, favoritos fijados en una barra inferior, selección de resolución/densidad, detección del display, tareas reconocidas por Android, controles de Inicio, maximización y distribución. Las herramientas Dextop y espacios de trabajo anteriores siguen disponibles.
+
+- **Apps en la pantalla virtual:** el panel identifica la pantalla creada antes de enviar comandos. Si hay varias pantallas secundarias, escoge explícitamente la virtual; no se redirige a la pantalla del teléfono por error.
+- **Ventanas reales:** mover, redimensionar, minimizar y cerrar una ventana mediante su barra de título depende del modo escritorio nativo de Android y de la elegibilidad del display virtual. No todos los Pixel, ROM o versiones lo ofrecen. Abrir el visor no implica automáticamente disponer de multitarea libre.
+- **Cerrar desde el panel:** la X solicita autorización para **forzar la detención de la app**; esto afecta a todas sus actividades y notificaciones, no equivale a cerrar una sola ventana. Si Android ofrece la barra de título nativa, usa sus controles para un cierre de ventana normal.
+- **Visor separado:** el contenido Android está en la ventana SDL de scrcpy; el panel Flutter es un lanzador y gestor de escritorio, no una sustitución del compositor Android. Las aplicaciones, interfaz y datos son reales, no una simulación.
+- No requiere root, modificar configuraciones globales ni permisos Android adicionales. La pantalla virtual se cierra al detener la sesión. Usa la firma existente para actualizar el APK.
 
 ## Desktop tools (0.1.9)
 

@@ -77,6 +77,8 @@ void main() {
         flexDisplay: true, startApp: 'org.mozilla.firefox'));
     expect(virtual, contains('--new-display=2560x1440'));
     expect(virtual, contains('--flex-display'));
+    expect(virtual, contains('--keep-active'));
+    expect(virtual, contains('--display-ime-policy=local'));
     expect(virtual, contains('--start-app=org.mozilla.firefox'));
     expect(virtual.any((v) => v.startsWith('--display-id=')), isFalse);
 

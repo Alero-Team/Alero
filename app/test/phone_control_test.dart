@@ -33,6 +33,10 @@ emulator-5554          offline
     );
     expect(
       desktopSupport(sdk: 37, freeform: true, forced: false),
+      Desktop.ready,
+    );
+    expect(
+      desktopSupport(sdk: 35, freeform: true, forced: false),
       Desktop.needsSetting,
     );
     expect(

@@ -187,6 +187,59 @@ class Scrcpy {
     ]);
   }
 
+  /// Only confirmed activity tasks on the requested secondary display.
+  static Future<Map<String, int>> desktopTasks(String serial, int displayId) async {
+    if (displayId <= 0 || displayId > 255) {
+      throw const FormatException('Selecciona una pantalla secundaria válida');
+    }
+    return parseDesktopTasks(
+      await _checked(serial, ['dumpsys', 'activity', 'top']),
+      displayId,
+    );
+  }
+
+  /// Route HOME to the secondary display; never change the phone display.
+  static Future<void> displayKey(String serial, int displayId, int code) async {
+    if (displayId <= 0 || displayId > 255 || code < 0 || code > 300) {
+      throw const FormatException('Pantalla o tecla inválida');
+    }
+    await _checked(serial, ['input', '-d', '$displayId', 'keyevent', '$code']);
+  }
+
+  /// Maximize only a task that still belongs to the chosen display.
+  static Future<void> resizeDesktopTask(
+    String serial, int taskId, DesktopDisplay display,
+  ) async {
+    final geometry = display.resolution;
+    if (taskId <= 0 || display.id <= 0 || geometry == null) {
+      throw const FormatException('Tarea o pantalla sin resolución válida');
+    }
+    final tasks = await desktopTasks(serial, display.id);
+    if (!tasks.containsValue(taskId)) {
+      throw StateError('La tarea ya no se encuentra en esa pantalla.');
+    }
+    final (width, height) = geometry;
+    final result = await _checked(serial, [
+      'am', 'task', 'resize', '$taskId', '0', '0', '$width', '$height',
+    ]);
+    if (result.contains('Error') || result.contains('Exception') ||
+        result.contains('Unknown command')) {
+      throw StateError('Android rechazó la ventana: $result');
+    }
+  }
+
+  /// This is a force-stop, not a native window close. The UI confirms it.
+  static Future<void> forceStopUserApp(String serial, String package) async {
+    if (!validAndroidPackage(package)) {
+      throw const FormatException('Paquete no válido');
+    }
+    final userApps = await installedApps(serial);
+    if (!userApps.contains(package)) {
+      throw StateError('Solo se pueden detener aplicaciones del usuario.');
+    }
+    await _checked(serial, ['am', 'force-stop', package]);
+  }
+
   /// Experimental AOSP task-window placement. Dextop normally performs this
   /// using its own privileged TaskBridge. With Alero, task IDs must match the
   /// exact installed package AND selected display, and ADB must explicitly

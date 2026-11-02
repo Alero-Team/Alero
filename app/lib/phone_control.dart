@@ -31,8 +31,9 @@ List<AdbDevice> parseDevices(String out) {
   return list;
 }
 
-/// The desktop mode needs Android's own desktop on secondary displays: freeform windows (Android 10+) and the
-/// developer option «Forzar modo de escritorio». Alero never changes that option itself.
+/// Android 16+ may expose native desktop windowing without the legacy
+/// 'force desktop mode' developer flag. This is a capability hint, not proof
+/// that an untrusted scrcpy virtual display has window decorations.
 enum Desktop { unsupported, needsSetting, ready }
 
 Desktop desktopSupport({
@@ -41,7 +42,7 @@ Desktop desktopSupport({
   required bool forced,
 }) => sdk < 29 || !freeform
     ? Desktop.unsupported
-    : forced
+    : (forced || sdk >= 36)
     ? Desktop.ready
     : Desktop.needsSetting;
 
@@ -89,6 +90,8 @@ List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
   // A virtual display shows the phone's desktop; the phone's own screen is untouched, so it is not turned off.
   if (o.desktop) ...[
     '--new-display=${o.desktopSize}',
+    '--keep-active',
+    '--display-ime-policy=local',
     if (o.flexDisplay) '--flex-display',
     if (o.startApp != null) '--start-app=${o.startApp}',
   ] else if (o.screenOff)

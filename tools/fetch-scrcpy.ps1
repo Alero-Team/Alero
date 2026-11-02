@@ -1,7 +1,7 @@
 # Download the pinned Windows runtime and verify its published SHA-256.
 $ErrorActionPreference = 'Stop'
-$version = 'v4.1'
-$sha256 = '5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db'
+$version = 'v5.0.1'
+$sha256 = 'b12a2c4ee8be317422451fc7dcf8ee20a71b5ea7ef9ad73ddd825a25316227a5'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\')
 $dest = [IO.Path]::GetFullPath((Join-Path $root 'third_party\scrcpy'))
 if (!$dest.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid runtime destination.' }

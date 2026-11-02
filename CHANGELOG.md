@@ -1,5 +1,18 @@
 # Cambios
 
+## 0.1.11 — 2026-11-02
+
+- **scrcpy actualizado:** runtime Windows pasa de 4.1 a 5.0.1, con hash SHA-256 oficial verificado para mayor compatibilidad con Android 17. La elegibilidad de un display virtual para ventanas libres sigue determinada por Android.
+- **Alero Desktop en Windows:** nueva pantalla accesible desde «Controlar teléfono» para iniciar una pantalla Android virtual independiente mediante scrcpy 4.1 y utilizar aplicaciones del Pixel desde la laptop.
+- **Entorno de trabajo:** lanzador con búsqueda de paquetes de usuario, favoritos persistentes (hasta 12) en una barra inferior, selección de pantalla real detectada, acceso al catálogo y a espacios guardados de Dextop.
+- **Resolución adaptativa:** 720p, 900p, 1080p o 1440p, densidad adecuada para pantalla grande, opción `--flex-display`, `--keep-active` y teclado/IME local en la pantalla Android.
+- **Ventanas y tareas:** consultar tareas Android reales de la pantalla secundaria, traer aplicaciones al frente, solicitar maximización y organización de 2 a 4 ventanas con los comandos ADB permitidos por Android. Botón Inicio dirigido a la pantalla secundaria. El cierre forzado de apps del usuario requiere confirmación y explica sus efectos sobre notificaciones.
+- **Compatibilidad Android 16/17:** la detección de ventanas libres considera el modo escritorio moderno y no depende únicamente del antiguo ajuste «Forzar modo de escritorio». La apertura de una pantalla virtual y el modo de ventanas con barra de título son capacidades distintas: Android puede denegar ventanas libres incluso cuando scrcpy muestra la pantalla.
+- **Protección de pantalla física:** no se adivina el identificador de pantalla; se compara la lista antes/después de crearla y se exige seleccionar un display secundario si no puede identificarse. No se necesita root.
+- **Limitaciones comprobables:** scrcpy presenta Android en una ventana propia, separada del panel Alero Desktop. Los botones de minimizar/cerrar/redimensionar individualmente mediante las decoraciones de Android solo aparecen cuando el sistema admite escritorio nativo en esa pantalla; Alero no inventa controles ni activa configuraciones privilegiadas. El lanzador alternativo es Windows, no una modificación del launcher del Pixel. Es necesaria una prueba real con el dispositivo para confirmar la compatibilidad visual.
+- Se mantiene la funcionalidad de Android (sin permisos nuevos), el control normal del teléfono, las notificaciones, las herramientas de escritorio previas, los espacios JSON y la firma de APK. Se actualizan pruebas automatizadas y versión 0.1.11 para APK e instalador Windows.
+
+
 ## 0.1.10 — 2026-11-01
 
 - Windows: el control del teléfono inicia scrcpy sin mostrar la consola auxiliar ADB/scrcpy; la ventana de imagen y los controles del teléfono siguen disponibles.

@@ -12,6 +12,7 @@ import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'desktop_workshop.dart';
+import 'alero_desktop.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -343,7 +344,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                         ],
                         Text(
                           switch (_desktop) {
-                            Desktop.ready => 'Este teléfono tiene escritorio de Android: abre una pantalla aparte con ventanas libres, sin tocar su pantalla.',
+                            Desktop.ready => 'Android declara compatibilidad con ventanas libres. La pantalla virtual puede tener restricciones del fabricante; pruébala en Alero Desktop.',
                             Desktop.needsSetting => 'Este teléfono admite escritorio. Actívalo en Ajustes › Sistema › Opciones de desarrollador › «Forzar modo de escritorio» y reinicia el teléfono. Mientras tanto se usa su pantalla normal.',
                             Desktop.unsupported => 'Este teléfono no tiene escritorio de Android: se controla su pantalla normal.',
                           },
@@ -376,6 +377,26 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                           icon: const Icon(Symbols.dashboard_customize_rounded),
                           label: const Text('Abrir herramientas'),
                         ),
+                        const SizedBox(height: Gap.s),
+                        FilledButton.icon(
+                          onPressed: _busy ? null : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => AleroDesktopPage(
+                                hub: widget.hub,
+                                serial: d.serial,
+                                deviceName: d.name,
+                                peerId: _peerFor(d),
+                              ),
+                            ),
+                          ),
+                          icon: const Icon(Symbols.desktop_windows_rounded),
+                          label: const Text('Iniciar Alero Desktop'),
+                        ),
+                        const SizedBox(height: Gap.xs),
+                        Text('Escritorio virtual, lanzador con dock y herramientas '
+                          'para ventanas de Android. Los botones nativos de '
+                          'minimizar, maximizar y cerrar dependen del dispositivo.',
+                          style: t.bodySmall),
                       ],
                     ),
                   ),
