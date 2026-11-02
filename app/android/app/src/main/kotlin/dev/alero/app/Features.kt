@@ -83,6 +83,7 @@ object Features {
                     if (p.optString("state") == "Connected") online.put(id, p.optString("name")) == null else { online.remove(id); false }
                 }
                 if (fresh) hello(id)
+                if (p.optString("state") != "Connected") Notifier.controlled(id, "", false) // the computer is gone: so is its session
                 // The foreground service (and its notification) exists only while a computer is connected.
                 PbService.update(ctx, onlineNames())
             }
@@ -94,6 +95,7 @@ object Features {
                 if (kind.startsWith("pb.x.fs.")) return Files.handle(peer, kind, body)
                 when (kind) {
                     "pb.x.info.request" -> hello(peer)
+                    "pb.x.phonecontrol" -> Notifier.controlled(peer, synchronized(online) { online[peer] } ?: "Un ordenador", body.optBoolean("active"))
                     "pb.x.clip" -> setClipboard(body.optString("text"))
                     "pb.x.media.cmd" -> main.post { NotifListener.command(body) }
                     "pb.x.media.request" -> NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }

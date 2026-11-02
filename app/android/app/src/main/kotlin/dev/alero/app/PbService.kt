@@ -25,6 +25,16 @@ object Prefs {
     fun setFiles(c: Context, on: Boolean) = sp(c).edit().putBoolean("files", on).apply()
 }
 
+/** "Detener" on the control notice: the computer ends the session at once. */
+class StopControl : android.content.BroadcastReceiver() {
+    override fun onReceive(c: Context, i: Intent) {
+        i.getStringExtra(PEER)?.let { Bridge.sendTo(it, "pb.x.phonecontrol.stop", org.json.JSONObject()) }
+        c.getSystemService(NotificationManager::class.java).cancel(2)
+    }
+
+    companion object { const val PEER = "peer" }
+}
+
 /** A silent status notification (the service) and alerts for the things that need the user. */
 object Notifier {
     private const val QUIET = "status"
@@ -54,6 +64,26 @@ object Notifier {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
+
+    private const val CONTROLLED = 2
+
+    /** While a computer views and drives this phone (scrcpy over adb), an ongoing notice with a way to stop it. */
+    fun controlled(peer: String, pc: String, on: Boolean) {
+        val c = ctx ?: return
+        val nm = c.getSystemService(NotificationManager::class.java)
+        if (!on) return nm.cancel(CONTROLLED)
+        val stop = PendingIntent.getBroadcast(
+            c, 0, Intent(c, StopControl::class.java).putExtra(StopControl.PEER, peer),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = Notification.Builder(c, ALERT).setSmallIcon(R.drawable.ic_stat_alero)
+            .setContentTitle("$pc controla este teléfono")
+            .setContentText("Ve la pantalla y usa el ratón y el teclado.")
+            .setContentIntent(open(c)).setOngoing(true).setOnlyAlertOnce(true)
+            .addAction(Notification.Action.Builder(null, "Detener", stop).build())
+            .build()
+        try { nm.notify(CONTROLLED, n) } catch (_: SecurityException) {}
+    }
 
     fun alert(title: String, text: String) {
         val c = ctx ?: return

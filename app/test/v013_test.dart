@@ -345,7 +345,10 @@ void main() {
       expect(label, findsOneWidget);
       expect(field, findsOneWidget);
       expect(tester.widget<TextField>(field).decoration?.labelText, isNull);
-      expect(tester.getBottomLeft(label).dy, lessThan(tester.getTopLeft(field).dy));
+      expect(
+        tester.getBottomLeft(label).dy,
+        lessThan(tester.getTopLeft(field).dy),
+      );
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     }

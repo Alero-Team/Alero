@@ -1,15 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:path_provider/path_provider.dart';
 
 import 'device_image.dart';
 import 'fs_client.dart';
 import 'native.dart';
 import 'pc_remote.dart';
+import 'phone_control.dart';
 import 'remote.dart';
 import 'scrcpy.dart';
 import 'src/rust/api/engine.dart' as pb;
@@ -197,6 +200,16 @@ class Hub extends ChangeNotifier {
         notifyListeners();
       }
     });
+    if (!Platform.isAndroid) {
+      PhoneSessions.instance.addListener(_sessionsChanged);
+      // Closing Alero ends every phone session: no scrcpy window is left driving a phone on its own.
+      AppLifecycleListener(
+        onExitRequested: () async {
+          PhoneSessions.instance.stopAll();
+          return AppExitResponse.exit;
+        },
+      );
+    }
     await takeShare();
     await checkPermissions();
     // A window opened later missed what phones sent on connect: ask again.
@@ -364,6 +377,7 @@ class Hub extends ChangeNotifier {
         Native.showWindow();
         return;
       case pb.Event_Quit():
+        PhoneSessions.instance.stopAll();
         exit(0);
     }
     notifyListeners();
@@ -445,6 +459,30 @@ class Hub extends ChangeNotifier {
     Map<String, Object?> body,
   ) => _send(peerId, kind, body);
 
+  /// adb serial -> paired phone it belongs to, for the sessions that phone was told about.
+  final _controlled = <String, String>{};
+
+  /// Desktop: starts a scrcpy session. When it drives a paired phone, that phone shows a notice with "Detener".
+  Future<void> startControl(
+    String serial,
+    String title,
+    SessionOptions o, {
+    String? peerId,
+  }) async {
+    await PhoneSessions.instance.start(serial, title, o);
+    if (peerId == null) return;
+    _controlled[serial] = peerId;
+    await _send(peerId, 'pb.x.phonecontrol', {'active': true});
+  }
+
+  void _sessionsChanged() {
+    for (final s in _controlled.keys.toList()) {
+      if (!PhoneSessions.instance.running(s)) {
+        _send(_controlled.remove(s)!, 'pb.x.phonecontrol', {'active': false});
+      }
+    }
+  }
+
   /// On connect: ask for the other side's info (a computer's own info comes from its daemon, a phone's from its
   /// service; each answers by itself when it sees us connect, this covers a window opened later).
   void _hello(String peerId) => _send(peerId, 'pb.x.info.request', {});
@@ -494,6 +532,17 @@ class Hub extends ChangeNotifier {
                 : 'No se pudo completar la acción en el ordenador.',
           );
         }
+      case 'pb.x.phonecontrol.stop':
+        // "Detener" on the phone's notice.
+        for (final s in [
+          for (final e in _controlled.entries)
+            if (e.value == peerId) e.key,
+        ]) {
+          PhoneSessions.instance.stop(s);
+        }
+        messages.add(
+          '${_peerName(peerId)} detuvo el control desde el teléfono.',
+        );
       case 'pb.x.remote.power.result':
         messages.add(
           b['ok'] == true ? 'Hecho' : 'El ordenador no pudo hacerlo',

@@ -292,9 +292,11 @@ class _Hero extends StatelessWidget {
                   ClipboardButton(hub, p.id, enabled: online),
                   if (!Platform.isAndroid && phone)
                     FilledButton.tonalIcon(
-                      onPressed: online ? () => openScreen(context, p) : null,
+                      onPressed: online
+                          ? () => openScreen(context, hub, p)
+                          : null,
                       icon: const Icon(Symbols.cast_rounded, size: 18),
-                      label: const Text('Ver pantalla'),
+                      label: const Text('Controlar teléfono'),
                     ),
                 ],
               ),

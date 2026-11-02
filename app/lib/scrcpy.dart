@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'phone_control.dart';
+
 /// Desktop wrapper around the bundled scrcpy + adb (Apache-2.0, ADR-0008). The phone must have wireless
 /// debugging on (Developer options); this is the "ADB" permission class in the project rules, chosen by the user
 /// and explained in the UI. Nothing here touches the engine or the trust store.
@@ -125,21 +127,36 @@ class Scrcpy {
     }
   }
 
-  static Future<Process> start(
-    String serial, {
-    required String title,
-    bool screenOff = false,
-    bool audio = true,
-  }) => Process.start(
-    _scrcpy,
-    [
-      '-s',
+  /// Every device adb sees, authorised or not, with its model (`adb devices -l`).
+  static Future<List<AdbDevice>> list() async =>
+      parseDevices('${(await _run(['devices', '-l'])).stdout}');
+
+  /// One shell command on the phone; its output, trimmed.
+  static Future<String> shell(String serial, String command) async =>
+      '${(await _run(['-s', serial, 'shell', command])).stdout}'.trim();
+
+  /// A hardware key on the phone (back, home, volume…), as Android's `input keyevent`.
+  /// Spoken to the running adb server: no extra adb process per tap (and none of another adb version, which
+  /// would restart the server and cut the scrcpy session).
+  static Future<void> key(String serial, int code) =>
+      _AdbServer._ask(['host:transport:$serial', 'shell:input keyevent $code']);
+
+  /// What the phone offers for the desktop mode (see [desktopSupport]).
+  static Future<Desktop> desktop(String serial) async {
+    final v = (await shell(
       serial,
-      '--window-title=$title',
-      '--stay-awake',
-      if (screenOff) '--turn-screen-off',
-      if (!audio) '--no-audio',
-    ],
+      'getprop ro.build.version.sdk; pm has-feature android.software.freeform_window_management; settings get global force_desktop_mode_on_external_displays',
+    )).split(RegExp(r'\s+'));
+    return desktopSupport(
+      sdk: int.tryParse(v.firstOrNull ?? '') ?? 0,
+      freeform: v.length > 1 && v[1] == 'true',
+      forced: v.length > 2 && v[2] == '1',
+    );
+  }
+
+  static Future<Process> launch(List<String> args) => Process.start(
+    _scrcpy,
+    args,
     environment: {'ADB': _adb},
     // Detached: no console window. Its stdout closing tells us the window was closed.
     mode: ProcessStartMode.detachedWithStdio,

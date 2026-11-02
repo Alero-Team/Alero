@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.1.8 — 2026-11-01
+
+- **Controlar el teléfono desde Windows** (scrcpy 4.1 incluido): nueva página con los teléfonos por USB y Wi-Fi y su estado («Listo», «Falta permiso: toca Permitir en el teléfono», «Sin respuesta»), detección automática de cables cada 3 s, elección entre varios dispositivos y vinculación por Wi-Fi con código.
+- Opciones de sesión: resolución (1024, 1600, original), calidad (4, 8, 16 Mbps), 30/60 fps, orientación, sonido, pantalla completa y apagar la pantalla del teléfono. Ratón, teclado y portapapeles funcionan en la ventana (Alt+F pantalla completa, Alt+R girar).
+- Barra durante la sesión: Atrás, Inicio, Recientes, volumen y reproducción, enviados al servidor de adb ya en marcha (sin lanzar procesos adb ni cortar la sesión).
+- **Modo escritorio** solo donde Android lo ofrece: con ventanas libres y la opción de desarrollador «Forzar modo de escritorio» se abre una pantalla aparte con el escritorio de Android; si falta la opción se explica cómo activarla, y si el teléfono no lo admite se usa su pantalla normal. Alero no cambia ajustes del teléfono por su cuenta.
+- Seguridad: el teléfono emparejado muestra «<PC> controla este teléfono» con un botón «Detener» que cierra la sesión en el PC; el aviso desaparece al terminar o si el PC se desconecta. Cerrar Alero en Windows termina todas las sesiones.
+- Corrección: una alerta sin ventana disponible ya no produce un error asíncrono (causaba un fallo intermitente en las pruebas desde 0.1.4). La versión mostrada en la app volvía a decir 0.1.5.
+- Pruebas nuevas: lectura de `adb devices -l`, decisión del modo escritorio y argumentos de scrcpy.
+
 ## 0.1.7 — 2026-11-01
 
 - Configuración inicial en Windows y Android: el campo «Nombre del dispositivo» presenta la etiqueta por encima del cuadro, texto alineado verticalmente y una ayuda separada; evita la superposición con nombres largos y la tipografía variable.

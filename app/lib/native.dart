@@ -221,11 +221,11 @@ class Native {
 
   /// Something needs the user: a notification on Android, the window comes up on desktop.
   static void alert(String title, String text) {
-    if (_android) {
-      _ch.invokeMethod('alert', {'title': title, 'text': text});
-    } else {
-      showWindow();
-    }
+    // Fire and forget: an alert that cannot be shown (no window yet, tests) must not surface as an error later.
+    final f = _android
+        ? _ch.invokeMethod<void>('alert', {'title': title, 'text': text})
+        : showWindow();
+    f.catchError((Object _) {});
   }
 
   static Future<void> showWindow() async {

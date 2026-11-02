@@ -1,0 +1,134 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
+import 'scrcpy.dart';
+
+/// A phone as adb sees it. `state` is adb's own word: `device` (ready), `unauthorized` (the phone has not
+/// accepted this computer yet), `offline`, …
+class AdbDevice {
+  const AdbDevice(this.serial, this.state, this.model);
+  final String serial, state, model;
+
+  bool get ready => state == 'device';
+  bool get unauthorized => state == 'unauthorized';
+
+  /// Wireless debugging: `ip:port` or an mDNS name.
+  bool get wifi => serial.contains(':') || serial.contains('._adb-tls');
+  String get name => model.isEmpty ? serial : model;
+}
+
+/// Parses `adb devices -l`.
+List<AdbDevice> parseDevices(String out) {
+  final list = <AdbDevice>[];
+  for (final l in out.split('\n').map((l) => l.trim())) {
+    if (l.isEmpty || l.startsWith('List of') || l.startsWith('*')) continue;
+    final p = l.split(RegExp(r'\s+'));
+    if (p.length < 2) continue;
+    final m = RegExp(r'model:(\S+)').firstMatch(l);
+    list.add(AdbDevice(p[0], p[1], (m?[1] ?? '').replaceAll('_', ' ')));
+  }
+  return list;
+}
+
+/// The desktop mode needs Android's own desktop on secondary displays: freeform windows (Android 10+) and the
+/// developer option «Forzar modo de escritorio». Alero never changes that option itself.
+enum Desktop { unsupported, needsSetting, ready }
+
+Desktop desktopSupport({
+  required int sdk,
+  required bool freeform,
+  required bool forced,
+}) => sdk < 29 || !freeform
+    ? Desktop.unsupported
+    : forced
+    ? Desktop.ready
+    : Desktop.needsSetting;
+
+class SessionOptions {
+  const SessionOptions({
+    this.maxSize = 1600,
+    this.bitRate = 8,
+    this.maxFps = 60,
+    this.audio = true,
+    this.screenOff = false,
+    this.fullscreen = false,
+    this.orientation = 0,
+    this.desktop = false,
+    this.desktopSize = '1920x1080',
+  });
+
+  /// Longest side in pixels; 0 keeps the phone's own resolution.
+  final int maxSize;
+
+  /// Megabits per second.
+  final int bitRate, maxFps, orientation;
+  final bool audio, screenOff, fullscreen, desktop;
+  final String desktopSize;
+}
+
+/// The scrcpy command line for one session. Keyboard, mouse and clipboard sync are scrcpy's defaults.
+List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
+  '-s',
+  serial,
+  '--window-title=$title',
+  '--stay-awake',
+  if (o.maxSize > 0) '--max-size=${o.maxSize}',
+  '--video-bit-rate=${o.bitRate}M',
+  '--max-fps=${o.maxFps}',
+  if (!o.audio) '--no-audio',
+  if (o.fullscreen) '--fullscreen',
+  if (o.orientation != 0) '--orientation=${o.orientation}',
+  // A virtual display shows the phone's desktop; the phone's own screen is untouched, so it is not turned off.
+  if (o.desktop)
+    '--new-display=${o.desktopSize}'
+  else if (o.screenOff)
+    '--turn-screen-off',
+];
+
+/// Android key codes for the toolbar.
+abstract final class Keys {
+  static const back = 4, home = 3, recents = 187;
+  static const volumeUp = 24, volumeDown = 25, playPause = 85;
+  static const next = 87, previous = 88;
+}
+
+/// Running scrcpy windows, one per phone. Closing the window, "Detener" here or on the phone, or quitting
+/// Alero ends a session; nothing keeps running after that.
+class PhoneSessions extends ChangeNotifier {
+  PhoneSessions._();
+  static final instance = PhoneSessions._();
+
+  final _running = <String, Process>{};
+
+  bool running(String serial) => _running.containsKey(serial);
+  Iterable<String> get serials => _running.keys;
+
+  Future<void> start(String serial, String title, SessionOptions o) async {
+    stop(serial);
+    final p = await Scrcpy.launch(scrcpyArgs(serial, title, o));
+    _running[serial] = p;
+    p.stderr.drain<void>();
+    p.stdout.drain<void>().whenComplete(() {
+      // The window was closed (or scrcpy failed): forget it, unless a newer session took its place.
+      if (_running[serial] == p) {
+        _running.remove(serial);
+        notifyListeners();
+      }
+    });
+    notifyListeners();
+  }
+
+  void stop(String serial) {
+    final p = _running.remove(serial);
+    if (p == null) return;
+    Process.killPid(p.pid); // works for detached processes too
+    notifyListeners();
+  }
+
+  void stopAll() {
+    for (final s in _running.keys.toList()) {
+      stop(s);
+    }
+  }
+}
