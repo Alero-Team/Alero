@@ -1,5 +1,19 @@
 # Cambios
 
+## 0.1.9 — 2026-11-01
+
+- Alero amplía el control de Windows a Android con un **taller de escritorio** inspirado en Dextop: lista dinámica de aplicaciones instaladas mediante ADB autorizado, búsqueda y apertura de aplicaciones.
+- **Espacios de trabajo:** selecciona varias aplicaciones, guarda configuraciones localmente, restáuralas de forma explícita e importa/exporta JSON (máximo 32 espacios y 12 apps por espacio, con validación de paquetes).
+- **Varias pantallas:** descubre los identificadores que scrcpy anuncia, permite escoger un display disponible y solicita a Android iniciar allí las aplicaciones.
+- **Ventanas libres:** se solicita freeform y, bajo autorización explícita, se intenta distribuir hasta cuatro tareas mediante `am task resize` cuando Android expone identificadores fiables y admite esa orden. Si el fabricante lo impide, Alero informa y conserva las apps abiertas sin forzar configuraciones ocultas.
+- **Resolución del escritorio:** perfiles 720p, 900p, 1080p y 1440p; opción experimental de cambiar dinámicamente el tamaño de la pantalla virtual mediante scrcpy.
+- **Diagnóstico real bajo demanda:** batería, temperatura y memoria disponibles mediante ADB sin estimar FPS ni consumo eléctrico no medidos.
+- **Control existente conservado:** ratón, teclado, gestos y portapapeles de scrcpy, conexiones USB/Wi-Fi, navegación y cierre de sesión; herramientas para recuperar voluntariamente espacios tras reconectar.
+- Nuevas pruebas de catálogo de paquetes, validación de entradas, perfiles JSON, pantallas, comandos de scrcpy y métricas; se mantiene la firma e identidad Android.
+- **Limitaciones:** la distribución nativa es experimental y depende de `am task resize`, no un gestor privilegiado de ventanas de Dextop. No se implementa el movimiento automático del puntero entre monitores; requiere validación con hardware real.
+- Se conserva la función de notificaciones y medios de Android. Play Protect puede seguir bloqueando APK distribuidos fuera de Google Play.
+
+
 ## 0.1.8 — 2026-11-01
 
 - **Controlar el teléfono desde Windows** (scrcpy 4.1 incluido): nueva página con los teléfonos por USB y Wi-Fi y su estado («Listo», «Falta permiso: toca Permitir en el teléfono», «Sin respuesta»), detección automática de cables cada 3 s, elección entre varios dispositivos y vinculación por Wi-Fi con código.

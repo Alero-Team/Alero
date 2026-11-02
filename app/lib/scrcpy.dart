@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'phone_control.dart';
+import 'desktop_workspace.dart';
 
 /// Desktop wrapper around the bundled scrcpy + adb (Apache-2.0, ADR-0008). The phone must have wireless
 /// debugging on (Developer options); this is the "ADB" permission class in the project rules, chosen by the user
@@ -134,6 +135,105 @@ class Scrcpy {
   /// One shell command on the phone; its output, trimmed.
   static Future<String> shell(String serial, String command) async =>
       '${(await _run(['-s', serial, 'shell', command])).stdout}'.trim();
+
+  /// User-authorized ADB commands only. Each argument is passed separately to
+  /// the local adb executable (no host shell interpolation of package names).
+  static Future<String> _checked(String serial, List<String> command) async {
+    final result = await _run(['-s', serial, 'shell', ...command]);
+    if (result.exitCode != 0) {
+      throw StateError('${result.stderr}'.trim().isEmpty
+          ? 'Android no permite esta operación.'
+          : '${result.stderr}'.trim());
+    }
+    return '${result.stdout}'.trim();
+  }
+
+  /// A lightweight package catalog. Apps with no launchable activity will
+  /// report an Android error instead of pretending the launch succeeded.
+  static Future<List<String>> installedApps(String serial) async =>
+      DesktopApps.parse(await _checked(serial, ['pm', 'list', 'packages', '-3']));
+
+  /// Display IDs actually advertised by this version of scrcpy + Android.
+  static Future<List<DesktopDisplay>> displays(String serial) async {
+    final r = await Process.run(
+      _scrcpy, ['-s', serial, '--list-displays'],
+      environment: {'ADB': _adb},
+    ).timeout(const Duration(seconds: 20));
+    if (r.exitCode != 0) throw StateError('${r.stderr}');
+    final found = DesktopDisplay.parse('${r.stdout}\\n${r.stderr}');
+    return found.isEmpty ? [const DesktopDisplay(0, 'Pantalla principal')] : found;
+  }
+
+  /// Native Android app launch, optionally on an existing external display.
+  /// Freeform is only a request; OEM firmware can refuse or ignore it.
+  static Future<String> launchApp(
+    String serial, String package, {
+    int displayId = 0,
+    bool freeform = false,
+  }) async {
+    if (!validAndroidPackage(package)) {
+      throw const FormatException('Identificador de aplicación inválido');
+    }
+    if (displayId < 0 || displayId > 255) {
+      throw const FormatException('Pantalla inválida');
+    }
+    return _checked(serial, [
+      'am', 'start', '-W',
+      if (displayId > 0) ...['--display', '$displayId'],
+      if (freeform) ...['--windowingMode', '5'],
+      '-a', 'android.intent.action.MAIN',
+      '-c', 'android.intent.category.LAUNCHER',
+      '-p', package,
+    ]);
+  }
+
+  /// Experimental AOSP task-window placement. Dextop normally performs this
+  /// using its own privileged TaskBridge. With Alero, task IDs must match the
+  /// exact installed package AND selected display, and ADB must explicitly
+  /// report that this shell command is supported. No global settings change.
+  static Future<int> arrangeWindows(
+    String serial,
+    DesktopDisplay display,
+    List<String> packages,
+    DesktopLayout layout,
+  ) async {
+    if (display.id == 0 || display.resolution == null) {
+      throw StateError('Selecciona una pantalla secundaria con resolución conocida.');
+    }
+    final (width, height) = display.resolution!;
+    final bounds = desktopWindowBounds(layout, width, height, packages.length);
+    if (bounds.length != packages.length) {
+      throw StateError('Esta distribución necesita entre 1 y 4 ventanas.');
+    }
+    final tasks = parseDesktopTasks(
+      await _checked(serial, ['dumpsys', 'activity', 'top']),
+      display.id,
+    );
+    if (packages.any((p) => !tasks.containsKey(p))) {
+      throw StateError('Android no expone tareas para todas las apps de esta pantalla.');
+    }
+    for (var i = 0; i < packages.length; i++) {
+      final task = tasks[packages[i]]!;
+      final box = bounds[i];
+      final result = await _checked(serial, [
+        'am', 'task', 'resize', '$task',
+        '${box.left}', '${box.top}', '${box.right}', '${box.bottom}',
+      ]);
+      if (result.contains('Error:') || result.contains('Exception') ||
+          result.contains('Unknown command')) {
+        throw StateError('Android rechazó una ventana: $result');
+      }
+    }
+    return packages.length;
+  }
+
+  /// Read-only device diagnostics. No privileged service and no polling when
+  /// this panel is not visible, to keep CPU and battery use minimal.
+  static Future<DesktopDiagnostics> diagnostics(String serial) async {
+    final battery = await _checked(serial, ['dumpsys', 'battery']);
+    final memory = await _checked(serial, ['cat', '/proc/meminfo']);
+    return DesktopDiagnostics.parse(battery, memory);
+  }
 
   /// A hardware key on the phone (back, home, volume…), as Android's `input keyevent`.
   /// Spoken to the running adb server: no extra adb process per tap (and none of another adb version, which

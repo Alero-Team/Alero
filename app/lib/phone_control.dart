@@ -56,6 +56,9 @@ class SessionOptions {
     this.orientation = 0,
     this.desktop = false,
     this.desktopSize = '1920x1080',
+    this.displayId = 0,
+    this.flexDisplay = false,
+    this.startApp,
   });
 
   /// Longest side in pixels; 0 keeps the phone's own resolution.
@@ -65,6 +68,9 @@ class SessionOptions {
   final int bitRate, maxFps, orientation;
   final bool audio, screenOff, fullscreen, desktop;
   final String desktopSize;
+  final int displayId;
+  final bool flexDisplay;
+  final String? startApp;
 }
 
 /// The scrcpy command line for one session. Keyboard, mouse and clipboard sync are scrcpy's defaults.
@@ -79,10 +85,13 @@ List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
   if (!o.audio) '--no-audio',
   if (o.fullscreen) '--fullscreen',
   if (o.orientation != 0) '--orientation=${o.orientation}',
+  if (!o.desktop && o.displayId > 0) '--display-id=${o.displayId}',
   // A virtual display shows the phone's desktop; the phone's own screen is untouched, so it is not turned off.
-  if (o.desktop)
-    '--new-display=${o.desktopSize}'
-  else if (o.screenOff)
+  if (o.desktop) ...[
+    '--new-display=${o.desktopSize}',
+    if (o.flexDisplay) '--flex-display',
+    if (o.startApp != null) '--start-app=${o.startApp}',
+  ] else if (o.screenOff)
     '--turn-screen-off',
 ];
 

@@ -2,7 +2,7 @@
 
 Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
 
-**Alpha software · 0.1.8.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
+**Alpha software · 0.1.9.** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
 
 ## Use
 
@@ -17,6 +17,16 @@ The file browser's Music section excludes audio lasting 5 seconds or less, ringt
 Android's optional **Security** setting unlocks the app with the system fingerprint or device PIN. It locks the interface when returning from the background; previously paired connections can continue working in the background. Alero never stores the PIN or biometric data.
 
 Device previews use the reported screen geometry, hardware identity and built-in system wallpaper. Verified hardware profiles: Google Pixel 9a and Lenovo V15 G4 IAH. Other models use the geometry the device reports. Windows uses its installed stock Windows wallpaper; OEM-specific artwork is not bundled.
+
+## Desktop tools (0.1.9)
+
+On Windows, open **Controlar teléfono → Herramientas de escritorio** with an ADB-authorized device. The new Dextop-inspired toolkit reads the actual installed user apps, launches selected apps on an available Android display, saves and restores app sets, supports JSON import/export, and reads real battery/thermal/memory diagnostics on demand. Saved workspaces are local to Alero on Windows; no extra Android permissions or root are requested.
+
+Desktop virtual-screen presets now include 720p, 900p, 1080p and 1440p plus an experimental flexible resize option. The underlying phone input, USB and Wi-Fi controls remain provided by scrcpy.
+
+The multi-window layout selection can **attempt real two-, three- or four-window placement** via ADB's task resize shell command only when Android exposes exact matching task IDs for the selected secondary display. Many OEM builds reject or ignore this command, so a layout is not guaranteed. Cross-display pointer routing or mirroring multiple real Android displays simultaneously depends on Android firmware and additional privileged OEM capabilities. Alero only requests supported Android activity launches and reports failures; it does not silently install or run Dextop's privileged services. Workspaces can be restored manually after reconnecting, not automatically after a phone disconnect.
+
+Design references: [Dextop](https://github.com/NarYuki/Dextop) (GPL-3.0) app catalog, workspace layouts, capability probes and diagnostics. Alero's Flutter models and ADB integration are independently implemented; no Dextop native code or binaries were copied.
 
 ## Build
 

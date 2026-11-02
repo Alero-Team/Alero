@@ -7,9 +7,11 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../phone_control.dart';
+import '../desktop_workspace.dart';
 import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
+import 'desktop_workshop.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -40,12 +42,16 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
   List<AdbDevice> _devices = [];
   String? _serial;
   Desktop _desktop = Desktop.unsupported;
+  List<DesktopDisplay> _screens = [const DesktopDisplay(0, 'Pantalla principal')];
+  int _displayId = 0;
   String _status = '';
   bool _busy = false, _listing = false;
   Timer? _poll;
 
   // Session options (scrcpy flags, see scrcpyArgs).
   int _maxSize = 1600, _bitRate = 8, _fps = 60, _orientation = 0;
+  String _desktopSize = '1920x1080';
+  bool _flexDesktop = false;
   bool _audio = true, _screenOff = false, _fullscreen = false, _desk = false;
 
   AdbDevice? get _device =>
@@ -113,9 +119,16 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     final r = d != null && d.ready
         ? await Scrcpy.desktop(d.serial)
         : Desktop.unsupported;
+    List<DesktopDisplay> screens = [const DesktopDisplay(0, 'Pantalla principal')];
+    if (d != null && d.ready) {
+      try { screens = await Scrcpy.displays(d.serial); }
+      catch (_) { /* Some builds don't expose display enumeration. */ }
+    }
     if (mounted) {
       setState(() {
         _desktop = r;
+        _screens = screens;
+        if (!screens.any((v) => v.id == _displayId)) _displayId = 0;
         if (r != Desktop.ready) _desk = false;
       });
     }
@@ -190,6 +203,9 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
         fullscreen: _fullscreen,
         orientation: _orientation,
         desktop: _desk,
+        desktopSize: _desktopSize,
+        displayId: _desk ? 0 : _displayId,
+        flexDisplay: _flexDesktop,
       ),
       peerId: _peerFor(d),
     );
@@ -308,6 +324,23 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                               setState(() => _desk = v.first),
                         ),
                         const SizedBox(height: Gap.s),
+                        if (!_desk && _screens.length > 1) ...[
+                          const Text('Pantalla Android que quieres controlar'),
+                          DropdownButton<int>(
+                            isExpanded: true,
+                            value: _screens.any((v) => v.id == _displayId)
+                              ? _displayId : _screens.first.id,
+                            items: [
+                              for (final display in _screens)
+                                DropdownMenuItem(
+                                  value: display.id,
+                                  child: Text(display.description,
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                            ],
+                            onChanged: (id) => setState(() => _displayId = id ?? 0),
+                          ),
+                        ],
                         Text(
                           switch (_desktop) {
                             Desktop.ready => 'Este teléfono tiene escritorio de Android: abre una pantalla aparte con ventanas libres, sin tocar su pantalla.',
@@ -323,6 +356,30 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                   ),
                 ),
                 const SizedBox(height: Gap.m),
+                if (d != null && d.ready)
+                  Panel(
+                    title: 'Herramientas de escritorio',
+                    icon: Symbols.apps_rounded,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text('Aplicaciones instaladas, espacios guardados, '
+                          'varias pantallas y diagnóstico del teléfono. '
+                          'Basado en las ideas de Dextop.'),
+                        const SizedBox(height: Gap.s),
+                        FilledButton.tonalIcon(
+                          onPressed: _busy ? null : () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => DesktopWorkshopPage(serial: d.serial),
+                            ),
+                          ),
+                          icon: const Icon(Symbols.dashboard_customize_rounded),
+                          label: const Text('Abrir herramientas'),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: Gap.m),
                 Reveal(
                   index: 2,
                   child: Panel(
@@ -331,6 +388,31 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (_desk) ...[
+                          const Text('Tamaño del escritorio virtual'),
+                          const SizedBox(height: Gap.s),
+                          DropdownButton<String>(
+                            value: _desktopSize,
+                            isExpanded: true,
+                            items: const [
+                              DropdownMenuItem(value: '1280x720',
+                                child: Text('HD · 1280 × 720')),
+                              DropdownMenuItem(value: '1600x900',
+                                child: Text('HD+ · 1600 × 900')),
+                              DropdownMenuItem(value: '1920x1080',
+                                child: Text('Full HD · 1920 × 1080')),
+                              DropdownMenuItem(value: '2560x1440',
+                                child: Text('QHD · 2560 × 1440')),
+                            ],
+                            onChanged: (v) => setState(() =>
+                              _desktopSize = v ?? _desktopSize),
+                          ),
+                          _Toggle(
+                            'Adaptar escritorio al tamaño de la ventana (experimental)',
+                            _flexDesktop,
+                            (v) => setState(() => _flexDesktop = v),
+                          ),
+                        ],
                         _Choice(
                           label: 'Resolución',
                           value: _maxSize,
