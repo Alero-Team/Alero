@@ -101,10 +101,36 @@ impl Ui {
                     _ => {}
                 }
             }
+            // A file waits for consent: answer from the toast. Nothing is downloaded until Aceptar.
+            #[cfg(windows)]
+            Event::TransferOffer { id, peer_name, name, size, .. } => {
+                let engine = engine.clone();
+                let mb = size as f64 / (1024.0 * 1024.0);
+                win::toast_buttons(
+                    &format!("{peer_name} quiere enviarte un archivo"),
+                    &format!("{name} · {mb:.1} MB"),
+                    &[win::Button::Call("Rechazar".into(), format!("decline:{id}")), win::Button::Call("Aceptar".into(), format!("accept:{id}"))],
+                    // The engine ignores a second answer, so repeated clicks cannot start two downloads.
+                    move |arg| match arg.split_once(':') {
+                        Some(("accept", id)) => engine.respond_transfer(id, true),
+                        Some(("decline", id)) => engine.respond_transfer(id, false),
+                        _ => {}
+                    },
+                );
+            }
             #[cfg(windows)]
             Event::TransferFinished { ok: true, path, .. } if !path.is_empty() => {
-                let name = std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                win::toast("Archivo recibido", &name);
+                let file = std::path::PathBuf::from(&path);
+                let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let mut buttons = Vec::new();
+                // Opening an executable would run it: for those only the folder is offered.
+                if !win::runs_code(&file) {
+                    buttons.push(win::Button::Open("Abrir".into(), file.clone()));
+                }
+                if let Some(dir) = file.parent() {
+                    buttons.push(win::Button::Open("Abrir carpeta".into(), dir.to_path_buf()));
+                }
+                win::toast_buttons("Archivo recibido", &name, &buttons, |_| {});
             }
             _ => {}
         }

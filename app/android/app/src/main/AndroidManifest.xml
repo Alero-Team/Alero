@@ -105,6 +105,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <receiver android:name=".StopControl" android:exported="false" />
+        <receiver android:name=".TransferAction" android:exported="false" />
         <receiver android:name=".DevicesWidget" android:exported="true" android:label="@string/w_devices_label">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_devices" />

@@ -24,6 +24,12 @@ object Bridge {
     /** Next event as JSON, or null after [timeoutMs]. */
     external fun next(timeoutMs: Long): String?
 
+    /** Answers an incoming file offer (a notification's Aceptar / Rechazar). A second answer is ignored. */
+    external fun respondTransfer(id: String, accept: Boolean)
+
+    /** Cancels an active transfer (a notification's Cancelar). */
+    external fun cancelTransfer(id: String)
+
     /** Ids of paired devices that are connected right now. */
     fun connected(): List<String> {
         val a = JSONArray(peers() ?: return emptyList())

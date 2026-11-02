@@ -47,6 +47,7 @@ object Features {
         ctx = c.applicationContext
         Files.init(ctx)
         WidgetData.init(ctx)
+        TransferNotices.init(ctx)
         Thread(::loop, "pb-features").apply { isDaemon = true }.start()
         ctx.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
@@ -90,10 +91,18 @@ object Features {
                 // The foreground service (and its notification) exists only while a computer is connected.
                 PbService.update(ctx, onlineNames())
             }
-            "TransferStarted" -> WidgetData.transferStarted(e)
-            "TransferProgress" -> WidgetData.transferProgress(e)
+            "TransferOffer" -> TransferNotices.offer(e)
+            "TransferStarted" -> {
+                WidgetData.transferStarted(e)
+                TransferNotices.started(e)
+            }
+            "TransferProgress" -> {
+                WidgetData.transferProgress(e)
+                TransferNotices.progress(e.getString("id"), e.optLong("done"), e.optLong("total"))
+            }
             "TransferFinished" -> {
                 WidgetData.transferFinished(e)
+                TransferNotices.finished(e)
                 Files.finished(e.getString("id"))
             }
             "Message" -> {
