@@ -36,7 +36,7 @@ Instala juntos el APK de Android y el instalador de Windows de esta versión: la
 ### Arquitecturas de Windows (auditoría)
 
 - **La aplicación es x64 nativa.** El instalador lo genera Inno Setup 6, cuyo programa de instalación siempre es un ejecutable de 32 bits; por eso Windows lo muestra como «32 bits». Instala Alero en modo de 64 bits y solo en Windows x64 o Windows 11 ARM (mediante su emulación x64). No era un error de compilación.
-- El script de compilación comprueba ahora que **todos** los binarios del paquete son x64 y que llevan la información de versión «Alero».
+- El script de compilación comprueba ahora que **todos** los binarios del paquete son x64 y que llevan la información de versión «Alero». Única excepción, encontrada por esa comprobación: `adb.exe` y sus dos DLL (incluidos en el paquete oficial «win64» de scrcpy) son de 32 bits porque Google solo publica adb para Windows en x86; funcionan en Windows x64 y en Windows 11 ARM.
 - **ARM64 nativo: no se publica.** Flutter no compila Windows ARM64 de forma cruzada desde x64, GitHub no ofrece ejecutores Windows ARM64 para repositorios privados y scrcpy no publica binarios ARM64 para Windows. El instalador x64 funciona en Windows 11 ARM mediante emulación.
 - **x86 de 32 bits: no es posible.** Flutter no admite Windows de 32 bits.
 

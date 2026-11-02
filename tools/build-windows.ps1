@@ -102,10 +102,14 @@ try {
             if (!(Test-Path -LiteralPath (Join-Path $bundle $required))) { throw "Missing runtime file: $required" }
         }
         # Every native binary must be x64: the installer is x64-only, so a stray 32-bit or ARM64 file would ship broken.
+        # Only exception: Google ships adb for Windows as 32-bit x86 only (inside scrcpy's win64 package); it runs on
+        # x64 Windows (WOW64) and on Windows 11 ARM.
+        $x86Allowed = @('adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll')
         $wrongArch = Get-ChildItem -LiteralPath $bundle -Recurse -File -Include *.exe,*.dll | Where-Object {
             $b = [IO.File]::ReadAllBytes($_.FullName)
             $pe = [BitConverter]::ToInt32($b, 0x3C)
-            [BitConverter]::ToUInt16($b, $pe + 4) -ne 0x8664
+            $machine = [BitConverter]::ToUInt16($b, $pe + 4)
+            -not ($machine -eq 0x8664 -or ($machine -eq 0x14C -and $x86Allowed -contains $_.Name))
         }
         if ($wrongArch) { throw ('Non-x64 binaries in the bundle: ' + ($wrongArch.Name -join ', ')) }
         foreach ($exe in 'alero.exe','alero_daemon.exe') {
