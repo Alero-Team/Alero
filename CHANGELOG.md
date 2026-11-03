@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.1.15 — 2026-11-03 (solo Android, versión candidata a revisión de Play Protect)
+
+### Correcciones y seguridad Android
+
+- Se añade un diálogo de consentimiento destacado antes de solicitar acceso al historial SMS/MMS y a los contactos. Explica los datos compartidos con un ordenador emparejado, el envío de SMS, que la función está apagada de forma predeterminada y cómo desactivarla. Cancelar no activa la función.
+- Se mantienen exactamente los permisos `READ_SMS`, `SEND_SMS`, `READ_CALL_LOG`, el acceso a notificaciones y todas las funciones de 0.1.14. Sin modificaciones ni compilación de Windows.
+- Se verifica automáticamente la firma de lanzamiento del APK contra la identidad original usada en 0.1.11 y 0.1.14; se publica únicamente el APK Android ARM64 y el archivo SHA-256.
+- **Estado real de Play Protect:** esta compilación es una candidata para revisión, **NO una corrección confirmada del bloqueo al instalar desde GitHub**. Play Protect puede continuar bloqueando APKs descargados de Internet que declaran `READ_SMS` y el acceso a notificaciones, aun con firma válida y consentimiento explícito. No desactives Play Protect para instalarla.
+- Para mantener SMS, llamadas y notificaciones al mismo tiempo, es necesaria una revisión/apelación de la clasificación de Play Protect o una distribución aprobada (Google Play permite solicitar una excepción para sincronización de SMS/llamadas entre dispositivos, sujeta a revisión). La aprobación depende de Google.
+
 ## 0.1.14 — 2026-11-03
 
 Instala juntos el APK de Android y el instalador de Windows de esta versión: los iconos de apps, Alero Desktop, SMS, llamadas y controles del teléfono necesitan ambos lados actualizados.

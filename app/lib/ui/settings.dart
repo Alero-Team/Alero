@@ -70,6 +70,43 @@ class SettingsScreen extends StatelessWidget {
     if (n != null) await hub.setName(n);
   }
 
+  /// A prominent, informed choice before requesting sensitive SMS access.
+  /// The feature remains off until the phone owner explicitly confirms.
+  Future<void> _setSmsAllowed(BuildContext context, bool enabled) async {
+    if (enabled && !hub.smsAllowed) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Autorizar mensajes en el ordenador'),
+          content: const Text(
+            'Si activas esta función, Alero podrá leer el historial de SMS '
+            'y MMS del teléfono y los nombres de tus contactos. '
+            'Un ordenador que hayas emparejado podrá ver esas '
+            'conversaciones y enviar mensajes SMS usando tu teléfono.\n\n'
+            'El contenido se transmite directamente y cifrado entre tus '
+            'dispositivos, sin subirlo a una nube. La función está '
+            'desactivada por defecto y puedes desactivarla aquí '
+            'cuando quieras.\n\n'
+            'Android te pedirá por separado los permisos necesarios '
+            'para SMS y Contactos.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Entiendo y activar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    await hub.setSmsAllowed(enabled);
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
@@ -262,11 +299,11 @@ class SettingsScreen extends StatelessWidget {
                   : 'Un ordenador emparejado verá tus conversaciones SMS y MMS (con los nombres de tus contactos) y podrá enviar SMS. Los mensajes van cifrados y directos, sin nube. Apagado por defecto.',
               trailing: AleroSwitch(
                 value: hub.smsAllowed,
-                onChanged: hub.setSmsAllowed,
+                onChanged: (enabled) => _setSmsAllowed(context, enabled),
                 label: 'Mensajes en el ordenador',
               ),
               onTap: () =>
-                  hub.setSmsAllowed(!hub.smsAllowed || !hub.smsPermission),
+                  _setSmsAllowed(context, !hub.smsAllowed || !hub.smsPermission),
             ),
           )
         : null;

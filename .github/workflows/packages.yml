@@ -12,6 +12,8 @@ permissions:
   contents: read
 jobs:
   packages:
+    # An explicitly scoped Android-only hotfix must not rebuild Windows.
+    if: ${{ !contains(github.event.head_commit.message, '[android-only]') }}
     runs-on: windows-latest
     timeout-minutes: 75
     steps:
