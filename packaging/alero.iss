@@ -36,7 +36,8 @@ LicenseFile={#BundleDir}\LICENSE
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=yes
+; [Code] below stops Alero first; the Restart Manager is only a fallback (it cannot close a tray app).
+CloseApplications=force
 CloseApplicationsFilter=alero.exe,alero_daemon.exe,*.dll
 RestartApplications=no
 Uninstallable=yes
@@ -60,3 +61,32 @@ Name: "{autodesktop}\Alero"; Filename: "{app}\alero.exe"; WorkingDir: "{app}"; T
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Alero"""; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Alero"" dir=in action=allow program=""{app}\alero_daemon.exe"" profile=any enable=yes"; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."
 Filename: "{app}\alero.exe"; Description: "Abrir Alero"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+{ Alero's window, its tray daemon, scrcpy and the bundled adb keep files open, so an update or uninstall used to
+  stop and ask to close them by hand. Stops every process started from the install folder, and nothing else. }
+procedure StopAlero();
+var
+  Dir: String;
+  Code: Integer;
+begin
+  Dir := ExpandConstant('{app}');
+  if not DirExists(Dir) then Exit;
+  StringChangeEx(Dir, '''', '''''', True);
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith(''' + Dir + '\'', [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force"',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Sleep(800);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopAlero();
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  StopAlero();
+  Result := True;
+end;

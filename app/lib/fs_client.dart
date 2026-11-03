@@ -266,6 +266,51 @@ class FsClient extends ChangeNotifier {
     }
   }
 
+  /// Asks the phone to send a whole folder; it arrives in Downloads with its subfolders.
+  void downloadDir(FsEntry e) => hub.sendMessage(peerId!, 'pb.x.fs.getdir', {
+    'root': root,
+    'path': e.path,
+    'name': e.name,
+  });
+
+  /// Asks the phone to delete these files or folders (a folder goes with everything inside).
+  void delete(Iterable<FsEntry> items) {
+    for (final e in items) {
+      hub.sendMessage(peerId!, 'pb.x.fs.delete', _ref(e));
+    }
+    selected.clear();
+    notifyListeners();
+  }
+
+  void rename(FsEntry e, String to) =>
+      hub.sendMessage(peerId!, 'pb.x.fs.rename', {..._ref(e), 'to': to.trim()});
+
+  Map<String, Object?> _ref(FsEntry e) => {
+    'root': root,
+    'id': e.id,
+    'path': e.path,
+    'dir': e.dir,
+    'name': e.name,
+  };
+
+  static String doneMessage(Map b) {
+    final name = b['name'] as String? ?? '';
+    final verb = b['op'] == 'rename' ? 'renombrar' : 'eliminar';
+    if (b['ok'] == true) {
+      return b['op'] == 'rename' ? 'Renombrado: $name' : 'Eliminado: $name';
+    }
+    return 'No se pudo $verb $name: ${switch (b['reason']) {
+      'bad_name' => 'el nombre no es válido.',
+      'exists' => 'ya existe otro con ese nombre.',
+      'missing' => 'ya no existe en el teléfono.',
+      'read_only' => 'la carpeta es de solo lectura. Quítala y vuelve a añadirla en el teléfono.',
+      'needs_all_files' => 'Android solo lo permite con «Todas las carpetas» activado en el teléfono.',
+      'no_permission' => 'falta un permiso en el teléfono.',
+      'unsupported' => 'esta ubicación no lo permite.',
+      _ => 'el teléfono lo rechazó.',
+    }}';
+  }
+
   // --- what the phone says ----------------------------------------------------------------------------
 
   void onMessage(String peer, String kind, Map<String, dynamic> b) {
@@ -321,6 +366,19 @@ class FsClient extends ChangeNotifier {
         _timeout?.cancel();
         loading = false;
         error = b['reason'] as String? ?? 'not_allowed';
+      case 'pb.x.fs.dir':
+        final n = (b['files'] as num?)?.toInt() ?? 0;
+        hub.messages.add(
+          n == 0
+              ? 'La carpeta ${b['name']} está vacía.'
+              : 'Recibiendo ${b['name']}: $n ${n == 1 ? 'archivo' : 'archivos'}…',
+        );
+        return;
+      case 'pb.x.fs.done':
+        hub.messages.add(doneMessage(b));
+        _debounce?.cancel();
+        _debounce = Timer(const Duration(milliseconds: 400), () => _list());
+        return;
       case 'pb.x.fs.changed':
         // Something changed on the phone: list again, once, a moment after the last change.
         _debounce?.cancel();

@@ -13,6 +13,10 @@ internal object StoragePaths {
         }
     } catch (_: Exception) { -1L }
 
+    /** A plain file or folder name (a rename from the computer): no path, no reserved characters. */
+    fun validName(n: String) = n.isNotEmpty() && n.length <= 255 && n != "." && n != ".." &&
+        n.none { it.isISOControl() || it in "/\\:*?\"<>|" }
+
     fun resolve(root: File, path: String): File {
         val base = root.canonicalFile
         val file = if (path.isEmpty()) base else File(base, path).canonicalFile

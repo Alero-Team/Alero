@@ -20,10 +20,7 @@ const QUEUE_MAX: usize = 256;
 pub(crate) fn push(e: &core::Event) {
     // Only what the service acts on: remote-screen frames and other large messages are for the Dart side.
     let keep = match e {
-        core::Event::Message { kind, .. } => {
-            kind.starts_with("pb.x.fs.")
-                || matches!(kind.as_str(), "pb.x.info.request" | "pb.x.clip" | "pb.x.media.cmd" | "pb.x.notif.dismiss" | "pb.x.notif.reply" | "pb.x.media.request")
-        }
+        core::Event::Message { kind, .. } => crate::service_kind(kind),
         // PeerChanged/Gone: who is connected. Transfers: the notifications and widgets, and the service closes the
         // file it opened for a send when it finishes (Kotlin redraws progress at most once a second).
         core::Event::PeerChanged { .. }
@@ -117,3 +114,4 @@ pub extern "system" fn Java_dev_alero_app_Bridge_next(mut env: JNIEnv, _: JClass
     drop(q);
     out(&mut env, line)
 }
+

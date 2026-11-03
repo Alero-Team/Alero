@@ -23,7 +23,9 @@ class DesktopWorkshopPage extends StatefulWidget {
 
 class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
   List<String> _apps = [];
-  List<DesktopDisplay> _displays = [const DesktopDisplay(0, 'Pantalla principal')];
+  List<DesktopDisplay> _displays = [
+    const DesktopDisplay(0, 'Pantalla principal'),
+  ];
   List<DesktopWorkspace> _workspaces = [];
   final _selected = <String>{};
   final _search = TextEditingController();
@@ -64,7 +66,10 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
 
   Future<void> _saveWorkspaces() async {
     final file = await _workspaceFile();
-    await file.writeAsString(DesktopWorkspace.exportAll(_workspaces), flush: true);
+    await file.writeAsString(
+      DesktopWorkspace.exportAll(_workspaces),
+      flush: true,
+    );
   }
 
   Future<void> _load() async {
@@ -82,7 +87,9 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       try {
         desktop = await Scrcpy.desktop(widget.serial);
         manufacturer = await Scrcpy.shell(
-          widget.serial, 'getprop ro.product.manufacturer');
+          widget.serial,
+          'getprop ro.product.manufacturer',
+        );
       } catch (_) {
         // Some OEM builds restrict capability queries: default to unsupported.
       }
@@ -90,7 +97,8 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       setState(() {
         _desktopSupport = desktop;
         _manufacturer = manufacturer.trim().isEmpty
-          ? 'Sin identificar' : manufacturer.trim();
+            ? 'Sin identificar'
+            : manufacturer.trim();
         _apps = apps;
         _displays = displays;
         if (!_displays.any((d) => d.id == _display)) _display = 0;
@@ -101,7 +109,10 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
 
   Future<void> _run(String title, Future<void> Function() task) async {
     if (_busy) return;
-    setState(() { _busy = true; _message = title; });
+    setState(() {
+      _busy = true;
+      _message = title;
+    });
     try {
       await task();
       if (mounted) setState(() => _message = 'Operación finalizada.');
@@ -119,13 +130,18 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
           title: const Text('Confirmar en Android'),
           content: Text(message),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Continuar')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Continuar'),
+            ),
           ],
         ),
-      ) ?? false;
+      ) ??
+      false;
 
   Future<void> _launch(String package) async {
     if (!await _confirm(
@@ -138,7 +154,12 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
     await _run('Abriendo $package…', () async {
       if (_display > 0) {
         // Verified: throws if Android put it on the phone instead.
-        await Scrcpy.launchDesktopApp(widget.serial, package, _display, freeform: true);
+        await Scrcpy.launchDesktopApp(
+          widget.serial,
+          package,
+          _display,
+          freeform: true,
+        );
         return;
       }
       final out = await Scrcpy.launchApp(widget.serial, package);
@@ -163,8 +184,12 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       return;
     }
     await _run('Guardando espacio…', () async {
-      final preset = DesktopWorkspace(name: name,
-        packages: _selected.toList(), layout: _layout, displayId: _display);
+      final preset = DesktopWorkspace(
+        name: name,
+        packages: _selected.toList(),
+        layout: _layout,
+        displayId: _display,
+      );
       setState(() => _workspaces = [..._workspaces, preset]);
       await _saveWorkspaces();
       _name.clear();
@@ -184,7 +209,12 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       for (final package in preset.packages) {
         try {
           if (_display > 0) {
-            await Scrcpy.launchDesktopApp(widget.serial, package, _display, freeform: true);
+            await Scrcpy.launchDesktopApp(
+              widget.serial,
+              package,
+              _display,
+              freeform: true,
+            );
             continue;
           }
           final result = await Scrcpy.launchApp(widget.serial, package);
@@ -201,17 +231,24 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       if (_display > 0 && preset.layout != DesktopLayout.floating) {
         final display = _displays.where((d) => d.id == _display).firstOrNull;
         if (display == null) {
-          throw StateError('Apps abiertas, pero la pantalla ya no está disponible.');
+          throw StateError(
+            'Apps abiertas, pero la pantalla ya no está disponible.',
+          );
         }
         // The external display may take a moment to register the new tasks.
         await Future<void>.delayed(const Duration(milliseconds: 250));
         try {
           await Scrcpy.arrangeWindows(
-            widget.serial, display, preset.packages, preset.layout,
+            widget.serial,
+            display,
+            preset.packages,
+            preset.layout,
           );
         } catch (e) {
-          throw StateError('Apps abiertas, pero Android no permitió '
-            'colocar las ventanas: $e');
+          throw StateError(
+            'Apps abiertas, pero Android no permitió '
+            'colocar las ventanas: $e',
+          );
         }
       }
     });
@@ -223,15 +260,25 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Importar espacios JSON'),
-        content: SizedBox(width: 520, child: TextField(
-          controller: controller, maxLines: 9,
-          decoration: const InputDecoration(hintText: 'Pega los espacios exportados'),
-        )),
+        content: SizedBox(
+          width: 520,
+          child: TextField(
+            controller: controller,
+            maxLines: 9,
+            decoration: const InputDecoration(
+              hintText: 'Pega los espacios exportados',
+            ),
+          ),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, controller.text),
-            child: const Text('Importar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Importar'),
+          ),
         ],
       ),
     );
@@ -254,8 +301,11 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
   @override
   Widget build(BuildContext context) {
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final filtered = _apps.where((p) => p.toLowerCase().contains(
-      _search.text.trim().toLowerCase())).toList();
+    final filtered = _apps
+        .where(
+          (p) => p.toLowerCase().contains(_search.text.trim().toLowerCase()),
+        )
+        .toList();
     return Scaffold(
       appBar: AppBar(title: const Text('Escritorio y aplicaciones')),
       body: ListView(
@@ -267,28 +317,43 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Selecciona una pantalla detectada para abrir aplicaciones. '
+                Text(
+                  'Selecciona una pantalla detectada para abrir aplicaciones. '
                   'Para crear una pantalla virtual primero utiliza «Abrir escritorio» '
-                  'en el control del teléfono.', style: TextStyle(color: muted)),
+                  'en el control del teléfono.',
+                  style: TextStyle(color: muted),
+                ),
                 const SizedBox(height: Gap.s),
                 DropdownButton<int>(
-                  isExpanded: true, value: _displays.any((d) => d.id == _display)
-                    ? _display : _displays.first.id,
+                  isExpanded: true,
+                  value: _displays.any((d) => d.id == _display)
+                      ? _display
+                      : _displays.first.id,
                   items: [
                     for (final d in _displays)
-                      DropdownMenuItem(value: d.id,
-                        child: Text(d.description, maxLines: 1,
-                          overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                        value: d.id,
+                        child: Text(
+                          d.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                   ],
-                  onChanged: _busy ? null : (id) => setState(() => _display = id ?? 0),
+                  onChanged: _busy
+                      ? null
+                      : (id) => setState(() => _display = id ?? 0),
                 ),
-                Wrap(spacing: Gap.s, children: [
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _load,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Actualizar'),
-                  ),
-                ]),
+                Wrap(
+                  spacing: Gap.s,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _load,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Actualizar'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -307,9 +372,11 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                   Desktop.unsupported => 'Ventanas libres: no confirmadas por Android. Se utiliza la pantalla normal.',
                 }),
                 const SizedBox(height: Gap.s),
-                Text('La compatibilidad real varía por Android y fabricante. '
+                Text(
+                  'La compatibilidad real varía por Android y fabricante. '
                   'Alero no modifica ajustes de desarrollador ni invoca APIs ocultas.',
-                  style: TextStyle(color: muted)),
+                  style: TextStyle(color: muted),
+                ),
               ],
             ),
           ),
@@ -320,9 +387,11 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Catálogo de paquetes de usuario leído directamente '
+                Text(
+                  'Catálogo de paquetes de usuario leído directamente '
                   'desde Android. Algunas aplicaciones no tienen pantalla principal.',
-                  style: TextStyle(color: muted)),
+                  style: TextStyle(color: muted),
+                ),
                 const SizedBox(height: Gap.s),
                 TextField(
                   controller: _search,
@@ -343,22 +412,33 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         value: _selected.contains(app),
-                        title: Text(app, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        title: Text(
+                          app,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         secondary: IconButton(
                           tooltip: 'Abrir $app',
                           icon: const Icon(Icons.open_in_new_rounded),
                           onPressed: _busy ? null : () => _launch(app),
                         ),
-                        onChanged: _busy ? null : (v) => setState(() {
-                          if (v == true) { _selected.add(app); }
-                          else { _selected.remove(app); }
-                        }),
+                        onChanged: _busy
+                            ? null
+                            : (v) => setState(() {
+                                if (v == true) {
+                                  _selected.add(app);
+                                } else {
+                                  _selected.remove(app);
+                                }
+                              }),
                       );
                     },
                   ),
                 ),
-                Text('${_selected.length} seleccionadas',
-                  style: TextStyle(color: muted)),
+                Text(
+                  '${_selected.length} seleccionadas',
+                  style: TextStyle(color: muted),
+                ),
               ],
             ),
           ),
@@ -369,27 +449,41 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Inspirado en los espacios y distribuciones de Dextop. '
+                Text(
+                  'Inspirado en los espacios y distribuciones de Dextop. '
                   'Guarda grupos de aplicaciones y solicita su ubicación en '
                   'dos, tres o cuatro ventanas, si Android permite cambiar '
                   'los límites de sus tareas. Sin ajustes globales ni root.',
-                  style: TextStyle(color: muted)),
+                  style: TextStyle(color: muted),
+                ),
                 const SizedBox(height: Gap.s),
-                TextField(controller: _name,
+                TextField(
+                  controller: _name,
                   maxLength: 72,
-                  decoration: const InputDecoration(hintText: 'Nombre del espacio')),
+                  decoration: const InputDecoration(
+                    hintText: 'Nombre del espacio',
+                  ),
+                ),
                 DropdownButton<DesktopLayout>(
                   isExpanded: true,
                   value: _layout,
                   items: const [
-                    DropdownMenuItem(value: DesktopLayout.floating,
-                      child: Text('Ventanas libres')),
-                    DropdownMenuItem(value: DesktopLayout.halves,
-                      child: Text('Dos ventanas (experimental)')),
-                    DropdownMenuItem(value: DesktopLayout.thirds,
-                      child: Text('Tres ventanas (experimental)')),
-                    DropdownMenuItem(value: DesktopLayout.quarters,
-                      child: Text('Cuatro ventanas (experimental)')),
+                    DropdownMenuItem(
+                      value: DesktopLayout.floating,
+                      child: Text('Ventanas libres'),
+                    ),
+                    DropdownMenuItem(
+                      value: DesktopLayout.halves,
+                      child: Text('Dos ventanas (experimental)'),
+                    ),
+                    DropdownMenuItem(
+                      value: DesktopLayout.thirds,
+                      child: Text('Tres ventanas (experimental)'),
+                    ),
+                    DropdownMenuItem(
+                      value: DesktopLayout.quarters,
+                      child: Text('Cuatro ventanas (experimental)'),
+                    ),
                   ],
                   onChanged: (v) => setState(() => _layout = v ?? _layout),
                 ),
@@ -403,39 +497,60 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text(preset.name),
-                    subtitle: Text('${preset.packages.length} apps · ${preset.layout.name}'),
-                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(
-                        tooltip: 'Restaurar',
-                        onPressed: _busy ? null : () => _restore(preset),
-                        icon: const Icon(Icons.play_arrow_rounded),
-                      ),
-                      IconButton(
-                        tooltip: 'Borrar',
-                        onPressed: _busy ? null : () => _run('Borrando…', () async {
-                          setState(() => _workspaces.removeAt(index));
-                          await _saveWorkspaces();
-                        }),
-                        icon: const Icon(Icons.delete_outline_rounded),
-                      ),
-                    ]),
+                    subtitle: Text(
+                      '${preset.packages.length} apps · ${preset.layout.name}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Restaurar',
+                          onPressed: _busy ? null : () => _restore(preset),
+                          icon: const Icon(Icons.play_arrow_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Borrar',
+                          onPressed: _busy
+                              ? null
+                              : () => _run('Borrando…', () async {
+                                  setState(() => _workspaces.removeAt(index));
+                                  await _saveWorkspaces();
+                                }),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
+                    ),
                   ),
-                Wrap(spacing: Gap.s, runSpacing: Gap.s, children: [
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : () async {
-                      await Clipboard.setData(ClipboardData(
-                        text: DesktopWorkspace.exportAll(_workspaces)));
-                      if (mounted) setState(() => _message = 'JSON copiado al portapapeles.');
-                    },
-                    icon: const Icon(Icons.copy_rounded),
-                    label: const Text('Exportar JSON'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _import,
-                    icon: const Icon(Icons.file_open_rounded),
-                    label: const Text('Importar JSON'),
-                  ),
-                ]),
+                Wrap(
+                  spacing: Gap.s,
+                  runSpacing: Gap.s,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              await Clipboard.setData(
+                                ClipboardData(
+                                  text: DesktopWorkspace.exportAll(_workspaces),
+                                ),
+                              );
+                              if (mounted) {
+                                setState(
+                                  () => _message =
+                                      'JSON copiado al portapapeles.',
+                                );
+                              }
+                            },
+                      icon: const Icon(Icons.copy_rounded),
+                      label: const Text('Exportar JSON'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _import,
+                      icon: const Icon(Icons.file_open_rounded),
+                      label: const Text('Importar JSON'),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -446,15 +561,25 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Lectura bajo demanda para reducir consumo. Los FPS '
+                Text(
+                  'Lectura bajo demanda para reducir consumo. Los FPS '
                   'y vatios no se estiman sin una fuente fiable.',
-                  style: TextStyle(color: muted)),
+                  style: TextStyle(color: muted),
+                ),
                 if (_diagnostics != null) ...[
                   const SizedBox(height: Gap.s),
-                  Text('Batería: ${_diagnostics!.batteryPercent?.toString() ?? 'No disponible'} %'),
-                  Text('Temperatura: ${_diagnostics!.temperatureC?.toStringAsFixed(1) ?? 'No disponible'} °C'),
-                  Text('RAM libre: ${_diagnostics!.availableMemoryMb?.toString() ?? 'No disponible'} MB'),
-                  Text('RAM total: ${_diagnostics!.totalMemoryMb?.toString() ?? 'No disponible'} MB'),
+                  Text(
+                    'Batería: ${_diagnostics!.batteryPercent?.toString() ?? 'No disponible'} %',
+                  ),
+                  Text(
+                    'Temperatura: ${_diagnostics!.temperatureC?.toStringAsFixed(1) ?? 'No disponible'} °C',
+                  ),
+                  Text(
+                    'RAM libre: ${_diagnostics!.availableMemoryMb?.toString() ?? 'No disponible'} MB',
+                  ),
+                  Text(
+                    'RAM total: ${_diagnostics!.totalMemoryMb?.toString() ?? 'No disponible'} MB',
+                  ),
                 ],
                 const SizedBox(height: Gap.s),
                 OutlinedButton.icon(
@@ -467,8 +592,13 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
           ),
           const SizedBox(height: Gap.m),
           if (_message.isNotEmpty)
-            Semantics(liveRegion: true, child: Text(_message,
-              style: Theme.of(context).textTheme.bodyMedium)),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                _message,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
         ],
       ),
     );

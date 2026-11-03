@@ -45,6 +45,7 @@ class Native {
       _ch.invokeMethod('requestNotifications');
   static Future<bool> installPermission() async =>
       _android && (await _ch.invokeMethod<bool>('installPermission') ?? false);
+
   static Future<void> requestInstallPermission() async =>
       _ch.invokeMethod('requestInstallPermission');
   static Future<bool> startupEnabled() async =>
@@ -97,6 +98,10 @@ class Native {
         Picked('fd:${m['fd']}', m['name'] as String, m['fd'] as int),
     ];
   }
+
+  /// Desktop: a folder chosen with the system dialog, or null.
+  static Future<String?> pickFolder() async =>
+      _android ? null : getDirectoryPath(confirmButtonText: 'Enviar');
 
   static void closeFd(int fd) => _ch.invokeMethod('closeFd', fd);
 
@@ -187,6 +192,40 @@ class Native {
   static Future<void> removeFolder(int i) async =>
       _android ? _ch.invokeMethod('removeFolder', i) : null;
 
+  static Future<(bool, bool)> sms() async {
+    if (!_android) return (false, false);
+    final m = await _ch.invokeMapMethod<String, Object?>('sms') ?? {};
+    return (m['allowed'] == true, m['permission'] == true);
+  }
+
+  static Future<void> setSms(bool on) async =>
+      _android ? _ch.invokeMethod('setSms', on) : null;
+
+  /// Asks for SMS and contacts. True when Android will not ask again (settings only).
+  static Future<bool> requestSms() async =>
+      _android && (await _ch.invokeMethod<bool>('requestSms') ?? false);
+
+  static Future<(bool, bool)> calls() async {
+    if (!_android) return (false, false);
+    final m = await _ch.invokeMapMethod<String, Object?>('calls') ?? {};
+    return (m['allowed'] == true, m['permission'] == true);
+  }
+
+  static Future<void> setCalls(bool on) async =>
+      _android ? _ch.invokeMethod('setCalls', on) : null;
+
+  /// Asks for the call permissions. True when Android will not ask again (settings only).
+  static Future<bool> requestCalls() async =>
+      _android && (await _ch.invokeMethod<bool>('requestCalls') ?? false);
+
+  static Future<List<(String, String)>> mutedApps() async => [
+    if (_android)
+      for (final a in await _ch.invokeListMethod<Map>('mutedApps') ?? <Map>[])
+        ('${a['pkg']}', '${a['name']}'),
+  ];
+  static Future<void> unmuteApp(String pkg) async =>
+      _android ? _ch.invokeMethod('unmuteApp', pkg) : null;
+
   static Future<void> openDevSettings() async =>
       _android ? _ch.invokeMethod('openDevSettings') : null;
 
@@ -245,8 +284,8 @@ class Native {
     await windowManager.waitUntilReadyToShow(
       const WindowOptions(
         title: 'Alero',
-        size: Size(900, 680),
-        minimumSize: Size(420, 480),
+        size: Size(1200, 800),
+        minimumSize: Size(900, 560), // the side menu (240) plus a usable page
       ),
       () => windowManager.show(),
     );

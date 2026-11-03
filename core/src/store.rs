@@ -111,6 +111,13 @@ impl Store {
         self.save("history.json", &h)
     }
 
+    /// A peer forgot these shared transfers: forget them too, but only records that involve that peer.
+    pub fn remove_history_of(&self, peer_id: &str, ids: &[String]) -> Result<(), String> {
+        let mut h = self.history();
+        h.retain(|x| x.peer_id != peer_id || !ids.contains(&x.id));
+        self.save("history.json", &h)
+    }
+
     pub fn clear_history(&self) -> Result<(), String> {
         self.save::<HistoryEntry>("history.json", &[])
     }
@@ -119,6 +126,23 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_peer_only_removes_its_own_history() {
+        let dir = std::env::temp_dir().join(format!("alero-hist-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let s = Store { dir: dir.clone() };
+        let e = |id: &str, peer: &str| HistoryEntry {
+            id: id.into(), peer_id: peer.into(), peer_name: String::new(), name: "f".into(), size: 1, incoming: true,
+            status: "done".into(), code: String::new(), message: String::new(), time: 0, path: String::new(),
+        };
+        s.push_history(e("1", "a")).unwrap();
+        s.push_history(e("2", "b")).unwrap();
+        s.remove_history_of("a", &["1".into(), "2".into()]).unwrap();
+        let left: Vec<String> = s.history().into_iter().map(|h| h.id).collect();
+        assert_eq!(left, vec!["2".to_string()]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn peers_file_from_before_addresses_still_loads_and_stays_compatible() {

@@ -1,5 +1,38 @@
 # Cambios
 
+## 0.1.14 — 2026-11-03
+
+Instala juntos el APK de Android y el instalador de Windows de esta versión: los iconos de apps, Alero Desktop, SMS, llamadas y controles del teléfono necesitan ambos lados actualizados.
+
+### Funciones nuevas
+
+- **El teléfono desde el ordenador (menú lateral):** Mensajes (SMS y chats de apps; se activa en Alero › Ajustes del teléfono), Llamadas (contestar, colgar, marcar y registro de llamadas), Fotos, Aplicaciones (cada app se abre en su propia ventana sin ocupar el teléfono) y Alero Desktop.
+- **Controles del teléfono en Inicio:** nuevo apartado con Buscar teléfono, Wi-Fi, Bluetooth, zona Wi-Fi, No molestar, linterna, bloqueo de pantalla, modo de sonido, volúmenes y la cámara del teléfono en una ventana. Wi-Fi, Bluetooth, bloqueo y cámara necesitan la depuración USB o inalámbrica.
+- **Aplicaciones con su icono:** el teléfono envía el icono real de cada app (una sola vez por app) para la cuadrícula de Aplicaciones, el lanzador y la barra de Alero Desktop.
+- **«Reproduciendo» rediseñado:** portada grande con fondo difuminado, icono de la app que reproduce, barras animadas mientras suena, cambio de canción animado y dónde suena (en el teléfono, transmitiendo a otro dispositivo o en el ordenador). Respeta «reducir movimiento».
+- **Explorador:** eliminar y renombrar archivos del teléfono; enviar y recibir carpetas completas.
+- **Recientes sincronizados:** quitar una entrada la quita en los dos dispositivos (el archivo no se borra).
+- **Notificaciones:** marcar como leída, silenciar una conversación o una app (lista en Ajustes del teléfono).
+
+### Cambios
+
+- **«Modo Deck» ahora se llama Alero Desktop.**
+- **Se quitó el apartado Archivos.** Las transferencias en curso y las recientes siguen en Inicio («Abrir carpeta» abre las descargas).
+- Las notificaciones de reproductores de música ya no se duplican en Notificaciones: se ven solo en «Reproduciendo».
+
+### Errores corregidos
+
+- **Alero Desktop:**
+  - **Inicio no funcionaba:** Android 17 rechaza el botón Inicio en las pantallas virtuales de scrcpy («not allowed on display») y su barra de tareas tapaba la de Alero. El escritorio se crea ahora sin las barras del sistema, y la barra de Alero tiene su propio botón Inicio. Flota sobre las apps y se reduce a una franja fina mientras hay una app delante; al pasar el ratón por la franja vuelve a aparecer. Alero concede por adb el permiso «Mostrar sobre otras apps» al iniciar el escritorio.
+  - **Relación de aspecto:** «Adaptar al tamaño de la ventana» (`--flex-display`) dibujaba la pantalla sin escalar, así que el escritorio se veía recortado y sin barra de tareas. Se quitó: el escritorio conserva su tamaño y se escala a la ventana.
+  - **Apps que se abrían en el teléfono:** las apps con varias actividades de inicio (por ejemplo, Firefox) fallaban con «unable to resolve». Ahora se abre la actividad exacta que Android declara para cada app. Comprobado en un Pixel 9a con Android 17: una app abierta en el teléfono se abre como ventana nueva en el escritorio sin quitarla del teléfono.
+- **Instalador de Windows:** antes de instalar o desinstalar cierra Alero, su proceso en segundo plano, scrcpy y adb (solo los que se ejecutan desde la carpeta de Alero). Ya no hay que cerrarlos a mano.
+- **Mensajes y llamadas no llegaban al teléfono:** el puente de Android descartaba esos mensajes.
+
+### Limpieza
+
+- Se eliminaron archivos del antiguo ejecutor de Linux que seguían en el repositorio y la pantalla de Archivos.
+
 ## 0.1.13 — 2026-11-02
 
 Instala juntos el APK de Android y el instalador de Windows de esta versión: la desconexión voluntaria, las acciones de transferencia y el Inicio de Alero Desktop necesitan ambos lados actualizados.

@@ -70,10 +70,12 @@ class NotifListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (Calls.isCall(sbn)) return Calls.posted(sbn)
         json(sbn)?.let { Bridge.broadcast("pb.x.notif.posted", it) }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (Calls.isCall(sbn)) return Calls.removed(sbn)
         replies.remove(sbn.key)
         if (worth(sbn)) Bridge.broadcast("pb.x.notif.removed", JSONObject().put("key", sbn.key))
     }
@@ -115,6 +117,8 @@ class NotifListener : NotificationListenerService() {
         return JSONObject()
             .put("active", true)
             .put("app", appName(c.packageName))
+            .put("pkg", c.packageName)
+            .put("cast", c.playbackInfo?.playbackType == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE)
             .put("title", m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: "")
             .put("artist", m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: "")
             .put("album", m?.getString(MediaMetadata.METADATA_KEY_ALBUM) ?: "")
@@ -147,24 +151,13 @@ class NotifListener : NotificationListenerService() {
         pkg
     }
 
-    /** Ongoing, our own and group summaries are noise on the computer. */
+    /** Ongoing, our own, group summaries and media players (shown in "Reproduciendo") are noise on the computer. */
     private fun worth(sbn: StatusBarNotification) =
-        sbn.packageName != packageName && !sbn.isOngoing && sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0
+        sbn.packageName != packageName && !sbn.isOngoing && !Calls.isCall(sbn) && sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 &&
+            !sbn.notification.extras.containsKey(Notification.EXTRA_MEDIA_SESSION) &&
+            sbn.packageName !in Prefs.muted(this)
 
-    /** Launcher icon of the source app as a small PNG (base64); cached per package, "" when it has none. */
-    private fun icon(pkg: String): String = icons.getOrPut(pkg) {
-        try {
-            val d = packageManager.getApplicationIcon(pkg)
-            val b = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
-            d.setBounds(0, 0, 64, 64)
-            d.draw(android.graphics.Canvas(b))
-            val out = ByteArrayOutputStream()
-            try { b.compress(Bitmap.CompressFormat.PNG, 100, out) } finally { b.recycle() }
-            Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-        } catch (_: Exception) {
-            ""
-        }
-    }
+    private fun icon(pkg: String): String = appIcon(this, pkg)
 
     private fun json(sbn: StatusBarNotification, withIcon: Boolean = true): JSONObject? {
         if (!worth(sbn)) return null
@@ -185,11 +178,69 @@ class NotifListener : NotificationListenerService() {
             .put("text", text.take(1000))
             .put("time", sbn.postTime)
             .put("clearable", sbn.isClearable)
+            .put("chat", chat(sbn))
+            .put("conversation", (x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) ?: title).toString().take(200))
+            .put("messages", messages(sbn))
+            .put("markable", semantic(sbn, Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) != null)
+            .put("mutable", semantic(sbn, Notification.Action.SEMANTIC_ACTION_MUTE) != null)
+    }
+
+    /** A conversation notification (WhatsApp, Telegram, Signal…): messaging style or the message category. */
+    private fun chat(sbn: StatusBarNotification) =
+        sbn.notification.category == Notification.CATEGORY_MESSAGE ||
+            sbn.notification.extras.getString(Notification.EXTRA_TEMPLATE) == Notification.MessagingStyle::class.java.name
+
+    /** The last messages a messaging-style notification carries (apps usually keep a few), oldest first. */
+    @Suppress("DEPRECATION") // the typed getters need Android 13; these read every version
+    private fun messages(sbn: StatusBarNotification): JSONArray {
+        val a = JSONArray()
+        val raw = sbn.notification.extras.getParcelableArray(Notification.EXTRA_MESSAGES) ?: return a
+        for (p in raw.takeLast(10)) {
+            val b = p as? Bundle ?: continue
+            val text = b.getCharSequence("text")?.toString() ?: continue
+            val sender = if (android.os.Build.VERSION.SDK_INT >= 28)
+                (b.get("sender_person") as? android.app.Person)?.name?.toString() ?: b.getCharSequence("sender")?.toString()
+            else b.getCharSequence("sender")?.toString()
+            // No sender means the phone's owner wrote it (MessagingStyle's convention).
+            a.put(JSONObject().put("text", text.take(1000)).put("time", b.getLong("time")).put("sender", sender ?: "").put("out", sender == null))
+        }
+        return a
     }
 
     companion object {
+        /** The app's own button for this meaning (Android 9+ messaging apps tag them), or null. */
+        private fun semantic(sbn: StatusBarNotification, what: Int): Notification.Action? =
+            if (android.os.Build.VERSION.SDK_INT < 28) null
+            else sbn.notification.actions?.firstOrNull { it.semanticAction == what && it.actionIntent != null }
+
+        /**
+         * `read`: the app's "mark as read" button, else the notification is cleared (it is read on the computer).
+         * `mute`: the app's "mute" button (that conversation). `muteApp`: this app's notifications stop reaching
+         * computers until unmuted in Alero's settings on the phone.
+         */
+        fun act(body: JSONObject) {
+            val s = me ?: return
+            val sbn = try { s.activeNotifications.orEmpty().firstOrNull { it.key == body.optString("key") } } catch (_: Exception) { null } ?: return
+            when (body.optString("action")) {
+                "read" -> semantic(sbn, Notification.Action.SEMANTIC_ACTION_MARK_AS_READ)
+                    ?.let { try { it.actionIntent.send() } catch (_: PendingIntent.CanceledException) {} }
+                    ?: s.cancelNotification(sbn.key)
+                "mute" -> semantic(sbn, Notification.Action.SEMANTIC_ACTION_MUTE)
+                    ?.let { try { it.actionIntent.send() } catch (_: PendingIntent.CanceledException) {} }
+                "muteApp" -> {
+                    Prefs.setMuted(s, sbn.packageName, true)
+                    // The computers drop what they show from that app.
+                    s.activeNotifications.orEmpty().filter { it.packageName == sbn.packageName }
+                        .forEach { Bridge.broadcast("pb.x.notif.removed", JSONObject().put("key", it.key)) }
+                }
+            }
+        }
+
+        fun mutedApps(c: Context): List<Map<String, String>> = Prefs.muted(c).map { pkg ->
+            mapOf("pkg" to pkg, "name" to try { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Exception) { pkg })
+        }.sortedBy { it["name"]!!.lowercase() }
+
         private var me: NotifListener? = null
-        private val icons = HashMap<String, String>()
         private data class ReplyTarget(val intent: PendingIntent, val inputs: Array<RemoteInput>)
         private val replies = ReplyTargets<ReplyTarget>()
 
@@ -238,12 +289,33 @@ class NotifListener : NotificationListenerService() {
             val items = JSONArray()
             // One icon per app: the snapshot would otherwise pass the frame limit.
             val sent = HashSet<String>()
+            var size = 0
             for (n in s.activeNotifications.orEmpty().sortedByDescending { it.postTime }.take(50))
                 s.json(n, false)?.let { j -> // the icon goes on the first notification that is really sent
                     if (sent.add(n.packageName)) j.put("icon", s.icon(n.packageName))
+                    // Chats carry their last messages: stay well under the 256 KiB frame, newest first.
+                    size += j.toString().length
+                    if (size > 200_000) return JSONObject().put("items", items)
                     items.put(j)
                 }
             return JSONObject().put("items", items)
+        }
+
+        private val icons = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+        /** Launcher icon of an app as a small PNG (base64); cached per package, "" when it has none. */
+        fun appIcon(c: Context, pkg: String): String = icons.getOrPut(pkg) {
+            try {
+                val d = c.packageManager.getApplicationIcon(pkg)
+                val b = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+                d.setBounds(0, 0, 64, 64)
+                d.draw(android.graphics.Canvas(b))
+                val out = ByteArrayOutputStream()
+                try { b.compress(Bitmap.CompressFormat.PNG, 100, out) } finally { b.recycle() }
+                Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+            } catch (_: Exception) {
+                ""
+            }
         }
 
         fun mediaState(): JSONObject? = me?.let { it.state() ?: JSONObject().put("active", false) }

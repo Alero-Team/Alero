@@ -106,42 +106,45 @@ void main() {
     },
   );
 
-  test(
-    'reply reports expired targets, offline peers and invalid input',
-    () async {
-      final hub = connected();
-      await expectLater(hub.replyNotif(peer.id, 'n', ' '), throwsStateError);
-      // Past the protocol's one-message limit: refused with a reason, never cut.
-      await expectLater(
-        hub.replyNotif(peer.id, 'n', 'x' * (Hub.maxReplyBytes + 1)),
-        throwsA(isA<StateError>().having((e) => e.message, 'message', contains('ni recortado'))),
-      );
-      expect(hub.sent, isEmpty);
-      await expectLater(
-        hub.replyNotif(peer.id, 'missing', 'Hola'),
-        throwsStateError,
-      );
-      final reply = hub.replyNotif(peer.id, 'n', 'Hola');
-      final checked = expectLater(
-        reply,
-        throwsA(
-          isA<StateError>().having(
-            (e) => e.message,
-            'message',
-            contains('caducó'),
-          ),
+  test('reply reports expired targets, offline peers and invalid input', () async {
+    final hub = connected();
+    await expectLater(hub.replyNotif(peer.id, 'n', ' '), throwsStateError);
+    // Past the protocol's one-message limit: refused with a reason, never cut.
+    await expectLater(
+      hub.replyNotif(peer.id, 'n', 'x' * (Hub.maxReplyBytes + 1)),
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('ni recortado'),
         ),
-      );
-      hub.onNotifReplyResult(peer.id, {
-        ...hub.sent.last.$3,
-        'ok': false,
-        'error': 'expired',
-      });
-      await checked;
-      hub.peers = [];
-      await expectLater(hub.replyNotif(peer.id, 'n', 'Hola'), throwsStateError);
-    },
-  );
+      ),
+    );
+    expect(hub.sent, isEmpty);
+    await expectLater(
+      hub.replyNotif(peer.id, 'missing', 'Hola'),
+      throwsStateError,
+    );
+    final reply = hub.replyNotif(peer.id, 'n', 'Hola');
+    final checked = expectLater(
+      reply,
+      throwsA(
+        isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('caducó'),
+        ),
+      ),
+    );
+    hub.onNotifReplyResult(peer.id, {
+      ...hub.sent.last.$3,
+      'ok': false,
+      'error': 'expired',
+    });
+    await checked;
+    hub.peers = [];
+    await expectLater(hub.replyNotif(peer.id, 'n', 'Hola'), throwsStateError);
+  });
 
   testWidgets('a missing reply acknowledgement times out', (tester) async {
     final hub = connected();
@@ -404,8 +407,14 @@ void main() {
         expect(find.text('Enviando…'), findsOneWidget);
         hub.onNotifReplyResult(peer.id, {...hub.sent.last.$3, 'ok': true});
         await tester.pump();
-        expect(find.textContaining('Android entregó la respuesta'), findsOneWidget);
-        expect(find.textContaining('no puede confirmar que el destinatario'), findsOneWidget);
+        expect(
+          find.textContaining('Android entregó la respuesta'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('no puede confirmar que el destinatario'),
+          findsOneWidget,
+        );
         await tester.pumpWidget(const SizedBox());
       },
     );
@@ -424,7 +433,9 @@ void main() {
       '5 000 caracteres': sized(5000),
       '10 000 caracteres': sized(10000),
       'varios párrafos': 'Primer párrafo.\n\nSegundo párrafo,\ncon salto.\n\n\tTercero con tabulador.\r\nFin.',
-      'emojis y símbolos': '👋🏽 Hola 👨‍👩‍👧‍👦 €£¥ «comillas» — “tipográficas” 中文 العربية 𝔘𝔫𝔦𝔠𝔬𝔡𝔢 ' * 120,
+      'emojis y símbolos':
+          '👋🏽 Hola 👨‍👩‍👧‍👦 €£¥ «comillas» — “tipográficas” 中文 العربية 𝔘𝔫𝔦𝔠𝔬𝔡𝔢 ' *
+          120,
       'texto pegado del portapapeles': sized(9000).replaceAll('. ', '.\r\n'),
     };
     for (final c in cases.entries) {
@@ -434,7 +445,9 @@ void main() {
         final body = hub.sent.single.$3;
         // Exactly what was typed: same code units, same grapheme clusters, through a JSON round trip.
         expect(body['text'], c.value);
-        final wire = jsonDecode(jsonEncode({'type': 'pb.x.notif.reply', 'body': body})) as Map;
+        final wire = jsonDecode(
+          jsonEncode({'type': 'pb.x.notif.reply', 'body': body}),
+        ) as Map;
         expect((wire['body'] as Map)['text'], c.value);
         expect(utf8.encode(jsonEncode(body)).length, lessThan(256 * 1024));
         hub.onNotifReplyResult(peer.id, {...body, 'ok': true});
@@ -442,46 +455,61 @@ void main() {
       });
     }
 
-    testWidgets('the field takes 10 000 characters, grows, and Enter sends while Shift+Enter breaks the line',
-        (tester) async {
-      final hub = connected();
-      hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
-      await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
-      final field = find.byType(TextField);
-      expect(tester.widget<TextField>(field).maxLength, isNull);
-      expect(tester.widget<TextField>(field).maxLines, greaterThan(1));
-      final long = sized(10000);
-      await tester.enterText(field, long);
-      await tester.pump();
-      expect(tester.widget<TextField>(field).controller!.text, long);
-      // Shift+Enter: no send.
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-      await tester.pump();
-      expect(hub.sent, isEmpty);
-      // Enter: sends the whole text once, however many times it is pressed while sending.
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      expect(hub.sent, hasLength(1));
-      expect(hub.sent.single.$3['text'], startsWith(long));
-      hub.onNotifReplyResult(peer.id, {...hub.sent.single.$3, 'ok': false, 'error': 'send_failed'});
-      await tester.pump();
-      // A failed send keeps the text for a retry.
-      expect(tester.widget<TextField>(field).controller!.text, startsWith(long));
-      await tester.pumpWidget(const SizedBox());
-    });
+    testWidgets(
+      'the field takes 10 000 characters, grows, and Enter sends while Shift+Enter breaks the line',
+      (tester) async {
+        final hub = connected();
+        hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
+        await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        final field = find.byType(TextField);
+        expect(tester.widget<TextField>(field).maxLength, isNull);
+        expect(tester.widget<TextField>(field).maxLines, greaterThan(1));
+        final long = sized(10000);
+        await tester.enterText(field, long);
+        await tester.pump();
+        expect(tester.widget<TextField>(field).controller!.text, long);
+        // Shift+Enter: no send.
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.pump();
+        expect(hub.sent, isEmpty);
+        // Enter: sends the whole text once, however many times it is pressed while sending.
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+        expect(hub.sent, hasLength(1));
+        expect(hub.sent.single.$3['text'], startsWith(long));
+        hub.onNotifReplyResult(peer.id, {
+          ...hub.sent.single.$3,
+          'ok': false,
+          'error': 'send_failed',
+        });
+        await tester.pump();
+        // A failed send keeps the text for a retry.
+        expect(
+          tester.widget<TextField>(field).controller!.text,
+          startsWith(long),
+        );
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
 
-    testWidgets('an unsent draft survives the row being rebuilt (layout change)', (tester) async {
-      final hub = connected();
-      hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
-      await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
-      await tester.enterText(find.byType(TextField), 'Borrador\nlargo');
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'Borrador\nlargo');
-      await tester.pumpWidget(const SizedBox());
-    });
+    testWidgets(
+      'an unsent draft survives the row being rebuilt (layout change)',
+      (tester) async {
+        final hub = connected();
+        hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
+        await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        await tester.enterText(find.byType(TextField), 'Borrador\nlargo');
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        expect(
+          tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'Borrador\nlargo',
+        );
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   });
 }

@@ -103,6 +103,12 @@ class PeerInfo {
       ((j['storage'] as Map?)?['total'] as num?)?.toInt() ?? 0;
   bool get notifAccess => j['notifAccess'] == true;
 
+  /// The phone's owner lets this computer read and send SMS.
+  bool get sms => j['sms'] == true;
+
+  /// The phone's owner lets this computer answer, end and place calls.
+  bool get calls => j['calls'] == true;
+
   /// A computer's remote-control capabilities (the "remote" field of its pb.x.info). Absent on phones and old versions.
   Map? get _remote => j['remote'] as Map?;
   bool get remoteAllowed => _remote?['allowed'] == true;
@@ -149,16 +155,120 @@ class PhoneNotif {
         (j['time'] as num?)?.toInt() ?? 0,
       ),
       clearable = j['clearable'] != false,
-      replyable = j['replyable'] == true;
+      replyable = j['replyable'] == true,
+      markable = j['markable'] == true,
+      mutable = j['mutable'] == true,
+      chat = j['chat'] == true,
+      conversation = j['conversation'] as String? ?? '',
+      messages = [
+        for (final m in (j['messages'] as List? ?? []))
+          if (m is Map) ChatMsg.fromNotif(m),
+      ];
   final String key, app, pkg, title, text;
   final DateTime time;
   final bool clearable, replyable;
+
+  /// The app has its own "mark as read" / "mute conversation" buttons.
+  final bool markable, mutable;
+
+  /// A messaging app's conversation, with the last messages its notification carries.
+  final bool chat;
+  final String conversation;
+  final List<ChatMsg> messages;
+}
+
+/// The phone's quick controls (`pb.x.phone.state`).
+class PhoneState {
+  PhoneState(Map j)
+    : dnd = j['dnd'] == true,
+      dndAccess = j['dndAccess'] == true,
+      torch = j['torch'] == true,
+      finding = j['finding'] == true,
+      callLog = j['callLog'] == true,
+      ringer = j['ringer'] as String? ?? 'normal',
+      media = (j['media'] as num?)?.toInt() ?? 0,
+      mediaMax = (j['mediaMax'] as num?)?.toInt() ?? 15,
+      ring = (j['ring'] as num?)?.toInt() ?? 0,
+      ringMax = (j['ringMax'] as num?)?.toInt() ?? 7;
+  final bool dnd, dndAccess, torch, finding, callLog;
+  final String ringer;
+  final int media, mediaMax, ring, ringMax;
+}
+
+/// One line of the phone's call log, or one contact number.
+class CallEntry {
+  CallEntry(Map j)
+    : number = j['number'] as String? ?? '',
+      name = j['name'] as String? ?? '',
+      type = j['type'] as String? ?? '',
+      date = DateTime.fromMillisecondsSinceEpoch(
+        (j['date'] as num?)?.toInt() ?? 0,
+      ),
+      duration = (j['duration'] as num?)?.toInt() ?? 0;
+  final String number, name, type;
+  final DateTime date;
+  final int duration;
+  String get who => name.isNotEmpty ? name : number;
+}
+
+/// The phone's call right now (`pb.x.call`): nothing, ringing, or in progress.
+class CallState {
+  CallState(Map j)
+    : active = j['active'] == true,
+      ringing = j['ringing'] == true,
+      canAnswer = j['canAnswer'] == true,
+      name = j['name'] as String? ?? '',
+      text = j['text'] as String? ?? '';
+  final bool active, ringing, canAnswer;
+  final String name, text;
+}
+
+/// One message of a conversation: an SMS/MMS from the phone's store or a line of a chat notification.
+class ChatMsg {
+  ChatMsg({
+    required this.body,
+    required this.time,
+    required this.out,
+    this.sender = '',
+    this.media = 0,
+    this.failed = false,
+    this.id = '',
+  });
+  ChatMsg.fromNotif(Map m)
+    : this(
+        body: m['text'] as String? ?? '',
+        time: DateTime.fromMillisecondsSinceEpoch(
+          (m['time'] as num?)?.toInt() ?? 0,
+        ),
+        out: m['out'] == true,
+        sender: m['sender'] as String? ?? '',
+      );
+  ChatMsg.fromSms(Map m)
+    : this(
+        id: m['id'] as String? ?? '',
+        body: m['body'] as String? ?? '',
+        time: DateTime.fromMillisecondsSinceEpoch(
+          (m['date'] as num?)?.toInt() ?? 0,
+        ),
+        out: m['out'] == true,
+        sender: m['sender'] as String? ?? '',
+        media: (m['media'] as num?)?.toInt() ?? 0,
+        failed: m['failed'] == true,
+      );
+  final String id, body, sender;
+  final DateTime time;
+  final bool out, failed;
+
+  /// Attachments (pictures, audio) of an MMS; they stay on the phone.
+  final int media;
 }
 
 class MediaState {
   MediaState(Map j)
     : active = j['active'] == true,
       app = j['app'] as String? ?? '',
+      pkg = j['pkg'] as String? ?? '',
+      cast = j['cast'] == true,
       title = j['title'] as String? ?? '',
       artist = j['artist'] as String? ?? '',
       album = j['album'] as String? ?? '',
@@ -173,7 +283,10 @@ class MediaState {
       receivedAt = DateTime.now().millisecondsSinceEpoch,
       art = _art(j['art']);
   final bool active, playing;
-  final String app, title, artist, album;
+
+  /// Played on another device (Chromecast, a speaker), not on the phone itself.
+  final bool cast;
+  final String app, pkg, title, artist, album;
   final int duration, position, at, volume, volumeMax;
   final Uint8List? art;
   final double speed;

@@ -46,6 +46,9 @@ object Features {
         if (::ctx.isInitialized) return
         ctx = c.applicationContext
         Files.init(ctx)
+        Sms.init(ctx)
+        Calls.init(ctx)
+        Phone.init(ctx)
         WidgetData.init(ctx)
         TransferNotices.init(ctx)
         Thread(::loop, "pb-features").apply { isDaemon = true }.start()
@@ -110,6 +113,9 @@ object Features {
                 val body = e.optJSONObject("body") ?: JSONObject()
                 val kind = e.getString("kind")
                 if (kind.startsWith("pb.x.fs.")) return Files.handle(peer, kind, body)
+                if (kind.startsWith("pb.x.sms.")) return Sms.handle(peer, kind, body)
+                if (kind == "pb.x.call.cmd" || kind == "pb.x.call.dial") return Calls.handle(peer, kind, body)
+                if (kind.startsWith("pb.x.phone.")) return Phone.handle(peer, kind, body)
                 when (kind) {
                     "pb.x.info.request" -> hello(peer)
                     "pb.x.info" -> WidgetData.info(peer, body)
@@ -119,6 +125,7 @@ object Features {
                     "pb.x.media.cmd" -> main.post { NotifListener.command(body) }
                     "pb.x.media.request" -> NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }
                     "pb.x.notif.dismiss" -> NotifListener.dismiss(body.optString("key"))
+                    "pb.x.notif.action" -> main.post { NotifListener.act(body) }
                     "pb.x.notif.reply" -> main.post {
                         val request = body.optString("request").take(200)
                         val key = "$peer|$request"
@@ -139,6 +146,8 @@ object Features {
         wallpaperMessage()?.let { Bridge.sendTo(peer, "pb.x.wallpaper", it) }
         NotifListener.snapshot()?.let { Bridge.sendTo(peer, "pb.x.notif.snapshot", it) }
         NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }
+        Calls.snapshot()?.let { Bridge.sendTo(peer, "pb.x.call", it) }
+        Bridge.sendTo(peer, "pb.x.phone.state", Phone.state())
     }
 
     fun phoneBattery(): Pair<Int, Boolean> = if (::ctx.isInitialized) battery() else -1 to false
@@ -238,7 +247,12 @@ object Features {
             .put("screen", screen())
             .put("wallpaper", JSONObject().put("colors", wallpaperColors()).put("custom", wallpaperFile().exists()))
             .put("notifAccess", NotifListener.enabled(ctx))
+            .put("sms", Sms.allowed())
+            .put("calls", Calls.allowed())
     }
+
+    /** Tells every connected computer what changed (a switch or a permission in Settings). */
+    fun announce() = Bridge.broadcast("pb.x.info", info())
 
     /**
      * The user's wallpaper, as far as Android lets an ordinary app know it: its dominant colours (no permission

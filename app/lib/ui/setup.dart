@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -22,9 +23,16 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _busy = false, _startup = false;
   String? _error;
 
+  // Permissions are granted in Android's own screens: read them again when Alero comes back.
+  late final _life = AppLifecycleListener(
+    onResume: () => widget.hub.checkPermissions(),
+  );
+
   @override
   void initState() {
     super.initState();
+    _life;
+    widget.hub.checkPermissions();
     if (Platform.isWindows) {
       _act(() async {
         _startup = await Native.startupEnabled();
@@ -34,6 +42,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   void dispose() {
+    _life.dispose();
     _name.dispose();
     super.dispose();
   }
@@ -55,28 +64,65 @@ class _SetupScreenState extends State<SetupScreen> {
     }
   }
 
+  /// One permission: a check and «Concedido» once Android granted it, so nothing is asked twice.
   Widget _permission(
     String title,
     String why,
     String action,
-    Future<void> Function() onTap,
-  ) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: Gap.s),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleSmall),
-        Text(why),
-        TextButton(
-          onPressed: _busy ? null : () => _act(onTap),
-          child: Text(action),
-        ),
-      ],
-    ),
-  );
+    Future<void> Function() onTap, {
+    required bool ok,
+  }) {
+    final s = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.s),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: Gap.m),
+            child: Icon(
+              ok
+                  ? Symbols.check_circle_rounded
+                  : Symbols.radio_button_unchecked_rounded,
+              fill: ok ? 1 : 0,
+              color: ok ? s.primary : s.onSurfaceVariant,
+              semanticLabel: ok ? 'Concedido' : 'Sin conceder',
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                Text(why),
+                ok
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: Gap.s),
+                        child: Text(
+                          'Concedido',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: s.primary),
+                        ),
+                      )
+                    : TextButton(
+                        onPressed: _busy ? null : () => _act(onTap),
+                        child: Text(action),
+                      ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.hub,
+    builder: (context, _) => _build(context),
+  );
+
+  Widget _build(BuildContext context) {
     final hub = widget.hub;
     return Scaffold(
       appBar: AppBar(
@@ -155,30 +201,49 @@ class _SetupScreenState extends State<SetupScreen> {
                     'Para avisarte de transferencias y solicitudes de emparejamiento.',
                     'Permitir avisos',
                     Native.requestNotifications,
+                    ok: hub.notifPermission,
                   ),
                   _permission(
                     'Notificaciones del teléfono',
                     'Muestra tus notificaciones y permite responder y controlar la música desde el PC.',
                     'Revisar acceso',
                     hub.openNotifAccess,
+                    ok: hub.notifAccess,
                   ),
                   _permission(
                     'Fotos, vídeos y música',
                     'Un ordenador emparejado podrá explorar y descargar los archivos que autorices.',
                     'Elegir archivos compartidos',
                     () => hub.setFilesAllowed(true),
+                    ok: hub.filesAllowed && hub.filesPermission,
                   ),
                   _permission(
                     'Todas las carpetas',
                     'Comparte el almacenamiento común. Las carpetas privadas de otras apps siguen protegidas.',
                     'Revisar acceso a carpetas',
                     Native.requestAllFiles,
+                    ok: hub.allFiles,
                   ),
                   _permission(
                     'Instalar apps recibidas',
                     'Abre el instalador al tocar un APK. Android seguirá pidiendo confirmar cada instalación.',
                     'Revisar instalación de apps',
                     Native.requestInstallPermission,
+                    ok: hub.installAllowed,
+                  ),
+                  _permission(
+                    'Mensajes SMS',
+                    'Lee y envía tus SMS desde el ordenador. Incluye los nombres de tus contactos.',
+                    'Permitir mensajes',
+                    () => hub.setSmsAllowed(true),
+                    ok: hub.smsAllowed && hub.smsPermission,
+                  ),
+                  _permission(
+                    'Llamadas',
+                    'Contesta, cuelga y llama desde el ordenador; hablas por el teléfono.',
+                    'Permitir llamadas',
+                    () => hub.setCallsAllowed(true),
+                    ok: hub.callsAllowed && hub.callsPermission,
                   ),
                 ],
                 if (_step == 1 && !Platform.isAndroid) ...[

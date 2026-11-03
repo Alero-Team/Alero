@@ -6,38 +6,83 @@ import 'phone_control.dart';
 import 'desktop_workspace.dart';
 
 /// Independent desktop activity launch arguments. Display 0 is prohibited.
-List<String> desktopAppLaunchArgs(String package, int displayId, {bool freeform = false}) {
+List<String> desktopAppLaunchArgs(
+  String package,
+  int displayId, {
+  bool freeform = false,
+  String? component,
+}) {
   if (!validAndroidPackage(package) || displayId < 1 || displayId > 255) {
     throw const FormatException('Pantalla o paquete inválido');
   }
-  return ['am','start','-W','--display','$displayId','-f','0x18000000',
-    if (freeform) ...['--windowingMode','5'],
-    '-a','android.intent.action.MAIN','-c','android.intent.category.LAUNCHER','-p',package];
+  if (component != null &&
+      !RegExp(r'^[A-Za-z0-9_.]+/[A-Za-z0-9_.$]+$').hasMatch(component)) {
+    throw const FormatException('Actividad inválida');
+  }
+  return [
+    'am',
+    'start',
+    '-W',
+    '--display',
+    '$displayId',
+    '-f',
+    '0x18000000',
+    if (freeform) ...['--windowingMode', '5'],
+    if (component != null) ...[
+      '-n',
+      component,
+    ] else ...[
+      '-a',
+      'android.intent.action.MAIN',
+      '-c',
+      'android.intent.category.LAUNCHER',
+      '-p',
+      package,
+    ],
+  ];
 }
+
 /// NEW_TASK only: DesktopHomeActivity is singleTask with its own affinity, so
 /// Home brings back the one desktop launcher instead of stacking a new copy.
 List<String> desktopHomeLaunchArgs(int displayId) {
-  if (displayId < 1 || displayId > 255) throw const FormatException('Pantalla virtual inválida');
-  return ['am','start','-W','--display','$displayId','-f','0x10000000',
-    '-n','dev.alero.app/.DesktopHomeActivity'];
+  if (displayId < 1 || displayId > 255) {
+    throw const FormatException('Pantalla virtual inválida');
+  }
+  return [
+    'am',
+    'start',
+    '-W',
+    '--display',
+    '$displayId',
+    '-f',
+    '0x10000000',
+    '-n',
+    'dev.alero.app/.DesktopHomeActivity',
+  ];
 }
 
 /// What the user is told after each launch; never claims more than Android showed.
-String desktopLaunchMessage(DesktopLaunch r, String package, int displayId) => switch (r) {
-  DesktopLaunch.desktop => 'Android confirmó $package en la pantalla virtual $displayId.',
+String desktopLaunchMessage(
+  DesktopLaunch r,
+  String package,
+  int displayId,
+) => switch (r) {
+  DesktopLaunch.desktop =>
+    'Android confirmó $package en la pantalla virtual $displayId.',
   DesktopLaunch.movedFromPhone =>
     'Android movió $package desde el Pixel a la pantalla virtual $displayId: esta app solo admite una ventana.',
   DesktopLaunch.alsoOnPhone =>
     '$package se abrió en la pantalla virtual $displayId, pero Android también mostró una ventana en el Pixel.',
   DesktopLaunch.phone =>
     'Android abrió $package en la pantalla del Pixel en lugar del escritorio virtual. '
-    'Esta app o tu versión de Android no permiten abrirla en otra pantalla.',
+        'Esta app o tu versión de Android no permiten abrirla en otra pantalla.',
   DesktopLaunch.unconfirmed =>
     'Android no mostró $package en la pantalla virtual $displayId. No se ha dado por abierta.',
 };
 bool desktopLaunchRejected(String value) => RegExp(
   r'(Error:|Exception|unable to resolve|Permission Denial|SecurityException|does not exist|not found)',
-  caseSensitive:false).hasMatch(value);
+  caseSensitive: false,
+).hasMatch(value);
 
 /// Desktop wrapper around the bundled scrcpy + adb (Apache-2.0, ADR-0008). The phone must have wireless
 /// debugging on (Developer options); this is the "ADB" permission class in the project rules, chosen by the user
@@ -175,9 +220,11 @@ class Scrcpy {
   static Future<String> _checked(String serial, List<String> command) async {
     final result = await _run(['-s', serial, 'shell', ...command]);
     if (result.exitCode != 0) {
-      throw StateError('${result.stderr}'.trim().isEmpty
-          ? 'Android no permite esta operación.'
-          : '${result.stderr}'.trim());
+      throw StateError(
+        '${result.stderr}'.trim().isEmpty
+            ? 'Android no permite esta operación.'
+            : '${result.stderr}'.trim(),
+      );
     }
     return '${result.stdout}'.trim();
   }
@@ -185,23 +232,29 @@ class Scrcpy {
   /// A lightweight package catalog. Apps with no launchable activity will
   /// report an Android error instead of pretending the launch succeeded.
   static Future<List<String>> installedApps(String serial) async =>
-      DesktopApps.parse(await _checked(serial, ['pm', 'list', 'packages', '-3']));
+      DesktopApps.parse(
+        await _checked(serial, ['pm', 'list', 'packages', '-3']),
+      );
 
   /// Display IDs actually advertised by this version of scrcpy + Android.
   static Future<List<DesktopDisplay>> displays(String serial) async {
     final r = await Process.run(
-      _scrcpy, ['-s', serial, '--list-displays'],
+      _scrcpy,
+      ['-s', serial, '--list-displays'],
       environment: {'ADB': _adb},
     ).timeout(const Duration(seconds: 20));
     if (r.exitCode != 0) throw StateError('${r.stderr}');
     final found = DesktopDisplay.parse('${r.stdout}\n${r.stderr}');
-    return found.isEmpty ? [const DesktopDisplay(0, 'Pantalla principal')] : found;
+    return found.isEmpty
+        ? [const DesktopDisplay(0, 'Pantalla principal')]
+        : found;
   }
 
   /// Native Android app launch, optionally on an existing external display.
   /// Freeform is only a request; OEM firmware can refuse or ignore it.
   static Future<String> launchApp(
-    String serial, String package, {
+    String serial,
+    String package, {
     int displayId = 0,
     bool freeform = false,
   }) async {
@@ -212,12 +265,17 @@ class Scrcpy {
       throw const FormatException('Pantalla inválida');
     }
     return _checked(serial, [
-      'am', 'start', '-W',
+      'am',
+      'start',
+      '-W',
       if (displayId > 0) ...['--display', '$displayId'],
       if (freeform) ...['--windowingMode', '5'],
-      '-a', 'android.intent.action.MAIN',
-      '-c', 'android.intent.category.LAUNCHER',
-      '-p', package,
+      '-a',
+      'android.intent.action.MAIN',
+      '-c',
+      'android.intent.category.LAUNCHER',
+      '-p',
+      package,
     ]);
   }
 
@@ -227,7 +285,9 @@ class Scrcpy {
   static Future<bool> displayAlive(String serial, int displayId) async {
     if (displayId <= 0 || displayId > 255) return false;
     final listed = displayListed(
-      await _checked(serial, ['dumpsys', 'display']), displayId);
+      await _checked(serial, ['dumpsys', 'display']),
+      displayId,
+    );
     return listed ?? (await displays(serial)).any((d) => d.id == displayId);
   }
 
@@ -238,23 +298,56 @@ class Scrcpy {
   /// Launches on the virtual display, then checks where Android really put
   /// the app. Returns the verdict for warnings; throws when the app did not
   /// land on the virtual display, so nothing is reported as opened there.
-  static Future<DesktopLaunch> launchDesktopApp(String serial, String package,
-      int displayId, {bool freeform = false, List<TopTask>? before}) async {
+  static Future<DesktopLaunch> launchDesktopApp(
+    String serial,
+    String package,
+    int displayId, {
+    bool freeform = false,
+    List<TopTask>? before,
+  }) async {
     if (!await displayAlive(serial, displayId)) {
-      throw StateError('La pantalla virtual $displayId ya no existe. Vuelve a iniciar Alero Desktop.');
+      throw StateError(
+        'La pantalla virtual $displayId ya no existe. Vuelve a iniciar Alero Desktop.',
+      );
     }
     final prior = before ?? await topTasks(serial);
-    final result = await _checked(serial,
-      desktopAppLaunchArgs(package, displayId, freeform: freeform));
-    if (desktopLaunchRejected(result)) throw StateError('Android rechazó: $result');
+    final resolved = (await _checked(serial, [
+      'cmd',
+      'package',
+      'resolve-activity',
+      '--brief',
+      '-a',
+      'android.intent.action.MAIN',
+      '-c',
+      'android.intent.category.LAUNCHER',
+      package,
+    ])).split('\n').last.trim();
+    final result = await _checked(
+      serial,
+      desktopAppLaunchArgs(
+        package,
+        displayId,
+        freeform: freeform,
+        component: resolved.startsWith('$package/') ? resolved : null,
+      ),
+    );
+    if (desktopLaunchRejected(result)) {
+      throw StateError('Android rechazó: $result');
+    }
     var verdict = DesktopLaunch.unconfirmed;
     for (var i = 0; i < 6; i++) {
-      verdict = judgeDesktopLaunch(package, displayId, prior,
-        await topTasks(serial), amOutput: result);
+      verdict = judgeDesktopLaunch(
+        package,
+        displayId,
+        prior,
+        await topTasks(serial),
+        amOutput: result,
+      );
       if (verdict != DesktopLaunch.unconfirmed) break;
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
-    if (verdict == DesktopLaunch.phone || verdict == DesktopLaunch.unconfirmed) {
+    if (verdict == DesktopLaunch.phone ||
+        verdict == DesktopLaunch.unconfirmed) {
       throw StateError(desktopLaunchMessage(verdict, package, displayId));
     }
     return verdict;
@@ -264,7 +357,11 @@ class Scrcpy {
   /// Recents would. The app keeps running if it has other windows, such as
   /// one on the phone. Refuses tasks that are not on that display.
   static Future<void> closeDesktopTask(
-      String serial, String package, int taskId, int displayId) async {
+    String serial,
+    String package,
+    int taskId,
+    int displayId,
+  ) async {
     if (displayId <= 0 || taskId <= 0) {
       throw const FormatException('Tarea o pantalla no válida');
     }
@@ -284,22 +381,37 @@ class Scrcpy {
     if (!await displayAlive(serial, displayId)) {
       throw StateError('Selecciona una pantalla virtual activa.');
     }
+    // Lets the desktop's taskbar float over apps (Alero's own Home); it is drawn only on this display.
+    await _checked(serial, [
+      'appops',
+      'set',
+      'dev.alero.app',
+      'SYSTEM_ALERT_WINDOW',
+      'allow',
+    ]).catchError((_) => '');
     final result = await _checked(serial, desktopHomeLaunchArgs(displayId));
     if (desktopLaunchRejected(result)) {
-      throw StateError('Instala en el teléfono la misma versión de Alero que en Windows: $result');
+      throw StateError(
+        'Instala en el teléfono la misma versión de Alero que en Windows: $result',
+      );
     }
     for (var i = 0; i < 5; i++) {
-      if ((await topTasks(serial)).any((t) =>
-          t.package == 'dev.alero.app' && t.display == displayId)) {
+      if ((await topTasks(serial))
+          .any((t) => t.package == 'dev.alero.app' && t.display == displayId)) {
         return;
       }
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    throw StateError('Android no mostró el Inicio de Alero en la pantalla $displayId.');
+    throw StateError(
+      'Android no mostró el Inicio de Alero en la pantalla $displayId.',
+    );
   }
 
   /// Only confirmed activity tasks on the requested secondary display.
-  static Future<Map<String, int>> desktopTasks(String serial, int displayId) async {
+  static Future<Map<String, int>> desktopTasks(
+    String serial,
+    int displayId,
+  ) async {
     if (displayId <= 0 || displayId > 255) {
       throw const FormatException('Selecciona una pantalla secundaria válida');
     }
@@ -319,7 +431,9 @@ class Scrcpy {
 
   /// Maximize only a task that still belongs to the chosen display.
   static Future<void> resizeDesktopTask(
-    String serial, int taskId, DesktopDisplay display,
+    String serial,
+    int taskId,
+    DesktopDisplay display,
   ) async {
     final geometry = display.resolution;
     if (taskId <= 0 || display.id <= 0 || geometry == null) {
@@ -331,9 +445,17 @@ class Scrcpy {
     }
     final (width, height) = geometry;
     final result = await _checked(serial, [
-      'am', 'task', 'resize', '$taskId', '0', '0', '$width', '$height',
+      'am',
+      'task',
+      'resize',
+      '$taskId',
+      '0',
+      '0',
+      '$width',
+      '$height',
     ]);
-    if (result.contains('Error') || result.contains('Exception') ||
+    if (result.contains('Error') ||
+        result.contains('Exception') ||
         result.contains('Unknown command')) {
       throw StateError('Android rechazó la ventana: $result');
     }
@@ -362,7 +484,9 @@ class Scrcpy {
     DesktopLayout layout,
   ) async {
     if (display.id == 0 || display.resolution == null) {
-      throw StateError('Selecciona una pantalla secundaria con resolución conocida.');
+      throw StateError(
+        'Selecciona una pantalla secundaria con resolución conocida.',
+      );
     }
     final (width, height) = display.resolution!;
     final bounds = desktopWindowBounds(layout, width, height, packages.length);
@@ -374,16 +498,25 @@ class Scrcpy {
       display.id,
     );
     if (packages.any((p) => !tasks.containsKey(p))) {
-      throw StateError('Android no expone tareas para todas las apps de esta pantalla.');
+      throw StateError(
+        'Android no expone tareas para todas las apps de esta pantalla.',
+      );
     }
     for (var i = 0; i < packages.length; i++) {
       final task = tasks[packages[i]]!;
       final box = bounds[i];
       final result = await _checked(serial, [
-        'am', 'task', 'resize', '$task',
-        '${box.left}', '${box.top}', '${box.right}', '${box.bottom}',
+        'am',
+        'task',
+        'resize',
+        '$task',
+        '${box.left}',
+        '${box.top}',
+        '${box.right}',
+        '${box.bottom}',
       ]);
-      if (result.contains('Error:') || result.contains('Exception') ||
+      if (result.contains('Error:') ||
+          result.contains('Exception') ||
           result.contains('Unknown command')) {
         throw StateError('Android rechazó una ventana: $result');
       }
@@ -416,6 +549,23 @@ class Scrcpy {
       freeform: v.length > 1 && v[1] == 'true',
       forced: v.length > 2 && v[2] == '1',
     );
+  }
+
+  /// Installed user apps with their names, as scrcpy lists them (`* Name  package`); package ids only when
+  /// that fails. Sorted by name.
+  static Future<List<(String, String)>> appsWithNames(String serial) async {
+    try {
+      final r = await Process.run(
+        _scrcpy,
+        ['-s', serial, '--list-apps'],
+        environment: {'ADB': _adb},
+      ).timeout(const Duration(seconds: 20));
+      final apps = parseListApps('${r.stdout}');
+      if (apps.isNotEmpty) return apps;
+    } catch (_) {
+      // fall back to package ids
+    }
+    return [for (final p in await installedApps(serial)) (p, p)];
   }
 
   static Future<Process> launch(List<String> args) => Process.start(
@@ -523,4 +673,15 @@ class _AdbServer {
     final r = await _ask(['host:transport:$serial', 'reverse:list-forward']);
     return f.contains('tcp:$phonePort') && r.contains('tcp:$pcPort');
   }
+}
+
+/// `scrcpy --list-apps` lines: ` * Name    package` (`*` system app, `-` user app; both are listed: Chrome or
+/// Photos are system apps on a Pixel). The package is the last word, the name everything before it.
+List<(String, String)> parseListApps(String out) {
+  final re = RegExp(r'^\s*[*-]\s+(.+)\s+(\S+)$');
+  return [
+    for (final l in out.split('\n'))
+      if (re.firstMatch(l.trimRight()) case final m?)
+        if (validAndroidPackage(m[2]!)) (m[1]!.trim(), m[2]!),
+  ]..sort((a, b) => a.$1.toLowerCase().compareTo(b.$1.toLowerCase()));
 }

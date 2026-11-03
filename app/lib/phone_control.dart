@@ -60,6 +60,8 @@ class SessionOptions {
     this.displayId = 0,
     this.flexDisplay = false,
     this.startApp,
+    this.appWindow = false,
+    this.camera,
   });
 
   /// Longest side in pixels; 0 keeps the phone's own resolution.
@@ -72,6 +74,12 @@ class SessionOptions {
   final int displayId;
   final bool flexDisplay;
   final String? startApp;
+
+  /// One app alone in its own window: a virtual display the size of the phone, without launcher or bars.
+  final bool appWindow;
+
+  /// `back` or `front`: the window shows that camera instead of the screen (Android 12+).
+  final String? camera;
 }
 
 /// The scrcpy command line for one session. Keyboard, mouse and clipboard sync are scrcpy's defaults.
@@ -83,13 +91,28 @@ List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
   if (o.maxSize > 0) '--max-size=${o.maxSize}',
   '--video-bit-rate=${o.bitRate}M',
   '--max-fps=${o.maxFps}',
-  if (!o.audio) '--no-audio',
+  if (o.camera != null) ...[
+    '--video-source=camera',
+    '--camera-facing=${o.camera}',
+    '--no-control',
+    if (o.audio) '--audio-source=mic' else '--no-audio',
+  ] else if (!o.audio)
+    '--no-audio',
   if (o.fullscreen) '--fullscreen',
   if (o.orientation != 0) '--orientation=${o.orientation}',
   if (!o.desktop && o.displayId > 0) '--display-id=${o.displayId}',
   // A virtual display shows the phone's desktop; the phone's own screen is untouched, so it is not turned off.
-  if (o.desktop) ...[
+  if (o.camera != null)
+    ...[]
+  else if (o.appWindow && o.startApp != null) ...[
+    '--new-display',
+    '--no-vd-system-decorations',
+    '--display-ime-policy=local',
+    '--start-app=${o.startApp}',
+  ] else if (o.desktop) ...[
     '--new-display=${o.desktopSize}',
+    // Android 17 refuses Home on scrcpy's displays and its taskbar covers Alero's: Alero Desktop draws its own.
+    '--no-vd-system-decorations',
     '--keep-active',
     '--display-ime-policy=local',
     if (o.flexDisplay) '--flex-display',
@@ -114,12 +137,22 @@ class PhoneSessions extends ChangeNotifier {
   final _running = <String, Process>{};
 
   bool running(String serial) => _running.containsKey(serial);
-  Iterable<String> get serials => _running.keys;
+  Iterable<String> get serials => _running.keys.where((k) => !k.contains('|'));
 
-  Future<void> start(String serial, String title, SessionOptions o) async {
-    stop(serial);
+  /// Extra windows of a phone (an app, the camera) run next to its main session: key `serial|what`.
+  bool runningExtra(String serial, String what) =>
+      _running.containsKey('$serial|$what');
+
+  Future<void> start(
+    String serial,
+    String title,
+    SessionOptions o, {
+    String? extra,
+  }) async {
+    final key = extra == null ? serial : '$serial|$extra';
+    stop(key);
     final p = await Scrcpy.launch(scrcpyArgs(serial, title, o));
-    _running[serial] = p;
+    _running[key] = p;
     // Drain both pipes so scrcpy cannot block if its logs fill the buffers.
     p.stderr.drain<void>();
     p.stdout.drain<void>();
@@ -127,8 +160,8 @@ class PhoneSessions extends ChangeNotifier {
     // when native subprocesses inherit a pipe). Scrcpy's SDL window closing
     // terminates scrcpy; Alero's Stop button also kills this same process.
     p.exitCode.then((_) {
-      if (_running[serial] == p) {
-        _running.remove(serial);
+      if (_running[key] == p) {
+        _running.remove(key);
         notifyListeners();
       }
     });

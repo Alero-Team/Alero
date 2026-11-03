@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -177,32 +180,105 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       );
     } else {
       final pos = _seek?.round() ?? m.positionNow;
+      final name =
+          hub.peers.where((p) => p.id == id).firstOrNull?.name ?? '';
+      final where = widget.computer
+          ? 'En $name'
+          : m.cast
+          ? 'Transmitiendo desde $name'
+          : 'En $name';
+      final swap = motion(context, const Duration(milliseconds: 350));
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              _Art(m, size: 64),
+              _Art(
+                m,
+                size: 88,
+                appIcon: hub.appIcons[m.pkg],
+                computer: widget.computer,
+              ),
               const SizedBox(width: Gap.l),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      m.title.isEmpty ? 'Sin título' : m.title,
-                      style: t.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        _Bars(playing: m.playing, color: s.primary),
+                        const SizedBox(width: Gap.s),
+                        Icon(
+                          widget.computer
+                              ? Symbols.computer_rounded
+                              : m.cast
+                              ? Symbols.cast_rounded
+                              : Symbols.smartphone_rounded,
+                          size: 16,
+                          color: s.primary,
+                        ),
+                        const SizedBox(width: Gap.xs),
+                        Flexible(
+                          child: Text(
+                            where,
+                            style: t.labelMedium?.copyWith(color: s.primary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      [m.artist, m.app].where((x) => x.isNotEmpty).join(' · '),
-                      style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: Gap.xs),
+                    // A new song slides in; the same song only updates in place.
+                    AnimatedSwitcher(
+                      duration: swap,
+                      transitionBuilder: (c, a) => FadeTransition(
+                        opacity: a,
+                        child: SlideTransition(
+                          position: Tween(
+                            begin: const Offset(0, 0.3),
+                            end: Offset.zero,
+                          ).animate(a),
+                          child: c,
+                        ),
+                      ),
+                      layoutBuilder: (cur, prev) => Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [...prev, ?cur],
+                      ),
+                      child: Column(
+                        key: ValueKey('${m.title}|${m.artist}'),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            m.title.isEmpty ? 'Sin título' : m.title,
+                            style: t.titleLarge,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            [
+                              m.artist,
+                              m.app,
+                            ].where((x) => x.isNotEmpty).join(' · '),
+                            style: t.bodyMedium?.copyWith(
+                              color: s.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: Gap.s),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               IconButton(
                 tooltip: 'Anterior',
                 onPressed: m.supports(16) ? () => _command('prev') : null,
@@ -215,7 +291,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                     : Symbols.play_arrow_rounded,
                 label: m.playing ? 'Pausar' : 'Reproducir',
                 on: m.playing,
-                size: 48,
+                size: 56,
                 onPressed: m.supports(512 | (m.playing ? 2 : 4))
                     ? () => _command('toggle')
                     : null,
@@ -321,40 +397,206 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         duration: motion(context, Spring.spatial.settle),
         curve: Spring.spatial,
         alignment: Alignment.topCenter,
-        child: body,
+        child: m?.art == null || !m!.active
+            ? body
+            : Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(Radii.tile),
+                      child: AnimatedSwitcher(
+                        duration: motion(
+                          context,
+                          const Duration(milliseconds: 600),
+                        ),
+                        child: ImageFiltered(
+                          key: ValueKey(m.title),
+                          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                          child: Opacity(
+                            opacity: 0.22,
+                            child: Image.memory(
+                              m.art!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              gaplessPlayback: true,
+                              excludeFromSemantics: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  body,
+                ],
+              ),
       ),
     );
   }
 }
 
+/// Equalizer bars that dance while something plays and rest when it pauses.
+class _Bars extends StatefulWidget {
+  const _Bars({required this.playing, required this.color});
+  final bool playing;
+  final Color color;
+
+  @override
+  State<_Bars> createState() => _BarsState();
+}
+
+class _BarsState extends State<_Bars> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_Bars old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    final move = widget.playing && !MediaQuery.disableAnimationsOf(context);
+    if (move && !_c.isAnimating) _c.repeat();
+    if (!move) _c.stop();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: SizedBox(
+      width: 18,
+      height: 14,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) => Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (var i = 0; i < 4; i++)
+              Container(
+                width: 3,
+                height: widget.playing
+                    ? 4 +
+                          10 *
+                              (0.5 +
+                                  0.5 *
+                                      math.sin(
+                                        _c.value * 2 * math.pi * (i.isEven ? 2 : 3) +
+                                            i * 1.7,
+                                      ))
+                    : 4,
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _Art extends StatelessWidget {
-  const _Art(this.m, {required this.size});
+  const _Art(
+    this.m, {
+    required this.size,
+    this.appIcon,
+    this.computer = false,
+  });
   final MediaState m;
   final double size;
+  final Uint8List? appIcon;
+  final bool computer;
 
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(size * 0.25),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: m.art != null
-            ? Image.memory(
-                m.art!,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                semanticLabel: 'Portada',
-              )
-            : ColoredBox(
-                color: s.tertiaryContainer,
-                child: Icon(
-                  Symbols.music_note_rounded,
-                  size: size * 0.4,
-                  color: s.onTertiaryContainer,
+    final badge = size * 0.32;
+    return SizedBox(
+      width: size + badge * 0.25,
+      height: size + badge * 0.25,
+      child: Stack(
+        children: [
+          AnimatedScale(
+            scale: m.playing ? 1 : 0.9,
+            duration: motion(context, const Duration(milliseconds: 400)),
+            curve: Curves.easeOutBack,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(size * 0.22),
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: AnimatedSwitcher(
+                  duration: motion(context, const Duration(milliseconds: 400)),
+                  child: m.art != null
+                      ? Image.memory(
+                          m.art!,
+                          key: ValueKey(m.title),
+                          fit: BoxFit.cover,
+                          width: size,
+                          height: size,
+                          gaplessPlayback: true,
+                          semanticLabel: 'Portada',
+                        )
+                      : ColoredBox(
+                          color: s.tertiaryContainer,
+                          child: Center(
+                            child: Icon(
+                              Symbols.music_note_rounded,
+                              size: size * 0.4,
+                              color: s.onTertiaryContainer,
+                            ),
+                          ),
+                        ),
                 ),
               ),
+            ),
+          ),
+          // The app that plays it (the phone sends its icon; a computer shows a computer).
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: badge,
+              height: badge,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: s.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: appIcon != null
+                  ? ClipOval(
+                      child: Image.memory(
+                        appIcon!,
+                        semanticLabel: m.app,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    )
+                  : Icon(
+                      computer
+                          ? Symbols.computer_rounded
+                          : Symbols.music_note_rounded,
+                      size: badge * 0.6,
+                      color: s.onSurfaceVariant,
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

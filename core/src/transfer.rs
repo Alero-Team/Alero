@@ -105,6 +105,16 @@ pub fn safe_name(name: &str) -> Result<(), TransferError> {
     if bad { Err(TransferError::InvalidName) } else { Ok(()) }
 }
 
+/// A file inside a sent folder travels as `Folder/sub/name`: every segment must be a safe name, and at most
+/// 16 deep, so a peer can never climb out of the download folder or reach a drive or device path.
+pub fn safe_rel(name: &str) -> Result<(), TransferError> {
+    let parts: Vec<&str> = name.split('/').collect();
+    if parts.len() > 16 || name.len() > 1024 {
+        return Err(TransferError::InvalidName);
+    }
+    parts.iter().try_for_each(|p| safe_name(p))
+}
+
 /// Hasher state after folding in the per-block hashes of the first `n` blocks of `f`.
 fn hash_prefix(f: &mut File, n: u64, bs: u32) -> std::io::Result<Sha256> {
     let mut root = Sha256::new();
@@ -165,7 +175,7 @@ fn send_inner<S: Read + Write>(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<Report, TransferError> {
-    safe_name(name)?;
+    safe_rel(name)?;
     let name = name.to_string();
     if !(MIN_BLOCK..=MAX_BLOCK).contains(&block_size) {
         return proto("block size out of range");
@@ -291,7 +301,7 @@ fn receive_inner<S: Read + Write>(
     let offer = read_frame(s)?;
     let o = field(&offer, "pb.transfer.offer")?;
     let name = o["name"].as_str().ok_or(TransferError::InvalidName)?.to_string();
-    safe_name(&name)?;
+    safe_rel(&name)?;
     let size = o["size"].as_u64().ok_or(TransferError::Protocol("size".into()))?;
     let bs = o["blockSize"].as_u64().unwrap_or(0) as u32;
     if !(MIN_BLOCK..=MAX_BLOCK).contains(&bs) {
@@ -303,8 +313,11 @@ fn receive_inner<S: Read + Write>(
         return Err(TransferError::Rejected(reason));
     }
 
+    // A file of a folder lands in the same subfolders under the download folder.
+    let (sub, file) = name.rsplit_once('/').unwrap_or(("", name.as_str()));
+    let dest_dir = &dest_dir.join(sub);
     std::fs::create_dir_all(dest_dir)?;
-    let part_path = dest_dir.join(format!("{name}.part"));
+    let part_path = dest_dir.join(format!("{file}.part"));
     *part_out = Some(part_path.clone());
     let mut part = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(&part_path)?;
     let blocks = (part.metadata()?.len() / bs as u64).min(size / bs as u64);
@@ -369,7 +382,40 @@ fn receive_inner<S: Read + Write>(
     }
     part.sync_all()?;
     drop(part);
-    let final_path = unique_path(dest_dir, &name);
+    let final_path = unique_path(dest_dir, file);
     std::fs::rename(&part_path, &final_path)?;
     Ok((Report { name, size, resumed_from_block: from, bytes: written - from * bs as u64 }, final_path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn folder_paths_are_checked_segment_by_segment() {
+        assert!(safe_rel("Viaje/día 1/foto.jpg").is_ok());
+        for bad in ["../x", "a/../b", "/abs", "a//b", "C:/x", r"a\b", "a/NUL", "a/b."] {
+            assert!(safe_rel(bad).is_err(), "{bad}");
+        }
+        assert!(safe_rel(&vec!["a"; 17].join("/")).is_err());
+    }
+
+    #[test]
+    fn a_file_of_a_folder_lands_in_its_subfolder() {
+        let dir = std::env::temp_dir().join(format!("alero-rel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("src.txt");
+        std::fs::write(&src, b"hola").unwrap();
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        let out = dir.join("out");
+        let rx = std::thread::spawn(move || receive_file(&mut l.accept().unwrap().0, &out).unwrap().1);
+        let mut s = std::net::TcpStream::connect(addr).unwrap();
+        send_file_ex(&mut s, &src, "Viaje/día 1/nota.txt", "t", DEFAULT_BLOCK, None, &AtomicBool::new(false), &mut |_, _| {}).unwrap();
+        let got = rx.join().unwrap();
+        assert_eq!(got, dir.join("out").join("Viaje").join("día 1").join("nota.txt"));
+        assert_eq!(std::fs::read(got).unwrap(), b"hola");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

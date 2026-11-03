@@ -134,7 +134,8 @@ object Files {
     fun removeTree(i: Int) {
         val t = trees().getOrNull(i) ?: return
         try {
-            ctx.contentResolver.releasePersistableUriPermission(t, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            ctx.contentResolver.releasePersistableUriPermission(t, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                if (ctx.contentResolver.persistedUriPermissions.any { it.uri == t && it.isWritePermission }) android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
         } catch (_: Exception) {}
     }
 
@@ -155,6 +156,9 @@ object Files {
                     "pb.x.fs.list" -> list(peer, body)
                     "pb.x.fs.thumb" -> thumb(peer, body)
                     "pb.x.fs.get" -> get(peer, body)
+                    "pb.x.fs.getdir" -> getDir(peer, body)
+                    "pb.x.fs.delete" -> change(peer, body, "delete")
+                    "pb.x.fs.rename" -> change(peer, body, "rename")
                 }
             } catch (e: SecurityException) {
                 Bridge.sendTo(peer, "pb.x.fs.denied", JSONObject().put("reason", "no_permission"))
@@ -376,19 +380,126 @@ object Files {
     }
 
     /** Sends the file to the computer as an ordinary transfer (resumable, with progress on both sides). */
+    private fun clean(n: String) =
+        n.map { if (it.isISOControl() || it in "/\\:*?\"<>|") '_' else it }.joinToString("").trim().trimEnd('.').ifEmpty { "archivo" }
+
     private fun get(peer: String, b: JSONObject) {
         val uri = uriFor(b.optString("root"), b.optString("id")) ?: return
-        val name = b.optString("name").map { if (it.isISOControl() || it in "/\\:*?\"<>|") '_' else it }.joinToString("").trim().trimEnd('.').ifEmpty { "archivo" }
-        val pfd = ctx.contentResolver.openFileDescriptor(uri, "r") ?: return
+        sendUri(peer, uri, clean(b.optString("name")))
+    }
+
+    /** Sends one file as an ordinary transfer; false (and the computer is told) when the engine refused it. */
+    private fun sendUri(peer: String, uri: Uri, name: String): Boolean {
+        val pfd = ctx.contentResolver.openFileDescriptor(uri, "r") ?: return false
         val r = Bridge.sendFile(peer, "fd:${pfd.fd}", name)
         if (r.startsWith("!") || r.isEmpty()) {
             pfd.close()
             Bridge.sendTo(peer, "pb.x.fs.denied", JSONObject().put("reason", "send_failed").put("detail", r.removePrefix("!")))
-        } else {
-            sending[r] = pfd
-            ctx.getSharedPreferences("file_locations", Context.MODE_PRIVATE).edit()
-                .putString("id:$r", uri.toString()).apply()
+            return false
         }
+        sending[r] = pfd
+        ctx.getSharedPreferences("file_locations", Context.MODE_PRIVATE).edit().putString("id:$r", uri.toString()).apply()
+        return true
+    }
+
+    /**
+     * Sends every file of a folder, named `Folder/sub/file` so the computer rebuilds it. Shared storage (and music
+     * folders, which are storage paths) or a folder the owner added; at most 5000 files and 16 levels.
+     */
+    private fun getDir(peer: String, b: JSONObject) {
+        val root = b.optString("root")
+        val path = b.optString("path")
+        if (path.isEmpty()) return
+        val top = clean(b.optString("name"))
+        val files = ArrayList<Pair<Uri, String>>()
+        if (root == "storage" || root == "audio") {
+            val dir = storageFile(path)
+            dir.walkTopDown().maxDepth(15).filter { it.isFile }.take(5000).forEach { f ->
+                // Every step must stay inside shared storage (no links out, no private folders).
+                val safe = try { storageFile(f.relativeTo(Environment.getExternalStorageDirectory().canonicalFile).invariantSeparatorsPath) } catch (_: SecurityException) { return@forEach }
+                files += Uri.fromFile(safe) to "$top/" + f.relativeTo(dir).invariantSeparatorsPath.split('/').joinToString("/") { clean(it) }
+            }
+        } else if (root.startsWith("tree:")) {
+            val tree = trees().getOrNull(root.substring(5).toIntOrNull() ?: -1) ?: return
+            fun walk(doc: String, rel: String, depth: Int) {
+                if (depth > 15 || files.size >= 5000) return
+                ctx.contentResolver.query(
+                    DocumentsContract.buildChildDocumentsUriUsingTree(tree, doc),
+                    arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE),
+                    null, null, null,
+                )?.use { c ->
+                    while (c.moveToNext() && files.size < 5000) {
+                        val name = "$rel/${clean(c.getString(1) ?: "archivo")}"
+                        if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) walk(c.getString(0), name, depth + 1)
+                        else files += DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0)) to name
+                    }
+                }
+            }
+            walk(path, top, 0)
+        } else return
+        Bridge.sendTo(peer, "pb.x.fs.dir", JSONObject().put("name", top).put("files", files.size))
+        for ((uri, name) in files) if (!sendUri(peer, uri, name)) return
+    }
+
+    // --- delete and rename -------------------------------------------------------------------------------
+
+    /** The real thing an entry names: a File in shared storage (music folders are storage paths too), else a Uri. */
+    private fun target(b: JSONObject): Any? {
+        val root = b.optString("root")
+        if (b.optBoolean("dir")) {
+            val path = b.optString("path")
+            return when {
+                path.isEmpty() -> null // never a whole location
+                root == "storage" || root == "audio" -> storageFile(path)
+                root.startsWith("tree:") -> trees().getOrNull(root.substring(5).toIntOrNull() ?: -1)?.let { DocumentsContract.buildDocumentUriUsingTree(it, path) }
+                else -> null
+            }
+        }
+        val id = b.optString("id")
+        return if (root == "storage") storageFile(id).takeIf { id.isNotEmpty() && it.isFile } else uriFor(root, id)
+    }
+
+    /** Deletes or renames one entry and says how it went (`pb.x.fs.done`); the computer lists the folder again. */
+    private fun change(peer: String, b: JSONObject, op: String) {
+        val to = b.optString("to").trim()
+        val reason = try {
+            if (op == "rename" && !StoragePaths.validName(to)) "bad_name"
+            else when (val t = target(b)) {
+                is java.io.File -> fileOp(t, op, to)
+                is Uri -> uriOp(t, op, to)
+                else -> "unsupported"
+            }
+        } catch (e: SecurityException) {
+            when {
+                b.optString("root").startsWith("tree:") -> "read_only"
+                Build.VERSION.SDK_INT >= 29 && e is android.app.RecoverableSecurityException -> "needs_all_files"
+                else -> "no_permission"
+            }
+        } catch (_: Exception) { "failed" }
+        synchronized(cache) { cache.clear() }
+        Bridge.sendTo(peer, "pb.x.fs.done", JSONObject().put("op", op).put("name", b.optString("name"))
+            .put("ok", reason == null).put("reason", reason ?: ""))
+    }
+
+    // Android 11+ routes these through MediaProvider, so the galleries notice the change by themselves.
+    private fun fileOp(f: java.io.File, op: String, to: String): String? {
+        if (!f.exists()) return "missing"
+        if (op == "delete") return if (f.deleteRecursively()) null else "failed"
+        val dest = java.io.File(f.parentFile, to)
+        if (dest.exists()) return "exists"
+        return if (f.renameTo(dest)) null else "failed"
+    }
+
+    private fun uriOp(u: Uri, op: String, to: String): String? {
+        val r = ctx.contentResolver
+        val doc = DocumentsContract.isDocumentUri(ctx, u)
+        val ok = when {
+            op == "delete" && doc -> DocumentsContract.deleteDocument(r, u)
+            op == "delete" -> r.delete(u, null, null) > 0
+            doc -> DocumentsContract.renameDocument(r, u, to) != null
+            else -> r.update(u, android.content.ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, to) }, null, null) > 0
+        }
+        return if (ok) null else "failed"
     }
 
     /** A transfer ended: close the descriptor opened for it. */

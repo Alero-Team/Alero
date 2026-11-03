@@ -4,6 +4,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../fs_client.dart';
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
+import 'phone_page.dart';
+import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -12,6 +14,139 @@ String _date(DateTime d) =>
 
 String _ext(String name) =>
     name.contains('.') ? name.split('.').last.toUpperCase() : '';
+
+/// Asks before deleting: nothing on the phone goes to a trash can.
+Future<void> _delete(
+  BuildContext context,
+  FsClient fs,
+  List<FsEntry> items,
+) async {
+  if (items.isEmpty) return;
+  final one = items.length == 1 ? items.first : null;
+  final ok = await confirm(
+    context,
+    one == null
+        ? '¿Eliminar ${items.length} elementos?'
+        : '¿Eliminar «${one.name}»?',
+    '${one?.dir == true ? 'La carpeta y todo su contenido se borrarán' : 'Se borrará'} del teléfono. No se puede deshacer.',
+    'Eliminar',
+  );
+  if (ok) fs.delete(items);
+}
+
+Future<void> _rename(BuildContext context, FsClient fs, FsEntry e) async {
+  final c = TextEditingController(text: e.name);
+  final dot = e.dir ? -1 : e.name.lastIndexOf('.');
+  c.selection = TextSelection(
+    baseOffset: 0,
+    extentOffset: dot > 0 ? dot : e.name.length,
+  );
+  final to = await showDialog<String>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: const Text('Renombrar'),
+      content: TextField(
+        controller: c,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Nombre nuevo'),
+        onSubmitted: (v) => Navigator.pop(d, v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(d),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(d, c.text),
+          child: const Text('Renombrar'),
+        ),
+      ],
+    ),
+  );
+  // Not disposed here: the dialog's closing animation still reads it.
+  if (to != null && to.trim().isNotEmpty && to.trim() != e.name) {
+    fs.rename(e, to);
+  }
+}
+
+/// Right click or long press on an entry.
+Future<void> _menu(
+  BuildContext context,
+  FsClient fs,
+  FsEntry e,
+  Offset at,
+) async {
+  final size = MediaQuery.sizeOf(context);
+  final pick = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      at.dx,
+      at.dy,
+      size.width - at.dx,
+      size.height - at.dy,
+    ),
+    items: [
+      PopupMenuItem(
+        value: 'open',
+        child: ListTile(
+          leading: Icon(
+            e.dir ? Symbols.folder_open_rounded : Symbols.open_in_new_rounded,
+          ),
+          title: Text(e.dir ? 'Abrir' : 'Abrir en el ordenador'),
+        ),
+      ),
+      if (e.dir && fs.root != 'images' && fs.root != 'video')
+        const PopupMenuItem(
+          value: 'downloadDir',
+          child: ListTile(
+            leading: Icon(Symbols.download_rounded),
+            title: Text('Descargar carpeta'),
+          ),
+        ),
+      if (!e.dir)
+        const PopupMenuItem(
+          value: 'download',
+          child: ListTile(
+            leading: Icon(Symbols.download_rounded),
+            title: Text('Descargar'),
+          ),
+        ),
+      const PopupMenuItem(
+        value: 'rename',
+        child: ListTile(
+          leading: Icon(Symbols.edit_rounded),
+          title: Text('Renombrar'),
+        ),
+      ),
+      PopupMenuItem(
+        value: 'delete',
+        child: ListTile(
+          leading: Icon(
+            Symbols.delete_rounded,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          title: Text(
+            'Eliminar',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      ),
+    ],
+  );
+  if (!context.mounted) return;
+  switch (pick) {
+    case 'open':
+      e.dir ? fs.enter(e) : fs.download([e], openWhenDone: true);
+    case 'download':
+      fs.download([e]);
+    case 'downloadDir':
+      fs.downloadDir(e);
+    case 'rename':
+      await _rename(context, fs, e);
+    case 'delete':
+      await _delete(context, fs, [e]);
+  }
+}
 
 /// The phone's files, on the computer (ADR-0011). It lists what the phone chooses to show (photos, videos, music,
 /// Alero's received files and the folders its owner added) and asks it to send files; downloads and uploads are
@@ -144,10 +279,25 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             label: Text('Descargar (${chosen.length})'),
           ),
         ),
+      if (chosen.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(right: Gap.s),
+          child: IconButton.filledTonal(
+            tooltip: 'Eliminar (${chosen.length})',
+            onPressed: () => _delete(context, fs, chosen),
+            icon: const Icon(Symbols.delete_rounded),
+          ),
+        ),
       FilledButton.tonalIcon(
         onPressed: () => hub.send(phone.id),
         icon: const Icon(Symbols.upload_rounded, size: 18),
         label: const Text('Subir'),
+      ),
+      const SizedBox(width: Gap.xs),
+      FilledButton.tonalIcon(
+        onPressed: () => hub.sendFolder(phone.id),
+        icon: const Icon(Symbols.drive_folder_upload_rounded, size: 18),
+        label: const Text('Subir carpeta'),
       ),
       const SizedBox(width: Gap.xs),
       PopupMenuButton<String>(
@@ -481,6 +631,8 @@ class _GridTile extends StatelessWidget {
       child: GestureDetector(
         onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
         onDoubleTap: e.dir ? null : () => fs.download([e], openWhenDone: true),
+        onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
+        onLongPressStart: (d) => _menu(context, fs, e, d.globalPosition),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           decoration: BoxDecoration(
@@ -568,6 +720,7 @@ class _Row extends StatelessWidget {
         borderRadius: BorderRadius.circular(Radii.tile),
         onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
         onDoubleTap: e.dir ? null : () => fs.download([e], openWhenDone: true),
+        onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: Gap.m, vertical: 6),
           child: Row(
@@ -628,10 +781,193 @@ class _Row extends StatelessWidget {
                   style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
                 ),
               ),
+              Builder(
+                builder: (b) => IconButton(
+                  tooltip: 'Más opciones',
+                  iconSize: 20,
+                  onPressed: () {
+                    final box = b.findRenderObject()! as RenderBox;
+                    _menu(
+                      context,
+                      fs,
+                      e,
+                      box.localToGlobal(box.size.center(Offset.zero)),
+                    );
+                  },
+                  icon: const Icon(Symbols.more_vert_rounded),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// "Fotos": the phone's photos (or videos), newest first, as a big grid. Same session, thumbnails and actions
+/// as the explorer; click selects, double click opens on the computer, right click for more.
+class PhotosScreen extends StatefulWidget {
+  const PhotosScreen(this.hub, {super.key});
+  final Hub hub;
+
+  @override
+  State<PhotosScreen> createState() => _PhotosScreenState();
+}
+
+class _PhotosScreenState extends State<PhotosScreen> {
+  Hub get hub => widget.hub;
+  FsClient get fs => hub.fs;
+  String _kind = 'images';
+
+  @override
+  void initState() {
+    super.initState();
+    fs.sort = 'date';
+    fs.grid = true;
+    hub.addListener(_ensure);
+    fs.addListener(_pick);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ensure());
+  }
+
+  @override
+  void dispose() {
+    hub.removeListener(_ensure);
+    fs.removeListener(_pick);
+    fs.close();
+    super.dispose();
+  }
+
+  void _ensure() {
+    final p = hub.connectedPhone;
+    if (p != null &&
+        (fs.peerId != p.id ||
+            (fs.roots.isEmpty && !fs.loading && fs.error == null))) {
+      fs.open(p.id);
+    }
+  }
+
+  /// The explorer opens the first location; this screen wants the photo (or video) library.
+  void _pick() {
+    if (fs.root != _kind && fs.roots.any((r) => r.id == _kind && r.ok)) {
+      fs.selectRoot(_kind);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PhonePage(
+    hub: hub,
+    title: 'Fotos',
+    actions: (phone) => [
+      ListenableBuilder(
+        listenable: fs,
+        builder: (context, _) {
+          final chosen = fs.entries
+              .where((e) => fs.selected.contains(e.id))
+              .toList();
+          return Row(
+            children: [
+              if (chosen.isNotEmpty) ...[
+                FilledButton.icon(
+                  onPressed: () {
+                    fs.download(chosen);
+                    fs.clearSelection();
+                  },
+                  icon: const Icon(Symbols.download_rounded, size: 18),
+                  label: Text('Descargar (${chosen.length})'),
+                ),
+                const SizedBox(width: Gap.s),
+                IconButton.filledTonal(
+                  tooltip: 'Eliminar (${chosen.length})',
+                  onPressed: () => _delete(context, fs, chosen),
+                  icon: const Icon(Symbols.delete_rounded),
+                ),
+                const SizedBox(width: Gap.s),
+              ],
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'images',
+                    label: Text('Fotos'),
+                    icon: Icon(Symbols.image_rounded),
+                  ),
+                  ButtonSegment(
+                    value: 'video',
+                    label: Text('Vídeos'),
+                    icon: Icon(Symbols.movie_rounded),
+                  ),
+                ],
+                selected: {_kind},
+                onSelectionChanged: (v) {
+                  setState(() => _kind = v.first);
+                  _pick();
+                },
+              ),
+              IconButton(
+                tooltip: 'Actualizar',
+                onPressed: fs.refresh,
+                icon: const Icon(Symbols.refresh_rounded),
+              ),
+            ],
+          );
+        },
+      ),
+    ],
+    body: (context, phone) => ListenableBuilder(
+      listenable: fs,
+      builder: (context, _) {
+        final s = Theme.of(context).colorScheme;
+        final root = fs.roots.where((r) => r.id == _kind).firstOrNull;
+        if (fs.error == 'not_allowed' ||
+            (root != null && !root.ok) ||
+            fs.error == 'no_permission') {
+          return const Align(
+            alignment: Alignment.topCenter,
+            child: EmptyState(
+              icon: Symbols.lock_rounded,
+              title: 'El teléfono aún no comparte sus fotos',
+              body: 'En el teléfono: Alero › Ajustes › Archivos para el ordenador, y concede «Fotos y vídeos».',
+            ),
+          );
+        }
+        final list = fs.root == _kind ? fs.sorted : const <FsEntry>[];
+        if (list.isEmpty) {
+          return Center(
+            child: fs.loading
+                ? const CircularProgressIndicator()
+                : Text(
+                    'No hay nada aquí.',
+                    style: TextStyle(color: s.onSurfaceVariant),
+                  ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (fs.loading) const LinearProgressIndicator(),
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 200,
+                  mainAxisSpacing: Gap.m,
+                  crossAxisSpacing: Gap.m,
+                  childAspectRatio: 0.85,
+                ),
+                itemCount: list.length,
+                itemBuilder: (_, i) => _GridTile(fs, list[i]),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: Gap.s),
+              child: Text(
+                '${fs.total} elementos${fs.selected.isEmpty ? '' : ' · ${fs.selected.length} seleccionados'}',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: s.onSurfaceVariant),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

@@ -191,7 +191,7 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 SettingTile(
                   title: 'Dejar que el ordenador explore mis archivos',
-                  subtitle: 'Un ordenador emparejado podrá ver y descargar tus fotos, vídeos, música y las carpetas que añadas abajo. Las carpetas privadas de otras apps permanecen protegidas. Apagado por defecto.',
+                  subtitle: 'Un ordenador emparejado podrá ver, descargar, renombrar y eliminar tus fotos, vídeos, música y las carpetas que añadas abajo. Las carpetas privadas de otras apps permanecen protegidas. Apagado por defecto.',
                   trailing: AleroSwitch(
                     value: hub.filesAllowed,
                     onChanged: hub.setFilesAllowed,
@@ -247,6 +247,47 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          )
+        : null;
+
+    final sms = Platform.isAndroid
+        ? Panel(
+            title: 'Mensajes en el ordenador',
+            icon: Symbols.sms_rounded,
+            child: SettingTile(
+              title: 'Leer y enviar SMS desde el ordenador',
+              subtitle: hub.smsAllowed && !hub.smsPermission
+                  ? 'Falta el permiso de SMS de Android. Toca para concederlo.'
+                  : 'Un ordenador emparejado verá tus conversaciones SMS y MMS (con los nombres de tus contactos) y podrá enviar SMS. Los mensajes van cifrados y directos, sin nube. Apagado por defecto.',
+              trailing: AleroSwitch(
+                value: hub.smsAllowed,
+                onChanged: hub.setSmsAllowed,
+                label: 'Mensajes en el ordenador',
+              ),
+              onTap: () =>
+                  hub.setSmsAllowed(!hub.smsAllowed || !hub.smsPermission),
+            ),
+          )
+        : null;
+
+    final calls = Platform.isAndroid
+        ? Panel(
+            title: 'Llamadas en el ordenador',
+            icon: Symbols.call_rounded,
+            child: SettingTile(
+              title: 'Contestar, colgar y llamar desde el ordenador',
+              subtitle: hub.callsAllowed && !hub.callsPermission
+                  ? 'Faltan los permisos de llamadas de Android. Toca para concederlos.'
+                  : 'Un ordenador emparejado verá quién llama y podrá contestar, rechazar, colgar y marcar números. Hablas por el teléfono o sus auriculares. Apagado por defecto.',
+              trailing: AleroSwitch(
+                value: hub.callsAllowed,
+                onChanged: hub.setCallsAllowed,
+                label: 'Llamadas en el ordenador',
+              ),
+              onTap: () => hub.setCallsAllowed(
+                !hub.callsAllowed || !hub.callsPermission,
+              ),
             ),
           )
         : null;
@@ -326,11 +367,25 @@ class SettingsScreen extends StatelessWidget {
                   ok: hub.notifAccess,
                   onFix: hub.openNotifAccess,
                 ),
+                for (final (pkg, name) in hub.mutedApps)
+                  SettingTile(
+                    leading: Icon(
+                      Symbols.notifications_off_rounded,
+                      size: 20,
+                      color: s.onSurfaceVariant,
+                    ),
+                    title: name,
+                    subtitle: 'Silenciada en el ordenador',
+                    trailing: TextButton(
+                      onPressed: () => hub.unmuteApp(pkg),
+                      child: const Text('Reactivar'),
+                    ),
+                  ),
                 _Perm(
                   icon: Symbols.install_mobile_rounded,
                   title: 'Instalar apps recibidas',
                   body: 'Permite abrir el instalador al tocar un APK. Cada instalación requiere confirmación de Android.',
-                  ok: null,
+                  ok: hub.installAllowed,
                   onFix: Native.requestInstallPermission,
                 ),
                 _Perm(
@@ -428,6 +483,10 @@ class SettingsScreen extends StatelessWidget {
                         if (phone != null) gap,
                         ?files,
                         if (files != null) gap,
+                        ?sms,
+                        if (sms != null) gap,
+                        ?calls,
+                        if (calls != null) gap,
                         ?perms,
                       ],
                     ),
@@ -456,6 +515,8 @@ class SettingsScreen extends StatelessWidget {
               gap,
               if (phone != null) ...[phone, gap],
               if (files != null) ...[files, gap],
+              if (sms != null) ...[sms, gap],
+              if (calls != null) ...[calls, gap],
               look,
               gap,
               if (remote != null) ...[remote, gap],

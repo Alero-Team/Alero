@@ -3,7 +3,9 @@ import 'dart:convert';
 /// Ideas adapted from the Dextop workspace, app-catalog and capability design.
 /// No privileged Android APIs are required for these data models.
 /// Alero invokes Android's public adb/scrcpy commands after user authorization.
-final _packagePattern = RegExp(r'^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$');
+final _packagePattern = RegExp(
+  r'^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$',
+);
 
 bool validAndroidPackage(String value) => _packagePattern.hasMatch(value);
 
@@ -69,20 +71,33 @@ class DesktopWorkspace {
   };
 
   factory DesktopWorkspace.fromJson(Map<String, dynamic> value) {
-    final name = value['name'] is String ? (value['name'] as String).trim() : '';
+    final name = value['name'] is String
+        ? (value['name'] as String).trim()
+        : '';
     final raw = value['packages'];
     final packages = raw is List
         ? raw.whereType<String>().where(validAndroidPackage).toSet().toList()
         : <String>[];
-    final layout = DesktopLayout.values
-        .where((v) => v.name == value['layout'])
-        .firstOrNull ?? DesktopLayout.floating;
+    final layout =
+        DesktopLayout.values
+            .where((v) => v.name == value['layout'])
+            .firstOrNull ??
+        DesktopLayout.floating;
     final displayId = value['displayId'] is int ? value['displayId'] as int : 0;
-    if (name.isEmpty || name.length > 72 || packages.isEmpty || packages.length > 12 ||
-        displayId < 0 || displayId > 255) {
+    if (name.isEmpty ||
+        name.length > 72 ||
+        packages.isEmpty ||
+        packages.length > 12 ||
+        displayId < 0 ||
+        displayId > 255) {
       throw const FormatException('Espacio de trabajo inválido');
     }
-    return DesktopWorkspace(name: name, packages: packages, layout: layout, displayId: displayId);
+    return DesktopWorkspace(
+      name: name,
+      packages: packages,
+      layout: layout,
+      displayId: displayId,
+    );
   }
 
   static String exportAll(List<DesktopWorkspace> workspaces) =>
@@ -105,7 +120,6 @@ class DesktopWorkspace {
   }
 }
 
-
 /// Window geometry follows the rectangular layout patterns in Dextop's
 /// WorkspaceLayoutEngine. Only the optional ADB fallback applies bounds:
 /// OEMs may reject it or enforce minimum window dimensions.
@@ -115,9 +129,15 @@ class DesktopWindowBounds {
 }
 
 List<DesktopWindowBounds> desktopWindowBounds(
-  DesktopLayout layout, int width, int height, int count,
+  DesktopLayout layout,
+  int width,
+  int height,
+  int count,
 ) {
-  if (width < 400 || height < 400 || count < 1 || count > 4 ||
+  if (width < 400 ||
+      height < 400 ||
+      count < 1 ||
+      count > 4 ||
       layout == DesktopLayout.floating) {
     return [];
   }
@@ -232,9 +252,11 @@ DesktopLaunch judgeDesktopLaunch(
   final onPhone = mine.where((t) => t.display == 0).toList();
   final newOnPhone = onPhone.any((t) => !phoneBefore.contains(t.id));
   if (onDesk.isEmpty) {
-    final broughtUp = onPhone.isNotEmpty &&
-        amOutput.contains('brought to the front');
-    return newOnPhone || broughtUp ? DesktopLaunch.phone : DesktopLaunch.unconfirmed;
+    final broughtUp =
+        onPhone.isNotEmpty && amOutput.contains('brought to the front');
+    return newOnPhone || broughtUp
+        ? DesktopLaunch.phone
+        : DesktopLaunch.unconfirmed;
   }
   if (newOnPhone) return DesktopLaunch.alsoOnPhone;
   if (onDesk.any((t) => phoneBefore.contains(t.id))) {
@@ -246,10 +268,10 @@ DesktopLaunch judgeDesktopLaunch(
 /// `dumpsys display` lists each logical display as `mDisplayId=N`. Null when
 /// the dump has no such lines (unknown format): callers then ask scrcpy.
 bool? displayListed(String dump, int displayId) {
-  final ids = RegExp(r'^\s*mDisplayId=(\d+)\s*$', multiLine: true)
-      .allMatches(dump)
-      .map((m) => int.parse(m[1]!))
-      .toSet();
+  final ids = RegExp(
+    r'^\s*mDisplayId=(\d+)\s*$',
+    multiLine: true,
+  ).allMatches(dump).map((m) => int.parse(m[1]!)).toSet();
   return ids.isEmpty ? null : ids.contains(displayId);
 }
 
@@ -268,9 +290,14 @@ class DesktopDiagnostics {
 
   static DesktopDiagnostics parse(String battery, String meminfo) {
     int? matchedInt(String pattern, String source) {
-      final m = RegExp(pattern, caseSensitive: false, multiLine: true).firstMatch(source);
+      final m = RegExp(
+        pattern,
+        caseSensitive: false,
+        multiLine: true,
+      ).firstMatch(source);
       return m == null ? null : int.tryParse(m.group(1)!);
     }
+
     final level = matchedInt(r'^\s*level:\s*(\d+)', battery);
     final temp = matchedInt(r'^\s*temperature:\s*(\d+)', battery);
     final total = matchedInt(r'^MemTotal:\s*(\d+)', meminfo);

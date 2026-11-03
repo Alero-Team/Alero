@@ -14,6 +14,7 @@ import 'native.dart';
 import 'pc_remote.dart';
 import 'phone_control.dart';
 import 'remote.dart';
+import 'sms_client.dart';
 import 'scrcpy.dart';
 import 'src/rust/api/engine.dart' as pb;
 
@@ -59,6 +60,7 @@ class Hub extends ChangeNotifier {
 
   /// App icon (PNG) by package: the phone sends it once per app, so later rows reuse it.
   final appIcons = <String, Uint8List>{};
+  final _iconAsked = <String>{};
 
   PhoneNotif _notif(Map j) {
     final n = PhoneNotif(j);
@@ -70,6 +72,31 @@ class Hub extends ChangeNotifier {
   }
 
   final media = <String, MediaState>{};
+
+  /// The call on each phone, while there is one.
+  final calls = <String, CallState>{};
+
+  /// Quick controls, call log and the last contact search, by phone.
+  final phoneState = <String, PhoneState>{};
+  final callLog = <String, List<CallEntry>>{};
+  final contacts = <String, List<CallEntry>>{};
+
+  /// The paired phone connected now (the computer's phone features use it), or null.
+  pb.Peer? get connectedPhone => peers
+      .where(
+        (p) =>
+            p.trusted &&
+            p.state == pb.PeerState.connected &&
+            info[p.id]?.phone == true,
+      )
+      .firstOrNull;
+
+  /// `what` is dnd, torch, ringer, volume, find, state.request, calllog.request or contacts.
+  Future<void> phoneCmd(
+    String peerId,
+    String what, [
+    Map<String, Object?> body = const {},
+  ]) => _send(peerId, 'pb.x.phone.$what', body);
   final wallpaper = <String, Uint8List>{};
 
   /// Commercial name and back cover of each connected phone (computer side), by peer id.
@@ -105,6 +132,7 @@ class Hub extends ChangeNotifier {
 
   /// Computer side: browsing a phone's files. Files it asks for are accepted without a prompt (we asked).
   late final fs = FsClient(this);
+  late final sms = SmsClient(this);
   final _expected = <String, (bool, DateTime)>{};
 
   void expectFromPhone(String name, {bool open = false}) {
@@ -134,6 +162,15 @@ class Hub extends ChangeNotifier {
   /// Android: may a paired computer browse this phone's files (photos, videos, music, chosen folders)?
   bool filesAllowed = false, filesPermission = false;
   List<String> filesFolders = const [];
+
+  /// Android: apps muted from a computer, as (package, name).
+  List<(String, String)> mutedApps = const [];
+
+  /// Android: SMS on the computer is switched on / Android granted reading SMS.
+  bool smsAllowed = false, smsPermission = false;
+
+  /// Android: received APKs may open the system installer.
+  bool installAllowed = false;
 
   /// Libraries Android lets this app read in full ('images', 'video', 'audio'), and whether only some photos are shared.
   Set<String> filesMedia = const {};
@@ -298,10 +335,13 @@ class Hub extends ChangeNotifier {
         if (_online(peer) && (was == null || !_online(was))) _hello(peer.id);
         if (!_online(peer)) {
           media.remove(peer.id);
+          calls.remove(peer.id);
+          phoneState.remove(peer.id);
           _failReplies(peer.id, 'El teléfono está sin conexión.');
         }
       case pb.Event_PeerGone(:final id):
         media.remove(id);
+        calls.remove(id);
         _failReplies(id, 'El teléfono está sin conexión.');
         peers = peers.where((p) => p.id != id).toList();
       case pb.Event_PairRequest() when _qrId != null && e.peerId == _qrId:
@@ -501,7 +541,50 @@ class Hub extends ChangeNotifier {
       return;
     }
     if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
+    if (kind.startsWith('pb.x.sms.')) return sms.onMessage(peerId, kind, b);
     switch (kind) {
+      case 'pb.x.call':
+        final c = CallState(b);
+        c.active ? calls[peerId] = c : calls.remove(peerId);
+      case 'pb.x.phone.state':
+        phoneState[peerId] = PhoneState(b);
+      case 'pb.x.phone.calllog':
+        callLog[peerId] = [
+          for (final c in (b['items'] as List? ?? []))
+            if (c is Map) CallEntry(c),
+        ];
+      case 'pb.x.phone.icons.result':
+        (b['icons'] as Map? ?? {}).forEach((k, v) {
+          if (k is String && v is String && v.isNotEmpty) {
+            appIcons[k] = base64Decode(v);
+          }
+        });
+      case 'pb.x.phone.contacts.result':
+        contacts[peerId] = [
+          for (final c in (b['items'] as List? ?? []))
+            if (c is Map) CallEntry(c),
+        ];
+      case 'pb.x.phone.error':
+        messages.add(switch (b['error']) {
+          'dnd_access' => 'En el teléfono, toca el aviso de Alero y permite el acceso a «No molestar».',
+          'no_permission' => 'Falta un permiso en el teléfono.',
+          _ => 'El teléfono no pudo hacerlo.',
+        });
+        return;
+      case 'pb.x.call.result':
+        if (b['ok'] != true) {
+          messages.add(switch (b['error']) {
+            'not_allowed' => 'Activa las llamadas en el teléfono: Alero › Ajustes › Llamadas en el ordenador.',
+            'no_permission' => 'Falta el permiso de llamadas en el teléfono.',
+            'bad_number' => 'Ese número no es válido.',
+            _ => 'El teléfono no pudo hacerlo.',
+          });
+        }
+        return;
+      case 'pb.x.history.remove':
+        // The engine already removed them; just show it.
+        refresh();
+        return;
       case 'pb.x.info':
         info[peerId] = PeerInfo(b);
         _resolveLook(peerId, info[peerId]!);
@@ -586,7 +669,14 @@ class Hub extends ChangeNotifier {
           return; // not valid base64: ignore it
         }
       case 'pb.x.media.state':
-        media[peerId] = MediaState(b);
+        final m = media[peerId] = MediaState(b);
+        if (m.pkg.isNotEmpty &&
+            !appIcons.containsKey(m.pkg) &&
+            _iconAsked.add(m.pkg)) {
+          phoneCmd(peerId, 'icons', {
+            'pkgs': [m.pkg],
+          });
+        }
       case 'pb.x.clip':
         final text = b['text'] as String? ?? '';
         if (text.isEmpty) return;
@@ -700,8 +790,7 @@ class Hub extends ChangeNotifier {
           'expired' => 'La notificación caducó o fue descartada.',
           'no_access' => 'Falta acceso a las notificaciones en el teléfono.',
           'invalid_text' => 'La respuesta no es válida.',
-          'too_large' =>
-            'Android rechazó la respuesta por su tamaño. No se envió; acórtala e inténtalo de nuevo.',
+          'too_large' => 'Android rechazó la respuesta por su tamaño. No se envió; acórtala e inténtalo de nuevo.',
           _ => 'La app del teléfono no aceptó la respuesta.',
         }),
       );
@@ -722,6 +811,19 @@ class Hub extends ChangeNotifier {
     notifs[peerId] = [...?notifs[peerId]?.where((n) => n.key != key)];
     notifyListeners();
     await _send(peerId, 'pb.x.notif.dismiss', {'key': key});
+  }
+
+  /// `read`, `mute` (the conversation, through the app) or `muteApp` (this app stops reaching computers).
+  Future<void> notifAction(String peerId, PhoneNotif n, String action) async {
+    if (action != 'mute') {
+      notifs[peerId] = [
+        ...?notifs[peerId]?.where(
+          (x) => action == 'muteApp' ? x.pkg != n.pkg : x.key != n.key,
+        ),
+      ];
+      notifyListeners();
+    }
+    await _send(peerId, 'pb.x.notif.action', {'key': n.key, 'action': action});
   }
 
   Future<void> clearNotifs(String peerId) async {
@@ -797,6 +899,14 @@ class Hub extends ChangeNotifier {
     filesAllowed = f.allowed;
     filesPermission = f.permission;
     filesFolders = f.folders;
+    mutedApps = await Native.mutedApps();
+    installAllowed = await Native.installPermission();
+    final smsState = await Native.sms();
+    smsAllowed = smsState.$1;
+    smsPermission = smsState.$2;
+    final callState = await Native.calls();
+    callsAllowed = callState.$1;
+    callsPermission = callState.$2;
     filesMedia = f.media;
     filesLimited = f.limited;
     notifyListeners();
@@ -827,6 +937,47 @@ class Hub extends ChangeNotifier {
 
   Future<void> removeFilesFolder(int i) async {
     await Native.removeFolder(i);
+    await checkPermissions();
+  }
+
+  /// `answer`, `decline` or `hangup` on the phone's current call.
+  Future<void> callCmd(String peerId, String action) =>
+      _send(peerId, 'pb.x.call.cmd', {'action': action});
+
+  Future<void> dial(String peerId, String number) =>
+      _send(peerId, 'pb.x.call.dial', {'number': number});
+
+  /// Android: calls on the computer switched on / Android granted the call permissions.
+  bool callsAllowed = false, callsPermission = false;
+
+  Future<void> setCallsAllowed(bool on) async {
+    await Native.setCalls(on);
+    callsAllowed = on;
+    notifyListeners();
+    if (on && await Native.requestCalls()) {
+      messages.add(
+        'Android ya no puede preguntar: concede Teléfono en los permisos de la app.',
+      );
+      await Native.openPermissions();
+    }
+    await checkPermissions();
+  }
+
+  Future<void> setSmsAllowed(bool on) async {
+    await Native.setSms(on);
+    smsAllowed = on;
+    notifyListeners();
+    if (on && await Native.requestSms()) {
+      messages.add(
+        'Android ya no puede preguntar: concede SMS y Contactos en los permisos de la app.',
+      );
+      await Native.openPermissions();
+    }
+    await checkPermissions();
+  }
+
+  Future<void> unmuteApp(String pkg) async {
+    await Native.unmuteApp(pkg);
     await checkPermissions();
   }
 
@@ -980,7 +1131,11 @@ class Hub extends ChangeNotifier {
       PhoneSessions.instance.stop(s);
     }
     // A local engine command, never sent to the other device (see the bridge's send_message).
-    await pb.sendMessage(peerId: peerId, kind: 'pb.local.disconnect', body: '{}');
+    await pb.sendMessage(
+      peerId: peerId,
+      kind: 'pb.local.disconnect',
+      body: '{}',
+    );
     await refresh();
   });
 
@@ -995,6 +1150,7 @@ class Hub extends ChangeNotifier {
 
   /// Drops one record from the list (the file on disk stays). The list updates before the store answers.
   Future<void> removeHistory(String id) => _run(() async {
+    _forgetOnPeers(history.where((h) => h.id == id));
     history = history.where((h) => h.id != id).toList();
     notifyListeners();
     await pb.removeHistory(id: id);
@@ -1002,9 +1158,24 @@ class Hub extends ChangeNotifier {
   });
 
   Future<void> clearHistory() => _run(() async {
+    _forgetOnPeers(history);
     await pb.clearHistory();
     await refresh();
   });
+
+  /// The other device drops the same transfers from its list (files stay on both).
+  /// shortcut: a peer that is offline now keeps its records; queue them if that matters.
+  void _forgetOnPeers(Iterable<pb.HistoryItem> items) {
+    final byPeer = <String, List<String>>{};
+    for (final h in items) {
+      (byPeer[h.peerId] ??= []).add(h.id);
+    }
+    for (final MapEntry(key: peer, value: ids) in byPeer.entries) {
+      if (peers.any((p) => p.id == peer && p.state == pb.PeerState.connected)) {
+        sendMessage(peer, 'pb.x.history.remove', {'ids': ids});
+      }
+    }
+  }
 
   /// Desktop: real paths. Android: picks content URIs and sends their descriptors (no copy).
   Future<void> send(String peerId) async =>
@@ -1014,7 +1185,43 @@ class Hub extends ChangeNotifier {
   Future<void> sendPaths(String peerId, List<String> paths) =>
       _sendPicked(peerId, [for (final p in paths) Picked(p, null)]);
 
-  Future<void> _sendPicked(String peerId, List<Picked> files) async {
+  /// Desktop: pick a folder and send everything in it, keeping its subfolders.
+  Future<void> sendFolder(String peerId) async {
+    final dir = await Native.pickFolder();
+    if (dir != null) await sendPaths(peerId, [dir]);
+  }
+
+  /// A folder becomes its files, each named `Folder/sub/file` so the receiver rebuilds the tree.
+  /// shortcut: empty folders are not recreated; send a placeholder file if that ever matters.
+  static List<Picked> expandFolders(List<Picked> picked) {
+    final out = <Picked>[];
+    for (final p in picked) {
+      if (p.fd != null || !FileSystemEntity.isDirectorySync(p.path)) {
+        out.add(p);
+        continue;
+      }
+      final root = p.path
+          .replaceAll(r'\', '/')
+          .replaceFirst(RegExp(r'/+$'), '');
+      final top = root.split('/').last;
+      for (final f in Directory(
+        root,
+      ).listSync(recursive: true, followLinks: false).whereType<File>()) {
+        final rel = f.path.replaceAll(r'\', '/').substring(root.length + 1);
+        out.add(Picked(f.path, '$top/$rel'));
+      }
+    }
+    return out;
+  }
+
+  Future<void> _sendPicked(String peerId, List<Picked> picked) async {
+    final files = expandFolders(picked);
+    if (files.length > 5000) {
+      messages.add(
+        'La carpeta tiene ${files.length} archivos; el máximo por envío es 5000.',
+      );
+      return;
+    }
     for (final f in files) {
       try {
         final id = await pb.sendFile(

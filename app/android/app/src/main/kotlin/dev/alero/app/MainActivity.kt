@@ -81,11 +81,13 @@ class MainActivity : FlutterActivity() {
     /** Answers Dart with `blocked`: something was denied and Android will not ask again (only system settings can grant it). */
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != MEDIA) return
+        if (requestCode != MEDIA && requestCode != SMS && requestCode != CALLS) return
         val r = mediaResult ?: return
         mediaResult = null
         val denied = permissions.filterIndexed { i, _ -> grantResults.getOrNull(i) != android.content.pm.PackageManager.PERMISSION_GRANTED }
-        r.success(denied.isNotEmpty() && Files.mediaState()["limited"] != true && denied.none { shouldShowRequestPermissionRationale(it) })
+        if (requestCode != MEDIA) Features.announce()
+        // true: Android will not ask again, so the caller opens the app's permission page.
+        r.success(denied.isNotEmpty() && (requestCode != MEDIA || Files.mediaState()["limited"] != true) && denied.none { shouldShowRequestPermissionRationale(it) })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -229,7 +231,38 @@ class MainActivity : FlutterActivity() {
                 "addFolder" -> {
                     treeResult?.success(false)
                     treeResult = result
-                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), TREE)
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION), TREE)
+                }
+                "sms" -> result.success(mapOf("allowed" to Prefs.sms(this), "permission" to Sms.readable()))
+                "setSms" -> {
+                    Prefs.setSms(this, call.arguments as Boolean)
+                    Features.announce()
+                    result.success(null)
+                }
+                "requestSms" -> {
+                    val missing = Sms.permissions.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+                    if (missing.isEmpty()) return@setMethodCallHandler result.success(false)
+                    mediaResult?.success(false)
+                    mediaResult = result
+                    requestPermissions(missing.toTypedArray(), SMS)
+                }
+                "calls" -> result.success(mapOf("allowed" to Prefs.calls(this), "permission" to Calls.granted()))
+                "setCalls" -> {
+                    Prefs.setCalls(this, call.arguments as Boolean)
+                    Features.announce()
+                    result.success(null)
+                }
+                "requestCalls" -> {
+                    val missing = Calls.permissions.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+                    if (missing.isEmpty()) return@setMethodCallHandler result.success(false)
+                    mediaResult?.success(false)
+                    mediaResult = result
+                    requestPermissions(missing.toTypedArray(), CALLS)
+                }
+                "mutedApps" -> result.success(NotifListener.mutedApps(this))
+                "unmuteApp" -> {
+                    Prefs.setMuted(this, call.arguments as String, false)
+                    result.success(null)
                 }
                 "removeFolder" -> {
                     Files.removeTree(call.arguments as Int)
@@ -315,7 +348,9 @@ class MainActivity : FlutterActivity() {
             val uri = if (resultCode == Activity.RESULT_OK) data?.data else null
             if (uri == null) return r.success(false)
             try {
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // Write lets the computer delete and rename inside the folder; a provider that refuses it stays read-only.
+                try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+                catch (_: SecurityException) { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
                 r.success(true)
             } catch (_: Exception) {
                 r.success(false)
@@ -364,11 +399,14 @@ class MainActivity : FlutterActivity() {
     private fun publish(path: String): String {
         val src = File(path)
         if (Build.VERSION.SDK_INT < 29) return path // MediaStore.Downloads is API 29+
+        // A file of a sent folder arrives under incoming/Folder/sub/: keep those folders in Downloads.
+        val sub = path.substringAfter("/incoming/", "").substringBeforeLast('/', "")
+        val rel = if (sub.isEmpty()) "Download/Alero" else "Download/Alero/$sub"
         return try {
             val cv = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, src.name)
                 put(MediaStore.Downloads.MIME_TYPE, MimeTypeMap.getSingleton().getMimeTypeFromExtension(src.extension.lowercase()) ?: "application/octet-stream")
-                put(MediaStore.Downloads.RELATIVE_PATH, "Download/Alero")
+                put(MediaStore.Downloads.RELATIVE_PATH, rel)
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return path
@@ -380,7 +418,7 @@ class MainActivity : FlutterActivity() {
             contentResolver.update(uri, cv, null, null)
             fileLocations.edit().putString(path, uri.toString()).apply()
             src.delete()
-            "Descargas/Alero/${src.name}"
+            "Descargas/Alero/${if (sub.isEmpty()) "" else "$sub/"}${src.name}"
         } catch (e: Exception) {
             path // stays in the app's folder; Dart shows this path
         }
@@ -439,6 +477,8 @@ class MainActivity : FlutterActivity() {
         private const val WALLPAPER = 42
         private const val TREE = 43
         private const val MEDIA = 44
+        private const val SMS = 45
+        private const val CALLS = 46
         private val open = HashMap<Int, ParcelFileDescriptor>()
     }
 }

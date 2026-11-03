@@ -32,7 +32,7 @@ use crate::frame::{read_frame, read_frame_max, write_frame, write_frame_max, MAX
 use crate::identity::Identity;
 use crate::store::{HistoryEntry, PeerRecord, Store};
 use crate::tls::{client_config, peer_device_id, server_config, Verifier};
-use crate::transfer::{receive_file_ex, safe_name, send_file_ex, TransferError, DEFAULT_BLOCK};
+use crate::transfer::{receive_file_ex, safe_rel, send_file_ex, TransferError, DEFAULT_BLOCK};
 
 pub const PROTOCOL: u64 = 1;
 pub const DEFAULT_PORT: u16 = 41420;
@@ -589,6 +589,11 @@ impl Inner {
             }
             if !self.is_trusted(peer_id) {
                 return Ok(());
+            }
+            if kind == "pb.x.history.remove" {
+                // Handled here so it works while the app's UI is closed; the UI still gets the message to refresh.
+                let ids: Vec<String> = m["body"]["ids"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect()).unwrap_or_default();
+                let _ = self.store.remove_history_of(peer_id, &ids);
             }
             self.emit(Event::Message { peer_id: peer_id.into(), kind: kind.into(), body: m["body"].clone() });
             write_frame(&mut tls, &json!({"type":"pb.ack","body":{}})).map_err(|e| e.code().to_string())?;
@@ -1290,7 +1295,7 @@ impl Engine {
             Some(n) => n.to_string(),
             None => path.file_name().and_then(|n| n.to_str()).ok_or("file has no usable name")?.to_string(),
         };
-        safe_name(&name).map_err(|_| "file name not allowed".to_string())?;
+        safe_rel(&name).map_err(|_| "file name not allowed".to_string())?;
         let size = crate::transfer::open_source(path).and_then(|f| f.metadata()).map_err(|e| format!("cannot read file: {e}"))?.len();
         let id = random_id();
         let x = Arc::new(Xfer {

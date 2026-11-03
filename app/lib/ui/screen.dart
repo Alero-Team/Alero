@@ -13,6 +13,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'desktop_workshop.dart';
 import 'alero_desktop.dart';
+import 'phone_windows.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -43,7 +44,9 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
   List<AdbDevice> _devices = [];
   String? _serial;
   Desktop _desktop = Desktop.unsupported;
-  List<DesktopDisplay> _screens = [const DesktopDisplay(0, 'Pantalla principal')];
+  List<DesktopDisplay> _screens = [
+    const DesktopDisplay(0, 'Pantalla principal'),
+  ];
   int _displayId = 0;
   String _status = '';
   bool _busy = false, _listing = false;
@@ -120,10 +123,15 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     final r = d != null && d.ready
         ? await Scrcpy.desktop(d.serial)
         : Desktop.unsupported;
-    List<DesktopDisplay> screens = [const DesktopDisplay(0, 'Pantalla principal')];
+    List<DesktopDisplay> screens = [
+      const DesktopDisplay(0, 'Pantalla principal'),
+    ];
     if (d != null && d.ready) {
-      try { screens = await Scrcpy.displays(d.serial); }
-      catch (_) { /* Some builds don't expose display enumeration. */ }
+      try {
+        screens = await Scrcpy.displays(d.serial);
+      } catch (_) {
+        /* Some builds don't expose display enumeration. */
+      }
     }
     if (mounted) {
       setState(() {
@@ -229,324 +237,467 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
               title: 'Falta el componente de pantalla',
               body: 'Esta instalación no incluye scrcpy. Reinstala Alero o copia la carpeta «scrcpy» junto al programa.',
             )
-          : ListView(
-              padding: const EdgeInsets.all(Gap.l),
-              children: [
-                if (live) _LiveBar(serial: d.serial, name: d.name),
-                Reveal(
-                  index: 0,
-                  child: Panel(
-                    title: 'Dispositivo',
-                    icon: Symbols.devices_rounded,
-                    action: IconButton(
-                      tooltip: 'Buscar de nuevo',
-                      onPressed: _list,
-                      icon: const Icon(Symbols.refresh_rounded),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_devices.isEmpty)
-                          Text(
-                            'No hay teléfonos a la vista. Conecta uno por USB con «Depuración USB» activada, o búscalo por Wi-Fi.',
-                            style: t.bodyMedium?.copyWith(
-                              color: s.onSurfaceVariant,
-                            ),
-                          ),
-                        RadioGroup<String>(
-                          groupValue: _serial,
-                          onChanged: (v) {
-                            setState(() => _serial = v);
-                            _probe();
-                          },
-                          child: Column(
-                            children: [
-                              for (final x in _devices)
-                                RadioListTile<String>(
-                                  contentPadding: EdgeInsets.zero,
-                                  value: x.serial,
-                                  secondary: Icon(
-                                    x.wifi
-                                        ? Symbols.wifi_rounded
-                                        : Symbols.usb_rounded,
-                                  ),
-                                  title: Text(x.name),
-                                  subtitle: Text(_stateText(x)),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: Gap.s),
-                        Wrap(
-                          spacing: Gap.s,
-                          runSpacing: Gap.s,
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _busy
-                                  ? null
-                                  : () => _run('Buscando por Wi-Fi…', _wifi),
-                              icon: const Icon(
-                                Symbols.wifi_find_rounded,
-                                size: 18,
-                              ),
-                              label: const Text('Buscar por Wi-Fi'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: Gap.m),
-                Reveal(
-                  index: 1,
-                  child: Panel(
-                    title: 'Modo',
-                    icon: Symbols.desktop_windows_rounded,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SegmentedButton<bool>(
-                          segments: [
-                            const ButtonSegment(
-                              value: false,
-                              icon: Icon(Symbols.smartphone_rounded),
-                              label: Text('Pantalla del teléfono'),
-                            ),
-                            ButtonSegment(
-                              value: true,
-                              enabled: _desktop == Desktop.ready,
-                              icon: const Icon(Symbols.desktop_windows_rounded),
-                              label: const Text('Escritorio'),
-                            ),
-                          ],
-                          selected: {_desk},
-                          onSelectionChanged: (v) =>
-                              setState(() => _desk = v.first),
-                        ),
-                        const SizedBox(height: Gap.s),
-                        if (!_desk && _screens.length > 1) ...[
-                          const Text('Pantalla Android que quieres controlar'),
-                          DropdownButton<int>(
-                            isExpanded: true,
-                            value: _screens.any((v) => v.id == _displayId)
-                              ? _displayId : _screens.first.id,
-                            items: [
-                              for (final display in _screens)
-                                DropdownMenuItem(
-                                  value: display.id,
-                                  child: Text(display.description,
-                                    maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ),
-                            ],
-                            onChanged: (id) => setState(() => _displayId = id ?? 0),
-                          ),
-                        ],
-                        Text(
-                          switch (_desktop) {
-                            Desktop.ready => 'Android declara compatibilidad con ventanas libres. La pantalla virtual puede tener restricciones del fabricante; pruébala en Alero Desktop.',
-                            Desktop.needsSetting => 'Este teléfono admite escritorio. Actívalo en Ajustes › Sistema › Opciones de desarrollador › «Forzar modo de escritorio» y reinicia el teléfono. Mientras tanto se usa su pantalla normal.',
-                            Desktop.unsupported => 'Este teléfono no tiene escritorio de Android: se controla su pantalla normal.',
-                          },
-                          style: t.bodyMedium?.copyWith(
-                            color: s.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: Gap.m),
-                if (d != null && d.ready)
-                  Panel(
-                    title: 'Herramientas de escritorio',
-                    icon: Symbols.apps_rounded,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text('Aplicaciones instaladas, espacios guardados, '
-                          'varias pantallas y diagnóstico del teléfono. '
-                          'Basado en las ideas de Dextop.'),
-                        const SizedBox(height: Gap.s),
-                        FilledButton.tonalIcon(
-                          onPressed: _busy ? null : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => DesktopWorkshopPage(serial: d.serial),
-                            ),
-                          ),
-                          icon: const Icon(Symbols.dashboard_customize_rounded),
-                          label: const Text('Abrir herramientas'),
-                        ),
-                        const SizedBox(height: Gap.s),
-                        FilledButton.icon(
-                          onPressed: _busy ? null : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => AleroDesktopPage(
-                                hub: widget.hub,
-                                serial: d.serial,
-                                deviceName: d.name,
-                                peerId: _peerFor(d),
-                              ),
-                            ),
-                          ),
-                          icon: const Icon(Symbols.desktop_windows_rounded),
-                          label: const Text('Iniciar Alero Desktop'),
-                        ),
-                        const SizedBox(height: Gap.xs),
-                        Text('Escritorio virtual, lanzador con dock y herramientas '
-                          'para ventanas de Android. Los botones nativos de '
-                          'minimizar, maximizar y cerrar dependen del dispositivo.',
-                          style: t.bodySmall),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: Gap.m),
-                Reveal(
-                  index: 2,
-                  child: Panel(
-                    title: 'Imagen y sonido',
-                    icon: Symbols.tune_rounded,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (_desk) ...[
-                          const Text('Tamaño del escritorio virtual'),
-                          const SizedBox(height: Gap.s),
-                          DropdownButton<String>(
-                            value: _desktopSize,
-                            isExpanded: true,
-                            items: const [
-                              DropdownMenuItem(value: '1280x720',
-                                child: Text('HD · 1280 × 720')),
-                              DropdownMenuItem(value: '1600x900',
-                                child: Text('HD+ · 1600 × 900')),
-                              DropdownMenuItem(value: '1920x1080',
-                                child: Text('Full HD · 1920 × 1080')),
-                              DropdownMenuItem(value: '2560x1440',
-                                child: Text('QHD · 2560 × 1440')),
-                            ],
-                            onChanged: (v) => setState(() =>
-                              _desktopSize = v ?? _desktopSize),
-                          ),
-                          _Toggle(
-                            'Adaptar escritorio al tamaño de la ventana (experimental)',
-                            _flexDesktop,
-                            (v) => setState(() => _flexDesktop = v),
-                          ),
-                        ],
-                        _Choice(
-                          label: 'Resolución',
-                          value: _maxSize,
-                          options: const {
-                            1024: '1024',
-                            1600: '1600',
-                            0: 'Original',
-                          },
-                          onChanged: (v) => setState(() => _maxSize = v),
-                        ),
-                        _Choice(
-                          label: 'Calidad',
-                          value: _bitRate,
-                          options: const {4: 'Ahorro', 8: 'Normal', 16: 'Alta'},
-                          onChanged: (v) => setState(() => _bitRate = v),
-                        ),
-                        _Choice(
-                          label: 'Fotogramas',
-                          value: _fps,
-                          options: const {30: '30', 60: '60'},
-                          onChanged: (v) => setState(() => _fps = v),
-                        ),
-                        _Choice(
-                          label: 'Orientación',
-                          value: _orientation,
-                          options: const {
-                            0: 'Auto',
-                            90: '90°',
-                            180: '180°',
-                            270: '270°',
-                          },
-                          onChanged: (v) => setState(() => _orientation = v),
-                        ),
-                        _Toggle(
-                          'Sonido del teléfono en el ordenador',
-                          _audio,
-                          (v) => setState(() => _audio = v),
-                        ),
-                        _Toggle(
-                          'Abrir a pantalla completa',
-                          _fullscreen,
-                          (v) => setState(() => _fullscreen = v),
-                        ),
-                        if (!_desk)
-                          _Toggle(
-                            'Apagar la pantalla del teléfono mientras tanto',
-                            _screenOff,
-                            (v) => setState(() => _screenOff = v),
-                          ),
-                        Text(
-                          'En la ventana: Alt+F pantalla completa, Alt+R girar, Ctrl+C y Ctrl+V copian y pegan entre los dos.',
-                          style: t.bodySmall?.copyWith(
-                            color: s.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: Gap.m),
-                if (_status.isNotEmpty)
-                  Semantics(
-                    liveRegion: true,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: Gap.m),
-                      child: Row(
+          : LayoutBuilder(
+              builder: (context, box) {
+                const gap = SizedBox(height: Gap.m);
+                // Connection, mode and picture on the left; desktop tools, windows and setup on the right.
+                final left = <Widget>[
+                  Reveal(
+                    index: 0,
+                    child: Panel(
+                      title: 'Dispositivo',
+                      icon: Symbols.devices_rounded,
+                      action: IconButton(
+                        tooltip: 'Buscar de nuevo',
+                        onPressed: _list,
+                        icon: const Icon(Symbols.refresh_rounded),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (_busy)
-                            const Padding(
-                              padding: EdgeInsets.only(right: Gap.s),
-                              child: SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
+                          if (_devices.isEmpty)
+                            Text(
+                              'No hay teléfonos a la vista. Conecta uno por USB con «Depuración USB» activada, o búscalo por Wi-Fi.',
+                              style: t.bodyMedium?.copyWith(
+                                color: s.onSurfaceVariant,
                               ),
                             ),
-                          Expanded(child: Text(_status, style: t.bodyMedium)),
+                          RadioGroup<String>(
+                            groupValue: _serial,
+                            onChanged: (v) {
+                              setState(() => _serial = v);
+                              _probe();
+                            },
+                            child: Column(
+                              children: [
+                                for (final x in _devices)
+                                  RadioListTile<String>(
+                                    contentPadding: EdgeInsets.zero,
+                                    value: x.serial,
+                                    secondary: Icon(
+                                      x.wifi
+                                          ? Symbols.wifi_rounded
+                                          : Symbols.usb_rounded,
+                                    ),
+                                    title: Text(x.name),
+                                    subtitle: Text(_stateText(x)),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: Gap.s),
+                          Wrap(
+                            spacing: Gap.s,
+                            runSpacing: Gap.s,
+                            children: [
+                              FilledButton.tonalIcon(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _run('Buscando por Wi-Fi…', _wifi),
+                                icon: const Icon(
+                                  Symbols.wifi_find_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('Buscar por Wi-Fi'),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
                   ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: live
-                      ? FilledButton.tonalIcon(
-                          onPressed: () =>
-                              PhoneSessions.instance.stop(d.serial),
-                          icon: const Icon(
-                            Symbols.stop_circle_rounded,
-                            size: 18,
+                  gap,
+                  Reveal(
+                    index: 1,
+                    child: Panel(
+                      title: 'Modo',
+                      icon: Symbols.desktop_windows_rounded,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SegmentedButton<bool>(
+                            segments: [
+                              const ButtonSegment(
+                                value: false,
+                                icon: Icon(Symbols.smartphone_rounded),
+                                label: Text('Pantalla del teléfono'),
+                              ),
+                              ButtonSegment(
+                                value: true,
+                                enabled: _desktop == Desktop.ready,
+                                icon: const Icon(
+                                  Symbols.desktop_windows_rounded,
+                                ),
+                                label: const Text('Escritorio'),
+                              ),
+                            ],
+                            selected: {_desk},
+                            onSelectionChanged: (v) =>
+                                setState(() => _desk = v.first),
                           ),
-                          label: const Text('Detener'),
-                        )
-                      : FilledButton.icon(
-                          onPressed: _busy || d == null || !d.ready
-                              ? null
-                              : () => _run('Abriendo…', _start),
-                          icon: const Icon(Symbols.cast_rounded, size: 18),
-                          label: Text(
-                            _desk ? 'Abrir escritorio' : 'Iniciar control',
+                          const SizedBox(height: Gap.s),
+                          if (!_desk && _screens.length > 1) ...[
+                            const Text(
+                              'Pantalla Android que quieres controlar',
+                            ),
+                            DropdownButton<int>(
+                              isExpanded: true,
+                              value: _screens.any((v) => v.id == _displayId)
+                                  ? _displayId
+                                  : _screens.first.id,
+                              items: [
+                                for (final display in _screens)
+                                  DropdownMenuItem(
+                                    value: display.id,
+                                    child: Text(
+                                      display.description,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (id) =>
+                                  setState(() => _displayId = id ?? 0),
+                            ),
+                          ],
+                          Text(
+                            switch (_desktop) {
+                              Desktop.ready => 'Android declara compatibilidad con ventanas libres. La pantalla virtual puede tener restricciones del fabricante; pruébala en Alero Desktop.',
+                              Desktop.needsSetting => 'Este teléfono admite escritorio. Actívalo en Ajustes › Sistema › Opciones de desarrollador › «Forzar modo de escritorio» y reinicia el teléfono. Mientras tanto se usa su pantalla normal.',
+                              Desktop.unsupported => 'Este teléfono no tiene escritorio de Android: se controla su pantalla normal.',
+                            },
+                            style: t.bodyMedium?.copyWith(
+                              color: s.onSurfaceVariant,
+                            ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  gap,
+                  Reveal(
+                    index: 2,
+                    child: Panel(
+                      title: 'Imagen y sonido',
+                      icon: Symbols.tune_rounded,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (_desk) ...[
+                            const Text('Tamaño del escritorio virtual'),
+                            const SizedBox(height: Gap.s),
+                            DropdownButton<String>(
+                              value: _desktopSize,
+                              isExpanded: true,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: '1280x720',
+                                  child: Text('HD · 1280 × 720'),
+                                ),
+                                DropdownMenuItem(
+                                  value: '1600x900',
+                                  child: Text('HD+ · 1600 × 900'),
+                                ),
+                                DropdownMenuItem(
+                                  value: '1920x1080',
+                                  child: Text('Full HD · 1920 × 1080'),
+                                ),
+                                DropdownMenuItem(
+                                  value: '2560x1440',
+                                  child: Text('QHD · 2560 × 1440'),
+                                ),
+                              ],
+                              onChanged: (v) => setState(
+                                () => _desktopSize = v ?? _desktopSize,
+                              ),
+                            ),
+                            _Toggle(
+                              'Adaptar escritorio al tamaño de la ventana (experimental)',
+                              _flexDesktop,
+                              (v) => setState(() => _flexDesktop = v),
+                            ),
+                          ],
+                          _Choice(
+                            label: 'Resolución',
+                            value: _maxSize,
+                            options: const {
+                              1024: '1024',
+                              1600: '1600',
+                              0: 'Original',
+                            },
+                            onChanged: (v) => setState(() => _maxSize = v),
+                          ),
+                          _Choice(
+                            label: 'Calidad',
+                            value: _bitRate,
+                            options: const {
+                              4: 'Ahorro',
+                              8: 'Normal',
+                              16: 'Alta',
+                            },
+                            onChanged: (v) => setState(() => _bitRate = v),
+                          ),
+                          _Choice(
+                            label: 'Fotogramas',
+                            value: _fps,
+                            options: const {30: '30', 60: '60'},
+                            onChanged: (v) => setState(() => _fps = v),
+                          ),
+                          _Choice(
+                            label: 'Orientación',
+                            value: _orientation,
+                            options: const {
+                              0: 'Auto',
+                              90: '90°',
+                              180: '180°',
+                              270: '270°',
+                            },
+                            onChanged: (v) => setState(() => _orientation = v),
+                          ),
+                          _Toggle(
+                            'Sonido del teléfono en el ordenador',
+                            _audio,
+                            (v) => setState(() => _audio = v),
+                          ),
+                          _Toggle(
+                            'Abrir a pantalla completa',
+                            _fullscreen,
+                            (v) => setState(() => _fullscreen = v),
+                          ),
+                          if (!_desk)
+                            _Toggle(
+                              'Apagar la pantalla del teléfono mientras tanto',
+                              _screenOff,
+                              (v) => setState(() => _screenOff = v),
+                            ),
+                          Text(
+                            'En la ventana: Alt+F pantalla completa, Alt+R girar, Ctrl+C y Ctrl+V copian y pegan entre los dos.',
+                            style: t.bodySmall?.copyWith(
+                              color: s.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ];
+                final right = <Widget>[
+                  if (d != null && d.ready)
+                    Panel(
+                      title: 'Herramientas de escritorio',
+                      icon: Symbols.apps_rounded,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Aplicaciones instaladas, espacios guardados, '
+                            'varias pantallas y diagnóstico del teléfono. '
+                            'Basado en las ideas de Dextop.',
+                          ),
+                          const SizedBox(height: Gap.s),
+                          FilledButton.tonalIcon(
+                            onPressed: _busy
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          DesktopWorkshopPage(serial: d.serial),
+                                    ),
+                                  ),
+                            icon: const Icon(
+                              Symbols.dashboard_customize_rounded,
+                            ),
+                            label: const Text('Abrir herramientas'),
+                          ),
+                          const SizedBox(height: Gap.s),
+                          FilledButton.icon(
+                            onPressed: _busy
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => AleroDesktopPage(
+                                        hub: widget.hub,
+                                        serial: d.serial,
+                                        deviceName: d.name,
+                                        peerId: _peerFor(d),
+                                      ),
+                                    ),
+                                  ),
+                            icon: const Icon(Symbols.desktop_windows_rounded),
+                            label: const Text('Iniciar Alero Desktop'),
+                          ),
+                          const SizedBox(height: Gap.xs),
+                          Text(
+                            'Escritorio virtual, lanzador con dock y herramientas '
+                            'para ventanas de Android. Los botones nativos de '
+                            'minimizar, maximizar y cerrar dependen del dispositivo.',
+                            style: t.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  gap,
+                  if (d != null && d.ready) ...[
+                    PhoneWindowsPanel(serial: d.serial, deviceName: d.name),
+                    const SizedBox(height: Gap.m),
+                  ],
+                  _Setup(
+                    port: _port,
+                    code: _code,
+                    busy: _busy,
+                    onPair: () => _run('Vinculando…', _pair),
+                  ),
+                ];
+                final wide = box.maxWidth >= 1000;
+                return ListView(
+                  padding: const EdgeInsets.all(Gap.xl),
+                  children: [
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1400),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (live) _LiveBar(serial: d.serial, name: d.name),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(Gap.l),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      live
+                                          ? Symbols.cast_connected_rounded
+                                          : Symbols.cast_rounded,
+                                      size: 32,
+                                      fill: live ? 1 : 0,
+                                      color: live
+                                          ? s.primary
+                                          : s.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: Gap.l),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            live
+                                                ? 'Controlando ${d.name}'
+                                                : d == null
+                                                ? 'Conecta el teléfono por USB o depuración inalámbrica'
+                                                : d.ready
+                                                ? '${d.name} listo para controlar'
+                                                : '${d.name}: ${_stateText(d)}',
+                                            style: t.titleLarge,
+                                          ),
+                                          if (_status.isNotEmpty)
+                                            Semantics(
+                                              liveRegion: true,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: Gap.m,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    if (_busy)
+                                                      const Padding(
+                                                        padding:
+                                                            EdgeInsets.only(
+                                                              right: Gap.s,
+                                                            ),
+                                                        child: SizedBox(
+                                                          width: 16,
+                                                          height: 16,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    Expanded(
+                                                      child: Text(
+                                                        _status,
+                                                        style: t.bodyMedium,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: Gap.l),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: live
+                                          ? FilledButton.tonalIcon(
+                                              onPressed: () => PhoneSessions
+                                                  .instance
+                                                  .stop(d.serial),
+                                              icon: const Icon(
+                                                Symbols.stop_circle_rounded,
+                                                size: 18,
+                                              ),
+                                              label: const Text('Detener'),
+                                            )
+                                          : FilledButton.icon(
+                                              onPressed:
+                                                  _busy || d == null || !d.ready
+                                                  ? null
+                                                  : () => _run(
+                                                      'Abriendo…',
+                                                      _start,
+                                                    ),
+                                              icon: const Icon(
+                                                Symbols.cast_rounded,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                _desk
+                                                    ? 'Abrir escritorio'
+                                                    : 'Iniciar control',
+                                              ),
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: Gap.l),
+                            if (wide)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: left,
+                                    ),
+                                  ),
+                                  const SizedBox(width: Gap.l),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: right,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            else ...[
+                              ...left,
+                              gap,
+                              ...right,
+                            ],
+                          ],
                         ),
-                ),
-                const SizedBox(height: Gap.l),
-                _Setup(
-                  port: _port,
-                  code: _code,
-                  busy: _busy,
-                  onPair: () => _run('Vinculando…', _pair),
-                ),
-              ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
     );
   }

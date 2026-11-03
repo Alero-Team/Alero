@@ -15,6 +15,7 @@ import 'phone_home.dart';
 import 'screen.dart';
 import 'shell.dart';
 import 'theme.dart';
+import 'controls.dart';
 import 'widgets.dart';
 
 /// The connected device Home is about: the first paired one online, else the first paired.
@@ -76,6 +77,9 @@ class HomeScreen extends StatelessWidget {
     final recent = _Recent(hub, go: go);
     final media = online && phone ? MediaPanel(hub, main.id) : null;
     final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
+    final controls = online && phone && !Platform.isAndroid
+        ? PhoneControlsPanel(hub, main)
+        : null;
     final status = phone && info != null ? _StatusPanel(info) : null;
     const gap = SizedBox(height: Gap.l, width: Gap.l);
 
@@ -96,7 +100,7 @@ class HomeScreen extends StatelessWidget {
                 flex: 3,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: col([hero, media, recent]),
+                  children: col([hero, media, controls, recent]),
                 ),
               ),
               gap,
@@ -110,7 +114,7 @@ class HomeScreen extends StatelessWidget {
             ],
           )
         else
-          ...col([hero, media, notifs, status, recent]),
+          ...col([hero, media, controls, notifs, status, recent]),
       ],
     );
   }
@@ -440,13 +444,13 @@ class _Recent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recent = hub.history.take(4).toList();
+    final recent = hub.history.take(8).toList();
     return Panel(
       title: 'Recientes',
       icon: Symbols.history_rounded,
       action: TextButton(
-        onPressed: () => go(Section.files),
-        child: const Text('Ver todo'),
+        onPressed: hub.openDownloads,
+        child: const Text('Abrir carpeta'),
       ),
       child: AnimatedSize(
         duration: motion(context, Spring.spatial.settle),

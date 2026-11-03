@@ -23,6 +23,19 @@ object Prefs {
     /** The owner lets a paired computer browse photos, videos, music and chosen folders. Off by default. */
     fun files(c: Context) = sp(c).getBoolean("files", false)
     fun setFiles(c: Context, on: Boolean) = sp(c).edit().putBoolean("files", on).apply()
+
+    /** The owner lets a paired computer read and send SMS. Off by default. */
+    fun sms(c: Context) = sp(c).getBoolean("sms", false)
+    fun setSms(c: Context, on: Boolean) = sp(c).edit().putBoolean("sms", on).apply()
+
+    /** The owner lets a paired computer answer, end and place calls. Off by default. */
+    fun calls(c: Context) = sp(c).getBoolean("calls", false)
+    fun setCalls(c: Context, on: Boolean) = sp(c).edit().putBoolean("calls", on).apply()
+
+    /** Apps whose notifications stay on the phone only (muted from a computer). */
+    fun muted(c: Context): Set<String> = sp(c).getStringSet("muted", null) ?: emptySet()
+    fun setMuted(c: Context, pkg: String, on: Boolean) =
+        sp(c).edit().putStringSet("muted", if (on) muted(c) + pkg else muted(c) - pkg).apply()
 }
 
 /** "Detener" on the control notice: the computer ends the session at once. */

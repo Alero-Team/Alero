@@ -15,31 +15,64 @@ import 'devices.dart';
 import 'explorer.dart';
 import 'expressive.dart';
 import 'home.dart';
+import 'apps_screen.dart';
+import 'call_bar.dart';
+import 'calls_screen.dart';
+import 'deck_screen.dart';
+import 'messages.dart';
 import 'nav.dart';
 import 'pc_control.dart';
 import 'pc_screen.dart';
 import 'settings.dart';
 import 'theme.dart';
-import 'transfers.dart';
 import 'widgets.dart';
 
 /// Four top-level places. Clipboard, notifications, media and screen are things you do with a device, so they
 /// live on Home as panels and actions, not as destinations (fewer places, each with one purpose).
-enum Section { home, files, explorer, devices, settings }
+enum Section {
+  home,
+  messages,
+  calls,
+  photos,
+  apps,
+  deck,
+  explorer,
+  devices,
+  settings,
+}
 
 class _Dest {
-  const _Dest(this.section, this.label, this.icon);
+  const _Dest(this.section, this.label, this.icon, {this.group});
   final Section section;
   final String label;
   final IconData icon;
+
+  /// A small heading shown above the first destination of a group in the side menu.
+  final String? group;
 }
 
 /// The phone's own file browser is a computer feature: it reads another device's files, so it has no place on a phone.
 final _dests = [
   const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
-  const _Dest(Section.files, 'Archivos', Symbols.folder_rounded),
-  if (!Platform.isAndroid)
-    const _Dest(Section.explorer, 'Explorador', Symbols.perm_media_rounded),
+  // The phone, used from the computer.
+  if (!Platform.isAndroid) ...const [
+    _Dest(
+      Section.messages,
+      'Mensajes',
+      Symbols.chat_rounded,
+      group: 'Teléfono',
+    ),
+    _Dest(Section.calls, 'Llamadas', Symbols.call_rounded),
+    _Dest(Section.photos, 'Fotos', Symbols.photo_library_rounded),
+    _Dest(Section.apps, 'Aplicaciones', Symbols.apps_rounded),
+    _Dest(Section.deck, 'Alero Desktop', Symbols.desktop_windows_rounded),
+    _Dest(
+      Section.explorer,
+      'Explorador',
+      Symbols.perm_media_rounded,
+      group: 'Archivos y equipo',
+    ),
+  ],
   const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded),
   const _Dest(Section.settings, 'Ajustes', Symbols.settings_rounded),
 ];
@@ -143,7 +176,7 @@ class _ShellState extends State<Shell>
       case 'devices':
         _go(Section.devices);
       case 'files':
-        _go(Section.files);
+        hub.openDownloads();
       case 'send':
         hub.send(pc!.id);
       case 'clip':
@@ -206,7 +239,11 @@ class _ShellState extends State<Shell>
 
   Widget _page() => switch (_section) {
     Section.home => HomeScreen(hub, go: _go),
-    Section.files => TransfersScreen(hub),
+    Section.messages => MessagesScreen(hub),
+    Section.calls => CallsScreen(hub),
+    Section.photos => PhotosScreen(hub),
+    Section.apps => AppsScreen(hub),
+    Section.deck => DeckScreen(hub),
     Section.explorer => ExplorerScreen(hub),
     Section.devices => DevicesScreen(hub),
     Section.settings => SettingsScreen(hub),
@@ -214,7 +251,8 @@ class _ShellState extends State<Shell>
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: hub,
+    // sms too: the Mensajes badge follows unread conversations.
+    listenable: Listenable.merge([hub, hub.sms]),
     builder: (context, _) => LayoutBuilder(
       builder: (context, box) {
         // Adapted from Orion Store's AnimatedContent(tab): 0.98 -> 1 scale
@@ -227,12 +265,20 @@ class _ShellState extends State<Shell>
           transitionBuilder: orionTabTransition,
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
-        return box.maxWidth >= wideLayout ? _wide(page) : _narrow(page);
+        // The computer always has the side menu: its phone sections do not fit a bottom bar.
+        return box.maxWidth >= wideLayout || !Platform.isAndroid
+            ? _wide(page)
+            : _narrow(page);
       },
     ),
   );
 
-  int _badge(Section s) => s == Section.files ? hub.active.length : 0;
+  int _badge(Section s) => switch (s) {
+    Section.messages =>
+      hub.sms.threads.where((t) => !t.read).length +
+          hub.notifs.values.expand((l) => l).where((n) => n.chat).length,
+    _ => 0,
+  };
 
   Widget _wide(Widget page) {
     final s = Theme.of(context).colorScheme;
@@ -279,15 +325,39 @@ class _ShellState extends State<Shell>
                         ],
                       ),
                     ),
-                    for (final d in _dests)
-                      _NavItem(
-                        icon: d.icon,
-                        label: d.label,
-                        selected: d.section == _section,
-                        badge: _badge(d.section),
-                        onTap: () => _go(d.section),
+                    // Scrolls when the window is too short for every destination.
+                    Expanded(
+                      child: ListView(
+                        padding: EdgeInsets.zero,
+                        children: [
+                          for (final d in _dests) ...[
+                            if (d.group != null)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  Gap.l,
+                                  Gap.l,
+                                  Gap.l,
+                                  Gap.xs,
+                                ),
+                                child: Text(
+                                  d.group!,
+                                  style: t.labelMedium?.copyWith(
+                                    color: s.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            _NavItem(
+                              icon: d.icon,
+                              label: d.label,
+                              selected: d.section == _section,
+                              badge: _badge(d.section),
+                              onTap: () => _go(d.section),
+                            ),
+                          ],
+                        ],
                       ),
-                    const Spacer(),
+                    ),
+                    const SizedBox(height: Gap.s),
                     _PhoneChip(online, hub, onTap: () => _go(Section.devices)),
                     const SizedBox(height: Gap.m),
                   ],
@@ -302,7 +372,12 @@ class _ShellState extends State<Shell>
                 borderRadius: BorderRadius.circular(Radii.card),
                 child: ColoredBox(
                   color: s.surface,
-                  child: _Drop(hub, child: page),
+                  child: Column(
+                    children: [
+                      CallBar(hub),
+                      Expanded(child: _Drop(hub, child: page)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -376,7 +451,7 @@ class _NavItemState extends State<_NavItem> {
             child: AnimatedContainer(
               duration: motion(context, Spring.spatial.settle),
               curve: Spring.spatial,
-              height: 48,
+              height: 44,
               padding: EdgeInsets.symmetric(horizontal: sel ? Gap.l : Gap.m),
               decoration: BoxDecoration(
                 color: bg,

@@ -172,8 +172,7 @@ class _NotifRowState extends State<_NotifRow> {
     } on TimeoutException {
       if (mounted) {
         setState(
-          () => _status =
-              'Sin confirmación del teléfono. El texto sigue aquí: comprueba el chat antes de repetir.',
+          () => _status = 'Sin confirmación del teléfono. El texto sigue aquí: comprueba el chat antes de repetir.',
         );
       }
     } catch (e) {
@@ -275,8 +274,7 @@ class _NotifRowState extends State<_NotifRow> {
                             textInputAction: TextInputAction.newline,
                             decoration: const InputDecoration(
                               labelText: 'Responder',
-                              helperText:
-                                  'Intro envía · Mayús+Intro añade un salto de línea',
+                              helperText: 'Intro envía · Mayús+Intro añade un salto de línea',
                             ),
                             onChanged: (v) {
                               _drafts[_draftKey] = v;
@@ -315,12 +313,47 @@ class _NotifRowState extends State<_NotifRow> {
               ],
             ),
           ),
-          if (n.clearable)
+          if (n.markable || n.clearable)
             IconButton(
-              tooltip: 'Descartar en el teléfono',
-              icon: const Icon(Symbols.close_rounded, size: 18),
-              onPressed: () => hub.dismissNotif(peerId, n.key),
+              tooltip: 'Marcar como leído',
+              icon: const Icon(Symbols.mark_chat_read_rounded, size: 18),
+              onPressed: () => hub.notifAction(peerId, n, 'read'),
             ),
+          PopupMenuButton<String>(
+            tooltip: 'Más opciones',
+            icon: const Icon(Symbols.more_vert_rounded, size: 18),
+            onSelected: (a) => a == 'dismiss'
+                ? hub.dismissNotif(peerId, n.key)
+                : hub.notifAction(peerId, n, a),
+            itemBuilder: (_) => [
+              if (n.mutable)
+                const PopupMenuItem(
+                  value: 'mute',
+                  child: ListTile(
+                    leading: Icon(Symbols.notifications_paused_rounded),
+                    title: Text('Silenciar conversación'),
+                  ),
+                ),
+              PopupMenuItem(
+                value: 'muteApp',
+                child: ListTile(
+                  leading: const Icon(Symbols.notifications_off_rounded),
+                  title: Text(
+                    'Silenciar ${n.app.isEmpty ? 'esta app' : n.app} en el ordenador',
+                  ),
+                  subtitle: const Text('Se reactiva en Ajustes del teléfono'),
+                ),
+              ),
+              if (n.clearable)
+                const PopupMenuItem(
+                  value: 'dismiss',
+                  child: ListTile(
+                    leading: Icon(Symbols.close_rounded),
+                    title: Text('Descartar en el teléfono'),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
