@@ -1,5 +1,28 @@
 # Cambios
 
+## 0.1.16 — 2026-11-04 (mejoras incrementales Android + Windows)
+
+Instala ambos paquetes de la misma versión para conservar la compatibilidad. **Esta publicación es una actualización parcial de interfaz y estabilidad, no la finalización de todas las funciones solicitadas.**
+
+### Mejoras
+
+- **Mensajes:** conserva durante la sesión hasta 50 conversaciones procedentes de notificaciones, incluso si Android retira la notificación al contestar. Los mensajes enviados con confirmación de entrega a Android aparecen a la derecha, sin fingir una confirmación de recepción en WhatsApp. Si la notificación ya no permite responder, la conversación sigue visible en modo lectura.
+- **Reproduciendo:** carátulas como fondo del recuadro de reproducción y degradado de contraste para los controles; mejor selección de ilustraciones multimedia en Android y compresión adaptativa para no exceder el límite de comunicación. La reproducción de video en vivo permanece pendiente.
+- **Widgets Android:** reorganización del panel principal con información del equipo a la izquierda y controles a la derecha, aprovechando mejor las dimensiones grandes y manteniendo las acciones existentes.
+- **Rendimiento Android:** no ejecutar diagnósticos de red destinados a la interfaz mientras esta esté en segundo plano. El servicio de conexión, notificaciones y transferencias se mantiene independiente y activo.
+
+### Errores corregidos
+
+- Corrige el desplazamiento visual de los iconos de la navegación cuando tienen insignias.
+- Evita que los botones de dispositivos emparejados compriman el nombre y el estado en ventanas estrechas.
+- Corrige un aviso del analizador Flutter por una referencia al observador del ciclo de vida y libera el observador al desechar el controlador.
+
+### Limitaciones y verificación pendiente
+
+- El bloqueo de Google Play Protect en algunas instalaciones **no está confirmado como resuelto**. Se mantiene la misma firma y todos los permisos y funciones existentes. La revisión o apelación oficial de Google puede ser necesaria.
+- No se han corregido todavía de manera verificada la cámara remota, la vista previa de video directo ni la búsqueda temporal para multimedia de Windows.
+- Las pruebas automáticas de Rust, Flutter y Android se ejecutan mediante GitHub Actions antes de distribuir. No afirmar ensayos físicos no realizados.
+
 ## 0.1.15 — 2026-11-03 (solo Android, versión candidata a revisión de Play Protect)
 
 ### Correcciones y seguridad Android

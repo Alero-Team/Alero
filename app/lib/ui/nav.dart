@@ -192,17 +192,27 @@ class _Item extends StatelessWidget {
                     bottom: 0,
                     child: Center(
                       child: ExcludeSemantics(
-                        child: Badge(
-                          isLabelVisible: data.badge > 0,
-                          label: Text('${data.badge}'),
-                          child: Icon(
-                            data.icon,
-                            size: icon,
-                            fill: pp,
-                            color: Color.lerp(
-                              s.onSurfaceVariant,
-                              s.onSurface,
-                              pp,
+                        child: SizedBox(
+                          width: icon,
+                          height: icon,
+                          child: Center(
+                            child: Badge(
+                              // A fixed-size icon slot keeps every glyph centered
+                              // regardless of whether a message badge is visible.
+                              alignment: Alignment.topRight,
+                              offset: const Offset(4, -3),
+                              isLabelVisible: data.badge > 0,
+                              label: Text('${data.badge}'),
+                              child: Icon(
+                                data.icon,
+                                size: icon,
+                                fill: pp,
+                                color: Color.lerp(
+                                  s.onSurfaceVariant,
+                                  s.onSurface,
+                                  pp,
+                                ),
+                              ),
                             ),
                           ),
                         ),

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -404,18 +403,19 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(Radii.tile),
-                      child: AnimatedSwitcher(
-                        duration: motion(
-                          context,
-                          const Duration(milliseconds: 600),
-                        ),
-                        child: ImageFiltered(
-                          key: ValueKey(m.title),
-                          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                          child: Opacity(
-                            opacity: 0.22,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // The actual cover fills the complete player, like
+                          // Android's expanded media controls. Never stretch it.
+                          AnimatedSwitcher(
+                            duration: motion(
+                              context,
+                              const Duration(milliseconds: 600),
+                            ),
                             child: Image.memory(
                               m.art!,
+                              key: ValueKey('${m.title}|${m.artist}'),
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
@@ -423,7 +423,22 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                               excludeFromSemantics: true,
                             ),
                           ),
-                        ),
+                          // Keep controls and metadata readable in light/dark
+                          // themes; do not blur away the entire artwork.
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  s.surface.withValues(alpha: 0.78),
+                                  s.surface.withValues(alpha: 0.62),
+                                  s.surface.withValues(alpha: 0.82),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

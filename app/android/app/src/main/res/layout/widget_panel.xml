@@ -1,40 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- A 4x3/4x4 panel: status on the left, two rows of actionable tiles on the right. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/w_bg"
-    android:orientation="vertical"
-    android:padding="16dp">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
-        <ImageView android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/w_pill" android:padding="9dp" android:src="@drawable/ic_w_laptop" android:importantForAccessibility="no" />
-        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Alero" android:textColor="@color/w_on" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
-            <TextView android:id="@+id/state" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="13sp" />
-        </LinearLayout>
+    android:orientation="horizontal"
+    android:padding="12dp">
+    <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:layout_marginEnd="6dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+                <ImageView android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/w_pill" android:padding="9dp" android:src="@drawable/ic_w_laptop" android:importantForAccessibility="no" />
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:layout_weight="1" android:orientation="vertical">
+                    <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Alero" android:textColor="@color/w_on" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
+                    <TextView android:id="@+id/state" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="13sp" />
+                </LinearLayout>
+            </LinearLayout>
+        <LinearLayout android:id="@+id/t_box" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="@drawable/w_tile" android:orientation="vertical" android:padding="12dp">
+                <TextView android:id="@+id/t_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="middle" android:maxLines="1" android:textColor="@color/w_on" android:textSize="14sp" />
+                <TextView android:id="@+id/t_state" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="12sp" />
+            <ProgressBar android:id="@+id/t_progress" style="@android:style/Widget.Material.ProgressBar.Horizontal" android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="6dp" android:max="1000" android:progressTint="@color/w_accent" android:progressBackgroundTint="@color/w_bg" />
+            </LinearLayout>
     </LinearLayout>
-    <LinearLayout android:id="@+id/t_box" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="@drawable/w_tile" android:orientation="vertical" android:padding="12dp">
-        <TextView android:id="@+id/t_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="middle" android:maxLines="1" android:textColor="@color/w_on" android:textSize="14sp" />
-        <TextView android:id="@+id/t_state" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="12sp" />
-    <ProgressBar android:id="@+id/t_progress" style="@android:style/Widget.Material.ProgressBar.Horizontal" android:layout_width="match_parent" android:layout_height="6dp" android:layout_marginTop="6dp" android:max="1000" android:progressTint="@color/w_accent" android:progressBackgroundTint="@color/w_bg" />
-    </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="8dp" android:orientation="horizontal" />
-    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
-        <LinearLayout android:id="@+id/a_send" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Enviar" android:gravity="center" android:orientation="vertical" android:padding="6dp">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_send" android:importantForAccessibility="no" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Enviar" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/a_clip" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Portapapeles" android:gravity="center" android:orientation="vertical" android:padding="6dp">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_clip" android:importantForAccessibility="no" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Portapapeles" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/a_control" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Control" android:gravity="center" android:orientation="vertical" android:padding="6dp">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_mouse" android:importantForAccessibility="no" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Control" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
-        </LinearLayout>
-        <LinearLayout android:id="@+id/a_screen" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="3dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Pantalla" android:gravity="center" android:orientation="vertical" android:padding="6dp">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_cast" android:importantForAccessibility="no" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Pantalla" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
-        </LinearLayout>
+    <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:layout_marginStart="4dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+                <LinearLayout android:id="@+id/a_send" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="2dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Enviar" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_send" android:importantForAccessibility="no" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Enviar" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+                        </LinearLayout>
+                <LinearLayout android:id="@+id/a_clip" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="2dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Portapapeles" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_clip" android:importantForAccessibility="no" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Portapapeles" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+                        </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal">
+                <LinearLayout android:id="@+id/a_control" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="2dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Control" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_mouse" android:importantForAccessibility="no" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Control" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+                        </LinearLayout>
+                <LinearLayout android:id="@+id/a_screen" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="2dp" android:layout_weight="1" android:background="@drawable/w_tile" android:contentDescription="Pantalla" android:gravity="center" android:orientation="vertical" android:padding="6dp">
+                            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_w_cast" android:importantForAccessibility="no" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:ellipsize="end" android:maxLines="1" android:text="Pantalla" android:textColor="@color/w_on" android:textSize="12sp" android:importantForAccessibility="no" />
+                        </LinearLayout>
+            </LinearLayout>
     </LinearLayout>
 </LinearLayout>

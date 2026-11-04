@@ -135,12 +135,20 @@ class NotifListener : NotificationListenerService() {
 
     /** Small JPEG of the cover (base64), so a frame stays well under the 64 KiB limit. */
     private fun art(m: MediaMetadata?): String {
-        val b = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: return ""
-        val side = 160
+        val b = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: m?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+            ?: return ""
+        val side = 256
         val scale = minOf(1f, side.toFloat() / maxOf(1, b.width), side.toFloat() / maxOf(1, b.height))
         val small = Bitmap.createScaledBitmap(b, maxOf(1, (b.width * scale).toInt()), maxOf(1, (b.height * scale).toInt()), true)
         val out = ByteArrayOutputStream()
-        small.compress(Bitmap.CompressFormat.JPEG, 70, out)
+        var quality = 75
+        do {
+            out.reset()
+            small.compress(Bitmap.CompressFormat.JPEG, quality, out)
+            quality -= 10
+        } while (out.size() > 40_000 && quality >= 35)
         if (small !== b) small.recycle()
         return if (out.size() > 40_000) "" else Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }

@@ -75,6 +75,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   SmsClient get sms => hub.sms;
   String? _open;
   final _search = TextEditingController();
+  // Session-only snapshot of recent app conversations. Android is free to
+  // withdraw a notification on reply; that must not erase a visible chat.
+  // Never persist notification content or claim it is a full chat history.
+  final _recentChats = <String, Convo>{};
 
   pb.Peer? get _phone => hub.peers
       .where(
@@ -168,12 +172,29 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Widget _body(BuildContext context, pb.Peer phone) {
     final s = Theme.of(context).colorScheme;
     final smsOn = hub.info[phone.id]?.sms == true;
-    final list = Convo.inbox(
+    final live = Convo.inbox(
       smsOn ? sms.threads : const [],
       hub.notifs[phone.id] ?? const [],
-      _search.text,
     );
-    final open = list.where((c) => c.key == _open).firstOrNull;
+    for (final conversation in live.where((c) => c.notif != null)) {
+      _recentChats.remove(conversation.key);
+      _recentChats[conversation.key] = conversation;
+    }
+    while (_recentChats.length > 50) {
+      _recentChats.remove(_recentChats.keys.first);
+    }
+    final all = <String, Convo>{
+      for (final c in _recentChats.values) c.key: c,
+      for (final c in live) c.key: c,
+    };
+    final q = _search.text.trim().toLowerCase();
+    final list = all.values
+        .where((c) => q.isEmpty ||
+            c.title.toLowerCase().contains(q) ||
+            c.snippet.toLowerCase().contains(q))
+        .toList()
+      ..sort((a, b) => b.time.compareTo(a.time));
+    final open = all[_open];
     final notice = !smsOn
         ? 'Para ver los SMS, en el teléfono: Alero › Ajustes › Mensajes en el ordenador.'
         : switch (sms.error) {
@@ -366,6 +387,9 @@ class _ConversationState extends State<_Conversation> {
   final _text = TextEditingController();
   bool _sending = false;
   String? _status;
+  // Only responses acknowledged by Android; not a delivery receipt from
+  // WhatsApp or another destination. Retained in this open conversation.
+  final _localReplies = <ChatMsg>[];
   Convo get c => widget.c;
 
   @override
@@ -379,8 +403,12 @@ class _ConversationState extends State<_Conversation> {
     if (c.thread?.group == true) {
       return 'Los grupos se responden en el teléfono: Android solo deja enviar MMS a la app de mensajes predeterminada.';
     }
-    if (c.notif != null && !c.notif!.replyable) {
-      return '${c.source} no permite responder desde la notificación.';
+    if (c.notif != null) {
+      final active = widget.hub.notifs[widget.peerId]
+          ?.any((n) => n.key == c.notif!.key && n.replyable) ?? false;
+      if (!active) {
+        return 'La notificación ya no permite responder. Puedes seguir leyendo lo disponible.';
+      }
     }
     return null;
   }
@@ -398,6 +426,9 @@ class _ConversationState extends State<_Conversation> {
         _status = null;
       } else {
         await widget.hub.replyNotif(widget.peerId, c.notif!.key, text);
+        _localReplies.add(
+          ChatMsg(body: text, time: DateTime.now(), out: true),
+        );
         _status = 'Android entregó la respuesta a ${c.source}.';
       }
       _text.clear();
@@ -427,6 +458,18 @@ class _ConversationState extends State<_Conversation> {
               sender: c.notif!.title,
             ),
           ];
+    // MessagingStyle may already contain the outgoing response. Avoid
+    // displaying the same message twice after an updated notification.
+    final visibleMsgs = <ChatMsg>[
+      ...?msgs,
+      for (final reply in _localReplies)
+        if (!(msgs?.any((m) =>
+                m.out &&
+                m.body == reply.body &&
+                m.time.difference(reply.time).inSeconds.abs() < 20) ??
+            false))
+          reply,
+    ];
     // A chat app names group conversations apart from the sender (title).
     final n = c.notif;
     final group =
@@ -477,9 +520,11 @@ class _ConversationState extends State<_Conversation> {
               : ListView.builder(
                   reverse: true,
                   padding: const EdgeInsets.all(Gap.l),
-                  itemCount: msgs.length,
-                  itemBuilder: (_, i) =>
-                      _Bubble(msgs[msgs.length - 1 - i], showSender: group),
+                  itemCount: visibleMsgs.length,
+                  itemBuilder: (_, i) => _Bubble(
+                    visibleMsgs[visibleMsgs.length - 1 - i],
+                    showSender: group,
+                  ),
                 ),
         ),
         Padding(

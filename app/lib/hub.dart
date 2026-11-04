@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, AppLifecycleState;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -38,6 +38,10 @@ class Hub extends ChangeNotifier {
   String myId = '', name = '', downloads = '', startError = '';
   bool autoAccept = true;
   final messages = StreamController<String>.broadcast();
+  // Network diagnostics are needed by the QR screen, not by Android's
+  // background transfer/notification service.
+  bool _uiVisible = true;
+  AppLifecycleListener? _uiLifecycle;
 
   /// What paired devices report about themselves (`pb.x.*`), by peer id.
   final info = <String, PeerInfo>{};
@@ -227,10 +231,19 @@ class Hub extends ChangeNotifier {
       startError = 'No se pudo iniciar: $e';
     }
     await refresh();
-    // The local address (shown in the QR) changes when Wi-Fi or a cable comes and goes: a stale one made the phone
-    // dial an address nobody answers ("No route to host").
+    if (Platform.isAndroid) {
+      _uiLifecycle = AppLifecycleListener(
+        onStateChange: (state) {
+          final visible = state == AppLifecycleState.resumed;
+          if (visible && !_uiVisible) refresh();
+          _uiVisible = visible;
+        },
+      );
+    }
+    // Only the visible QR/diagnostics UI needs address polling. The native
+    // background service keeps connections and transfers working as before.
     Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (myId.isEmpty) return;
+      if (myId.isEmpty || (Platform.isAndroid && !_uiVisible)) return;
       final d = await pb.diagnostics();
       if (!listEquals(d, diagnostics)) {
         diagnostics = d;
@@ -1254,6 +1267,14 @@ class Hub extends ChangeNotifier {
     await _run(() => pb.setAutoAccept(on_: on));
     _saveSettings();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    // Release the Android lifecycle observer when the Hub is disposed.
+    // Keeping the reference is intentional; it handles UI-only polling.
+    _uiLifecycle?.dispose();
+    super.dispose();
   }
 
   /// F10: every error code has a message and a next step.

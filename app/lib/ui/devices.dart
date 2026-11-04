@@ -246,79 +246,111 @@ class _Paired extends StatelessWidget {
       p.addr,
       es(p.detail),
     ].where((x) => x.isNotEmpty).join(' · ');
+
+    final actions = <Widget>[
+      if (connected)
+        IconButton.filledTonal(
+          tooltip: 'Enviar archivos a ${p.name}',
+          onPressed: () => hub.send(p.id),
+          icon: const Icon(Symbols.upload_rounded),
+        ),
+      if (p.state == pb.PeerState.rejected)
+        TextButton(
+          onPressed: () => hub.pair(p.id),
+          child: const Text('Emparejar de nuevo'),
+        ),
+      if (connected || p.state == pb.PeerState.connecting)
+        OutlinedButton.icon(
+          onPressed: () => hub.disconnect(p.id),
+          icon: const Icon(Symbols.link_off_rounded),
+          label: const Text('Desconectar'),
+        ),
+      if (p.state == pb.PeerState.disconnected)
+        FilledButton.tonalIcon(
+          onPressed: () => hub.reconnect(p.id),
+          icon: const Icon(Symbols.link_rounded),
+          label: const Text('Conectar'),
+        ),
+      IconButton(
+        tooltip: 'Olvidar ${p.name}',
+        icon: Icon(Symbols.delete_rounded, color: s.error),
+        onPressed: () async {
+          final ok = await confirm(
+            context,
+            '¿Olvidar ${p.name}?',
+            'Se borra el emparejamiento. Para volver a usarlo tendréis que emparejaros otra vez con el código QR. '
+                'Si solo quieres dejar de usarlo por ahora, pulsa Desconectar.',
+            'Olvidar',
+          );
+          if (ok) await hub.forget(p.id);
+        },
+      ),
+    ];
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
-      child: Row(
-        children: [
-          IconTile(
-            info == null
-                ? Symbols.devices_rounded
-                : (info.phone
-                      ? Symbols.smartphone_rounded
-                      : Symbols.computer_rounded),
-            tonal: connected,
-          ),
-          const SizedBox(width: Gap.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(p.name, style: t.titleSmall),
-                StatusLine(p),
-                if (facts.isNotEmpty)
-                  Text(
-                    facts,
-                    style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Connected peers gain extra buttons. On narrow screens they belong
+          // on a second line, not in the name/status line.
+          final compact = constraints.maxWidth < 680;
+          final summary = Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              IconTile(
+                info == null
+                    ? Symbols.devices_rounded
+                    : (info.phone
+                          ? Symbols.smartphone_rounded
+                          : Symbols.computer_rounded),
+                tonal: connected,
+              ),
+              const SizedBox(width: Gap.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p.name,
+                      style: t.titleSmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    StatusLine(p),
+                    if (facts.isNotEmpty)
+                      Text(
+                        facts,
+                        style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              if (!compact)
+                ...actions.map(
+                  (action) => Padding(
+                    padding: const EdgeInsets.only(left: Gap.s),
+                    child: action,
                   ),
-              ],
-            ),
-          ),
-          if (connected)
-            IconButton.filledTonal(
-              tooltip: 'Enviar archivos a ${p.name}',
-              onPressed: () => hub.send(p.id),
-              icon: const Icon(Symbols.upload_rounded),
-            ),
-          if (p.state == pb.PeerState.rejected)
-            TextButton(
-              onPressed: () => hub.pair(p.id),
-              child: const Text('Emparejar de nuevo'),
-            ),
-          if (connected || p.state == pb.PeerState.connecting)
-            Padding(
-              padding: const EdgeInsets.only(left: Gap.s),
-              child: OutlinedButton.icon(
-                onPressed: () => hub.disconnect(p.id),
-                icon: const Icon(Symbols.link_off_rounded),
-                label: const Text('Desconectar'),
+                ),
+            ],
+          );
+          if (!compact) return summary;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              summary,
+              const SizedBox(height: Gap.xs),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: Gap.s,
+                runSpacing: Gap.xs,
+                children: actions,
               ),
-            ),
-          if (p.state == pb.PeerState.disconnected)
-            Padding(
-              padding: const EdgeInsets.only(left: Gap.s),
-              child: FilledButton.tonalIcon(
-                onPressed: () => hub.reconnect(p.id),
-                icon: const Icon(Symbols.link_rounded),
-                label: const Text('Conectar'),
-              ),
-            ),
-          IconButton(
-            tooltip: 'Olvidar ${p.name}',
-            icon: Icon(Symbols.delete_rounded, color: s.error),
-            onPressed: () async {
-              final ok = await confirm(
-                context,
-                '¿Olvidar ${p.name}?',
-                'Se borra el emparejamiento. Para volver a usarlo tendréis que emparejaros otra vez con el código QR. '
-                    'Si solo quieres dejar de usarlo por ahora, pulsa Desconectar.',
-                'Olvidar',
-              );
-              if (ok) await hub.forget(p.id);
-            },
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
