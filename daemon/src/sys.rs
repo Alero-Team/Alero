@@ -417,7 +417,12 @@ mod win {
             .ok()
             .map(|t| {
                 let ms = |d: windows::Foundation::TimeSpan| d.Duration / 10_000;
-                (t.Position().map(ms).unwrap_or(0), t.EndTime().map(ms).unwrap_or(0))
+                let (pos, end) = (t.Position().map(ms).unwrap_or(0), t.EndTime().map(ms).unwrap_or(0));
+                // Players report the position only now and then (Spotify every few seconds or on seek): add the
+                // time since that report, or the phone's bar jumps back on every update.
+                let since = t.LastUpdatedTime().ok().map(|u| now_ticks() - u.UniversalTime).filter(|&d| d > 0).unwrap_or(0);
+                let pos = if playing { pos + since / 10_000 } else { pos };
+                (if end > 0 { pos.min(end) } else { pos }, end)
             })
             .unwrap_or((0, 0));
         Some(Media {
@@ -430,6 +435,12 @@ mod win {
             actions,
             speed: playback.PlaybackRate().ok().and_then(|rate| rate.Value().ok()).unwrap_or(1.0),
         })
+    }
+
+    /// Now as a Windows `DateTime` (100 ns ticks since 1601-01-01 UTC), like the timeline's update time.
+    fn now_ticks() -> i64 {
+        let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as i64 / 100).unwrap_or(0);
+        unix + 116_444_736_000_000_000
     }
 
     /// Cover of the current session (JPEG or PNG). Covers over 150 KB are shrunk to a 400 px JPEG instead of
@@ -597,5 +608,17 @@ mod live {
         let small = super::win::cover(1).expect("shrunk cover");
         assert_eq!(&small[..2], &[0xff, 0xd8]);
         println!("shrunk: {} bytes", small.len());
+    }
+
+    #[test]
+    #[ignore]
+    fn position_moves_between_player_reports() {
+        let a = super::media_state().expect("play something first");
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let b = super::media_state().unwrap();
+        println!("playing={} {} -> {} ms", a.playing, a.position_ms, b.position_ms);
+        if a.playing && b.playing && a.title == b.title {
+            assert!((1500..2600).contains(&(b.position_ms - a.position_ms)));
+        }
     }
 }

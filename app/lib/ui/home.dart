@@ -55,7 +55,6 @@ class HomeScreen extends StatelessWidget {
       );
     }
 
-    final hero = _Hero(main, info, hub, go: go);
     final recent = _Recent(hub, go: go);
     final media = online && phone
         ? MediaPanel(hub, main.id, compact: !Platform.isAndroid)
@@ -67,6 +66,8 @@ class HomeScreen extends StatelessWidget {
     final status = phone && info != null
         ? _StatusPanel(info, online: online)
         : null;
+    // The device card carries its state too: one tile for who it is, what it has and what you can do.
+    final hero = _Hero(main, info, hub, go: go, status: status);
     final scale = TileScale.forSize(hub.tileSize.value);
     final gap = SizedBox(height: Gap.l * scale, width: Gap.l * scale);
 
@@ -127,13 +128,6 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   hero,
                   gap,
-                  status ??
-                      const Panel(
-                        title: 'Estado del dispositivo',
-                        icon: Symbols.info_rounded,
-                        child: Text('Conecta el teléfono para ver su estado.'),
-                      ),
-                  gap,
                   media ??
                       const Panel(
                         title: 'Reproductor',
@@ -174,7 +168,6 @@ class HomeScreen extends StatelessWidget {
       ] else ...[
         hero,
         gap,
-        if (status != null) ...[status, gap],
         if (media != null) ...[media, gap],
         if (controls != null) ...[controls, gap],
         if (notifs != null) ...[notifs, gap],
@@ -294,7 +287,8 @@ class _Welcome extends StatelessWidget {
 }
 
 class _Hero extends StatelessWidget {
-  const _Hero(this.p, this.info, this.hub, {required this.go});
+  const _Hero(this.p, this.info, this.hub, {required this.go, this.status});
+  final Widget? status;
   final pb.Peer p;
   final PeerInfo? info;
   final Hub hub;
@@ -332,33 +326,39 @@ class _Hero extends StatelessWidget {
       ),
     );
 
-    // Every shortcut lives in this card, as one grid, on the computer and on the phone.
+    // Every shortcut lives in this card, as the prototype's buttons, on the computer and on the phone.
     final actions = Platform.isAndroid
         ? QuickActions(hub, p)
-        : ShortcutGrid([
-            ShortcutTile(
-              Symbols.upload_rounded,
-              'Enviar',
-              online ? () => hub.send(p.id) : null,
-            ),
-            ShortcutTile(
-              Symbols.content_paste_go_rounded,
-              'Portapapeles',
-              online ? () => openClipboard(context, hub, p.id) : null,
-            ),
-            if (phone)
-              ShortcutTile(
-                Symbols.folder_open_rounded,
-                'Explorar',
-                () => go(Section.explorer),
+        : Wrap(
+            spacing: Gap.s,
+            runSpacing: Gap.s,
+            children: [
+              FilledButton.icon(
+                onPressed: online ? () => hub.send(p.id) : null,
+                icon: const Icon(Symbols.upload_rounded, size: 18),
+                label: const Text('Enviar archivos'),
               ),
-            if (phone)
-              ShortcutTile(
-                Symbols.cast_rounded,
-                'Controlar',
-                online ? () => openScreen(context, hub, p) : null,
+              FilledButton.tonalIcon(
+                onPressed: online
+                    ? () => openClipboard(context, hub, p.id)
+                    : null,
+                icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
+                label: const Text('Portapapeles'),
               ),
-          ]);
+              if (phone)
+                OutlinedButton.icon(
+                  onPressed: () => go(Section.explorer),
+                  icon: const Icon(Symbols.folder_open_rounded, size: 18),
+                  label: const Text('Explorar archivos'),
+                ),
+              if (phone)
+                OutlinedButton.icon(
+                  onPressed: online ? () => openScreen(context, hub, p) : null,
+                  icon: const Icon(Symbols.cast_rounded, size: 18),
+                  label: const Text('Controlar teléfono'),
+                ),
+            ],
+          );
 
     return Card(
       child: Padding(
@@ -464,6 +464,11 @@ class _Hero extends StatelessWidget {
                 ],
                 const SizedBox(height: 18),
                 actions,
+                if (status != null) ...[
+                  const SizedBox(height: Gap.l),
+                  Divider(color: colors.outlineVariant),
+                  status!,
+                ],
               ],
             );
           },
@@ -557,27 +562,23 @@ class _StatusPanel extends StatelessWidget {
       ),
     );
 
-    return Panel(
-      title: 'Estado del dispositivo',
-      icon: Symbols.info_rounded,
-      child: Column(
-        children: [
-          if (total > 0)
-            metric(
-              Symbols.hard_drive_rounded,
-              'Almacenamiento',
-              '${size(used)} de ${size(total)}',
-              progress: used / total,
-            ),
+    return Column(
+      children: [
+        if (total > 0)
           metric(
-            Symbols.wifi_rounded,
-            'Conectividad',
-            info.network.isEmpty ? 'Sin conexión' : info.network,
+            Symbols.hard_drive_rounded,
+            'Almacenamiento',
+            '${size(used)} de ${size(total)}',
+            progress: used / total,
           ),
-          if (info.chargeLabel != null)
-            metric(Symbols.bolt_rounded, 'Carga', info.chargeLabel!),
-        ],
-      ),
+        metric(
+          Symbols.wifi_rounded,
+          'Conectividad',
+          info.network.isEmpty ? 'Sin conexión' : info.network,
+        ),
+        if (info.chargeLabel != null)
+          metric(Symbols.bolt_rounded, 'Carga', info.chargeLabel!),
+      ],
     );
   }
 }
