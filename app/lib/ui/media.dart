@@ -159,7 +159,8 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     // Dashboard reference: an intentionally compact horizontal media card.
     // Uses the same real media state/commands as the expanded player.
     if (widget.compact) {
-      final active = access && m != null && m.active;
+      final cm = m ?? MediaState(const {});
+      final active = access && cm.active;
       return Panel(
         title: 'Reproductor',
         icon: Symbols.music_note_rounded,
@@ -169,18 +170,18 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             if (active)
               Row(
                 children: [
-                  _Art(m, size: 64, appIcon: hub.appIcons[m.pkg],
+                  _Art(cm, size: 64, appIcon: hub.appIcons[cm.pkg],
                        computer: widget.computer),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(m.title.isEmpty ? 'Sin título' : m.title,
+                        Text(cm.title.isEmpty ? 'Sin título' : cm.title,
                             maxLines: 2, overflow: TextOverflow.ellipsis,
                             style: t.titleSmall),
                         const SizedBox(height: 4),
-                        Text([m.artist, m.app]
+                        Text([cm.artist, cm.app]
                             .where((x) => x.isNotEmpty).join(' · '),
                             maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: t.bodySmall?.copyWith(
@@ -199,10 +200,10 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             if (active) ...[
               Slider(
                 padding: EdgeInsets.zero,
-                value: (_seek ?? m.positionNow.toDouble())
-                    .clamp(0, m.duration > 0 ? m.duration.toDouble() : 1.0),
-                max: m.duration > 0 ? m.duration.toDouble() : 1.0,
-                onChanged: m.duration > 0 && m.supports(256)
+                value: (_seek ?? cm.positionNow.toDouble())
+                    .clamp(0, cm.duration > 0 ? cm.duration.toDouble() : 1.0),
+                max: cm.duration > 0 ? cm.duration.toDouble() : 1.0,
+                onChanged: cm.duration > 0 && cm.supports(256)
                     ? (value) => setState(() => _seek = value) : null,
                 onChangeEnd: (value) {
                   _command('seek', position: value.toInt());
@@ -211,9 +212,9 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
               ),
               Row(
                 children: [
-                  Text(_clock(m.positionNow), style: t.labelSmall),
+                  Text(_clock(cm.positionNow), style: t.labelSmall),
                   const Spacer(),
-                  Text(_clock(m.duration), style: t.labelSmall),
+                  Text(_clock(cm.duration), style: t.labelSmall),
                 ],
               ),
             ],
@@ -223,22 +224,22 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
               children: [
                 IconButton(
                   tooltip: 'Anterior',
-                  onPressed: active && m.supports(16)
+                  onPressed: active && cm.supports(16)
                       ? () => _command('prev') : null,
                   icon: const Icon(Symbols.skip_previous_rounded),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
                   iconSize: 27,
-                  tooltip: active && m.playing ? 'Pausar' : 'Reproducir',
+                  tooltip: active && cm.playing ? 'Pausar' : 'Reproducir',
                   onPressed: active ? () => _command('toggle') : null,
-                  icon: Icon(active && m.playing
+                  icon: Icon(active && cm.playing
                       ? Symbols.pause_rounded : Symbols.play_arrow_rounded),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Siguiente',
-                  onPressed: active && m.supports(32)
+                  onPressed: active && cm.supports(32)
                       ? () => _command('next') : null,
                   icon: const Icon(Symbols.skip_next_rounded),
                 ),
