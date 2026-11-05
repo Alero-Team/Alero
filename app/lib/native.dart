@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
@@ -25,6 +26,19 @@ class Picked {
 /// Everything platform-specific. Android goes through a small Kotlin channel (MainActivity.kt);
 /// desktop uses the window plugin (the tray lives in the daemon). Nothing here decides protocol or trust.
 class Native {
+  /// Vault contents stay encrypted on disk; Android uses a device-bound AES key.
+  static Future<Uint8List> vaultSeal(Uint8List bytes) async =>
+      await _ch.invokeMethod<Uint8List>('vaultSeal', bytes) ??
+      (throw StateError('No se pudo cifrar el archivo.'));
+
+  static Future<Uint8List> vaultOpen(Uint8List bytes) async =>
+      await _ch.invokeMethod<Uint8List>('vaultOpen', bytes) ??
+      (throw StateError('No se pudo abrir el archivo cifrado.'));
+
+  /// Reads a system-picker file, never an arbitrary external Android path.
+  static Future<Uint8List> readVaultPicked(int descriptor) async =>
+      await _ch.invokeMethod<Uint8List>('readVaultPicked', descriptor) ??
+      (throw StateError('No se pudo leer el archivo seleccionado.'));
   static final lock = ValueNotifier(false);
   static Future<void> loadLock() async {
     lock.value =
