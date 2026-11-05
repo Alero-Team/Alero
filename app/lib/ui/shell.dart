@@ -258,9 +258,7 @@ class _ShellState extends State<Shell>
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         // The computer always has the side menu: its phone sections do not fit a bottom bar.
-        return box.maxWidth >= wideLayout || !Platform.isAndroid
-            ? _wide(page)
-            : _narrow(page);
+        return Platform.isAndroid ? _narrow(page) : _wide(page);
       },
     ),
   );
