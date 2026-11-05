@@ -124,9 +124,10 @@ class PcRemote {
 /// The computer's screen as a stream of JPEG frames (`pb.x.screen.*`). The computer keeps at most two frames in
 /// flight (we acknowledge each one) and stops by itself if we stop sending keepalives.
 class ScreenFeed extends ChangeNotifier {
-  ScreenFeed(this.hub, this.peerId);
+  ScreenFeed(this.hub, this.peerId, {this.monitor = 0});
   final Hub hub;
   final String peerId;
+  final int monitor;
 
   Uint8List? frame;
   int w = 0, h = 0;
@@ -139,7 +140,7 @@ class ScreenFeed extends ChangeNotifier {
   void start() {
     _keepalive?.cancel();
     running = true;
-    hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps});
+    hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps, 'monitor': monitor});
     _keepalive = Timer.periodic(
       const Duration(seconds: 5),
       (_) => hub.sendMessage(peerId, 'pb.x.screen.keepalive', {}),
