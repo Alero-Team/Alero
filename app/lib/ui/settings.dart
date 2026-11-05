@@ -418,9 +418,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: Gap.xs),
           Text(
-            Platform.isAndroid
-                ? 'Los colores siguen los de tu fondo de pantalla (Material You).'
-                : 'Los colores siguen el color de acento de Windows (Configuración › Personalización › Colores).',
+            'Identidad monocroma de Alero: el mismo aspecto en Windows y Android, con el color reservado al estado (conectado, avisos, errores).',
             style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
           ),
         ],
@@ -489,7 +487,7 @@ class SettingsScreen extends StatelessWidget {
           const AleroLogo(size: 28),
           const SizedBox(height: Gap.m),
           Text(
-            'Versión $aleroVersion · Conexión directa entre tus dispositivos.',
+            'Alero $aleroRelease · Conexión directa entre tus dispositivos.',
             style: t.bodyMedium,
           ),
           const SizedBox(height: Gap.s),
@@ -506,7 +504,7 @@ class SettingsScreen extends StatelessWidget {
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Alero',
-                applicationVersion: aleroVersion,
+                applicationVersion: '$aleroRelease ($aleroVersion)',
                 applicationIcon: const Padding(
                   padding: EdgeInsets.all(Gap.l),
                   child: AleroMark(size: 56),

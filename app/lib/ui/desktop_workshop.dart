@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -313,7 +314,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
         children: [
           Panel(
             title: 'Pantallas de Android',
-            icon: Icons.desktop_windows_rounded,
+            icon: Symbols.desktop_windows_rounded,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -349,7 +350,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                   children: [
                     OutlinedButton.icon(
                       onPressed: _busy ? null : _load,
-                      icon: const Icon(Icons.refresh_rounded),
+                      icon: const Icon(Symbols.refresh_rounded),
                       label: const Text('Actualizar'),
                     ),
                   ],
@@ -360,7 +361,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
           const SizedBox(height: Gap.m),
           Panel(
             title: 'Compatibilidad del dispositivo',
-            icon: Icons.fact_check_rounded,
+            icon: Symbols.fact_check_rounded,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -383,7 +384,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
           const SizedBox(height: Gap.m),
           Panel(
             title: 'Aplicaciones del teléfono',
-            icon: Icons.apps_rounded,
+            icon: Symbols.apps_rounded,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -397,7 +398,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search_rounded),
+                    prefixIcon: Icon(Symbols.search_rounded),
                     hintText: 'Buscar aplicación por paquete',
                   ),
                 ),
@@ -419,7 +420,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                         ),
                         secondary: IconButton(
                           tooltip: 'Abrir $app',
-                          icon: const Icon(Icons.open_in_new_rounded),
+                          icon: const Icon(Symbols.open_in_new_rounded),
                           onPressed: _busy ? null : () => _launch(app),
                         ),
                         onChanged: _busy
@@ -445,7 +446,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
           const SizedBox(height: Gap.m),
           Panel(
             title: 'Espacios de trabajo',
-            icon: Icons.dashboard_customize_rounded,
+            icon: Symbols.dashboard_customize_rounded,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -489,7 +490,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                 ),
                 FilledButton.icon(
                   onPressed: _busy ? null : _store,
-                  icon: const Icon(Icons.bookmark_add_rounded),
+                  icon: const Icon(Symbols.bookmark_add_rounded),
                   label: const Text('Guardar aplicaciones seleccionadas'),
                 ),
                 const SizedBox(height: Gap.s),
@@ -506,7 +507,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                         IconButton(
                           tooltip: 'Restaurar',
                           onPressed: _busy ? null : () => _restore(preset),
-                          icon: const Icon(Icons.play_arrow_rounded),
+                          icon: const Icon(Symbols.play_arrow_rounded),
                         ),
                         IconButton(
                           tooltip: 'Borrar',
@@ -516,7 +517,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                                   setState(() => _workspaces.removeAt(index));
                                   await _saveWorkspaces();
                                 }),
-                          icon: const Icon(Icons.delete_outline_rounded),
+                          icon: const Icon(Symbols.delete_outline_rounded),
                         ),
                       ],
                     ),
@@ -541,12 +542,12 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                                 );
                               }
                             },
-                      icon: const Icon(Icons.copy_rounded),
+                      icon: const Icon(Symbols.content_copy_rounded),
                       label: const Text('Exportar JSON'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _busy ? null : _import,
-                      icon: const Icon(Icons.file_open_rounded),
+                      icon: const Icon(Symbols.file_open_rounded),
                       label: const Text('Importar JSON'),
                     ),
                   ],
@@ -557,7 +558,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
           const SizedBox(height: Gap.m),
           Panel(
             title: 'Diagnóstico en vivo',
-            icon: Icons.monitor_heart_rounded,
+            icon: Symbols.monitor_heart_rounded,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -584,7 +585,7 @@ class _DesktopWorkshopPageState extends State<DesktopWorkshopPage> {
                 const SizedBox(height: Gap.s),
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _readDiagnostics,
-                  icon: const Icon(Icons.refresh_rounded),
+                  icon: const Icon(Symbols.refresh_rounded),
                   label: const Text('Actualizar diagnóstico'),
                 ),
               ],

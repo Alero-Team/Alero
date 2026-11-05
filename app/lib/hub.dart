@@ -190,10 +190,10 @@ class Hub extends ChangeNotifier {
   Shared? share;
 
   /// 'system' | 'light' | 'dark'. A notifier of its own so only the theme (not the whole app) rebuilds.
-  final themeMode = ValueNotifier('system');
+  final themeMode = ValueNotifier('dark');
 
   /// Pure-black variant of the dark theme; independent of the mode above (it only shows while dark is in use).
-  final amoled = ValueNotifier(false);
+  final amoled = ValueNotifier(true);
   String get theme => themeMode.value;
 
   late File _settings;
@@ -216,8 +216,8 @@ class Hub extends ChangeNotifier {
     name = s['name'] as String? ?? await Native.deviceName();
     autoAccept = s['autoAccept'] as bool? ?? true;
     setupDone = s['setupDone'] == true;
-    themeMode.value = s['theme'] as String? ?? 'system';
-    amoled.value = s['amoled'] as bool? ?? false;
+    themeMode.value = s['theme'] as String? ?? 'dark';
+    amoled.value = s['amoled'] as bool? ?? true;
     remoteAllow = _readRemote();
     pcFolders = _readPcFolders();
     pcFilesWrite = _readRemoteConfig()['allowPcFileEdits'] == true;

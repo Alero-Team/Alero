@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 import '../native.dart';
@@ -73,7 +74,7 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.lock_outline, size: 40),
+                      const Icon(Symbols.lock_rounded, size: 40),
                       const SizedBox(height: 16),
                       Text(
                         'Alero está bloqueado',

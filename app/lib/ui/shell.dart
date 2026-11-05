@@ -278,7 +278,7 @@ class _ShellState extends State<Shell>
         .where((p) => p.trusted && p.state == pb.PeerState.connected)
         .toList();
     return Scaffold(
-      backgroundColor: s.surfaceContainerLow,
+      backgroundColor: s.surface,
       body: Row(
         children: [
           AnimatedContainer(
@@ -366,7 +366,7 @@ class _ShellState extends State<Shell>
           ),
           Expanded(
             child: ColoredBox(
-              color: s.surfaceContainerLow,
+              color: s.surface,
               child: Column(
                 children: [
                   CallBar(hub),

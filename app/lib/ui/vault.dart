@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../native.dart';
@@ -41,9 +42,11 @@ class _VaultScreenState extends State<VaultScreen> {
       final items = await _vault.list();
       if (mounted) setState(() { _items = items; _error = null; });
     } catch (_) {
-      if (mounted) setState(() {
+      if (mounted) {
+        setState(() {
         _error = 'No se pudo descifrar la bóveda de este dispositivo. No se eliminó ningún dato.';
       });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -56,9 +59,11 @@ class _VaultScreenState extends State<VaultScreen> {
       await work();
       await _refresh();
     } catch (e) {
-      if (mounted) setState(() => _error = e is FormatException
+      if (mounted) {
+        setState(() => _error = e is FormatException
           ? e.message
           : 'No se pudo completar la operación. Los elementos existentes permanecen cifrados.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -170,8 +175,8 @@ class _VaultScreenState extends State<VaultScreen> {
       final filename = entry.name.replaceAll(RegExp(r'[\\/]'), '_');
       if (Platform.isAndroid) {
         final root = await getApplicationSupportDirectory();
-        final dir = await Directory(root.path + '/incoming').create(recursive: true);
-        final file = File(dir.path + '/' + (filename.isEmpty ? 'archivo' : filename));
+        final dir = await Directory('${root.path}/incoming').create(recursive: true);
+        final file = File('${dir.path}/${filename.isEmpty ? 'archivo' : filename}');
         await file.writeAsBytes(entry.fileBytes, flush: true);
         await Native.publish(file.path);
       } else {
@@ -187,7 +192,7 @@ class _VaultScreenState extends State<VaultScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar de Alero Vault'),
-        content: Text('¿Eliminar «' + entry.name + '» de este dispositivo? No se puede deshacer.'),
+        content: Text('¿Eliminar «${entry.name}» de este dispositivo? No se puede deshacer.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
@@ -208,7 +213,7 @@ class _VaultScreenState extends State<VaultScreen> {
           IconButton(
             tooltip: 'Actualizar',
             onPressed: _busy ? null : _refresh,
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Symbols.refresh_rounded),
           ),
         ],
       ),
@@ -232,12 +237,12 @@ class _VaultScreenState extends State<VaultScreen> {
               children: [
                 FilledButton.icon(
                   onPressed: _busy ? null : () => _note(),
-                  icon: const Icon(Icons.note_add_rounded),
+                  icon: const Icon(Symbols.note_add_rounded),
                   label: const Text('Nueva nota'),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: _busy ? null : _importFiles,
-                  icon: const Icon(Icons.add_to_drive_rounded),
+                  icon: const Icon(Symbols.add_to_drive_rounded),
                   label: const Text('Proteger archivos'),
                 ),
               ],
@@ -257,7 +262,7 @@ class _VaultScreenState extends State<VaultScreen> {
             for (final entry in _items)
               Card(
                 child: ListTile(
-                  leading: Icon(entry.isNote ? Icons.lock_rounded : Icons.insert_drive_file_rounded),
+                  leading: Icon(entry.isNote ? Symbols.lock_rounded : Symbols.insert_drive_file_rounded),
                   title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text(entry.isNote ? 'Nota cifrada' : 'Archivo cifrado · hasta 8 MB'),
                   onTap: _busy
@@ -267,7 +272,7 @@ class _VaultScreenState extends State<VaultScreen> {
                           : () => _export(entry),
                   trailing: IconButton(
                     tooltip: 'Eliminar',
-                    icon: const Icon(Icons.delete_outline_rounded),
+                    icon: const Icon(Symbols.delete_outline_rounded),
                     onPressed: _busy ? null : () => _delete(entry),
                   ),
                 ),

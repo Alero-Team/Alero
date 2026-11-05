@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
@@ -98,7 +99,7 @@ class _PcExtendPageState extends State<PcExtendPage> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Icon(Icons.desktop_windows_rounded, size: 64),
+          const Icon(Symbols.desktop_windows_rounded, size: 64),
           const SizedBox(height: 16),
           Text(
             'Usar el teléfono como segundo monitor de Windows',
@@ -115,7 +116,7 @@ class _PcExtendPageState extends State<PcExtendPage> {
           const SizedBox(height: 20),
           FilledButton.icon(
             onPressed: _starting || _showing ? null : _start,
-            icon: const Icon(Icons.add_to_photos_rounded),
+            icon: const Icon(Symbols.add_to_photos_rounded),
             label: Text(_starting ? 'Creando pantalla…' : 'Activar segunda pantalla'),
           ),
           if (_starting) const Padding(

@@ -56,7 +56,7 @@ class VaultStore {
   Future<Directory> _folder() async {
     final base = await getApplicationSupportDirectory();
     return Directory(
-      base.path + Platform.pathSeparator + 'secure-vault-v1',
+      '${base.path}${Platform.pathSeparator}secure-vault-v1',
     ).create(recursive: true);
   }
 
@@ -136,8 +136,8 @@ class VaultStore {
     final sealed = await _seal(
       Uint8List.fromList(utf8.encode(jsonEncode(entry.toMap()))),
     );
-    final target = File(root.path + Platform.pathSeparator + entry.id + '.avlt');
-    final tmp = File(target.path + '.partial');
+    final target = File('${root.path}${Platform.pathSeparator}${entry.id}.avlt');
+    final tmp = File('${target.path}.partial');
     try {
       await tmp.writeAsBytes(sealed, flush: true);
       if (await target.exists()) await target.delete();
@@ -175,7 +175,7 @@ class VaultStore {
   Future<void> remove(VaultEntry entry) async {
     if (!_validId(entry.id)) throw const FormatException('ID inválido');
     final root = await _folder();
-    final file = File(root.path + Platform.pathSeparator + entry.id + '.avlt');
+    final file = File('${root.path}${Platform.pathSeparator}${entry.id}.avlt');
     if (await file.exists()) await file.delete();
   }
 }

@@ -56,7 +56,6 @@ class HomeScreen extends StatelessWidget {
 
     final hero = _Hero(main, info, hub, go: go);
     final recent = _Recent(hub, go: go);
-    final filePanel = _FilePanel(hub, main, go: go);
     final media = online && phone ? MediaPanel(hub, main.id, compact: !Platform.isAndroid) : null;
     final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
     final controls = online && phone && !Platform.isAndroid
@@ -71,7 +70,7 @@ class HomeScreen extends StatelessWidget {
         maxWidth: 980,
         onRefresh: hub.refresh,
         children: [
-          Text('Resumen de ' + main.name,
+          Text('Resumen de ${main.name}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               )),
@@ -84,8 +83,6 @@ class HomeScreen extends StatelessWidget {
           gap,
           MediaPanel(hub, main.id, computer: true),
           gap,
-          filePanel,
-          gap,
           recent,
         ],
       );
@@ -94,22 +91,37 @@ class HomeScreen extends StatelessWidget {
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-      Text('Resumen de ' + main.name,
+      Text('Resumen de ${main.name}',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           )),
       gap,
       if (wide && !Platform.isAndroid) ...[
+        // Left: the device and its state; right: its quick controls (as tall as both, so no hole under the hero).
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(flex: 2, child: hero),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  hero,
+                  gap,
+                  status ?? const Panel(
+                    title: 'Estado del dispositivo',
+                    icon: Symbols.info_rounded,
+                    child: Text('Conecta el teléfono para ver su estado.'),
+                  ),
+                ],
+              ),
+            ),
             gap,
             Expanded(
-              child: media ?? const Panel(
-                title: 'Reproductor',
-                icon: Symbols.music_note_rounded,
-                child: Text('No hay música en reproducción.'),
+              child: controls ?? const Panel(
+                title: 'Controles rápidos',
+                icon: Symbols.tune_rounded,
+                child: Text('Conecta el teléfono para usar sus controles.'),
               ),
             ),
           ],
@@ -126,41 +138,24 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             gap,
-            Expanded(child: filePanel),
-            gap,
             Expanded(
-              child: status ?? const Panel(
-                title: 'Estado del dispositivo',
-                icon: Symbols.info_rounded,
-                child: Text('Conecta el teléfono para ver su estado.'),
+              child: media ?? const Panel(
+                title: 'Reproductor',
+                icon: Symbols.music_note_rounded,
+                child: Text('No hay música en reproducción.'),
               ),
             ),
           ],
         ),
         gap,
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: controls ?? const Panel(
-                title: 'Controles rápidos',
-                icon: Symbols.tune_rounded,
-                child: Text('El teléfono no está conectado.'),
-              ),
-            ),
-            gap,
-            Expanded(flex: 2, child: recent),
-          ],
-        ),
+        recent,
       ] else ...[
         hero,
         gap,
+        if (controls != null) ...[controls, gap],
         if (media != null) ...[media, gap],
         if (notifs != null) ...[notifs, gap],
-        filePanel,
-        gap,
         if (status != null) ...[status, gap],
-        if (controls != null) ...[controls, gap],
         recent,
       ],
     ];
@@ -301,7 +296,7 @@ class _Hero extends StatelessWidget {
                       width: phoneSize,
                       child: Semantics(
                         button: true,
-                        label: 'Dispositivo ' + p.name,
+                        label: 'Ver ${p.name} en Dispositivos',
                         child: InkWell(
                           onTap: () => go(Section.devices),
                           borderRadius: BorderRadius.circular(12),
@@ -408,76 +403,6 @@ class BatteryLine extends StatelessWidget {
   }
 }
 
-class _FilePanel extends StatelessWidget {
-  const _FilePanel(this.hub, this.peer, {required this.go});
-  final Hub hub;
-  final pb.Peer peer;
-  final void Function(Section s) go;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    final online = peer.state == pb.PeerState.connected;
-    return Panel(
-      title: 'Archivos',
-      icon: Symbols.folder_rounded,
-      child: Column(
-        children: [
-          InkWell(
-            onTap: online ? () => hub.send(peer.id) : null,
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.outlineVariant,
-                    style: BorderStyle.solid),
-                color: colors.surfaceContainerLow,
-              ),
-              child: Column(
-                children: [
-                  Icon(Symbols.upload_rounded, size: 26, color: colors.onSurface),
-                  const SizedBox(height: 8),
-                  Text('Arrastra archivos aquí', style: text.titleSmall),
-                  const SizedBox(height: 4),
-                  Text('o selecciónalos desde tu equipo',
-                    style: text.bodySmall?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: online ? () => hub.send(peer.id) : null,
-                    child: const Text('Seleccionar archivos'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              TextButton(
-                onPressed: online ? () => hub.send(peer.id) : null,
-                child: const Text('Enviar archivos'),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: Platform.isAndroid
-                    ? hub.openDownloads
-                    : () => go(Section.explorer),
-                child: const Text('Abrir explorador'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _StatusPanel extends StatelessWidget {
   const _StatusPanel(this.info, {required this.online});
   final PeerInfo info;
@@ -505,8 +430,9 @@ class _StatusPanel extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(child: Text(label, style: text.titleSmall)),
-                        Flexible(
+                        Text(label, style: text.titleSmall),
+                        const SizedBox(width: Gap.m),
+                        Expanded(
                           child: Text(value,
                             maxLines: 2,
                             textAlign: TextAlign.end,
@@ -586,7 +512,7 @@ class _RecentState extends State<_Recent> {
   @override
   Widget build(BuildContext context) {
     final hub = widget.hub;
-    final matches = (bool incoming) => filter == 'Todo' ||
+    bool matches(bool incoming) => filter == 'Todo' ||
         (filter == 'Recibidos' && incoming) ||
         (filter == 'Enviados' && !incoming);
     final recent = hub.history.where((h) => matches(h.incoming)).take(8).toList();

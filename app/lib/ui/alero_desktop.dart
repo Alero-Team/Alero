@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../desktop_workspace.dart';
@@ -546,7 +547,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
           Row(
             children: [
               Icon(
-                Icons.desktop_windows_rounded,
+                Symbols.desktop_windows_rounded,
                 size: 36,
                 color: s.onPrimaryContainer,
               ),
@@ -607,18 +608,18 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
               if (!live)
                 FilledButton.icon(
                   onPressed: _busy || _loading ? null : _start,
-                  icon: const Icon(Icons.play_arrow_rounded),
+                  icon: const Icon(Symbols.play_arrow_rounded),
                   label: const Text('Iniciar Alero Desktop'),
                 )
               else ...[
                 FilledButton.tonalIcon(
                   onPressed: canLaunch ? _showDesktop : null,
-                  icon: const Icon(Icons.home_rounded),
+                  icon: const Icon(Symbols.home_rounded),
                   label: const Text('Ir al escritorio'),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: canLaunch ? _arrange : null,
-                  icon: const Icon(Icons.grid_view_rounded),
+                  icon: const Icon(Symbols.grid_view_rounded),
                   label: const Text('Organizar ventanas'),
                 ),
                 FilledButton.icon(
@@ -627,7 +628,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                     foregroundColor: s.onError,
                   ),
                   onPressed: () => PhoneSessions.instance.stop(widget.serial),
-                  icon: const Icon(Icons.stop_rounded),
+                  icon: const Icon(Symbols.stop_rounded),
                   label: const Text('Detener'),
                 ),
               ],
@@ -641,13 +642,13 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                               DesktopWorkshopPage(serial: widget.serial),
                         ),
                       ),
-                icon: const Icon(Icons.dashboard_customize_outlined),
+                icon: const Icon(Symbols.dashboard_customize_rounded),
                 label: const Text('Espacios guardados'),
               ),
               IconButton(
                 tooltip: 'Actualizar pantallas y aplicaciones',
                 onPressed: _busy ? null : _load,
-                icon: const Icon(Icons.refresh_rounded),
+                icon: const Icon(Symbols.refresh_rounded),
               ),
             ],
           ),
@@ -677,7 +678,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
             tooltip: 'Escritorio',
             onPressed: canLaunch ? _showDesktop : null,
             color: s.onInverseSurface,
-            icon: const Icon(Icons.home_rounded),
+            icon: const Icon(Symbols.home_rounded),
           ),
           VerticalDivider(
             color: s.onInverseSurface.withValues(alpha: 0.2),
@@ -707,7 +708,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                             ),
                             onPressed: canLaunch ? () => _openApp(app) : null,
                             icon: widget.hub.appIcons[app] == null
-                                ? const Icon(Icons.apps_rounded, size: 18)
+                                ? const Icon(Symbols.apps_rounded, size: 18)
                                 : Image.memory(
                                     widget.hub.appIcons[app]!,
                                     width: 22,
@@ -720,7 +721,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                   ),
           ),
           Icon(
-            Icons.circle,
+            Symbols.circle_rounded,
             size: 10,
             color: live
                 ? s.inversePrimary
@@ -767,7 +768,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
               controller: _search,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search_rounded),
+                prefixIcon: Icon(Symbols.search_rounded),
                 hintText: 'Buscar apps',
               ),
             ),
@@ -814,7 +815,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                           const Positioned(
                             top: 4,
                             right: 8,
-                            child: Icon(Icons.push_pin_rounded, size: 16),
+                            child: Icon(Symbols.push_pin_rounded, size: 16),
                           ),
                       ],
                     ),
@@ -884,12 +885,12 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
               children: [
                 OutlinedButton.icon(
                   onPressed: live && !_busy ? _refreshDisplays : null,
-                  icon: const Icon(Icons.sync_rounded),
+                  icon: const Icon(Symbols.sync_rounded),
                   label: const Text('Detectar pantallas'),
                 ),
                 OutlinedButton.icon(
                   onPressed: canLaunch ? _showDesktop : null,
-                  icon: const Icon(Icons.home_rounded),
+                  icon: const Icon(Symbols.home_rounded),
                   label: const Text('Ir a Inicio'),
                 ),
               ],
@@ -908,7 +909,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
             for (final e in _tasks.entries.where((e) => _apps.contains(e.key)))
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.web_asset_rounded),
+                leading: const Icon(Symbols.web_asset_rounded),
                 title: Text(
                   e.key,
                   maxLines: 1,
@@ -923,21 +924,21 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
                     IconButton(
                       tooltip: 'Traer al frente',
                       onPressed: canLaunch ? () => _openApp(e.key) : null,
-                      icon: const Icon(Icons.flip_to_front_rounded),
+                      icon: const Icon(Symbols.flip_to_front_rounded),
                     ),
                     IconButton(
                       tooltip: 'Maximizar (si Android lo permite)',
                       onPressed: canLaunch
                           ? () => _maximize(e.key, e.value)
                           : null,
-                      icon: const Icon(Icons.crop_square_rounded),
+                      icon: const Icon(Symbols.crop_square_rounded),
                     ),
                     IconButton(
                       tooltip: 'Cerrar ventana',
                       onPressed: canLaunch
                           ? () => _closeApp(e.key, e.value)
                           : null,
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(Symbols.close_rounded),
                     ),
                   ],
                 ),
@@ -972,7 +973,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
               onPressed: canLaunch && _layout != DesktopLayout.floating
                   ? _arrange
                   : null,
-              icon: const Icon(Icons.view_quilt_rounded),
+              icon: const Icon(Symbols.view_quilt_rounded),
               label: const Text('Organizar ventanas detectadas'),
             ),
             const SizedBox(height: 6),
@@ -1022,7 +1023,7 @@ class _SizeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    Icons.monitor_rounded,
+                    Symbols.monitor_rounded,
                     color: selected ? s.onPrimary : s.onSurface,
                   ),
                   const SizedBox(height: 6),

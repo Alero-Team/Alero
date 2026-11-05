@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../fs_client.dart';
 import '../hub.dart';
@@ -72,8 +73,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar archivo del ordenador'),
-        content: Text('Esta acción elimina permanentemente «' + entry.name +
-            '» del ordenador. No se envía a la papelera. ¿Continuar?'),
+        content: Text('Esta acción elimina permanentemente «${entry.name}» del ordenador. No se envía a la papelera. ¿Continuar?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
@@ -87,12 +87,11 @@ class _PcFilesPageState extends State<PcFilesPage> {
     final date = entry.mtime;
     return Card(
       child: ListTile(
-        leading: Icon(entry.dir ? Icons.folder_rounded : Icons.insert_drive_file_rounded),
+        leading: Icon(entry.dir ? Symbols.folder_rounded : Symbols.insert_drive_file_rounded),
         title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(entry.dir
             ? 'Carpeta'
-            : (entry.size / 1024).toStringAsFixed(1) + ' KB · ' +
-              date.day.toString() + '/' + date.month.toString() + '/' + date.year.toString()),
+            : '${(entry.size / 1024).toStringAsFixed(1)} KB · ${date.day}/${date.month}/${date.year}'),
         onTap: () {
           if (entry.dir) {
             fs.enter(entry);
@@ -104,7 +103,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
           }
         },
         trailing: entry.dir
-            ? const Icon(Icons.chevron_right_rounded)
+            ? const Icon(Symbols.chevron_right_rounded)
             : PopupMenuButton<String>(
                 tooltip: 'Opciones de archivo',
                 onSelected: (action) {
@@ -134,12 +133,12 @@ class _PcFilesPageState extends State<PcFilesPage> {
     listenable: fs,
     builder: (context, _) => Scaffold(
       appBar: AppBar(
-        title: Text('Archivos de ' + widget.name),
+        title: Text('Archivos de ${widget.name}'),
         actions: [
           IconButton(
             tooltip: 'Actualizar',
             onPressed: () => fs.root == null ? fs.open(widget.peer) : fs.list(),
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Symbols.refresh_rounded),
           ),
         ],
       ),
@@ -166,7 +165,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
                   IconButton(
                     tooltip: 'Volver',
                     onPressed: fs.up,
-                    icon: const Icon(Icons.arrow_back_rounded),
+                    icon: const Icon(Symbols.arrow_back_rounded),
                   ),
                   Expanded(
                     child: Text(
@@ -188,7 +187,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
               if (fs.total > 0)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(fs.entries.length.toString() + ' de ' + fs.total.toString() + ' elementos'),
+                  child: Text('${fs.entries.length} de ${fs.total} elementos'),
                 ),
             ] else ...[
               if (!fs.loading && fs.roots.isEmpty && fs.error == null)
@@ -199,10 +198,10 @@ class _PcFilesPageState extends State<PcFilesPage> {
               for (final root in fs.roots)
                 Card(
                   child: ListTile(
-                    leading: const Icon(Icons.folder_shared_rounded),
+                    leading: const Icon(Symbols.folder_shared_rounded),
                     title: Text(root.name),
                     subtitle: const Text('Carpeta aprobada en Windows'),
-                    trailing: const Icon(Icons.chevron_right_rounded),
+                    trailing: const Icon(Symbols.chevron_right_rounded),
                     onTap: () => fs.selectRoot(root.id),
                   ),
                 ),

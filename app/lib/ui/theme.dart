@@ -29,7 +29,7 @@ class Palette extends ThemeExtension<Palette> {
     line: s.outlineVariant,
     accent: s.primaryContainer,
     onAccent: s.onPrimaryContainer,
-    signal: s.primary,
+    signal: s.brightness == Brightness.light ? Tokens.light.success : Tokens.dark.success,
     danger: s.error,
     primary: s.primary,
     onPrimary: s.onPrimary,
@@ -59,7 +59,7 @@ class Gap {
 }
 
 class Radii {
-  static const card = 16.0, tile = 12.0, chip = 10.0, pill = 999.0;
+  static const card = 16.0, tile = 12.0, chip = 10.0, button = 10.0, dialog = 20.0, pill = 999.0;
 }
 
 /// Wider than this: side navigation (desktop, tablets). Narrower: floating bottom bar.
@@ -98,61 +98,90 @@ TextStyle? weight(TextStyle? s, int w) => s?.copyWith(
   fontVariations: [FontVariation('wght', w.toDouble())],
 );
 
-/// The color scheme for a seed. [amoled] (dark only) swaps the grey surfaces for pure black and near-black steps:
-/// the accent colors, text and outline roles are untouched, so contrast and identity stay as in the dark theme.
+/// Alero Fluent Identity tokens (light, dark, AMOLED): neutral surfaces and a monochrome accent, black on light
+/// and white on dark. Status keeps its own colors; the system accent is not used, so the app looks the same
+/// everywhere.
+class Tokens {
+  const Tokens({
+    required this.bg,
+    required this.surface,
+    required this.elevated,
+    required this.secondary,
+    required this.border,
+    required this.borderStrong,
+    required this.text,
+    required this.text2,
+    required this.accent,
+    required this.onAccent,
+    required this.success,
+    required this.error,
+  });
+  final Color bg, surface, elevated, secondary, border, borderStrong;
+  final Color text, text2, accent, onAccent, success, error;
+
+  static const light = Tokens(
+    bg: Color(0xFFF2F2F2), surface: Color(0xFFFFFFFF), elevated: Color(0xFFFFFFFF),
+    secondary: Color(0xFFF4F4F4), border: Color(0xFFE3E3E3), borderStrong: Color(0xFFCFCFCF),
+    text: Color(0xFF111111), text2: Color(0xFF5B5B5B),
+    accent: Color(0xFF111111), onAccent: Color(0xFFFFFFFF),
+    success: Color(0xFF1B7A3D), error: Color(0xFFC42B1C),
+  );
+  static const dark = Tokens(
+    bg: Color(0xFF1B1B1B), surface: Color(0xFF262626), elevated: Color(0xFF2E2E2E),
+    secondary: Color(0xFF2F2F2F), border: Color(0xFF383838), borderStrong: Color(0xFF4A4A4A),
+    text: Color(0xFFF4F4F4), text2: Color(0xFFA9A9A9),
+    accent: Color(0xFFF4F4F4), onAccent: Color(0xFF111111),
+    success: Color(0xFF4CC27A), error: Color(0xFFFF7B72),
+  );
+  static const amoled = Tokens(
+    bg: Color(0xFF000000), surface: Color(0xFF0F0F0F), elevated: Color(0xFF1A1A1A),
+    secondary: Color(0xFF181818), border: Color(0xFF242424), borderStrong: Color(0xFF3A3A3A),
+    text: Color(0xFFFFFFFF), text2: Color(0xFFA6A6A6),
+    accent: Color(0xFFFFFFFF), onAccent: Color(0xFF000000),
+    success: Color(0xFF52D184), error: Color(0xFFFF8078),
+  );
+}
+
+/// The color scheme for a brightness. [amoled] (dark only) uses pure black and near-black steps.
+/// [seed] only tints the roles Alero does not set (tertiary), the accent stays monochrome.
 ColorScheme schemeFor(
   Color seed,
   DynamicSchemeVariant variant,
   Brightness b, {
   bool amoled = false,
 }) {
-  final s = ColorScheme.fromSeed(
+  final k = b == Brightness.light ? Tokens.light : (amoled ? Tokens.amoled : Tokens.dark);
+  return ColorScheme.fromSeed(
     seedColor: seed,
     brightness: b,
-    dynamicSchemeVariant: variant,
-  );
-  if (b == Brightness.light) {
-    return s.copyWith(
-      surface: const Color(0xFFF4F5F6),
-      surfaceDim: const Color(0xFFE4E6E8),
-      surfaceBright: Colors.white,
-      surfaceContainerLowest: Colors.white,
-      surfaceContainerLow: Colors.white,
-      surfaceContainer: const Color(0xFFF0F1F2),
-      surfaceContainerHigh: const Color(0xFFE8EAED),
-      surfaceContainerHighest: const Color(0xFFDFE2E6),
-      onSurface: brandGraphite,
-      onSurfaceVariant: const Color(0xFF4C535C),
-      outline: const Color(0xFF707780),
-      outlineVariant: const Color(0xFFCDD1D6),
-    );
-  }
-  final neutral = s.copyWith(
-    surface: brandGraphite,
-    surfaceDim: const Color(0xFF19191A),
-    surfaceBright: const Color(0xFF333335),
-    surfaceContainerLowest: const Color(0xFF171719),
-    surfaceContainerLow: const Color(0xFF1D1D1F),
-    surfaceContainer: const Color(0xFF232325),
-    surfaceContainerHigh: const Color(0xFF28282A),
-    surfaceContainerHighest: const Color(0xFF323234),
-    onSurface: const Color(0xFFF5F5F5),
-    onSurfaceVariant: const Color(0xFFB7B7BD),
-    outline: const Color(0xFF77777B),
-    outlineVariant: const Color(0xFF3C3C3F),
-  );
-  if (!amoled) return neutral;
-  return neutral.copyWith(
-    surface: Colors.black,
-    surfaceDim: Colors.black,
-    surfaceBright: const Color(0xFF242424),
-    surfaceContainerLowest: Colors.black,
-    surfaceContainerLow: const Color(0xFF0C0C0C),
-    surfaceContainer: const Color(0xFF131313),
-    surfaceContainerHigh: const Color(0xFF1B1B1B),
-    surfaceContainerHighest: const Color(0xFF242424),
-    // Hairlines must stay visible against black.
-    outlineVariant: const Color(0xFF383838),
+    dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
+  ).copyWith(
+    primary: k.accent,
+    onPrimary: k.onAccent,
+    primaryContainer: k.secondary,
+    onPrimaryContainer: k.text,
+    secondary: k.text2,
+    onSecondary: k.bg,
+    // Tonal buttons and selections: one step off the card (white on white was invisible in light).
+    secondaryContainer: b == Brightness.light ? k.border : k.elevated,
+    onSecondaryContainer: k.text,
+    inversePrimary: k.bg,
+    surface: k.bg,
+    surfaceDim: k.bg,
+    surfaceBright: k.elevated,
+    surfaceContainerLowest: k.bg,
+    surfaceContainerLow: k.surface,
+    surfaceContainer: k.secondary,
+    surfaceContainerHigh: k.elevated,
+    surfaceContainerHighest: k.borderStrong.withValues(alpha: 0.45),
+    onSurface: k.text,
+    onSurfaceVariant: k.text2,
+    outline: k.borderStrong,
+    outlineVariant: k.border,
+    inverseSurface: k.text,
+    onInverseSurface: k.bg,
+    error: k.error,
+    surfaceTint: Colors.transparent,
   );
 }
 
@@ -187,8 +216,8 @@ ThemeData buildTheme(
         bodySmall: weight(t.bodySmall, 400),
       )
       .apply(bodyColor: p.ink, displayColor: p.ink, fontFamily: font);
-  final pill = RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(Radii.pill),
+  final corner = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(Radii.button),
   );
   const tap = Size(48, 48);
   return base.copyWith(
@@ -210,14 +239,14 @@ ThemeData buildTheme(
       // A discreet border keeps cards readable on any surface, black included.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Radii.card),
-        side: BorderSide(color: p.line.withValues(alpha: 0.85)),
+        side: BorderSide(color: p.line),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: tap,
         padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
-        shape: pill,
+        shape: corner,
         textStyle: text.labelLarge,
       ),
     ),
@@ -225,7 +254,7 @@ ThemeData buildTheme(
       style: OutlinedButton.styleFrom(
         minimumSize: tap,
         padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
-        shape: pill,
+        shape: corner,
         foregroundColor: p.ink,
         side: BorderSide(color: p.line),
         textStyle: text.labelLarge,
@@ -234,7 +263,7 @@ ThemeData buildTheme(
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         minimumSize: tap,
-        shape: pill,
+        shape: corner,
         textStyle: text.labelLarge,
       ),
     ),
@@ -263,7 +292,7 @@ ThemeData buildTheme(
       subtitleTextStyle: text.bodyMedium?.copyWith(color: p.muted),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
-      color: p.signal,
+      color: p.primary,
       linearTrackColor: p.alt,
       linearMinHeight: 6,
       borderRadius: BorderRadius.circular(Radii.pill),
@@ -271,7 +300,8 @@ ThemeData buildTheme(
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.card),
+        side: BorderSide(color: scheme.outline),
+        borderRadius: BorderRadius.circular(Radii.dialog),
       ),
     ),
     snackBarTheme: SnackBarThemeData(

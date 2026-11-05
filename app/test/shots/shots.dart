@@ -170,7 +170,8 @@ void main() {
           theme: buildTheme(
             const Color(0xFF3F6FD8),
             DynamicSchemeVariant.tonalSpot,
-            Brightness.light,
+            Brightness.dark,
+            amoled: true,
           ),
           home: Shell(h, initialSection: sec),
         ),
@@ -216,11 +217,16 @@ void main() {
   }
 
   for (final (name, w, h) in [
+    ('wide', 1600.0, 1000.0),
     ('desktop', 1280.0, 800.0),
     ('small', 900.0, 600.0),
   ]) {
-    for (final b in Brightness.values) {
-      testWidgets('$name ${b.name}', (t) async {
+    for (final (look, b, amoled) in [
+      ('light', Brightness.light, false),
+      ('dark', Brightness.dark, false),
+      ('amoled', Brightness.dark, true),
+    ]) {
+      testWidgets('$name $look', (t) async {
         t.view.physicalSize = Size(w, h);
         t.view.devicePixelRatio = 1;
         addTearDown(t.view.reset);
@@ -231,6 +237,7 @@ void main() {
               const Color(0xFF3F6FD8),
               DynamicSchemeVariant.tonalSpot,
               b,
+              amoled: amoled,
             ),
             home: Shell(demo()),
           ),
@@ -238,7 +245,7 @@ void main() {
         await t.pump(const Duration(seconds: 2));
         await expectLater(
           find.byType(Shell),
-          matchesGoldenFile('out/${name}_${b.name}.png'),
+          matchesGoldenFile('out/${name}_$look.png'),
         );
       });
     }

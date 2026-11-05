@@ -41,10 +41,10 @@ class NotificationsScreen extends StatelessWidget {
           else ...[
             Row(
               children: [
-                Expanded(child: Text('Notificaciones de ' + peer.name)),
+                Expanded(child: Text('Notificaciones de ${peer.name}')),
                 TextButton.icon(
                   onPressed: () => hub.clearNotifs(peer.id),
-                  icon: const Icon(Icons.clear_all_rounded),
+                  icon: const Icon(Symbols.clear_all_rounded),
                   label: const Text('Borrar todas'),
                 ),
               ],
@@ -131,7 +131,7 @@ class NotificationsPanel extends StatelessWidget {
           if (list.any((n) => n.clearable))
             IconButton(
               tooltip: 'Borrar todas',
-              icon: const Icon(Icons.clear_all_rounded),
+              icon: const Icon(Symbols.clear_all_rounded),
               onPressed: () => hub.clearNotifs(peerId),
             ),
         ],
