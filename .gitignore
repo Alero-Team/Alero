@@ -22,3 +22,6 @@ local.properties
 graphify-out/
 # Golden screenshots (flutter test --update-goldens test/shots/shots.dart)
 app/test/shots/out/
+
+# Claude Code local settings
+.claude/

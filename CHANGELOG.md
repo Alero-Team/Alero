@@ -1,5 +1,42 @@
 # Cambios
 
+## Beta 1.1 (1.1.0) — 2026-11-05
+
+### Rediseño: Alero Fluent Identity
+
+- **Tema principal AMOLED** (negro puro) por defecto en instalaciones nuevas; Claro y Oscuro siguen disponibles en Ajustes › Apariencia. Quien ya eligió un tema lo conserva.
+- **Acento monocromo:** blanco sobre oscuro y negro sobre claro. El color se reserva al estado (verde de conectado, rojo de error). El color de acento de Windows ya no tiñe la app.
+- **Superficies sutiles y esquinas Fluent:** fondo de ventana negro, tarjetas a un paso del fondo, bordes finos sin sombras, botones con esquinas de 10 px, tarjetas de 16 px y diálogos de 20 px.
+- **Iconos unificados:** todos los iconos usan Material Symbols Rounded (había 40 iconos de otra familia que no siempre se dibujaban).
+- **El logo no cambia.**
+
+### Nueva distribución del inicio (Windows)
+
+- **Controles rápidos** arriba a la derecha, en el lugar del reproductor, con todas sus funciones.
+- **Reproductor multimedia** en el lugar de la sección «Arrastra archivos aquí», que desaparece del inicio. Enviar archivos sigue en la tarjeta del teléfono y se pueden soltar archivos en cualquier parte de la ventana.
+- **Estado del dispositivo** bajo la tarjeta del teléfono, para que no quede un hueco junto a los controles; sus valores ahora van alineados a la derecha.
+- **Actividad reciente** a lo ancho, en la parte inferior.
+
+### Errores corregidos
+
+- **No se podía volver a vincular un dispositivo después de desvincularlo.** Causa: el otro dispositivo seguía confiando en el primero, y al reintentar (con «Emparejar de nuevo» o escaneando el QR) el motor lo daba por «ya emparejado» y se saltaba la vinculación. Ahora lo comprueba en la misma conexión y, si el otro lado lo rechaza, inicia una vinculación nueva con código de confirmación. La desvinculación sigue borrando la confianza como antes. Lo cubre una prueba automática nueva.
+- **El chat desaparecía mientras se escribía.** Causa: cada cambio del hub (una notificación, la batería, la música) llamaba a la carga de SMS, que vaciaba hilos y mensajes tras un error o un retraso del teléfono. La conversación abierta y el texto escrito se perdían. Ahora solo se reinicia al cambiar de teléfono, y un corte breve de conexión deja el chat abierto con un aviso. Lo cubre una prueba automática nueva.
+- **La cámara del teléfono no abría.** Causa: al pasar de una cámara a otra se abría la nueva antes de que el teléfono liberase la anterior, y fallaban las dos sin avisar. Ahora Alero espera a que la sesión anterior termine y, si la cámara está ocupada o bloqueada, explica el motivo en pantalla. Probado con las cámaras trasera y frontal de un Pixel 9a (Android 17).
+- **`main` no compilaba en Windows** (import de `BOOL` del crate `windows` 0.62) ni en Dart (coma sobrante en `obs_webcam.dart`).
+- La versión de la app mostraba 0.1.18.
+- Etiqueta accesible de la tarjeta del dispositivo («Ver X en Dispositivos»).
+- El analizador vuelve a pasar sin avisos (25 correcciones de estilo).
+
+### Funciones revisadas
+
+- **Archivos del PC desde el teléfono:** solo las carpetas que autorizas en Ajustes, rutas validadas contra path traversal (`canonicalize` y comprobación de la raíz), conexión TLS emparejada y edición solo con un permiso aparte. Las descargas usan las transferencias de Alero (progreso y cancelación).
+- **Pantalla extendida:** Windows ve un monitor real mediante un controlador IddCx (Virtual Display Driver, de código abierto), y Alero transmite ese monitor al teléfono. No es una copia de la pantalla principal.
+
+### Pendiente
+
+- **Pantalla extendida:** necesita que instales el [Virtual Display Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver), que requiere permisos de administrador. Alero no instala controladores por su cuenta. Sin el controlador, la app lo indica y no simula un segundo monitor.
+- **APK firmado:** la firma de publicación solo existe en GitHub Actions, bloqueado en esta fecha por la facturación de la cuenta. Las compilaciones locales del APK son de depuración, con otra firma, y para instalarlas hay que desinstalar la versión anterior.
+
 ## 1.0.0 — 2026-11-05
 
 ### Rediseño de Windows y Android
