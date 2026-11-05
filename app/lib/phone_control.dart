@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -144,6 +146,9 @@ class PhoneSessions extends ChangeNotifier {
   bool runningExtra(String serial, String what) =>
       _running.containsKey('$serial|$what');
 
+  /// Why the last session of a key ended on its own with an error (camera busy, phone locked, …), shown by the UI.
+  final failures = <String, String>{};
+
   Future<void> start(
     String serial,
     String title,
@@ -151,20 +156,34 @@ class PhoneSessions extends ChangeNotifier {
     String? extra,
   }) async {
     final key = extra == null ? serial : '$serial|$extra';
-    stop(key);
+    failures.remove(key);
+    final old = _running.remove(key);
+    if (old != null) {
+      // The phone frees the camera only when the old server is gone: opening the other one at once failed both.
+      Process.killPid(old.pid);
+      await old.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => -1);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
     final p = await Scrcpy.launch(scrcpyArgs(serial, title, o));
     _running[key] = p;
-    // Drain both pipes so scrcpy cannot block if its logs fill the buffers.
-    p.stderr.drain<void>();
-    p.stdout.drain<void>();
+    // Read both pipes so scrcpy cannot block on full buffers; keep its errors to explain a failure.
+    final errors = <String>[];
+    void keep(String line) {
+      if (line.contains('ERROR')) errors.add(line.replaceFirst(RegExp(r'^.*ERROR:\s*'), ''));
+    }
+    final out = [p.stdout, p.stderr]
+        .map((s) => s.transform(const Utf8Decoder(allowMalformed: true))
+            .transform(const LineSplitter())
+            .listen(keep).asFuture<void>().catchError((Object _) {}));
     // Use the actual process exit, not stdout closing (which is unreliable
     // when native subprocesses inherit a pipe). Scrcpy's SDL window closing
     // terminates scrcpy; Alero's Stop button also kills this same process.
-    p.exitCode.then((_) {
-      if (_running[key] == p) {
-        _running.remove(key);
-        notifyListeners();
-      }
+    p.exitCode.then((code) async {
+      await Future.wait(out).timeout(const Duration(seconds: 1), onTimeout: () => []);
+      if (_running[key] != p) return; // stopped by Alero
+      _running.remove(key);
+      if (code != 0) failures[key] = sessionError(errors, camera: o.camera != null);
+      notifyListeners();
     });
     notifyListeners();
   }
@@ -181,4 +200,18 @@ class PhoneSessions extends ChangeNotifier {
       stop(s);
     }
   }
+}
+
+/// scrcpy's own error lines, in words for the user.
+String sessionError(List<String> errors, {bool camera = false}) {
+  final all = errors.join(' ').toLowerCase();
+  final busy = all.contains('in use') || all.contains('busy') || all.contains('disconnected');
+  // Another camera session or app holding the camera makes the server die before it connects.
+  if (camera && ((all.contains('camera') && busy) || all.contains('server connection failed'))) {
+    return 'La cámara está ocupada o el teléfono la bloqueó. Cierra otras apps de cámara, desbloquea el teléfono y vuelve a intentarlo.';
+  }
+  if (camera && all.contains('api')) return 'La cámara en una ventana necesita Android 12 o posterior.';
+  if (all.contains('unauthorized')) return 'Acepta la depuración USB en el teléfono.';
+  if (all.contains('not found') || all.contains('no devices')) return 'El teléfono ya no está conectado por ADB.';
+  return errors.isEmpty ? 'La ventana del teléfono se cerró por un error.' : errors.last;
 }

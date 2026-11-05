@@ -8,6 +8,7 @@ import '../phone_adb.dart';
 import '../phone_control.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'phone_page.dart' show NeedsAdb;
+import 'phone_windows.dart' show CameraFailure;
 import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart';
@@ -195,6 +196,7 @@ class _ControlsState extends State<_Controls> {
               onTap: adb == null ? null : () => _camera('front'),
             ),
           ]),
+          if (adb != null) CameraFailure(adb.serial),
           if (st != null) ...[
             const SizedBox(height: Gap.l),
             SegmentedButton<String>(

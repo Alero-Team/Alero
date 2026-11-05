@@ -62,8 +62,7 @@ class PhoneWindowsPanel extends StatelessWidget {
     );
     controller.dispose();
     if (password == null || !context.mounted) return;
-    final title = 'Cámara ' +
-        (facing == 'front' ? 'frontal' : 'trasera') + ' · ' + deviceName;
+    final title = 'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName';
     try {
       await _camera(facing);
       await Future<void>.delayed(const Duration(milliseconds: 800));
@@ -78,7 +77,7 @@ class PhoneWindowsPanel extends StatelessWidget {
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo iniciar la webcam: ' + error.toString())),
+          SnackBar(content: Text('No se pudo iniciar la webcam: $error')),
         );
       }
     }
@@ -86,7 +85,7 @@ class PhoneWindowsPanel extends StatelessWidget {
 
   Future<void> _stopCamera() async {
     await ObsWebcam.stop(silent: true);
-    PhoneSessions.instance.stop(serial + '|camera');
+    PhoneSessions.instance.stop('$serial|camera');
   }
 
   @override
@@ -131,12 +130,12 @@ class PhoneWindowsPanel extends StatelessWidget {
 
                   FilledButton.icon(
                     onPressed: () => _webcam(context, 'back'),
-                    icon: const Icon(Icons.videocam_rounded),
+                    icon: const Icon(Symbols.videocam_rounded),
                     label: const Text('Webcam trasera'),
                   ),
                   FilledButton.icon(
                     onPressed: () => _webcam(context, 'front'),
-                    icon: const Icon(Icons.videocam_rounded),
+                    icon: const Icon(Symbols.videocam_rounded),
                     label: const Text('Webcam frontal'),
                   ),
                   if (cam)
@@ -148,6 +147,7 @@ class PhoneWindowsPanel extends StatelessWidget {
                     ),
                 ],
               ),
+              CameraFailure(serial),
             ],
           ),
         );
@@ -156,3 +156,21 @@ class PhoneWindowsPanel extends StatelessWidget {
   }
 }
 
+/// Why the camera window could not open or closed with an error; nothing while it works.
+class CameraFailure extends StatelessWidget {
+  const CameraFailure(this.serial, {super.key});
+  final String serial;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: PhoneSessions.instance,
+    builder: (context, _) {
+      final why = PhoneSessions.instance.failures['$serial|camera'];
+      if (why == null) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: Gap.s),
+        child: ErrorBanner(why),
+      );
+    },
+  );
+}

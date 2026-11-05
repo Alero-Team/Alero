@@ -94,4 +94,11 @@ emulator-5554          offline
     expect(desk, contains('--new-display=1920x1080'));
     expect(desk, isNot(contains('--turn-screen-off')));
   });
+
+  test('scrcpy camera failures are explained, not swallowed', () {
+    expect(sessionError(['Server connection failed'], camera: true), contains('ocupada'));
+    expect(sessionError(['Camera disconnected'], camera: true), contains('ocupada'));
+    expect(sessionError(['Something else']), 'Something else');
+    expect(sessionError([]), contains('error'));
+  });
 }
