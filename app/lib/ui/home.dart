@@ -405,102 +405,149 @@ class BatteryLine extends StatelessWidget {
   }
 }
 
-class _StatusPanel extends StatelessWidget {
-  const _StatusPanel(this.info);
-  final PeerInfo info;
+class _FilePanel extends StatelessWidget {
+  const _FilePanel(this.hub, this.peer, {required this.go});
+  final Hub hub;
+  final pb.Peer peer;
+  final void Function(Section s) go;
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final s = Theme.of(context).colorScheme;
-    Widget row(
-      IconData i,
-      String label,
-      String value,
-      double? f, {
-      Widget? icon,
-    }) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: Gap.s),
-      child: Row(
+    final colors = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final online = peer.state == pb.PeerState.connected;
+    return Panel(
+      title: 'Archivos',
+      icon: Symbols.folder_rounded,
+      child: Column(
         children: [
-          SizedBox(
-            width: 24,
-            child: Center(
-              child: icon ?? Icon(i, size: 20, color: s.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(width: Gap.m),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(label, style: t.bodyMedium)),
-                    Text(
-                      value,
-                      style: t.labelLarge?.copyWith(fontFeatures: tabular),
-                    ),
-                  ],
-                ),
-                if (f != null) ...[
-                  const SizedBox(height: 6),
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(end: f.clamp(0, 1)),
-                    duration: motion(
-                      context,
-                      const Duration(milliseconds: 600),
-                    ),
-                    curve: Curves.easeOutCubic,
-                    builder: (_, v, _) => LinearProgressIndicator(
-                      value: v,
-                      semanticsLabel: label,
-                      semanticsValue: value,
+          InkWell(
+            onTap: online ? () => hub.send(peer.id) : null,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.outlineVariant,
+                    style: BorderStyle.solid),
+                color: colors.surfaceContainerLow,
+              ),
+              child: Column(
+                children: [
+                  Icon(Symbols.upload_rounded, size: 26, color: colors.onSurface),
+                  const SizedBox(height: 8),
+                  Text('Arrastra archivos aquí', style: text.titleSmall),
+                  const SizedBox(height: 4),
+                  Text('o selecciónalos desde tu equipo',
+                    style: text.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: online ? () => hub.send(peer.id) : null,
+                    child: const Text('Seleccionar archivos'),
+                  ),
                 ],
-              ],
+              ),
             ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton(
+                onPressed: online ? () => hub.send(peer.id) : null,
+                child: const Text('Enviar archivos'),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: Platform.isAndroid
+                    ? hub.openDownloads
+                    : () => go(Section.explorer),
+                child: const Text('Abrir explorador'),
+              ),
+            ],
           ),
         ],
       ),
     );
-    final used = info.storageTotal == 0
-        ? null
-        : 1 - info.storageFree / info.storageTotal;
+  }
+}
+
+class _StatusPanel extends StatelessWidget {
+  const _StatusPanel(this.info, {required this.online});
+  final PeerInfo info;
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final total = info.storageTotal;
+    final used = total > 0 ? total - info.storageFree : 0;
+
+    Widget metric(IconData icon, String label, String value, {double? progress}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 20, color: colors.onSurfaceVariant),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: Text(label, style: text.titleSmall)),
+                        Flexible(
+                          child: Text(value,
+                            maxLines: 2,
+                            textAlign: TextAlign.end,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (progress != null) ...[
+                      const SizedBox(height: 9),
+                      LinearProgressIndicator(
+                        value: progress.clamp(0, 1),
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
     return Panel(
-      title: 'Estado',
-      icon: Symbols.monitoring_rounded,
+      title: 'Estado del dispositivo',
+      icon: Symbols.info_rounded,
       child: Column(
         children: [
-          if (info.battery >= 0)
-            row(
-              Symbols.battery_full_rounded,
-              info.charging ? 'Batería (cargando)' : 'Batería',
-              '${info.battery} %',
-              info.battery / 100,
-              icon: BatteryGlyph(
-                info.battery,
-                charging: info.charging,
-                width: 20,
-              ),
-            ),
+          if (total > 0)
+            metric(Symbols.hard_drive_rounded, 'Almacenamiento',
+                '${size(used)} de ${size(total)}',
+                progress: used / total),
+          metric(Symbols.wifi_rounded, 'Conectividad',
+              info.network.isEmpty ? 'Sin conexión' : info.network),
+          metric(Symbols.shield_rounded, 'Seguridad',
+              online ? 'Conexión cifrada' : 'Desconectado'),
+          metric(Symbols.content_paste_rounded, 'Sincronización',
+              online ? 'Portapapeles activo' : 'Sin conexión'),
           if (info.chargeLabel != null)
-            row(
-              Symbols.bolt_rounded,
-              'Carga: ${info.chargeState}',
-              info.chargeLabel!,
-              null,
-            ),
-          if (used != null)
-            row(
-              Symbols.hard_drive_rounded,
-              'Almacenamiento',
-              '${size(info.storageTotal - info.storageFree)} de ${size(info.storageTotal)}',
-              used,
-            ),
-          if (info.network.isNotEmpty)
-            row(Symbols.wifi_rounded, 'Red', info.network, null),
+            metric(Symbols.bolt_rounded, 'Carga',
+                info.chargeLabel!),
         ],
       ),
     );
