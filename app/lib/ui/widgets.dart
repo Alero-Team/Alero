@@ -21,6 +21,24 @@ String size(int b) {
 const tabular = [FontFeature.tabularFigures()];
 
 /// A titled section card: the building block of every screen (title, optional action, content).
+/// How roomy Home's tiles are (Personalizar › Tamaño de los mosaicos): scales their padding and spacing.
+class TileScale extends InheritedWidget {
+  const TileScale(this.factor, {super.key, required super.child});
+  final double factor;
+
+  static double of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<TileScale>()?.factor ?? 1;
+
+  static double forSize(String size) => switch (size) {
+    'compact' => 0.75,
+    'large' => 1.3,
+    _ => 1,
+  };
+
+  @override
+  bool updateShouldNotify(TileScale old) => old.factor != factor;
+}
+
 class Panel extends StatelessWidget {
   const Panel({
     super.key,
@@ -43,7 +61,8 @@ class Panel extends StatelessWidget {
       child: Padding(
         padding:
             padding ??
-            const EdgeInsets.fromLTRB(Gap.l + 4, Gap.m, Gap.m, Gap.l),
+            const EdgeInsets.fromLTRB(Gap.l + 4, Gap.m, Gap.m, Gap.l) *
+                TileScale.of(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -320,9 +339,9 @@ class TransferRow extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: 52, right: Gap.s),
             child: AleroPulse(
-               active: x.note.isEmpty,
-               child: WavyProgress(value: f, label: 'Progreso de ${x.name}'),
-             ),
+              active: x.note.isEmpty,
+              child: WavyProgress(value: f, label: 'Progreso de ${x.name}'),
+            ),
           ),
         ],
       ),
@@ -611,9 +630,7 @@ class Reveal extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       AleroMotion.reveal(context, index, child);
-
 }
-
 
 /// The battery as a drawn glyph: body, nub and a level fill, so it sits on the text baseline whatever the font.
 class BatteryGlyph extends StatelessWidget {

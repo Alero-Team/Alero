@@ -88,36 +88,27 @@ class _Tile extends StatelessWidget {
       enabled: on,
       label: hint == null ? label : '$label. $hint',
       child: Material(
-        color: s.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(Radii.tile + 4),
+        color: s.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Radii.tile),
+          side: BorderSide(color: s.outlineVariant),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(Radii.tile + 4),
+          borderRadius: BorderRadius.circular(Radii.tile),
           onTap: onTap,
           child: SizedBox(
-            height: 84,
+            height: 60,
             child: ExcludeSemantics(
               child: Opacity(
                 opacity: on ? 1 : 0.45,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: s.secondaryContainer,
-                        borderRadius: BorderRadius.circular(Radii.pill),
-                      ),
-                      child: Icon(
-                        icon,
-                        size: 22,
-                        color: s.onSecondaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                    Icon(icon, size: 18, color: s.onSurface),
+                    const SizedBox(height: 4),
                     Text(
                       label,
-                      style: t.labelMedium,
+                      style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -153,31 +144,36 @@ class ControlCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           blocker != null
-          ? Padding(
-              padding: const EdgeInsets.symmetric(vertical: Gap.s),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    online ? Symbols.lock_rounded : Symbols.link_off_rounded,
-                    size: 20,
-                    color: s.onSurfaceVariant,
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Gap.s),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        online
+                            ? Symbols.lock_rounded
+                            : Symbols.link_off_rounded,
+                        size: 20,
+                        color: s.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: Gap.m),
+                      Expanded(
+                        child: Text(
+                          blocker,
+                          style: t.bodyMedium?.copyWith(
+                            color: s.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: Gap.m),
-                  Expanded(
-                    child: Text(
-                      blocker,
-                      style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : FilledButton.icon(
-              onPressed: () => openPcControl(context, hub, peer.id, peer.name),
-              icon: const Icon(Symbols.mouse_rounded, size: 20),
-              label: const Text('Controlar'),
-            ),
+                )
+              : FilledButton.icon(
+                  onPressed: () =>
+                      openPcControl(context, hub, peer.id, peer.name),
+                  icon: const Icon(Symbols.mouse_rounded, size: 20),
+                  label: const Text('Controlar'),
+                ),
           const SizedBox(height: Gap.s),
           OutlinedButton.icon(
             onPressed: online

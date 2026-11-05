@@ -10,12 +10,13 @@
 - **Iconos unificados:** todos los iconos usan Material Symbols Rounded (había 40 iconos de otra familia que no siempre se dibujaban).
 - **El logo no cambia.**
 
-### Nueva distribución del inicio (Windows)
+### Nueva distribución del inicio (Windows y Android)
 
-- **Controles rápidos** arriba a la derecha, en el lugar del reproductor, con todas sus funciones.
-- **Reproductor multimedia** en el lugar de la sección «Arrastra archivos aquí», que desaparece del inicio. Enviar archivos sigue en la tarjeta del teléfono y se pueden soltar archivos en cualquier parte de la ventana.
-- **Estado del dispositivo** bajo la tarjeta del teléfono, para que no quede un hueco junto a los controles; sus valores ahora van alineados a la derecha.
-- **Actividad reciente** a lo ancho, en la parte inferior.
+- **Windows:** a la izquierda, la tarjeta del teléfono, su estado y el reproductor; a la derecha, los controles rápidos y las notificaciones; la actividad reciente, a lo ancho abajo. La sección «Arrastra archivos aquí» desaparece del inicio: Enviar archivos sigue en la tarjeta del teléfono y se pueden soltar archivos en cualquier parte de la ventana.
+- **Controles del teléfono:** mosaicos pequeños con icono y nombre (como en el prototipo de identidad), «Buscar teléfono» en una línea discreta al final, y el aviso de depuración USB/inalámbrica solo cuando no está activa (antes aparecía un momento cada vez, aunque estuviera activada).
+- **Reproductor:** portada cuadrada junto al título y controles debajo, la misma en el teléfono y en el PC. Sustituye a la portada estirada de fondo, que en el teléfono se veía deformada y cargada.
+- **Android:** mismo orden que en el PC (equipo, reproductor, controles, actividad) y mosaicos compactos con el mismo estilo.
+- **Personalizar › Tamaño de los mosaicos:** Compacto, Normal o Amplio; cambia el relleno y la separación de las tarjetas del inicio al momento, en Windows y Android.
 
 ### Errores corregidos
 

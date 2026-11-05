@@ -170,22 +170,35 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             if (active)
               Row(
                 children: [
-                  _Art(cm, size: 64, appIcon: hub.appIcons[cm.pkg],
-                       computer: widget.computer),
+                  _Art(
+                    cm,
+                    size: 64,
+                    appIcon: hub.appIcons[cm.pkg],
+                    computer: widget.computer,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(cm.title.isEmpty ? 'Sin título' : cm.title,
-                            maxLines: 2, overflow: TextOverflow.ellipsis,
-                            style: t.titleSmall),
+                        Text(
+                          cm.title.isEmpty ? 'Sin título' : cm.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.titleSmall,
+                        ),
                         const SizedBox(height: 4),
-                        Text([cm.artist, cm.app]
-                            .where((x) => x.isNotEmpty).join(' · '),
-                            maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: t.bodySmall?.copyWith(
-                              color: s.onSurfaceVariant)),
+                        Text(
+                          [
+                            cm.artist,
+                            cm.app,
+                          ].where((x) => x.isNotEmpty).join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: t.bodySmall?.copyWith(
+                            color: s.onSurfaceVariant,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -200,11 +213,14 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             if (active) ...[
               Slider(
                 padding: EdgeInsets.zero,
-                value: (_seek ?? cm.positionNow.toDouble())
-                    .clamp(0, cm.duration > 0 ? cm.duration.toDouble() : 1.0),
+                value: (_seek ?? cm.positionNow.toDouble()).clamp(
+                  0,
+                  cm.duration > 0 ? cm.duration.toDouble() : 1.0,
+                ),
                 max: cm.duration > 0 ? cm.duration.toDouble() : 1.0,
                 onChanged: cm.duration > 0 && cm.supports(256)
-                    ? (value) => setState(() => _seek = value) : null,
+                    ? (value) => setState(() => _seek = value)
+                    : null,
                 onChangeEnd: (value) {
                   _command('seek', position: value.toInt());
                   setState(() => _seek = null);
@@ -225,7 +241,8 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 IconButton(
                   tooltip: 'Anterior',
                   onPressed: active && cm.supports(16)
-                      ? () => _command('prev') : null,
+                      ? () => _command('prev')
+                      : null,
                   icon: const Icon(Symbols.skip_previous_rounded),
                 ),
                 const SizedBox(width: 8),
@@ -233,14 +250,18 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                   iconSize: 27,
                   tooltip: active && cm.playing ? 'Pausar' : 'Reproducir',
                   onPressed: active ? () => _command('toggle') : null,
-                  icon: Icon(active && cm.playing
-                      ? Symbols.pause_rounded : Symbols.play_arrow_rounded),
+                  icon: Icon(
+                    active && cm.playing
+                        ? Symbols.pause_rounded
+                        : Symbols.play_arrow_rounded,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
                   tooltip: 'Siguiente',
                   onPressed: active && cm.supports(32)
-                      ? () => _command('next') : null,
+                      ? () => _command('next')
+                      : null,
                   icon: const Icon(Symbols.skip_next_rounded),
                 ),
               ],
@@ -274,8 +295,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       );
     } else {
       final pos = _seek?.round() ?? m.positionNow;
-      final name =
-          hub.peers.where((p) => p.id == id).firstOrNull?.name ?? '';
+      final name = hub.peers.where((p) => p.id == id).firstOrNull?.name ?? '';
       final where = widget.computer
           ? 'En $name'
           : m.cast
@@ -350,10 +370,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  [
-                    m.artist,
-                    m.app,
-                  ].where((x) => x.isNotEmpty).join(' · '),
+                  [m.artist, m.app].where((x) => x.isNotEmpty).join(' · '),
                   style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
                   textAlign: center ? TextAlign.center : TextAlign.start,
                   maxLines: 1,
@@ -376,7 +393,9 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           ),
           const SizedBox(width: Gap.m),
           MorphButton(
-            icon: m.playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+            icon: m.playing
+                ? Symbols.pause_rounded
+                : Symbols.play_arrow_rounded,
             label: m.playing ? 'Pausar' : 'Reproducir',
             on: m.playing,
             size: 64,
@@ -468,39 +487,24 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 ),
               ],
             );
-      // Narrow panels (phones, a side column) stack a big cover over the text; wide ones put it beside.
+      // One layout everywhere: a square cover beside the text, controls underneath (a cover filling the card
+      // looked stretched and crowded on phones).
       body = LayoutBuilder(
         builder: (context, box) {
           final w = box.maxWidth;
           final art = _Art(
             m,
-            size: w < 480 ? (w * 0.6).clamp(140.0, 260.0) : (w * 0.24).clamp(96.0, 168.0),
+            size: w < 480 ? 84.0 : (w * 0.2).clamp(88.0, 128.0),
             appIcon: hub.appIcons[m.pkg],
             computer: widget.computer,
           );
-          if (w < 480) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: Gap.s),
-                Center(child: art),
-                const SizedBox(height: Gap.l),
-                info(center: true),
-                const SizedBox(height: Gap.l),
-                ?progress,
-                const SizedBox(height: Gap.s),
-                transport,
-                if (volume != null) ...[const SizedBox(height: Gap.s), volume],
-              ],
-            );
-          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
                   art,
-                  const SizedBox(width: Gap.xl),
+                  SizedBox(width: w < 480 ? Gap.l : Gap.xl),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -533,55 +537,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         duration: motion(context, Spring.spatial.settle),
         curve: Spring.spatial,
         alignment: Alignment.topCenter,
-        child: m?.art == null || !m!.active
-            ? body
-            : Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(Radii.tile),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // The actual cover fills the complete player, like
-                          // Android's expanded media controls. Never stretch it.
-                          AnimatedSwitcher(
-                            duration: motion(
-                              context,
-                              const Duration(milliseconds: 600),
-                            ),
-                            child: Image.memory(
-                              m.art!,
-                              key: ValueKey('${m.title}|${m.artist}'),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              gaplessPlayback: true,
-                              excludeFromSemantics: true,
-                            ),
-                          ),
-                          // Keep controls and metadata readable in light/dark
-                          // themes; do not blur away the entire artwork.
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  s.surface.withValues(alpha: 0.78),
-                                  s.surface.withValues(alpha: 0.62),
-                                  s.surface.withValues(alpha: 0.82),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  body,
-                ],
-              ),
+        child: body,
       ),
     );
   }
@@ -647,7 +603,10 @@ class _BarsState extends State<_Bars> with SingleTickerProviderStateMixin {
                               (0.5 +
                                   0.5 *
                                       math.sin(
-                                        _c.value * 2 * math.pi * (i.isEven ? 2 : 3) +
+                                        _c.value *
+                                                2 *
+                                                math.pi *
+                                                (i.isEven ? 2 : 3) +
                                             i * 1.7,
                                       ))
                     : 4,
@@ -664,12 +623,7 @@ class _BarsState extends State<_Bars> with SingleTickerProviderStateMixin {
 }
 
 class _Art extends StatelessWidget {
-  const _Art(
-    this.m, {
-    required this.size,
-    this.appIcon,
-    this.computer = false,
-  });
+  const _Art(this.m, {required this.size, this.appIcon, this.computer = false});
   final MediaState m;
   final double size;
   final Uint8List? appIcon;
@@ -678,10 +632,10 @@ class _Art extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final badge = size * 0.32;
+    final badge = (size * 0.3).clamp(22.0, 34.0);
     return SizedBox(
-      width: size + badge * 0.25,
-      height: size + badge * 0.25,
+      width: size + badge * 0.2,
+      height: size + badge * 0.2,
       child: Stack(
         children: [
           AnimatedScale(
@@ -726,9 +680,10 @@ class _Art extends StatelessWidget {
             child: Container(
               width: badge,
               height: badge,
-              padding: const EdgeInsets.all(3),
+              padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
-                color: s.surfaceContainerHighest,
+                color: s.surfaceContainerHigh,
+                border: Border.all(color: s.surface, width: 2),
                 shape: BoxShape.circle,
               ),
               child: appIcon != null

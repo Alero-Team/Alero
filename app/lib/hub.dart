@@ -194,6 +194,9 @@ class Hub extends ChangeNotifier {
 
   /// Pure-black variant of the dark theme; independent of the mode above (it only shows while dark is in use).
   final amoled = ValueNotifier(true);
+
+  /// Size of Home's tiles (padding and spacing): compact, normal or large.
+  final tileSize = ValueNotifier('normal');
   String get theme => themeMode.value;
 
   late File _settings;
@@ -218,6 +221,7 @@ class Hub extends ChangeNotifier {
     setupDone = s['setupDone'] == true;
     themeMode.value = s['theme'] as String? ?? 'dark';
     amoled.value = s['amoled'] as bool? ?? true;
+    tileSize.value = s['tileSize'] as String? ?? 'normal';
     remoteAllow = _readRemote();
     pcFolders = _readPcFolders();
     pcFilesWrite = _readRemoteConfig()['allowPcFileEdits'] == true;
@@ -363,6 +367,7 @@ class Hub extends ChangeNotifier {
         'autoAccept': autoAccept,
         'theme': theme,
         'amoled': amoled.value,
+        'tileSize': tileSize.value,
       }),
     );
   }
@@ -1085,6 +1090,12 @@ class Hub extends ChangeNotifier {
 
   void setAmoled(bool on) {
     amoled.value = on;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setTileSize(String size) {
+    tileSize.value = size;
     _saveSettings();
     notifyListeners();
   }

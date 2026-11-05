@@ -56,34 +56,55 @@ class HomeScreen extends StatelessWidget {
 
     final hero = _Hero(main, info, hub, go: go);
     final recent = _Recent(hub, go: go);
-    final media = online && phone ? MediaPanel(hub, main.id, compact: !Platform.isAndroid) : null;
+    final media = online && phone
+        ? MediaPanel(hub, main.id, compact: !Platform.isAndroid)
+        : null;
     final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
     final controls = online && phone && !Platform.isAndroid
         ? PhoneControlsPanel(hub, main)
         : null;
-    final status = phone && info != null ? _StatusPanel(info, online: online) : null;
-    const gap = SizedBox(height: Gap.l, width: Gap.l);
+    final status = phone && info != null
+        ? _StatusPanel(info, online: online)
+        : null;
+    final scale = TileScale.forSize(hub.tileSize.value);
+    final gap = SizedBox(height: Gap.l * scale, width: Gap.l * scale);
 
     if (Platform.isAndroid && !phone) {
       return ScreenFrame(
         title: 'Inicio',
         maxWidth: 980,
         onRefresh: hub.refresh,
+        trailing: IconButton(
+          tooltip: 'Personalizar',
+          onPressed: () => _customize(context, hub, go),
+          icon: const Icon(Symbols.dashboard_customize_rounded),
+        ),
         children: [
-          Text('Resumen de ${main.name}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              )),
+          Text(
+            'Resumen de ${main.name}',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
           gap,
-          hero,
-          gap,
-          QuickActions(hub, main),
-          gap,
-          ControlCard(hub, main),
-          gap,
-          MediaPanel(hub, main.id, computer: true),
-          gap,
-          recent,
+          // Same order as the computer's Inicio: device, what it plays, its controls, then activity.
+          TileScale(
+            scale,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                hero,
+                gap,
+                MediaPanel(hub, main.id, computer: true),
+                gap,
+                QuickActions(hub, main),
+                gap,
+                ControlCard(hub, main),
+                gap,
+                recent,
+              ],
+            ),
+          ),
         ],
       );
     }
@@ -91,13 +112,14 @@ class HomeScreen extends StatelessWidget {
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-      Text('Resumen de ${main.name}',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          )),
+      Text(
+        'Resumen de ${main.name}',
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
       gap,
       if (wide && !Platform.isAndroid) ...[
-        // Left: the device and its state; right: its quick controls (as tall as both, so no hole under the hero).
+        // Left: the device, its state and what it plays; right: its controls and notifications.
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -108,41 +130,43 @@ class HomeScreen extends StatelessWidget {
                 children: [
                   hero,
                   gap,
-                  status ?? const Panel(
-                    title: 'Estado del dispositivo',
-                    icon: Symbols.info_rounded,
-                    child: Text('Conecta el teléfono para ver su estado.'),
-                  ),
+                  status ??
+                      const Panel(
+                        title: 'Estado del dispositivo',
+                        icon: Symbols.info_rounded,
+                        child: Text('Conecta el teléfono para ver su estado.'),
+                      ),
+                  gap,
+                  media ??
+                      const Panel(
+                        title: 'Reproductor',
+                        icon: Symbols.music_note_rounded,
+                        child: Text('No hay música en reproducción.'),
+                      ),
                 ],
               ),
             ),
             gap,
             Expanded(
-              child: controls ?? const Panel(
-                title: 'Controles rápidos',
-                icon: Symbols.tune_rounded,
-                child: Text('Conecta el teléfono para usar sus controles.'),
-              ),
-            ),
-          ],
-        ),
-        gap,
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: notifs ?? const Panel(
-                title: 'Notificaciones',
-                icon: Symbols.notifications_rounded,
-                child: Text('Sin notificaciones.'),
-              ),
-            ),
-            gap,
-            Expanded(
-              child: media ?? const Panel(
-                title: 'Reproductor',
-                icon: Symbols.music_note_rounded,
-                child: Text('No hay música en reproducción.'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  controls ??
+                      const Panel(
+                        title: 'Controles rápidos',
+                        icon: Symbols.tune_rounded,
+                        child: Text(
+                          'Conecta el teléfono para usar sus controles.',
+                        ),
+                      ),
+                  gap,
+                  notifs ??
+                      const Panel(
+                        title: 'Notificaciones',
+                        icon: Symbols.notifications_rounded,
+                        child: Text('Sin notificaciones.'),
+                      ),
+                ],
               ),
             ),
           ],
@@ -152,10 +176,10 @@ class HomeScreen extends StatelessWidget {
       ] else ...[
         hero,
         gap,
-        if (controls != null) ...[controls, gap],
-        if (media != null) ...[media, gap],
-        if (notifs != null) ...[notifs, gap],
         if (status != null) ...[status, gap],
+        if (media != null) ...[media, gap],
+        if (controls != null) ...[controls, gap],
+        if (notifs != null) ...[notifs, gap],
         recent,
       ],
     ];
@@ -165,15 +189,69 @@ class HomeScreen extends StatelessWidget {
       maxWidth: 1920,
       trailing: !Platform.isAndroid
           ? OutlinedButton.icon(
-              onPressed: () => go(Section.settings),
+              onPressed: () => _customize(context, hub, go),
               icon: const Icon(Symbols.dashboard_customize_rounded),
               label: const Text('Personalizar'),
             )
           : null,
-      children: dashboard,
+      children: [
+        TileScale(
+          scale,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: dashboard,
+          ),
+        ),
+      ],
     );
   }
 }
+
+/// Personalizar: the size of Home's tiles, applied at once; theme and the rest stay in Ajustes.
+Future<void> _customize(
+  BuildContext context,
+  Hub hub,
+  void Function(Section) go,
+) => showDialog<void>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: const Text('Personalizar inicio'),
+    content: ListenableBuilder(
+      listenable: hub.tileSize,
+      builder: (ctx, _) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Tamaño de los mosaicos'),
+          const SizedBox(height: Gap.s),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: 'compact', label: Text('Compacto')),
+              ButtonSegment(value: 'normal', label: Text('Normal')),
+              ButtonSegment(value: 'large', label: Text('Amplio')),
+            ],
+            selected: {hub.tileSize.value},
+            onSelectionChanged: (v) => hub.setTileSize(v.first),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () {
+          Navigator.pop(ctx);
+          go(Section.settings);
+        },
+        child: const Text('Tema y apariencia'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(ctx),
+        child: const Text('Listo'),
+      ),
+    ],
+  ),
+);
 
 /// First run (nothing paired yet): the mark draws itself and the next step is one button.
 class _Welcome extends StatelessWidget {
@@ -282,7 +360,7 @@ class _Hero extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(20 * TileScale.of(context)),
         child: LayoutBuilder(
           builder: (context, box) {
             final phoneSize = box.maxWidth < 420 ? 70.0 : 104.0;
@@ -314,8 +392,12 @@ class _Hero extends StatelessWidget {
                             spacing: 10,
                             runSpacing: 6,
                             children: [
-                              Text(p.name, style: type.headlineSmall,
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(
+                                p.name,
+                                style: type.headlineSmall,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               StatusLine(p),
                             ],
                           ),
@@ -325,20 +407,29 @@ class _Hero extends StatelessWidget {
                             runSpacing: 7,
                             children: [
                               if ((info?.model ?? '').isNotEmpty)
-                                property(Symbols.smartphone_rounded, info!.model),
+                                property(
+                                  Symbols.smartphone_rounded,
+                                  info!.model,
+                                ),
                               if ((info?.osLabel ?? '').isNotEmpty)
                                 property(Symbols.layers_rounded, info!.osLabel),
                               if ((info?.network ?? '').isNotEmpty)
                                 property(Symbols.wifi_rounded, info!.network),
                               if (online)
-                                property(Symbols.verified_user_rounded, 'Conexión cifrada'),
+                                property(
+                                  Symbols.verified_user_rounded,
+                                  'Conexión cifrada',
+                                ),
                             ],
                           ),
                           if ((info?.battery ?? -1) >= 0) ...[
                             const SizedBox(height: 13),
                             Row(
                               children: [
-                                BatteryGlyph(info!.battery, charging: info!.charging),
+                                BatteryGlyph(
+                                  info!.battery,
+                                  charging: info!.charging,
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   '${info!.battery}%',
@@ -362,10 +453,12 @@ class _Hero extends StatelessWidget {
                 ),
                 if (!online) ...[
                   const SizedBox(height: 12),
-                  Text('Comprueba que ambos dispositivos estén conectados a la misma red.',
-                      style: type.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      )),
+                  Text(
+                    'Comprueba que ambos dispositivos estén conectados a la misma red.',
+                    style: type.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 18),
                 actions,
@@ -393,10 +486,8 @@ class BatteryLine extends StatelessWidget {
         const SizedBox(width: Gap.xs + 2),
         AleroMotion.number(
           '${info.battery} %${info.charging ? ' · cargando' : ''}',
-          Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: s.onSurfaceVariant,
-            fontFeatures: tabular,
-          ),
+          Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
         ),
       ],
     );
@@ -415,49 +506,54 @@ class _StatusPanel extends StatelessWidget {
     final total = info.storageTotal;
     final used = total > 0 ? total - info.storageFree : 0;
 
-    Widget metric(IconData icon, String label, String value, {double? progress}) =>
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 20, color: colors.onSurfaceVariant),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+    Widget metric(
+      IconData icon,
+      String label,
+      String value, {
+      double? progress,
+    }) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: colors.onSurfaceVariant),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(label, style: text.titleSmall),
-                        const SizedBox(width: Gap.m),
-                        Expanded(
-                          child: Text(value,
-                            maxLines: 2,
-                            textAlign: TextAlign.end,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
+                    Text(label, style: text.titleSmall),
+                    const SizedBox(width: Gap.m),
+                    Expanded(
+                      child: Text(
+                        value,
+                        maxLines: 2,
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
                         ),
-                      ],
-                    ),
-                    if (progress != null) ...[
-                      const SizedBox(height: 9),
-                      LinearProgressIndicator(
-                        value: progress.clamp(0, 1),
-                        minHeight: 6,
-                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ],
+                    ),
                   ],
                 ),
-              ),
-            ],
+                if (progress != null) ...[
+                  const SizedBox(height: 9),
+                  LinearProgressIndicator(
+                    value: progress.clamp(0, 1),
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ],
+              ],
+            ),
           ),
-        );
+        ],
+      ),
+    );
 
     return Panel(
       title: 'Estado del dispositivo',
@@ -465,18 +561,29 @@ class _StatusPanel extends StatelessWidget {
       child: Column(
         children: [
           if (total > 0)
-            metric(Symbols.hard_drive_rounded, 'Almacenamiento',
-                '${size(used)} de ${size(total)}',
-                progress: used / total),
-          metric(Symbols.wifi_rounded, 'Conectividad',
-              info.network.isEmpty ? 'Sin conexión' : info.network),
-          metric(Symbols.shield_rounded, 'Seguridad',
-              online ? 'Conexión cifrada' : 'Desconectado'),
-          metric(Symbols.content_paste_rounded, 'Sincronización',
-              online ? 'Portapapeles activo' : 'Sin conexión'),
+            metric(
+              Symbols.hard_drive_rounded,
+              'Almacenamiento',
+              '${size(used)} de ${size(total)}',
+              progress: used / total,
+            ),
+          metric(
+            Symbols.wifi_rounded,
+            'Conectividad',
+            info.network.isEmpty ? 'Sin conexión' : info.network,
+          ),
+          metric(
+            Symbols.shield_rounded,
+            'Seguridad',
+            online ? 'Conexión cifrada' : 'Desconectado',
+          ),
+          metric(
+            Symbols.content_paste_rounded,
+            'Sincronización',
+            online ? 'Portapapeles activo' : 'Sin conexión',
+          ),
           if (info.chargeLabel != null)
-            metric(Symbols.bolt_rounded, 'Carga',
-                info.chargeLabel!),
+            metric(Symbols.bolt_rounded, 'Carga', info.chargeLabel!),
         ],
       ),
     );
@@ -512,10 +619,14 @@ class _RecentState extends State<_Recent> {
   @override
   Widget build(BuildContext context) {
     final hub = widget.hub;
-    bool matches(bool incoming) => filter == 'Todo' ||
+    bool matches(bool incoming) =>
+        filter == 'Todo' ||
         (filter == 'Recibidos' && incoming) ||
         (filter == 'Enviados' && !incoming);
-    final recent = hub.history.where((h) => matches(h.incoming)).take(8).toList();
+    final recent = hub.history
+        .where((h) => matches(h.incoming))
+        .take(8)
+        .toList();
     final active = hub.active.where((x) => matches(x.incoming)).toList();
     final wide = MediaQuery.sizeOf(context).width >= 1180;
     return Panel(
@@ -529,10 +640,7 @@ class _RecentState extends State<_Recent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!wide) ...[
-              filters(),
-              const SizedBox(height: 12),
-            ],
+            if (!wide) ...[filters(), const SizedBox(height: 12)],
             for (final x in active) TransferRow(x, hub),
             if (recent.isEmpty && active.isEmpty)
               Padding(
