@@ -47,9 +47,9 @@ class ObsWebcam {
 
   static Future<Map<String, dynamic>> _request(
     _ObsConnection connection, String type,
-    [Map<String, Object?> requestData = const {}],
+    [Map<String, Object?> requestData = const {}]
   ) async {
-    final requestId = 'alero-' + (++_nextId).toString();
+    final requestId = 'alero-${++_nextId}';
     connection.socket.add(jsonEncode({
       'op': 6,
       'd': {'requestType': type, 'requestId': requestId, 'requestData': requestData},
@@ -62,8 +62,7 @@ class ObsWebcam {
       final status = data['requestStatus'];
       if (status is! Map || status['result'] != true) {
         throw FormatException(
-          'OBS rechazó ' + type + ': ' +
-          (status is Map ? (status['comment'] ?? status['code']).toString() : 'desconocido'),
+          'OBS rechazó $type: ${status is Map ? (status['comment'] ?? status['code']).toString() : 'desconocido'}',
         );
       }
       return Map<String, dynamic>.from(data['responseData'] as Map? ?? {});
@@ -90,7 +89,7 @@ class ObsWebcam {
       final sourceExists = (inputs['inputs'] as List? ?? [])
           .whereType<Map>().any((item) => item['inputName'] == source);
       final capture = <String, Object?>{
-        'window': windowTitle + ':SDL_app:scrcpy.exe',
+        'window': '$windowTitle:SDL_app:scrcpy.exe',
         'capture_method': 'auto',
         'cursor': false,
       };

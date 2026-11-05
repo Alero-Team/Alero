@@ -76,7 +76,8 @@ mod other {
 #[cfg(windows)]
 mod win {
     use std::mem::size_of;
-    use windows::Win32::Foundation::{BOOL, LPARAM, RECT};
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::{LPARAM, RECT};
 
     use windows::Win32::Graphics::Gdi::{
         BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, EnumDisplayMonitors, GetMonitorInfoW,
