@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 
 String size(int b) {
@@ -318,7 +319,10 @@ class TransferRow extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(left: 52, right: Gap.s),
-            child: WavyProgress(value: f, label: 'Progreso de ${x.name}'),
+            child: AleroPulse(
+               active: x.note.isEmpty,
+               child: WavyProgress(value: f, label: 'Progreso de ${x.name}'),
+             ),
           ),
         ],
       ),
@@ -605,35 +609,11 @@ class Reveal extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    final delay = Duration(milliseconds: (index.clamp(0, 6)) * 40);
-    final total = motion(context, Spring.spatial.settle + delay);
-    if (total == Duration.zero) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: total,
-      curve: _Delayed(
-        delay.inMilliseconds / total.inMilliseconds,
-        Spring.spatial,
-      ),
-      child: child,
-      builder: (_, v, c) => Opacity(
-        opacity: v.clamp(0, 1),
-        child: Transform.translate(offset: Offset(0, (1 - v) * 14), child: c),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      AleroMotion.reveal(context, index, child);
+
 }
 
-class _Delayed extends Curve {
-  const _Delayed(this.start, this.inner);
-  final double start;
-  final Curve inner;
-
-  @override
-  double transformInternal(double t) =>
-      t <= start ? 0 : inner.transform((t - start) / (1 - start));
-}
 
 /// The battery as a drawn glyph: body, nub and a level fill, so it sits on the text baseline whatever the font.
 class BatteryGlyph extends StatelessWidget {
