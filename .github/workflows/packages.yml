@@ -1,7 +1,7 @@
 name: Packages
 on:
   push:
-    branches: [main, fix/ux-media-power-20261104, fix/reconnect-wireless-adb-v0.1.18]
+    branches: [main, fix/ux-media-power-20261104, fix/reconnect-wireless-adb-v0.1.18, feat/present-remote-productivity-20261104]
   workflow_dispatch:
     inputs:
       publish:
@@ -94,7 +94,7 @@ jobs:
           $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
           if (Test-Path -LiteralPath $keyFile) { Remove-Item -LiteralPath $keyFile }
   publish:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.publish
     needs: packages
     runs-on: ubuntu-latest
     permissions:

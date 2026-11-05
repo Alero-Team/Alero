@@ -216,6 +216,38 @@ class SettingsScreen extends StatelessWidget {
                       ? () => hub.setRemoteAllow(!hub.remoteAllow)
                       : null,
                 ),
+                if (Platform.isWindows) ...[
+                  const SizedBox(height: Gap.m),
+                  SettingTile(
+                    title: 'Compartir carpeta con el teléfono',
+                    subtitle: 'Solo se permite explorar y descargar archivos de las carpetas que elijas. La conexión debe estar emparejada. No se comparte ninguna carpeta por defecto.',
+                    trailing: FilledButton.tonal(
+                      onPressed: hub.addPcFolder,
+                      child: const Text('Añadir'),
+                    ),
+                  ),
+                  for (final folder in hub.pcFolders)
+                    SettingTile(
+                      title: folder,
+                      subtitle: 'Carpeta compartida con teléfonos emparejados',
+                      trailing: IconButton(
+                        tooltip: 'Dejar de compartir',
+                        icon: const Icon(Symbols.close_rounded),
+                        onPressed: () => hub.removePcFolder(folder),
+                      ),
+                    ),
+                  if (hub.pcFolders.isNotEmpty)
+                    SettingTile(
+                      title: 'Permitir cambios en los archivos compartidos',
+                      subtitle: 'Autoriza también renombrar y eliminar archivos desde Android. Desactivado por defecto. No permite eliminar carpetas completas.',
+                      trailing: AleroSwitch(
+                        value: hub.pcFilesWrite,
+                        onChanged: hub.setPcFileEdits,
+                        label: 'Editar archivos compartidos',
+                      ),
+                      onTap: () => hub.setPcFileEdits(!hub.pcFilesWrite),
+                    ),
+                ],
               ],
             ),
           );

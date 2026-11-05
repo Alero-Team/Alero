@@ -208,6 +208,9 @@ impl Remote {
 
     /// Returns true when the message was ours (it is then not forwarded to the window).
     pub fn handle(self: &Arc<Self>, engine: &Arc<Engine>, peer: &str, kind: &str, b: &Value) -> bool {
+        if kind.starts_with("pb.x.pcfs.") {
+            return crate::pc_files::handle(engine, peer, kind, b, &self.data);
+        }
         if kind == "pb.x.info.request" {
             self.pushed.lock().unwrap().remove(peer);
             self.push_info(engine, Some(peer));
@@ -323,7 +326,7 @@ impl Remote {
         *self.screen.lock().unwrap() = Some(Screen {
             peer: peer.to_string(),
             width: b["w"].as_u64().unwrap_or(960).clamp(320, 1920) as u32,
-            fps: b["fps"].as_u64().unwrap_or(4).clamp(1, 10) as u32,
+            fps: b["fps"].as_u64().unwrap_or(8).clamp(1, 15) as u32,
             last_keepalive: Instant::now(),
             inflight: 0,
             last_ack: Instant::now(),

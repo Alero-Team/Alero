@@ -5,6 +5,7 @@ import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'clipboard.dart';
 import 'pc_control.dart';
+import 'pc_files.dart';
 import 'pc_screen.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
@@ -53,7 +54,7 @@ class QuickActions extends StatelessWidget {
         Expanded(
           child: _Tile(
             Symbols.cast_rounded,
-            'Pantalla',
+            'Acceso remoto',
             canShot
                 ? () => openPcScreen(context, hub, peer.id, peer.name)
                 : null,
@@ -148,7 +149,10 @@ class ControlCard extends StatelessWidget {
     return Panel(
       title: 'Controlar ${peer.name}',
       icon: Symbols.mouse_rounded,
-      child: blocker != null
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          blocker != null
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: Gap.s),
               child: Row(
@@ -174,6 +178,16 @@ class ControlCard extends StatelessWidget {
               icon: const Icon(Symbols.mouse_rounded, size: 20),
               label: const Text('Controlar'),
             ),
+          const SizedBox(height: Gap.s),
+          OutlinedButton.icon(
+            onPressed: online
+                ? () => openPcFiles(context, hub, peer.id, peer.name)
+                : null,
+            icon: const Icon(Symbols.folder_open_rounded),
+            label: const Text('Archivos del ordenador'),
+          ),
+        ],
+      ),
     );
   }
 }

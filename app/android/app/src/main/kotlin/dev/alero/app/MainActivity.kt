@@ -107,6 +107,48 @@ class MainActivity : FlutterActivity() {
                     prefs.edit().putBoolean("introSeen", true).apply()
                     result.success(first)
                 }
+                "vaultSeal", "vaultOpen" -> {
+                    val bytes = call.arguments as? ByteArray
+                    if (bytes == null) {
+                        result.error("invalid_vault_data", "Archivo inválido", null)
+                    } else {
+                        Thread {
+                            try {
+                                val encrypted = if (call.method == "vaultSeal") VaultCrypto.seal(bytes) else VaultCrypto.open(bytes)
+                                runOnUiThread { result.success(encrypted) }
+                            } catch (_: Exception) {
+                                runOnUiThread { result.error("vault_crypto", "No se pudo abrir o guardar el archivo cifrado.", null) }
+                            }
+                        }.start()
+                    }
+                }
+                "readVaultPicked" -> {
+                    val descriptor = call.arguments as? Int
+                    val uri = if (descriptor != null) sourceUris[descriptor] else null
+                    if (uri == null) {
+                        result.error("missing_vault_file", "Selecciona un archivo primero.", null)
+                    } else {
+                        Thread {
+                            try {
+                                val maxBytes = 8 * 1024 * 1024
+                                val data = java.io.ByteArrayOutputStream()
+                                contentResolver.openInputStream(uri)!!.use { input ->
+                                    val chunk = ByteArray(32768)
+                                    while (true) {
+                                        val n = input.read(chunk)
+                                        if (n < 0) break
+                                        if (n == 0) continue
+                                        if (data.size() + n > maxBytes) error("Archivo supera 8 MB")
+                                        data.write(chunk, 0, n)
+                                    }
+                                }
+                                runOnUiThread { result.success(data.toByteArray()) }
+                            } catch (_: Exception) {
+                                runOnUiThread { result.error("vault_file", "El archivo no se pudo leer (máximo 8 MB).", null) }
+                            }
+                        }.start()
+                    }
+                }
                 "installPermission" -> result.success(packageManager.canRequestPackageInstalls())
                 "requestInstallPermission" -> {
                     startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))

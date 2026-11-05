@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'pc_screen.dart';
+import 'present.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
 
@@ -63,6 +64,16 @@ class _PcControlPageState extends State<PcControlPage> {
                       onPressed: () =>
                           openPcScreen(context, hub, widget.peer, widget.name),
                     ),
+                  IconButton(
+                    tooltip: 'Alero Present',
+                    icon: const Icon(Symbols.slideshow_rounded),
+                    onPressed: () => openAleroPresent(
+                      context,
+                      hub,
+                      widget.peer,
+                      widget.name,
+                    ),
+                  ),
                   IconButton(
                     tooltip: 'Volumen y reproducción',
                     icon: const Icon(Symbols.volume_up_rounded),

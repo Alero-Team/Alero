@@ -12,6 +12,7 @@ import 'device_image.dart';
 import 'fs_client.dart';
 import 'native.dart';
 import 'pc_remote.dart';
+import 'pc_files.dart';
 import 'phone_control.dart';
 import 'remote.dart';
 import 'sms_client.dart';
@@ -136,6 +137,7 @@ class Hub extends ChangeNotifier {
 
   /// Computer side: browsing a phone's files. Files it asks for are accepted without a prompt (we asked).
   late final fs = FsClient(this);
+  late final pcFs = PcFilesClient(this);
   late final sms = SmsClient(this);
   final _expected = <String, (bool, DateTime)>{};
 
@@ -154,6 +156,8 @@ class Hub extends ChangeNotifier {
 
   /// Computer side: the owner's switch for remote control. The daemon reads the same file (remote.json).
   bool remoteAllow = false;
+  List<String> pcFolders = const [];
+  bool pcFilesWrite = false;
   final clips = <ClipItem>[];
 
   /// Android: special access for notifications/media, and the normal notification permission.
@@ -213,6 +217,8 @@ class Hub extends ChangeNotifier {
     themeMode.value = s['theme'] as String? ?? 'system';
     amoled.value = s['amoled'] as bool? ?? false;
     remoteAllow = _readRemote();
+    pcFolders = _readPcFolders();
+    pcFilesWrite = _readRemoteConfig()['allowPcFileEdits'] == true;
     pb.events().listen(_on);
     Native.onShared(takeShare);
     try {
@@ -270,19 +276,57 @@ class Hub extends ChangeNotifier {
 
   File get _remoteFile => File('${_settings.parent.path}/remote.json');
 
-  bool _readRemote() {
+  Map<String, dynamic> _readRemoteConfig() {
     try {
-      return (jsonDecode(_remoteFile.readAsStringSync()) as Map)['allow'] ==
-          true;
+      return jsonDecode(_remoteFile.readAsStringSync()) as Map<String, dynamic>;
     } catch (_) {
-      return false; // missing or unreadable: control stays off
+      return {};
     }
   }
 
-  /// Computer: let paired phones control this computer (the daemon enforces it) and tell them right away.
-  void setRemoteAllow(bool on) {
+  void _writeRemoteConfig(Map<String, dynamic> data) {
     _remoteFile.parent.createSync(recursive: true);
-    _remoteFile.writeAsStringSync(jsonEncode({'allow': on}));
+    _remoteFile.writeAsStringSync(jsonEncode(data), flush: true);
+  }
+
+  bool _readRemote() => _readRemoteConfig()['allow'] == true;
+
+  List<String> _readPcFolders() => [
+    for (final path in (_readRemoteConfig()['folders'] as List? ?? []))
+      if (path is String && path.isNotEmpty) path,
+  ];
+
+  /// Windows folders stay private unless the owner chooses them explicitly.
+  Future<void> addPcFolder() async {
+    if (!Platform.isWindows) return;
+    final selected = await Native.pickSharedPcFolder();
+    if (selected == null) return;
+    final folder = Directory(selected);
+    if (!folder.existsSync()) return;
+    final canonical = folder.resolveSymbolicLinksSync();
+    final folders = {...pcFolders, canonical}.toList();
+    _writeRemoteConfig({..._readRemoteConfig(), 'folders': folders});
+    pcFolders = folders;
+    notifyListeners();
+  }
+
+  void removePcFolder(String folder) {
+    final folders = pcFolders.where((f) => f != folder).toList();
+    _writeRemoteConfig({..._readRemoteConfig(), 'folders': folders});
+    pcFolders = folders;
+    notifyListeners();
+  }
+
+  /// Separate explicit consent for renaming/deleting shared files.
+  void setPcFileEdits(bool value) {
+    _writeRemoteConfig({..._readRemoteConfig(), 'allowPcFileEdits': value});
+    pcFilesWrite = value;
+    notifyListeners();
+  }
+
+  /// Computer: let paired phones control this computer (the daemon enforces it).
+  void setRemoteAllow(bool on) {
+    _writeRemoteConfig({..._readRemoteConfig(), 'allow': on});
     remoteAllow = on;
     for (final p in peers.where(_online)) {
       sendMessage(p.id, 'pb.x.remote.state', {'allowed': on});
@@ -557,6 +601,7 @@ class Hub extends ChangeNotifier {
       return;
     }
     if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
+    if (kind.startsWith('pb.x.pcfs.')) return pcFs.onMessage(peerId, kind, b);
     if (kind.startsWith('pb.x.sms.')) return sms.onMessage(peerId, kind, b);
     switch (kind) {
       case 'pb.x.call':
