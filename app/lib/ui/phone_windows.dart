@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../phone_control.dart';
-import '../scrcpy.dart';
+import '../obs_webcam.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -16,26 +16,78 @@ class PhoneWindowsPanel extends StatelessWidget {
   });
   final String serial, deviceName;
 
-  Future<void> _app(BuildContext context) async {
-    final pick = await showDialog<(String, String)>(
-      context: context,
-      builder: (_) => _AppPicker(serial),
-    );
-    if (pick == null) return;
-    await PhoneSessions.instance.start(
-      serial,
-      '${pick.$1} · $deviceName',
-      SessionOptions(appWindow: true, startApp: pick.$2, maxSize: 1280),
-      extra: 'app:${pick.$2}',
-    );
-  }
-
   Future<void> _camera(String facing) => PhoneSessions.instance.start(
     serial,
     'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName',
     SessionOptions(camera: facing, maxSize: 1920, audio: false),
     extra: 'camera',
   );
+
+
+  Future<void> _webcam(BuildContext context, String facing) async {
+    final controller = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Activar webcam de Windows'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Inicia OBS Studio, activa Herramientas › Servidor WebSocket '
+              '(puerto 4455) y escribe la contraseña de OBS. Alero utilizará '
+              'la cámara virtual que Windows muestra en Zoom, Meet y Teams.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Contraseña de OBS WebSocket',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (password == null || !context.mounted) return;
+    final title = 'Cámara ' +
+        (facing == 'front' ? 'frontal' : 'trasera') + ' · ' + deviceName;
+    try {
+      await _camera(facing);
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      await ObsWebcam.start(windowTitle: title, password: password);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Webcam de Alero activada: selecciona OBS Virtual Camera en tu videollamada.'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo iniciar la webcam: ' + error.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    await ObsWebcam.stop(silent: true);
+    PhoneSessions.instance.stop(serial + '|camera');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,29 +97,14 @@ class PhoneWindowsPanel extends StatelessWidget {
       builder: (context, _) {
         final cam = PhoneSessions.instance.runningExtra(serial, 'camera');
         return Panel(
-          title: 'Ventanas y cámara',
+          title: 'Cámara y webcam',
           icon: Symbols.picture_in_picture_rounded,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Cada app se abre en su propia ventana, en una pantalla virtual: el teléfono sigue libre. '
-                'Puedes abrir varias a la vez.',
-                style: t.bodyMedium,
-              ),
-              const SizedBox(height: Gap.s),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _app(context),
-                  icon: const Icon(Symbols.open_in_new_rounded, size: 18),
-                  label: const Text('Abrir una app en una ventana'),
-                ),
-              ),
               const SizedBox(height: Gap.l),
               Text(
-                'La cámara del teléfono en una ventana (Android 12 o posterior). Para usarla como webcam en '
-                'Meet, Teams o Zoom, captura esa ventana con la cámara virtual de OBS Studio (gratuito y libre).',
+                'La cámara de Android puede abrirse en una ventana o convertirse en una webcam real de Windows a través de OBS Studio. La webcam aparecerá como dispositivo de vídeo en Zoom, Teams y Meet.',
                 style: t.bodyMedium,
               ),
               const SizedBox(height: Gap.s),
@@ -91,10 +128,21 @@ class PhoneWindowsPanel extends StatelessWidget {
                     ),
                     label: const Text('Cámara frontal'),
                   ),
+
+                  FilledButton.icon(
+                    onPressed: () => _webcam(context, 'back'),
+                    icon: const Icon(Icons.videocam_rounded),
+                    label: const Text('Webcam trasera'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => _webcam(context, 'front'),
+                    icon: const Icon(Icons.videocam_rounded),
+                    label: const Text('Webcam frontal'),
+                  ),
                   if (cam)
                     OutlinedButton.icon(
                       onPressed: () =>
-                          PhoneSessions.instance.stop('$serial|camera'),
+                          _stopCamera(),
                       icon: const Icon(Symbols.videocam_off_rounded, size: 18),
                       label: const Text('Cerrar cámara'),
                     ),
@@ -108,77 +156,3 @@ class PhoneWindowsPanel extends StatelessWidget {
   }
 }
 
-class _AppPicker extends StatefulWidget {
-  const _AppPicker(this.serial);
-  final String serial;
-
-  @override
-  State<_AppPicker> createState() => _AppPickerState();
-}
-
-class _AppPickerState extends State<_AppPicker> {
-  late final Future<List<(String, String)>> _apps = Scrcpy.appsWithNames(
-    widget.serial,
-  );
-  String _q = '';
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Abrir en una ventana'),
-    content: SizedBox(
-      width: 420,
-      height: 480,
-      child: Column(
-        children: [
-          TextField(
-            autofocus: true,
-            onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),
-            decoration: const InputDecoration(
-              hintText: 'Buscar apps',
-              prefixIcon: Icon(Symbols.search_rounded),
-            ),
-          ),
-          const SizedBox(height: Gap.s),
-          Expanded(
-            child: FutureBuilder(
-              future: _apps,
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final list = snap.data!
-                    .where(
-                      (a) =>
-                          _q.isEmpty ||
-                          a.$1.toLowerCase().contains(_q) ||
-                          a.$2.contains(_q),
-                    )
-                    .toList();
-                if (list.isEmpty) {
-                  return const Center(child: Text('Ninguna app coincide.'));
-                }
-                return ListView.builder(
-                  itemCount: list.length,
-                  itemBuilder: (_, i) => ListTile(
-                    leading: const Icon(Symbols.android_rounded),
-                    title: Text(list[i].$1),
-                    subtitle: list[i].$1 == list[i].$2
-                        ? null
-                        : Text(list[i].$2),
-                    onTap: () => Navigator.pop(context, list[i]),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancelar'),
-      ),
-    ],
-  );
-}
