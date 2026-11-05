@@ -57,9 +57,9 @@ mod other {
     pub fn battery() -> Option<(u8, bool)> {
         None
     }
-    pub fn capture(_: u32) -> Option<(u32, u32, Vec<u8>)> {
-        None
-    }
+    pub fn capture(_: u32) -> Option<(u32, u32, Vec<u8>)> { None }
+    pub fn capture_monitor(_: u32, _: usize) -> Option<(u32, u32, Vec<u8>)> { None }
+    pub fn monitors() -> Vec<(i32, i32, i32, i32)> { Vec::new() }
     pub fn media_state() -> Option<Media> {
         None
     }
@@ -76,10 +76,11 @@ mod other {
 #[cfg(windows)]
 mod win {
     use std::mem::size_of;
+    use windows::Win32::Foundation::{BOOL, LPARAM, RECT};
 
     use windows::Win32::Graphics::Gdi::{
-        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits, GetObjectW, ReleaseDC,
-        SelectObject, BITMAP,
+        BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, EnumDisplayMonitors, GetMonitorInfoW,
+        GetDC, GetDIBits, GetObjectW, ReleaseDC, SelectObject, BITMAP, HDC, HMONITOR, MONITORINFO,
         SetStretchBltMode, StretchBlt, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CAPTUREBLT, DIB_RGB_COLORS, HALFTONE, SRCCOPY,
     };
     use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
@@ -257,10 +258,44 @@ mod win {
         Some((s.BatteryLifePercent, s.ACLineStatus == 1))
     }
 
-    /// The primary screen scaled to `width` pixels (never enlarged), as top-down RGB, with the pointer drawn on.
-    pub fn capture(width: u32) -> Option<(u32, u32, Vec<u8>)> {
+    /// Actual Windows desktop monitors, primary first. An IddCx virtual display
+    /// is a separate monitor here, not a clone of the laptop screen.
+    pub fn monitors() -> Vec<(i32, i32, i32, i32)> {
+        unsafe extern "system" fn add(
+            monitor: HMONITOR, _: HDC, _: *mut RECT, context: LPARAM,
+        ) -> BOOL {
+            let result = &mut *(context.0 as *mut Vec<(bool, i32, i32, i32, i32)>);
+            let mut info = MONITORINFO { cbSize: size_of::<MONITORINFO>() as u32, ..Default::default() };
+            if GetMonitorInfoW(monitor, &mut info).as_bool() {
+                let r = info.rcMonitor;
+                if r.right > r.left && r.bottom > r.top {
+                    result.push((info.dwFlags & 1 != 0, r.left, r.top, r.right, r.bottom));
+                }
+            }
+            BOOL(1)
+        }
+        let mut out: Vec<(bool, i32, i32, i32, i32)> = Vec::new();
         unsafe {
-            let (sw, sh) = (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+            EnumDisplayMonitors(
+                None, None, Some(add),
+                LPARAM((&mut out as *mut Vec<(bool, i32, i32, i32, i32)>) as isize),
+            );
+        }
+        out.sort_by_key(|item| (!item.0, item.2, item.1));
+        out.into_iter().map(|(_, x, y, right, bottom)| (x, y, right, bottom)).collect()
+    }
+
+    /// Monitor index 0 is the primary screen. Secondary indexes may be
+    /// physical monitors or a signed IddCx virtual-display driver.
+    pub fn capture(width: u32) -> Option<(u32, u32, Vec<u8>)> {
+        capture_monitor(width, 0)
+    }
+
+    pub fn capture_monitor(width: u32, monitor: usize) -> Option<(u32, u32, Vec<u8>)> {
+        let (left, top, right, bottom) = *monitors().get(monitor)?;
+
+        unsafe {
+            let (sw, sh) = (right - left, bottom - top);
             if sw <= 0 || sh <= 0 {
                 return None;
             }
@@ -271,16 +306,16 @@ mod win {
             let bmp = CreateCompatibleBitmap(screen, dw, dh);
             let old = SelectObject(mem, bmp.into());
             let ok = if dw == sw {
-                BitBlt(mem, 0, 0, sw, sh, Some(screen), 0, 0, SRCCOPY | CAPTUREBLT).is_ok()
+                BitBlt(mem, 0, 0, sw, sh, Some(screen), left, top, SRCCOPY | CAPTUREBLT).is_ok()
             } else {
                 SetStretchBltMode(mem, HALFTONE);
-                StretchBlt(mem, 0, 0, dw, dh, Some(screen), 0, 0, sw, sh, SRCCOPY | CAPTUREBLT).as_bool()
+                StretchBlt(mem, 0, 0, dw, dh, Some(screen), left, top, sw, sh, SRCCOPY | CAPTUREBLT).as_bool()
             };
             let mut out = None;
             if ok {
                 let mut ci = CURSORINFO { cbSize: size_of::<CURSORINFO>() as u32, ..Default::default() };
                 if GetCursorInfo(&mut ci).is_ok() && (ci.flags.0 & CURSOR_SHOWING.0) != 0 {
-                    let (x, y) = ((ci.ptScreenPos.x as i64 * dw as i64 / sw as i64) as i32, (ci.ptScreenPos.y as i64 * dh as i64 / sh as i64) as i32);
+                    let (x, y) = (((ci.ptScreenPos.x - left) as i64 * dw as i64 / sw as i64) as i32, ((ci.ptScreenPos.y - top) as i64 * dh as i64 / sh as i64) as i32);
                     let icon = HICON(ci.hCursor.0);
                     let (mut native, mut hx, mut hy) = (GetSystemMetrics(SM_CXCURSOR), 0, 0);
                     let mut ii = ICONINFO::default();
