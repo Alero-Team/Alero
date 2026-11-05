@@ -19,13 +19,62 @@ String ago(DateTime t) {
   return 'hace ${d.inDays} d';
 }
 
+/// Full notifications destination for the desktop sidebar.
+class NotificationsScreen extends StatelessWidget {
+  const NotificationsScreen(this.hub, {super.key});
+  final Hub hub;
+
+  @override
+  Widget build(BuildContext context) {
+    final peer = hub.peers
+        .where((p) => p.trusted)
+        .firstOrNull;
+    final list = peer == null ? const <PhoneNotif>[] : hub.notifs[peer.id] ?? const <PhoneNotif>[];
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text('Notificaciones', style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 16),
+          if (peer == null)
+            const Text('Conecta tu teléfono para ver las notificaciones.')
+          else ...[
+            Row(
+              children: [
+                Expanded(child: Text('Notificaciones de ' + peer.name)),
+                TextButton.icon(
+                  onPressed: () => hub.clearNotifs(peer.id),
+                  icon: const Icon(Icons.clear_all_rounded),
+                  label: const Text('Borrar todas'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (list.isEmpty)
+              const Text('No hay notificaciones recientes.')
+            else
+              for (final n in list)
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: _NotifRow(hub, peer.id, n, key: ValueKey((peer.id, n.key))),
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 /// The phone's notifications, newest first: a panel on Home with the latest few and "Ver todas".
 class NotificationsPanel extends StatelessWidget {
   const NotificationsPanel(this.hub, this.peerId, {super.key});
   final Hub hub;
   final String peerId;
 
-  static const _shown = 4;
+  static const _shown = 3;
 
   @override
   Widget build(BuildContext context) {
@@ -68,12 +117,25 @@ class NotificationsPanel extends StatelessWidget {
     return Panel(
       title: 'Notificaciones',
       icon: Symbols.notifications_rounded,
-      action: list.any((n) => n.clearable)
-          ? TextButton(
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (list.isNotEmpty)
+            TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => _AllDialog(hub, peerId),
+              ),
+              child: Text('Ver todas (${list.length})'),
+            ),
+          if (list.any((n) => n.clearable))
+            IconButton(
+              tooltip: 'Borrar todas',
+              icon: const Icon(Icons.clear_all_rounded),
               onPressed: () => hub.clearNotifs(peerId),
-              child: const Text('Borrar todas'),
-            )
-          : null,
+            ),
+        ],
+      ),
       child: AnimatedSize(
         duration: motion(context, Spring.spatial.settle),
         curve: Spring.spatial,
