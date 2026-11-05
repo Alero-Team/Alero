@@ -12,6 +12,7 @@ import 'device_image.dart';
 import 'fs_client.dart';
 import 'native.dart';
 import 'pc_remote.dart';
+import 'pc_files.dart';
 import 'phone_control.dart';
 import 'remote.dart';
 import 'sms_client.dart';
@@ -136,6 +137,7 @@ class Hub extends ChangeNotifier {
 
   /// Computer side: browsing a phone's files. Files it asks for are accepted without a prompt (we asked).
   late final fs = FsClient(this);
+  late final pcFs = PcFilesClient(this);
   late final sms = SmsClient(this);
   final _expected = <String, (bool, DateTime)>{};
 
@@ -599,6 +601,7 @@ class Hub extends ChangeNotifier {
       return;
     }
     if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
+    if (kind.startsWith('pb.x.pcfs.')) return pcFs.onMessage(peerId, kind, b);
     if (kind.startsWith('pb.x.sms.')) return sms.onMessage(peerId, kind, b);
     switch (kind) {
       case 'pb.x.call':
