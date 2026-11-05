@@ -77,7 +77,12 @@ class Panel extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       header: true,
-                      child: Text(title, style: t.titleMedium),
+                      child: Text(
+                        title,
+                        style: t.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                   ?action,
