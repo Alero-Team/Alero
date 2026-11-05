@@ -326,7 +326,7 @@ impl Remote {
         *self.screen.lock().unwrap() = Some(Screen {
             peer: peer.to_string(),
             width: b["w"].as_u64().unwrap_or(960).clamp(320, 1920) as u32,
-            fps: b["fps"].as_u64().unwrap_or(4).clamp(1, 10) as u32,
+            fps: b["fps"].as_u64().unwrap_or(8).clamp(1, 15) as u32,
             last_keepalive: Instant::now(),
             inflight: 0,
             last_ack: Instant::now(),
