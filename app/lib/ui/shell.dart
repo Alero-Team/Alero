@@ -764,8 +764,10 @@ class ScreenFrame extends StatelessWidget {
     required this.children,
     this.onRefresh,
     this.trailing,
+    this.maxWidth = 1120,
   });
   final String title;
+  final double maxWidth;
   final List<Widget> children;
   final Future<void> Function()? onRefresh;
   final Widget? trailing;
@@ -784,7 +786,7 @@ class ScreenFrame extends StatelessWidget {
         Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
+            constraints: BoxConstraints(maxWidth: maxWidth),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

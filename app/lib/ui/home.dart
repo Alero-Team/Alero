@@ -36,6 +36,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final main = mainPeer(hub);
     final wide = MediaQuery.sizeOf(context).width >= 1180;
+    final veryWide = MediaQuery.sizeOf(context).width >= 1600;
     final online = main?.state == pb.PeerState.connected;
     final info = main == null ? null : hub.info[main.id];
     final phone = info?.phone ?? false;
@@ -89,28 +90,37 @@ class HomeScreen extends StatelessWidget {
 
     return ScreenFrame(
       title: 'Inicio',
+      maxWidth: 1920, // the panels fill wide windows instead of leaving empty margins
       children: [
         if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
         if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
+        // Phone controls and state on the right; what you look at most (device, music, notifications) on the left.
+        // Very wide windows give notifications their own column so nothing leaves a hole.
         if (wide)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: col([hero, media, controls, recent]),
+              for (final (i, (flex, panels))
+                  in (veryWide
+                          ? [
+                              (4, [hero, media, recent]),
+                              (3, [notifs]),
+                              (3, [controls, status]),
+                            ]
+                          : [
+                              (3, [hero, media, notifs]),
+                              (2, [controls, status, recent]),
+                            ])
+                      .indexed) ...[
+                if (i > 0) gap,
+                Expanded(
+                  flex: flex,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: col(panels),
+                  ),
                 ),
-              ),
-              gap,
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: col([notifs, status]),
-                ),
-              ),
+              ],
             ],
           )
         else

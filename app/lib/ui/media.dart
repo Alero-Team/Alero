@@ -187,162 +187,159 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           ? 'Transmitiendo desde $name'
           : 'En $name';
       final swap = motion(context, const Duration(milliseconds: 350));
-      body = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      final thin = SliderTheme.of(context).copyWith(
+        trackHeight: 6,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+        inactiveTrackColor: s.onSurface.withValues(alpha: 0.12),
+      );
+      Widget info({required bool center}) => Column(
+        crossAxisAlignment: center
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _Art(
-                m,
-                size: 88,
-                appIcon: hub.appIcons[m.pkg],
-                computer: widget.computer,
+              _Bars(playing: m.playing, color: s.primary),
+              const SizedBox(width: Gap.s),
+              Icon(
+                widget.computer
+                    ? Symbols.computer_rounded
+                    : m.cast
+                    ? Symbols.cast_rounded
+                    : Symbols.smartphone_rounded,
+                size: 16,
+                color: s.primary,
               ),
-              const SizedBox(width: Gap.l),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _Bars(playing: m.playing, color: s.primary),
-                        const SizedBox(width: Gap.s),
-                        Icon(
-                          widget.computer
-                              ? Symbols.computer_rounded
-                              : m.cast
-                              ? Symbols.cast_rounded
-                              : Symbols.smartphone_rounded,
-                          size: 16,
-                          color: s.primary,
-                        ),
-                        const SizedBox(width: Gap.xs),
-                        Flexible(
-                          child: Text(
-                            where,
-                            style: t.labelMedium?.copyWith(color: s.primary),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: Gap.xs),
-                    // A new song slides in; the same song only updates in place.
-                    AnimatedSwitcher(
-                      duration: swap,
-                      transitionBuilder: (c, a) => FadeTransition(
-                        opacity: a,
-                        child: SlideTransition(
-                          position: Tween(
-                            begin: const Offset(0, 0.3),
-                            end: Offset.zero,
-                          ).animate(a),
-                          child: c,
-                        ),
-                      ),
-                      layoutBuilder: (cur, prev) => Stack(
-                        alignment: Alignment.centerLeft,
-                        children: [...prev, ?cur],
-                      ),
-                      child: Column(
-                        key: ValueKey('${m.title}|${m.artist}'),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            m.title.isEmpty ? 'Sin título' : m.title,
-                            style: t.titleLarge,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            [
-                              m.artist,
-                              m.app,
-                            ].where((x) => x.isNotEmpty).join(' · '),
-                            style: t.bodyMedium?.copyWith(
-                              color: s.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: Gap.xs),
+              Flexible(
+                child: Text(
+                  where,
+                  style: t.labelMedium?.copyWith(color: s.primary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: Gap.s),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                tooltip: 'Anterior',
-                onPressed: m.supports(16) ? () => _command('prev') : null,
-                icon: const Icon(Symbols.skip_previous_rounded, fill: 1),
+          const SizedBox(height: Gap.xs),
+          // A new song slides in; the same song only updates in place.
+          AnimatedSwitcher(
+            duration: swap,
+            transitionBuilder: (c, a) => FadeTransition(
+              opacity: a,
+              child: SlideTransition(
+                position: Tween(
+                  begin: const Offset(0, 0.3),
+                  end: Offset.zero,
+                ).animate(a),
+                child: c,
               ),
-              const SizedBox(width: Gap.xs),
-              MorphButton(
-                icon: m.playing
-                    ? Symbols.pause_rounded
-                    : Symbols.play_arrow_rounded,
-                label: m.playing ? 'Pausar' : 'Reproducir',
-                on: m.playing,
-                size: 56,
-                onPressed: m.supports(512 | (m.playing ? 2 : 4))
-                    ? () => _command('toggle')
-                    : null,
-              ),
-              const SizedBox(width: Gap.xs),
-              IconButton(
-                tooltip: 'Siguiente',
-                onPressed: m.supports(32) ? () => _command('next') : null,
-                icon: const Icon(Symbols.skip_next_rounded, fill: 1),
-              ),
-            ],
-          ),
-          if (m.duration > 0) ...[
-            const SizedBox(height: Gap.m),
-            Row(
+            ),
+            layoutBuilder: (cur, prev) => Stack(
+              alignment: center ? Alignment.center : Alignment.centerLeft,
+              children: [...prev, ?cur],
+            ),
+            child: Column(
+              key: ValueKey('${m.title}|${m.artist}'),
+              crossAxisAlignment: center
+                  ? CrossAxisAlignment.center
+                  : CrossAxisAlignment.start,
               children: [
                 Text(
-                  _clock(pos),
-                  style: t.labelSmall?.copyWith(fontFeatures: tabular),
-                ),
-                Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
-                      ),
-                    ),
-                    child: Slider(
-                      value: pos.clamp(0, m.duration).toDouble(),
-                      max: m.duration.toDouble(),
-                      semanticFormatterCallback: (v) => _clock(v.round()),
-                      onChanged: !widget.computer && m.supports(256)
-                          ? (v) => setState(() => _seek = v)
-                          : null,
-                      onChangeEnd: (v) {
-                        _command('seek', position: v.round());
-                        setState(() => _seek = null);
-                      },
-                    ),
-                  ),
+                  m.title.isEmpty ? 'Sin título' : m.title,
+                  style: weight(t.titleLarge, 600),
+                  textAlign: center ? TextAlign.center : TextAlign.start,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  _clock(m.duration),
-                  style: t.labelSmall?.copyWith(fontFeatures: tabular),
+                  [
+                    m.artist,
+                    m.app,
+                  ].where((x) => x.isNotEmpty).join(' · '),
+                  style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+                  textAlign: center ? TextAlign.center : TextAlign.start,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
-          ],
-          if (widget.computer) _pcVolume(),
-          if (!widget.computer && m.volumeMax > 0)
-            Row(
+          ),
+        ],
+      );
+      final transport = Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton.filledTonal(
+            tooltip: 'Anterior',
+            iconSize: 28,
+            style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
+            onPressed: m.supports(16) ? () => _command('prev') : null,
+            icon: const Icon(Symbols.skip_previous_rounded, fill: 1),
+          ),
+          const SizedBox(width: Gap.m),
+          MorphButton(
+            icon: m.playing ? Symbols.pause_rounded : Symbols.play_arrow_rounded,
+            label: m.playing ? 'Pausar' : 'Reproducir',
+            on: m.playing,
+            size: 64,
+            onPressed: m.supports(512 | (m.playing ? 2 : 4))
+                ? () => _command('toggle')
+                : null,
+          ),
+          const SizedBox(width: Gap.m),
+          IconButton.filledTonal(
+            tooltip: 'Siguiente',
+            iconSize: 28,
+            style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
+            onPressed: m.supports(32) ? () => _command('next') : null,
+            icon: const Icon(Symbols.skip_next_rounded, fill: 1),
+          ),
+        ],
+      );
+      final progress = m.duration <= 0
+          ? null
+          : Column(
+              children: [
+                SliderTheme(
+                  data: thin,
+                  child: Slider(
+                    padding: EdgeInsets.zero,
+                    value: pos.clamp(0, m.duration).toDouble(),
+                    max: m.duration.toDouble(),
+                    semanticFormatterCallback: (v) => _clock(v.round()),
+                    onChanged: !widget.computer && m.supports(256)
+                        ? (v) => setState(() => _seek = v)
+                        : null,
+                    onChangeEnd: (v) {
+                      _command('seek', position: v.round());
+                      setState(() => _seek = null);
+                    },
+                  ),
+                ),
+                const SizedBox(height: Gap.xs),
+                Row(
+                  children: [
+                    Text(
+                      _clock(pos),
+                      style: t.labelSmall?.copyWith(fontFeatures: tabular),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _clock(m.duration),
+                      style: t.labelSmall?.copyWith(fontFeatures: tabular),
+                    ),
+                  ],
+                ),
+              ],
+            );
+      final volume = widget.computer
+          ? _pcVolume()
+          : m.volumeMax <= 0
+          ? null
+          : Row(
               children: [
                 Icon(
                   Symbols.volume_down_rounded,
@@ -351,12 +348,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 ),
                 Expanded(
                   child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
-                      ),
-                    ),
+                    data: thin,
                     child: Slider(
                       value: (_vol ?? m.volume.toDouble()).clamp(
                         0,
@@ -380,8 +372,58 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                   color: s.onSurfaceVariant,
                 ),
               ],
-            ),
-        ],
+            );
+      // Narrow panels (phones, a side column) stack a big cover over the text; wide ones put it beside.
+      body = LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth;
+          final art = _Art(
+            m,
+            size: w < 480 ? (w * 0.6).clamp(140.0, 260.0) : (w * 0.24).clamp(96.0, 168.0),
+            appIcon: hub.appIcons[m.pkg],
+            computer: widget.computer,
+          );
+          if (w < 480) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: Gap.s),
+                Center(child: art),
+                const SizedBox(height: Gap.l),
+                info(center: true),
+                const SizedBox(height: Gap.l),
+                ?progress,
+                const SizedBox(height: Gap.s),
+                transport,
+                if (volume != null) ...[const SizedBox(height: Gap.s), volume],
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  art,
+                  const SizedBox(width: Gap.xl),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        info(center: false),
+                        const SizedBox(height: Gap.m),
+                        ?progress,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Gap.m),
+              transport,
+              if (volume != null) ...[const SizedBox(height: Gap.s), volume],
+            ],
+          );
+        },
       );
     }
     return Panel(

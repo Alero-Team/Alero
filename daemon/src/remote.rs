@@ -444,6 +444,8 @@ impl Remote {
         thread::spawn(move || {
             let mut last: Option<Value> = None;
             let mut sent = Instant::now() - Duration::from_secs(60);
+            // The cover is read again only when the song changes (or is still missing), not every poll.
+            let (mut art_of, mut art) = (String::new(), String::new());
             loop {
                 let peers: Vec<String> = {
                     let mut ws = me.watchers.lock().unwrap();
@@ -455,8 +457,16 @@ impl Remote {
                     ws.keys().cloned().collect()
                 };
                 let state = match sys::media_state() {
-                    Some(m) => json!({"active": true, "app": m.app, "title": m.title, "artist": m.artist, "playing": m.playing,
-                        "position": m.position_ms, "duration": m.duration_ms, "actions": m.actions, "speed": m.speed, "at": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)}),
+                    Some(m) => {
+                        let song = format!("{}|{}|{}", m.app, m.title, m.artist);
+                        // Players often set the cover a moment after the title: retry while there is none.
+                        if song != art_of || art.is_empty() {
+                            art = sys::media_art().map(|b| STANDARD.encode(b)).unwrap_or_default();
+                            art_of = song;
+                        }
+                        json!({"active": true, "art": art, "app": m.app, "title": m.title, "artist": m.artist, "playing": m.playing,
+                        "position": m.position_ms, "duration": m.duration_ms, "actions": m.actions, "speed": m.speed, "at": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)})
+                    }
                     None => json!({"active": false}),
                 };
                 // Position moves every second by itself; compare the rest, and refresh the clock every 10 s.

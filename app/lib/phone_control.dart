@@ -87,7 +87,8 @@ List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
   '-s',
   serial,
   '--window-title=$title',
-  '--stay-awake',
+  // scrcpy refuses --stay-awake with --no-control (the camera) and exits at once.
+  if (o.camera == null) '--stay-awake',
   if (o.maxSize > 0) '--max-size=${o.maxSize}',
   '--video-bit-rate=${o.bitRate}M',
   '--max-fps=${o.maxFps}',

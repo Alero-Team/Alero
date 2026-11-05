@@ -26,6 +26,13 @@ emulator-5554          offline
     expect(parseDevices('List of devices attached\n'), isEmpty);
   });
 
+  test('camera window: no control, so no stay-awake (scrcpy rejects the pair)', () {
+    final cam = scrcpyArgs('S', 't', const SessionOptions(camera: 'back', audio: false));
+    expect(cam, containsAll(['--video-source=camera', '--camera-facing=back', '--no-control', '--no-audio']));
+    expect(cam, isNot(contains('--stay-awake')));
+    expect(scrcpyArgs('S', 't', const SessionOptions()), contains('--stay-awake'));
+  });
+
   test('desktop mode only where Android really offers it', () {
     expect(
       desktopSupport(sdk: 37, freeform: true, forced: true),

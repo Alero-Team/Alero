@@ -120,6 +120,8 @@ class _ControlsState extends State<_Controls> {
       final t = Theme.of(context).textTheme;
       void cmd(String what, [Map<String, Object?> b = const {}]) =>
           hub.phoneCmd(id, what, b);
+      const needAdb = 'Requiere depuración del teléfono';
+      const camHint = 'Abre la cámara en una ventana (Android 12+)';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -129,146 +131,143 @@ class _ControlsState extends State<_Controls> {
             onStop: () => cmd('find', {'on': false}),
           ),
           const SizedBox(height: Gap.l),
-          Text('Ajustes rápidos', style: t.titleSmall),
-          const SizedBox(height: Gap.s),
-          Wrap(
-            spacing: Gap.m,
-            runSpacing: Gap.m,
-            children: [
-              _Tile(
-                icon: Symbols.wifi_rounded,
-                label: 'Wi-Fi',
-                on: _radios?.$1,
-                hint: adb == null ? 'Requiere depuración' : null,
-                onTap: adb == null || _radios == null
-                    ? null
-                    : () => _wifi(!_radios!.$1),
-              ),
-              _Tile(
-                icon: Symbols.bluetooth_rounded,
-                label: 'Bluetooth',
-                on: _radios?.$2,
-                hint: adb == null ? 'Requiere depuración' : null,
-                onTap: adb == null || _radios == null
-                    ? null
-                    : () => _bt(!_radios!.$2),
-              ),
-              _Tile(
-                icon: Symbols.wifi_tethering_rounded,
-                label: 'Zona Wi-Fi',
-                hint: adb == null
-                    ? 'Requiere depuración'
-                    : 'Abre sus ajustes en el teléfono',
-                onTap: adb == null
-                    ? null
-                    : () => PhoneAdb.openHotspot(adb.serial),
-              ),
-              _Tile(
-                icon: Symbols.do_not_disturb_on_rounded,
-                label: 'No molestar',
-                on: st?.dnd,
-                hint: st != null && !st.dndAccess
-                    ? 'Pide permiso en el teléfono'
-                    : null,
-                onTap: st == null ? null : () => cmd('dnd', {'on': !st.dnd}),
-              ),
-              _Tile(
-                icon: Symbols.flashlight_on_rounded,
-                label: 'Linterna',
-                on: st?.torch,
-                onTap: st == null
-                    ? null
-                    : () => cmd('torch', {'on': !st.torch}),
-              ),
-              _Tile(
-                icon: Symbols.lock_rounded,
-                label: 'Bloquear pantalla',
-                hint: adb == null ? 'Requiere depuración' : null,
-                onTap: adb == null ? null : () => PhoneAdb.lock(adb.serial),
-              ),
-            ],
-          ),
+          // Icon tiles that share the whole width, like the phone's quick settings.
+          _Grid([
+            _Tile(
+              icon: Symbols.wifi_rounded,
+              label: 'Wi-Fi',
+              on: _radios?.$1,
+              hint: adb == null ? needAdb : null,
+              onTap: adb == null || _radios == null
+                  ? null
+                  : () => _wifi(!_radios!.$1),
+            ),
+            _Tile(
+              icon: Symbols.bluetooth_rounded,
+              label: 'Bluetooth',
+              on: _radios?.$2,
+              hint: adb == null ? needAdb : null,
+              onTap: adb == null || _radios == null
+                  ? null
+                  : () => _bt(!_radios!.$2),
+            ),
+            _Tile(
+              icon: Symbols.wifi_tethering_rounded,
+              label: 'Zona Wi-Fi',
+              hint: adb == null ? needAdb : 'Abre sus ajustes en el teléfono',
+              onTap: adb == null
+                  ? null
+                  : () => PhoneAdb.openHotspot(adb.serial),
+            ),
+            _Tile(
+              icon: Symbols.do_not_disturb_on_rounded,
+              label: 'No molestar',
+              on: st?.dnd,
+              hint: st != null && !st.dndAccess
+                  ? 'Pide permiso en el teléfono'
+                  : null,
+              onTap: st == null ? null : () => cmd('dnd', {'on': !st.dnd}),
+            ),
+            _Tile(
+              icon: Symbols.flashlight_on_rounded,
+              label: 'Linterna',
+              on: st?.torch,
+              onTap: st == null
+                  ? null
+                  : () => cmd('torch', {'on': !st.torch}),
+            ),
+            _Tile(
+              icon: Symbols.lock_rounded,
+              label: 'Bloquear pantalla',
+              hint: adb == null ? needAdb : null,
+              onTap: adb == null ? null : () => PhoneAdb.lock(adb.serial),
+            ),
+            _Tile(
+              icon: Symbols.photo_camera_back_rounded,
+              label: 'Cámara trasera',
+              hint: adb == null ? needAdb : camHint,
+              onTap: adb == null ? null : () => _camera('back'),
+            ),
+            _Tile(
+              icon: Symbols.photo_camera_front_rounded,
+              label: 'Cámara frontal',
+              hint: adb == null ? needAdb : camHint,
+              onTap: adb == null ? null : () => _camera('front'),
+            ),
+          ]),
           if (st != null) ...[
-            const SizedBox(height: Gap.xl),
-            Text('Sonido', style: t.titleSmall),
+            const SizedBox(height: Gap.l),
+            SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: 'normal',
+                  tooltip: 'Sonido',
+                  icon: Icon(Symbols.notifications_active_rounded),
+                ),
+                ButtonSegment(
+                  value: 'vibrate',
+                  tooltip: 'Vibrar',
+                  icon: Icon(Symbols.vibration_rounded),
+                ),
+                ButtonSegment(
+                  value: 'silent',
+                  tooltip: 'Silencio',
+                  icon: Icon(Symbols.notifications_off_rounded),
+                ),
+              ],
+              selected: {st.ringer},
+              onSelectionChanged: (v) => cmd('ringer', {'mode': v.first}),
+            ),
             const SizedBox(height: Gap.s),
-            Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'normal',
-                        label: Text('Sonido'),
-                        icon: Icon(Symbols.notifications_active_rounded),
-                      ),
-                      ButtonSegment(
-                        value: 'vibrate',
-                        label: Text('Vibrar'),
-                        icon: Icon(Symbols.vibration_rounded),
-                      ),
-                      ButtonSegment(
-                        value: 'silent',
-                        label: Text('Silencio'),
-                        icon: Icon(Symbols.notifications_off_rounded),
-                      ),
-                    ],
-                    selected: {st.ringer},
-                    onSelectionChanged: (v) => cmd('ringer', {'mode': v.first}),
-                  ),
-                  const SizedBox(height: Gap.m),
-                  _Volume(
-                    'Multimedia',
-                    st.media,
-                    st.mediaMax,
-                    (v) => cmd('volume', {'stream': 'media', 'value': v}),
-                  ),
-                  _Volume(
-                    'Tono de llamada',
-                    st.ring,
-                    st.ringMax,
-                    (v) => cmd('volume', {'stream': 'ring', 'value': v}),
-                  ),
-                ],
+            _Volume(
+              'Multimedia',
+              Symbols.music_note_rounded,
+              st.media,
+              st.mediaMax,
+              (v) => cmd('volume', {'stream': 'media', 'value': v}),
+            ),
+            _Volume(
+              'Tono de llamada',
+              Symbols.ring_volume_rounded,
+              st.ring,
+              st.ringMax,
+              (v) => cmd('volume', {'stream': 'ring', 'value': v}),
             ),
           ],
-          const SizedBox(height: Gap.xl),
-          Text('Cámara del teléfono', style: t.titleSmall),
-          const SizedBox(height: Gap.s),
-          adb == null
-                ? const NeedsAdb('La cámara', card: false)
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Abre la cámara del teléfono en una ventana del ordenador (Android 12 o posterior). '
-                        'Para usarla como webcam en Meet, Teams o Zoom, captura esa ventana con la cámara virtual '
-                        'de OBS Studio.',
-                      ),
-                      const SizedBox(height: Gap.s),
-                      Wrap(
-                        spacing: Gap.s,
-                        children: [
-                          FilledButton.tonalIcon(
-                            onPressed: () => _camera('back'),
-                            icon: const Icon(
-                              Symbols.photo_camera_back_rounded,
-                              size: 18,
-                            ),
-                            label: const Text('Trasera'),
-                          ),
-                          FilledButton.tonalIcon(
-                            onPressed: () => _camera('front'),
-                            icon: const Icon(
-                              Symbols.photo_camera_front_rounded,
-                              size: 18,
-                            ),
-                            label: const Text('Frontal'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+          if (adb == null) ...[
+            const SizedBox(height: Gap.s),
+            const NeedsAdb('Wi-Fi, Bluetooth, bloqueo y cámara', card: false),
+          ] else ...[
+            const SizedBox(height: Gap.xs),
+            Text(
+              'Para usar la cámara como webcam en Meet, Teams o Zoom, captura su ventana con la cámara virtual de OBS Studio.',
+              style: t.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      );
+    },
+  );
+}
+
+/// Lays tiles out in equal columns that fill the panel's width.
+class _Grid extends StatelessWidget {
+  const _Grid(this.children);
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final cols = (box.maxWidth / 84).floor().clamp(3, 8);
+      final w = (box.maxWidth - Gap.s * (cols - 1)) / cols;
+      return Wrap(
+        spacing: Gap.s,
+        runSpacing: Gap.s,
+        children: [
+          for (final c in children) SizedBox(width: w, height: 64, child: c),
         ],
       );
     },
@@ -291,14 +290,14 @@ class _FindCard extends StatelessWidget {
     return Card(
       color: finding ? s.tertiaryContainer : s.surfaceContainer,
       child: Padding(
-        padding: const EdgeInsets.all(Gap.xl),
+        padding: const EdgeInsets.all(Gap.l),
         child: Row(
           children: [
             Icon(
               finding
                   ? Symbols.ring_volume_rounded
                   : Symbols.mobile_sound_rounded,
-              size: 40,
+              size: 32,
               fill: finding ? 1 : 0,
               color: finding ? s.onTertiaryContainer : s.onSurface,
             ),
@@ -307,12 +306,12 @@ class _FindCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Buscar teléfono', style: t.titleLarge),
+                  Text('Buscar teléfono', style: t.titleMedium),
                   Text(
                     finding
-                        ? 'Sonando a todo volumen. Se detiene solo en un minuto o al tocar el aviso en el teléfono.'
-                        : 'Hace sonar el teléfono a todo volumen, aunque esté en silencio o en No molestar.',
-                    style: t.bodyMedium,
+                        ? 'Sonando. Se detiene solo en un minuto o al tocar el aviso.'
+                        : 'Suena a todo volumen, aunque esté en silencio.',
+                    style: t.bodySmall,
                   ),
                 ],
               ),
@@ -336,7 +335,7 @@ class _FindCard extends StatelessWidget {
   }
 }
 
-/// A quick-settings tile: on (filled), off, or not available (with why).
+/// A quick-settings tile, icon only: on (filled), off, or not available. The tooltip says what and why.
 class _Tile extends StatelessWidget {
   const _Tile({
     required this.icon,
@@ -354,17 +353,16 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final t = Theme.of(context).textTheme;
     final active = on == true;
-    final fg = active ? s.onPrimaryContainer : s.onSurface;
-    return Semantics(
-      button: true,
-      toggled: on,
-      enabled: onTap != null,
-      label: label,
-      child: SizedBox(
-        width: 210,
-        height: 76,
+    final state = on == null ? null : (active ? 'activado' : 'desactivado');
+    final tip = [label, ?state, ?hint].join(' · ');
+    return Tooltip(
+      message: tip,
+      child: Semantics(
+        button: true,
+        toggled: on,
+        enabled: onTap != null,
+        label: tip,
         child: Material(
           color: active ? s.primaryContainer : s.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(Radii.tile + 8),
@@ -372,41 +370,13 @@ class _Tile extends StatelessWidget {
             borderRadius: BorderRadius.circular(Radii.tile + 8),
             onTap: onTap,
             child: Opacity(
-              opacity: onTap == null ? 0.55 : 1,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Gap.l),
-                child: Row(
-                  children: [
-                    Icon(icon, fill: active ? 1 : 0, color: fg),
-                    const SizedBox(width: Gap.m),
-                    Expanded(
-                      child: ExcludeSemantics(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              label,
-                              style: t.titleSmall?.copyWith(color: fg),
-                            ),
-                            Text(
-                              hint ??
-                                  (on == null
-                                      ? 'Abrir'
-                                      : active
-                                      ? 'Activado'
-                                      : 'Desactivado'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: t.bodySmall?.copyWith(
-                                color: fg.withValues(alpha: 0.8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+              opacity: onTap == null ? 0.45 : 1,
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 26,
+                  fill: active ? 1 : 0,
+                  color: active ? s.onPrimaryContainer : s.onSurface,
                 ),
               ),
             ),
@@ -418,8 +388,9 @@ class _Tile extends StatelessWidget {
 }
 
 class _Volume extends StatefulWidget {
-  const _Volume(this.label, this.value, this.max, this.onChanged);
+  const _Volume(this.label, this.icon, this.value, this.max, this.onChanged);
   final String label;
+  final IconData icon;
   final int value, max;
   final ValueChanged<int> onChanged;
 
@@ -434,7 +405,10 @@ class _VolumeState extends State<_Volume> {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      SizedBox(width: 140, child: Text(widget.label)),
+      Tooltip(
+        message: widget.label,
+        child: Icon(widget.icon, size: 20, semanticLabel: widget.label),
+      ),
       Expanded(
         child: Slider(
           value: (_drag ?? widget.value.clamp(0, widget.max).toDouble()),

@@ -174,8 +174,11 @@ class PbService : Service() {
         private val main = Handler(Looper.getMainLooper())
         private var stopper: Runnable? = null
 
-        /** `names`: paired computers connected right now. Called from the engine events and when the setting changes. */
-        fun update(c: Context, names: List<String>) {
+        /**
+         * `names`: paired computers connected right now. Called from the engine events and when the setting changes.
+         * `linger`: false when the last one left on purpose (unpaired, disconnected): no grace period.
+         */
+        fun update(c: Context, names: List<String>, linger: Boolean = true) {
             val app = c.applicationContext
             main.post {
                 stopper?.let(main::removeCallbacks)
@@ -188,6 +191,8 @@ class PbService : Service() {
                         // Android refuses to start a foreground service from the background in some states: the
                         // connection simply lives as long as the process does.
                     }
+                } else if (!linger) {
+                    app.stopService(Intent(app, PbService::class.java))
                 } else {
                     if (running) {
                         // Say so: the notification must not keep claiming a connection that is gone.

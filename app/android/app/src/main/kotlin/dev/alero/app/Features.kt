@@ -84,15 +84,18 @@ object Features {
             "PeerChanged" -> {
                 val p = e.getJSONObject("peer")
                 val id = p.getString("id")
-                if (!p.optBoolean("trusted")) return WidgetData.forget(id)
-                WidgetData.peer(id, p.optString("name"), p.optString("state") == "Connected")
+                val trusted = p.optBoolean("trusted")
+                val connected = trusted && p.optString("state") == "Connected"
+                if (trusted) WidgetData.peer(id, p.optString("name"), connected) else WidgetData.forget(id)
                 val fresh = synchronized(online) {
-                    if (p.optString("state") == "Connected") online.put(id, p.optString("name")) == null else { online.remove(id); false }
+                    if (connected) online.put(id, p.optString("name")) == null else { online.remove(id); false }
                 }
                 if (fresh) hello(id)
-                if (p.optString("state") != "Connected") Notifier.controlled(id, "", false) // the computer is gone: so is its session
+                if (!connected) Notifier.controlled(id, "", false) // the computer is gone: so is its session
+                // Unpaired, rejected or disconnected on purpose: stop now instead of waiting for it to come back.
+                val deliberate = !trusted || p.optString("state") == "Rejected" || p.optString("detail").startsWith("paused")
                 // The foreground service (and its notification) exists only while a computer is connected.
-                PbService.update(ctx, onlineNames())
+                PbService.update(ctx, onlineNames(), linger = !deliberate)
             }
             "TransferOffer" -> TransferNotices.offer(e)
             "TransferStarted" -> {

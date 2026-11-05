@@ -63,6 +63,10 @@ mod other {
     pub fn media_state() -> Option<Media> {
         None
     }
+
+    pub fn media_art() -> Option<Vec<u8>> {
+        None
+    }
     pub fn keep_com_alive() {}
     pub fn secure_desktop() -> bool {
         false
@@ -390,6 +394,21 @@ mod win {
             actions,
             speed: playback.PlaybackRate().ok().and_then(|rate| rate.Value().ok()).unwrap_or(1.0),
         })
+    }
+
+    /// Cover of the current session as the player gave it (JPEG or PNG). None without one or when too big to send.
+    /// shortcut: covers over 150 KB are dropped, not shrunk; re-encode them if a player only sends big ones.
+    pub fn media_art() -> Option<Vec<u8>> {
+        use windows::Storage::Streams::DataReader;
+        let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok()?.join().ok()?;
+        let props = mgr.GetCurrentSession().ok()?.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
+        let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.join().ok()?;
+        let size = u32::try_from(stream.Size().ok()?).ok().filter(|&n| n > 0 && n <= 150_000)?;
+        let reader = DataReader::CreateDataReader(&stream).ok()?;
+        let got = reader.LoadAsync(size).ok()?.join().ok()?;
+        let mut buf = vec![0u8; got as usize];
+        reader.ReadBytes(&mut buf).ok()?;
+        Some(buf)
     }
 }
 

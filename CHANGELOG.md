@@ -1,5 +1,25 @@
 # Cambios
 
+## 0.1.17 — 2026-11-04
+
+Instala juntos el APK de Android y el instalador de Windows de esta versión: la portada de lo que suena en el ordenador necesita ambos lados actualizados.
+
+### Funciones nuevas
+
+- **Portada de lo que suena en Windows:** el teléfono muestra la portada de Spotify, el navegador o cualquier reproductor que se la dé a Windows.
+- **Clic derecho con dos dedos** en el panel táctil del teléfono.
+
+### Cambios
+
+- **Inicio ocupa toda la ventana:** los paneles se reparten en dos columnas (tres en ventanas muy anchas). Controles del teléfono y Estado van a la derecha.
+- **Controles del teléfono compactos:** cuadrícula de iconos que llena el ancho; el nombre, el estado y por qué un control no está disponible aparecen al pasar el ratón.
+- **«Reproduciendo» rediseñado otra vez:** se adapta a cada pantalla (portada grande arriba en pantallas estrechas, al lado en anchas), portadas no cuadradas recortadas sin salirse, títulos en dos líneas, botones más grandes y barras de progreso más gruesas.
+
+### Errores corregidos
+
+- **La cámara del teléfono no se abría:** scrcpy rechaza «mantener despierto» sin control y se cerraba al instante.
+- **Desplazamiento horizontal invertido** en el panel táctil: ahora el contenido sigue a los dedos, igual que en vertical.
+- **Alero seguía en segundo plano en Android tras desvincular:** un ordenador desemparejado seguía contando como conectado. Al desemparejar o desconectar a propósito el servicio se detiene al momento, salvo que actives «segundo plano» en Ajustes.
 ## 0.1.16 — 2026-11-04 (mejoras incrementales Android + Windows)
 
 Instala ambos paquetes de la misma versión para conservar la compatibilidad. **Esta publicación es una actualización parcial de interfaz y estabilidad, no la finalización de todas las funciones solicitadas.**

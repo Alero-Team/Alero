@@ -11,7 +11,8 @@ import 'expressive.dart';
 import 'shell.dart' show confirm;
 import 'theme.dart';
 
-/// The phone as a touchpad for a paired computer. One finger moves the pointer, a tap clicks, two fingers scroll,
+/// The phone as a touchpad for a paired computer. One finger moves the pointer, a tap clicks, a two-finger tap
+/// right-clicks, two fingers scroll (naturally, both axes),
 /// and a second tap held down drags until the finger lifts. Movement is sent in small batches (60 per second at most) as relative deltas, like a mouse.
 class Touchpad extends StatefulWidget {
   const Touchpad(
@@ -44,7 +45,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
       _active = false,
       _cancelled = false;
   Offset? _finger;
-  double _ax = 0, _ay = 0, _sy = 0, _sx = 0;
+  double _ax = 0, _ay = 0, _sy = 0, _sx = 0, _travel = 0;
   Timer? _flush, _tap;
   DateTime? _lastTap;
   Offset? _lastTapPosition;
@@ -116,7 +117,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
       _tap = Timer(const Duration(milliseconds: 300), () => _tapExpired = true);
       _start = e.position;
       _moved = _drag = _two = _cancelled = false;
-      _ax = _ay = _sy = _sx = 0;
+      _ax = _ay = _sy = _sx = _travel = 0;
       _flush ??= Timer.periodic(
         const Duration(milliseconds: 16),
         (_) => _tick(),
@@ -162,8 +163,10 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
       }
     } else {
       _moved = true;
+      _travel += e.delta.distance;
       _sy += e.delta.dy / _pointers.length / 30;
-      _sx += e.delta.dx / _pointers.length / 30;
+      // Natural like the vertical one: the content follows the fingers (swipe left, the page goes left).
+      _sx -= e.delta.dx / _pointers.length / 30;
     }
   }
 
@@ -182,6 +185,10 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     _flush = null;
     if (_drag) {
       _r.button(widget.peer, 'left', false);
+    } else if (!_cancelled && _two && !_tapExpired && _travel < 24) {
+      // Two-finger tap: right click, like a laptop touchpad.
+      _r.click(widget.peer, button: 'right');
+      HapticFeedback.selectionClick();
     } else if (!_cancelled && !_two && !_moved && !_tapExpired) {
       if (!_r.buttonHeld(widget.peer, 'left') &&
           !_r.buttonHeld(widget.peer, 'right')) {
@@ -204,7 +211,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     final t = Theme.of(context).textTheme;
     return Semantics(
       label: 'Panel táctil del ordenador',
-      hint: 'Un dedo mueve el cursor. Toca para clic. Dos dedos desplazan. Toca dos veces y mueve sin levantar el segundo toque para seleccionar.',
+      hint: 'Un dedo mueve el cursor. Toca para clic. Toca con dos dedos para clic derecho. Dos dedos desplazan. Toca dos veces y mueve sin levantar el segundo toque para seleccionar.',
       onTap: () => _r.click(widget.peer),
       child: Listener(
         onPointerDown: _down,
@@ -257,7 +264,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
                             if (box.maxHeight >= 160) ...[
                               const SizedBox(height: Gap.s),
                               Text(
-                                'Un toque: clic\nDos dedos: desplazar\nDoble toque y mueve: seleccionar',
+                                'Un toque: clic · Dos dedos: clic derecho\nDesliza con dos dedos: desplazar\nDoble toque y mueve: seleccionar',
                                 textAlign: TextAlign.center,
                                 style: t.bodySmall?.copyWith(
                                   color: s.onSurfaceVariant,
