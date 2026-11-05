@@ -1,7 +1,7 @@
 name: Packages
 on:
   push:
-    branches: [main, fix/ux-media-power-20261104, fix/reconnect-wireless-adb-v0.1.18, feat/present-remote-productivity-20261104]
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish:
