@@ -75,7 +75,7 @@ class AleroMotion {
       duration: Duration(milliseconds: 370 + delay),
       curve: const _AleroDelayedSpring(380, .8, .38),
       builder: (_, v, c) => Opacity(
-        opacity: v.clamp(0, 1),
+        opacity: v.clamp(0.0, 1.0).toDouble(),
         child: Transform.translate(
           offset: Offset(0, (1 - v) * 24),
           child: c,
@@ -194,7 +194,7 @@ class _AleroSpring extends Curve {
         0,
         1,
         0,
-      ).x(t * .36).clamp(0, 1);
+      ).x(t * .36).clamp(0.0, 1.0).toDouble();
 }
 
 class _AleroDelayedSpring extends Curve {
