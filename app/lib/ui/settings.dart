@@ -219,6 +219,17 @@ class SettingsScreen extends StatelessWidget {
                 if (Platform.isWindows) ...[
                   const SizedBox(height: Gap.m),
                   SettingTile(
+                    title: 'Permitir pantalla extendida',
+                    subtitle: 'Autoriza que un teléfono emparejado cree un monitor virtual real de Windows usando un controlador IddCx firmado. Desactivado por defecto.',
+                    trailing: AleroSwitch(
+                      value: hub.extendAllow,
+                      onChanged: hub.setExtendAllow,
+                      label: 'Pantalla extendida',
+                    ),
+                    onTap: () => hub.setExtendAllow(!hub.extendAllow),
+                  ),
+                  const SizedBox(height: Gap.m),
+                  SettingTile(
                     title: 'Compartir carpeta con el teléfono',
                     subtitle: 'Solo se permite explorar y descargar archivos de las carpetas que elijas. La conexión debe estar emparejada. No se comparte ninguna carpeta por defecto.',
                     trailing: FilledButton.tonal(
