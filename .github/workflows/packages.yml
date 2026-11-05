@@ -94,7 +94,7 @@ jobs:
           $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
           if (Test-Path -LiteralPath $keyFile) { Remove-Item -LiteralPath $keyFile }
   publish:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.publish
     needs: packages
     runs-on: ubuntu-latest
     permissions:
