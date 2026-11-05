@@ -40,8 +40,13 @@ class SmsClient extends ChangeNotifier {
   final _sends = <String, Completer<void>>{};
   int _next = 0;
 
+  /// Called on every hub change: for the same phone it must never wipe what is on screen (an open chat vanished
+  /// mid-typing), only retry once the phone stopped answering.
   void start(String peer) {
-    if (peerId == peer && threads.isNotEmpty && error == null) return;
+    if (peerId == peer) {
+      if (error == 'offline' && !loading) refresh();
+      return;
+    }
     peerId = peer;
     threads = [];
     messages.clear();

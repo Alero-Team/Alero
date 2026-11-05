@@ -80,14 +80,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
   // Never persist notification content or claim it is a full chat history.
   final _recentChats = <String, Convo>{};
 
-  pb.Peer? get _phone => hub.peers
-      .where(
-        (p) =>
-            p.trusted &&
-            p.state == pb.PeerState.connected &&
-            hub.info[p.id]?.phone == true,
-      )
-      .firstOrNull;
+  String? _lastPhone;
+
+  /// The connected phone; during a brief drop, the same phone while it stays paired, so the open chat and the
+  /// text being typed survive a reconnection.
+  pb.Peer? get _phone {
+    final live = hub.peers
+        .where(
+          (p) =>
+              p.trusted &&
+              p.state == pb.PeerState.connected &&
+              hub.info[p.id]?.phone == true,
+        )
+        .firstOrNull;
+    if (live != null) _lastPhone = live.id;
+    return live ??
+        hub.peers.where((p) => p.trusted && p.id == _lastPhone).firstOrNull;
+  }
 
   @override
   void initState() {
@@ -195,7 +204,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
         .toList()
       ..sort((a, b) => b.time.compareTo(a.time));
     final open = all[_open];
-    final notice = !smsOn
+    final notice = phone.state != pb.PeerState.connected
+        ? 'El teléfono está sin conexión. Alero se reconecta solo.'
+        : !smsOn
         ? 'Para ver los SMS, en el teléfono: Alero › Ajustes › Mensajes en el ordenador.'
         : switch (sms.error) {
             'no_permission' =>
