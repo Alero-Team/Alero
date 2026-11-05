@@ -11,6 +11,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../device_image.dart';
 import '../remote.dart';
 import 'theme.dart';
+import 'alero_motion.dart';
 
 /// Material 3 Expressive pieces Flutter 3.47 does not ship: spring motion, wavy progress, cookie shape, shape
 /// morphing, and a solid floating surface.
@@ -96,9 +97,9 @@ class _OrionPressState extends State<OrionPress> {
         if (mounted) setState(() => _pressed = value);
       },
       child: AnimatedScale(
-        scale: _pressed ? 0.94 : 1,
-        duration: motion(context, Spring.fast.settle),
-        curve: Spring.fast,
+        scale: _pressed ? 0.955 : 1,
+        duration: AleroMotion.duration(context, 240),
+        curve: AleroMotion.fastSpatial,
         child: widget.child,
       ),
     ),
