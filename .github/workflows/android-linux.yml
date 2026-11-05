@@ -1,0 +1,71 @@
+name: Android release package (Linux)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.8'
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare Android release keystore
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SIGNING_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SIGNING_KEY" ] || [ -z "$SIGNING_PASSWORD" ] || [ -z "$SIGNING_ALIAS" ] || [ -z "$SIGNING_KEY_PASSWORD" ]; then
+            echo "::error::Android signing secrets are not configured"
+            exit 1
+          fi
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/alero-signing.keystore"
+          chmod 600 "$RUNNER_TEMP/alero-signing.keystore"
+          echo "ALERO_ANDROID_KEYSTORE=$RUNNER_TEMP/alero-signing.keystore" >> "$GITHUB_ENV"
+          echo "ALERO_ANDROID_KEYSTORE_PASSWORD=$SIGNING_PASSWORD" >> "$GITHUB_ENV"
+          echo "ALERO_ANDROID_KEY_ALIAS=$SIGNING_ALIAS" >> "$GITHUB_ENV"
+          echo "ALERO_ANDROID_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Install Rust Android target
+        run: rustup target add aarch64-linux-android
+      - name: Resolve Flutter and Rust dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fetch --locked
+          cd app
+          flutter pub get
+      - name: Compile signed Alero APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app
+          flutter build apk --release --target-platform android-arm64 --no-pub
+          cd ..
+          version=$(sed -n 's/^version: \([^+]*\).*/\1/p' app/pubspec.yaml)
+          mkdir -p dist
+          cp app/build/app/outputs/flutter-apk/app-release.apk "dist/Alero-${version}-android-arm64.apk"
+          (cd dist && sha256sum -- *.apk > SHA256SUMS-android.txt)
+      - name: Upload signed Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Alero-android-release
+          path: dist/*
+          if-no-files-found: error
+      - name: Remove temporary signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/alero-signing.keystore"
