@@ -134,7 +134,7 @@ class ScreenFeed extends ChangeNotifier {
   Timer? _keepalive;
 
   /// Frame width asked from the computer, and frames per second.
-  int width = 960, fps = 5;
+  int width = 960, fps = 8;
 
   void start() {
     _keepalive?.cancel();
