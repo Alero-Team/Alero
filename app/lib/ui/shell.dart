@@ -19,6 +19,7 @@ import 'apps_screen.dart';
 import 'call_bar.dart';
 import 'calls_screen.dart';
 import 'deck_screen.dart';
+import 'vault.dart';
 import 'messages.dart';
 import 'nav.dart';
 import 'pc_control.dart';
@@ -37,6 +38,7 @@ enum Section {
   apps,
   deck,
   explorer,
+  vault,
   devices,
   settings,
 }
@@ -64,8 +66,6 @@ final _dests = [
     ),
     _Dest(Section.calls, 'Llamadas', Symbols.call_rounded),
     _Dest(Section.photos, 'Fotos', Symbols.photo_library_rounded),
-    _Dest(Section.apps, 'Aplicaciones', Symbols.apps_rounded),
-    _Dest(Section.deck, 'Alero Desktop', Symbols.desktop_windows_rounded),
     _Dest(
       Section.explorer,
       'Explorador',
@@ -73,6 +73,7 @@ final _dests = [
       group: 'Archivos y equipo',
     ),
   ],
+  const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
   const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded),
   const _Dest(Section.settings, 'Ajustes', Symbols.settings_rounded),
 ];
@@ -245,6 +246,7 @@ class _ShellState extends State<Shell>
     Section.apps => AppsScreen(hub),
     Section.deck => DeckScreen(hub),
     Section.explorer => ExplorerScreen(hub),
+    Section.vault => const VaultScreen(),
     Section.devices => DevicesScreen(hub),
     Section.settings => SettingsScreen(hub),
   };
