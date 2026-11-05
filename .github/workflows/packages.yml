@@ -14,7 +14,7 @@ jobs:
   packages:
     # Preview packages for this development branch; publish only after merge to main.\n    # An explicitly scoped Android-only hotfix must not rebuild Windows.
     if: ${{ !contains(github.event.head_commit.message, '[android-only]') }}
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
