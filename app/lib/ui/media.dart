@@ -28,8 +28,9 @@ class MediaPanel extends StatefulWidget {
     super.key,
     this.computer = false,
     this.hideInactive = true,
+    this.compact = false,
   });
-  final bool computer, hideInactive;
+  final bool computer, hideInactive, compact;
   final Hub hub;
   final String peerId;
 
@@ -154,6 +155,99 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     }
     final t = Theme.of(context).textTheme;
     final s = Theme.of(context).colorScheme;
+
+    // Dashboard reference: an intentionally compact horizontal media card.
+    // Uses the same real media state/commands as the expanded player.
+    if (widget.compact) {
+      final active = access && m != null && m.active;
+      return Panel(
+        title: 'Reproductor',
+        icon: Symbols.music_note_rounded,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (active)
+              Row(
+                children: [
+                  _Art(m, size: 64, appIcon: hub.appIcons[m.pkg],
+                       computer: widget.computer),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(m.title.isEmpty ? 'Sin título' : m.title,
+                            maxLines: 2, overflow: TextOverflow.ellipsis,
+                            style: t.titleSmall),
+                        const SizedBox(height: 4),
+                        Text([m.artist, m.app]
+                            .where((x) => x.isNotEmpty).join(' · '),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: t.bodySmall?.copyWith(
+                              color: s.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Text('No se está reproduciendo música.'),
+              ),
+            const SizedBox(height: 12),
+            if (active) ...[
+              Slider(
+                padding: EdgeInsets.zero,
+                value: (_seek ?? m.positionNow.toDouble())
+                    .clamp(0, m.duration > 0 ? m.duration.toDouble() : 1.0),
+                max: m.duration > 0 ? m.duration.toDouble() : 1.0,
+                onChanged: m.duration > 0 && m.supports(256)
+                    ? (value) => setState(() => _seek = value) : null,
+                onChangeEnd: (value) {
+                  _command('seek', position: value.toInt());
+                  setState(() => _seek = null);
+                },
+              ),
+              Row(
+                children: [
+                  Text(_clock(m.positionNow), style: t.labelSmall),
+                  const Spacer(),
+                  Text(_clock(m.duration), style: t.labelSmall),
+                ],
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Anterior',
+                  onPressed: active && m.supports(16)
+                      ? () => _command('prev') : null,
+                  icon: const Icon(Symbols.skip_previous_rounded),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  iconSize: 27,
+                  tooltip: active && m.playing ? 'Pausar' : 'Reproducir',
+                  onPressed: active ? () => _command('toggle') : null,
+                  icon: Icon(active && m.playing
+                      ? Symbols.pause_rounded : Symbols.play_arrow_rounded),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Siguiente',
+                  onPressed: active && m.supports(32)
+                      ? () => _command('next') : null,
+                  icon: const Icon(Symbols.skip_next_rounded),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
 
     Widget body;
     if (!access) {
