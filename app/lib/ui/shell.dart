@@ -62,12 +62,11 @@ final _dests = [
     _Dest(Section.photos, 'Fotos', Symbols.photo_library_rounded, group: 'CONTENIDO'),
     _Dest(Section.explorer, 'Explorador', Symbols.folder_rounded),
   ],
-  const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded,
-      ),
+  const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
   const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded,
       group: 'SISTEMA'),
   const _Dest(Section.settings, 'Ajustes', Symbols.tune_rounded),
-]
+];
 
 /// App frame: side navigation on wide windows, floating glass bar on phones. Owns the questions the engine
 /// asks the user (pairing code, incoming file), the share sheet and the toast messages. Reads Hub, never decides.
