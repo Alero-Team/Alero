@@ -208,6 +208,9 @@ impl Remote {
 
     /// Returns true when the message was ours (it is then not forwarded to the window).
     pub fn handle(self: &Arc<Self>, engine: &Arc<Engine>, peer: &str, kind: &str, b: &Value) -> bool {
+        if kind.starts_with("pb.x.pcfs.") {
+            return crate::pc_files::handle(engine, peer, kind, b, &self.data);
+        }
         if kind == "pb.x.info.request" {
             self.pushed.lock().unwrap().remove(peer);
             self.push_info(engine, Some(peer));
