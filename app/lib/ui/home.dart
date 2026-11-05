@@ -36,7 +36,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final main = mainPeer(hub);
     final wide = MediaQuery.sizeOf(context).width >= 1180;
-    final veryWide = MediaQuery.sizeOf(context).width >= 1600;
     final online = main?.state == pb.PeerState.connected;
     final info = main == null ? null : hub.info[main.id];
     final phone = info?.phone ?? false;
@@ -55,14 +54,27 @@ class HomeScreen extends StatelessWidget {
     }
 
     final hero = _Hero(main, info, hub, go: go);
+    final recent = _Recent(hub, go: go);
+    final filePanel = _FilePanel(hub, main, go: go);
+    final media = online && phone ? MediaPanel(hub, main.id, compact: !Platform.isAndroid) : null;
+    final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
+    final controls = online && phone && !Platform.isAndroid
+        ? PhoneControlsPanel(hub, main)
+        : null;
+    final status = phone && info != null ? _StatusPanel(info, online: online) : null;
+    const gap = SizedBox(height: Gap.l, width: Gap.l);
+
     if (Platform.isAndroid && !phone) {
-      // A phone looking at a computer: identity and state, the day-to-day actions, then the remote.
-      const gap = SizedBox(height: Gap.l);
       return ScreenFrame(
         title: 'Inicio',
+        maxWidth: 980,
         onRefresh: hub.refresh,
         children: [
-          if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
+          Text('Resumen de ' + main.name,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              )),
+          gap,
           hero,
           gap,
           QuickActions(hub, main),
@@ -71,61 +83,98 @@ class HomeScreen extends StatelessWidget {
           gap,
           MediaPanel(hub, main.id, computer: true),
           gap,
-          _Recent(hub, go: go),
+          filePanel,
+          gap,
+          recent,
         ],
       );
     }
-    final recent = _Recent(hub, go: go);
-    final media = online && phone ? MediaPanel(hub, main.id) : null;
-    final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
-    final controls = online && phone && !Platform.isAndroid
-        ? PhoneControlsPanel(hub, main)
-        : null;
-    final status = phone && info != null ? _StatusPanel(info) : null;
-    const gap = SizedBox(height: Gap.l, width: Gap.l);
 
-    List<Widget> col(List<Widget?> w) => [
-      for (final x in w.whereType<Widget>()) ...[x, gap],
+    final dashboard = <Widget>[
+      if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
+      if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
+      Text('Resumen de ' + main.name,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          )),
+      gap,
+      if (wide && !Platform.isAndroid) ...[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 2, child: hero),
+            gap,
+            Expanded(
+              child: media ?? const Panel(
+                title: 'Reproductor',
+                icon: Symbols.music_note_rounded,
+                child: Text('No hay música en reproducción.'),
+              ),
+            ),
+          ],
+        ),
+        gap,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: notifs ?? const Panel(
+                title: 'Notificaciones',
+                icon: Symbols.notifications_rounded,
+                child: Text('Sin notificaciones.'),
+              ),
+            ),
+            gap,
+            Expanded(child: filePanel),
+            gap,
+            Expanded(
+              child: status ?? const Panel(
+                title: 'Estado del dispositivo',
+                icon: Symbols.info_rounded,
+                child: Text('Conecta el teléfono para ver su estado.'),
+              ),
+            ),
+          ],
+        ),
+        gap,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: controls ?? const Panel(
+                title: 'Controles rápidos',
+                icon: Symbols.tune_rounded,
+                child: Text('El teléfono no está conectado.'),
+              ),
+            ),
+            gap,
+            Expanded(flex: 2, child: recent),
+          ],
+        ),
+      ] else ...[
+        hero,
+        gap,
+        if (media != null) ...[media, gap],
+        if (notifs != null) ...[notifs, gap],
+        filePanel,
+        gap,
+        if (status != null) ...[status, gap],
+        if (controls != null) ...[controls, gap],
+        recent,
+      ],
     ];
 
     return ScreenFrame(
       title: 'Inicio',
-      maxWidth: 1920, // the panels fill wide windows instead of leaving empty margins
-      children: [
-        if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
-        if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-        // Phone controls and state on the right; what you look at most (device, music, notifications) on the left.
-        // Very wide windows give notifications their own column so nothing leaves a hole.
-        if (wide)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final (i, (flex, panels))
-                  in (veryWide
-                          ? [
-                              (4, [hero, media, recent]),
-                              (3, [notifs]),
-                              (3, [controls, status]),
-                            ]
-                          : [
-                              (3, [hero, media, notifs]),
-                              (2, [controls, status, recent]),
-                            ])
-                      .indexed) ...[
-                if (i > 0) gap,
-                Expanded(
-                  flex: flex,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: col(panels),
-                  ),
-                ),
-              ],
-            ],
-          )
-        else
-          ...col([hero, media, controls, notifs, status, recent]),
-      ],
+      maxWidth: 1920,
+      trailing: !Platform.isAndroid
+          ? OutlinedButton.icon(
+              onPressed: () => go(Section.settings),
+              icon: const Icon(Symbols.dashboard_customize_rounded),
+              label: const Text('Personalizar'),
+            )
+          : null,
+      children: dashboard,
     );
   }
 }
