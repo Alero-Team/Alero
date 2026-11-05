@@ -84,5 +84,17 @@ fn disconnect_keeps_pairing_and_connect_restores_it() {
     a.connect(&ib).unwrap();
     wait("reconnected", || state(&a, &ib).0 == PeerState::Connected);
     assert!(b.peers().iter().any(|p| p.id == ia && p.trusted));
+
+    // Regression: a stale control socket must not overwrite a deliberate
+    // pause, and reconnect must work repeatedly without a new QR/TLS trust.
+    for _ in 0..3 {
+        a.disconnect(&ib).unwrap();
+        wait("paused after stale socket shutdown", || state(&a, &ib) == (PeerState::Disconnected, PAUSED.to_string()));
+        std::thread::sleep(Duration::from_millis(350));
+        assert_eq!(state(&a, &ib).1, PAUSED);
+        a.connect(&ib).unwrap();
+        wait("connected again without pairing", || state(&a, &ib).0 == PeerState::Connected);
+        assert!(a.peers().iter().any(|p| p.id == ib && p.trusted));
+    }
     let _ = (std::fs::remove_dir_all(da), std::fs::remove_dir_all(db));
 }

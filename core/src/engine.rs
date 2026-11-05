@@ -718,7 +718,17 @@ impl Inner {
         if mine {
             // Dropped just now: keep redialing for a while (a Wi-Fi blip), then give up until it is heard again.
             self.with_peer(&peer_id, |p| p.seen = Instant::now());
-            let detail = if self.is_trusted(&peer_id) { "connection lost" } else { "" };
+            // An old control socket can finish *after* the user taps
+            // Disconnect. Do not overwrite the explicit paused state with
+            // "connection lost": the user must still see Conectar and the
+            // peer must remain paused until they request reconnection.
+            let detail = if self.is_paused(&peer_id) {
+                PAUSED
+            } else if self.is_trusted(&peer_id) {
+                "connection lost"
+            } else {
+                ""
+            };
             self.set_state(&peer_id, PeerState::Disconnected, detail);
         }
         r

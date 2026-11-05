@@ -117,10 +117,33 @@ class Scrcpy {
     ];
   }
 
-  /// First time only: the code and port from "Vincular dispositivo con código de vinculación" on the phone.
+  /// First time only: the code and port from "Vincular dispositivo con código" on Android.
+  /// Feed the one-time code through stdin, not on the process command line
+  /// (which would expose it to local process-list readers). Never log it.
   static Future<String> pair(String ip, String port, String code) async {
-    final r = await _run(['pair', '$ip:$port', code]);
-    return '${r.stdout}${r.stderr}'.trim();
+    final process = await Process.start(
+      _adb,
+      ['pair', '$ip:$port'],
+      environment: {'ADB_MDNS_AUTO_CONNECT': 'adb-tls-connect'},
+    );
+    final stdout = process.stdout.transform(utf8.decoder).join();
+    final stderr = process.stderr.transform(utf8.decoder).join();
+    process.stdin.writeln(code);
+    await process.stdin.close();
+    final status = await process.exitCode.timeout(
+      const Duration(seconds: 20),
+      onTimeout: () {
+        process.kill();
+        return -1;
+      },
+    );
+    final output = await stdout;
+    // Drain stderr but do not return it (errors may echo sensitive data).
+    await stderr;
+    if (status != 0 || !output.contains('Successfully paired')) {
+      throw StateError('No se pudo vincular ADB. Comprueba la IP, el puerto y el código temporal.');
+    }
+    return 'Dispositivo vinculado correctamente con Android.';
   }
 
   /// The phone's wireless-debugging port changes every time; mDNS tells us where it is.
@@ -137,7 +160,16 @@ class Scrcpy {
 
   static Future<bool> connect(String target) async {
     final r = await _run(['connect', target]);
-    return '${r.stdout}'.contains('connected');
+    // A success-looking string alone is not proof of authorization.
+    if (r.exitCode != 0) return false;
+    return (await devices()).contains(target);
+  }
+
+  /// Disconnects only the ADB Wi-Fi transport; it does not forget the Alero
+  /// peer, its TLS identity or its app-level pairing.
+  static Future<void> disconnectWireless(String serial) async {
+    if (!serial.contains(':') && !serial.contains('._adb-tls')) return;
+    await _run(['disconnect', serial]);
   }
 
   /// A serial for this phone: already connected over Wi-Fi, found via mDNS, or the only phone on USB.

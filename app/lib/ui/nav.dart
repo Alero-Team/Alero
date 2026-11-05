@@ -162,9 +162,12 @@ class _Item extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     const icon = AleroNavBar._icon, gap = AleroNavBar._gap;
     final pp = p.clamp(0.0, 1.0);
-    // The icon + name group is centered in the item; unselected, only the icon is.
-    final groupW = icon + (gap + textW) * pp;
-    final x = (width - groupW) / 2;
+    // Flutter lays out the entire selected icon+label group as one centered
+    // object. Absolute Positioned(left: ...) used to let Badge / font metrics
+    // offset the glyph, even though the arithmetic looked centered.
+    final reveal = (gap + textW) * pp;
+    final contentWidth = (icon + reveal).clamp(0.0, width);
+
     return Semantics(
       button: true,
       selected: selected,
@@ -172,6 +175,7 @@ class _Item extends StatelessWidget {
       child: OrionPress(
         onTap: onTap,
         child: SizedBox(
+          key: ValueKey('alero-nav-${data.label}'),
           width: width < 0 ? 0 : width,
           height: AleroNavBar.height - 2 * AleroNavBar._pad,
           child: DecoratedBox(
@@ -183,26 +187,23 @@ class _Item extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(Radii.pill),
             ),
-            child: ClipRect(
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: x,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: ExcludeSemantics(
-                        child: SizedBox(
-                          width: icon,
-                          height: icon,
-                          child: Center(
-                            child: Badge(
-                              // A fixed-size icon slot keeps every glyph centered
-                              // regardless of whether a message badge is visible.
-                              alignment: Alignment.topRight,
-                              offset: const Offset(4, -3),
-                              isLabelVisible: data.badge > 0,
-                              label: Text('${data.badge}'),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(Radii.pill),
+              child: Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  height: AleroNavBar.height - 2 * AleroNavBar._pad,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: icon,
+                        height: icon,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          alignment: Alignment.center,
+                          children: [
+                            ExcludeSemantics(
                               child: Icon(
                                 data.icon,
                                 size: icon,
@@ -214,31 +215,41 @@ class _Item extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          ),
+                            if (data.badge > 0)
+                              Positioned(
+                                top: -6,
+                                right: -8,
+                                child: ExcludeSemantics(
+                                  child: Badge(
+                                    label: Text('${data.badge}'),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    left: x + icon + gap,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: Opacity(
-                        opacity: ((pp - 0.4) / 0.6).clamp(0.0, 1.0),
-                        child: ExcludeSemantics(
-                          child: Text(
-                            data.label,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.clip,
-                            style: label.copyWith(color: s.onSurface),
+                      if (reveal > 0)
+                        ClipRect(
+                          child: SizedBox(
+                            width: (contentWidth - icon).clamp(0.0, reveal),
+                            child: Padding(
+                              padding: EdgeInsets.only(left: gap * pp),
+                              child: Opacity(
+                                opacity: ((pp - 0.4) / 0.6).clamp(0.0, 1.0),
+                                child: Text(
+                                  data.label,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.clip,
+                                  style: label.copyWith(color: s.onSurface),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),

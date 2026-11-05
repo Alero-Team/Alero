@@ -51,7 +51,7 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
   Desktop _support = Desktop.unsupported;
   DesktopLayout _layout = DesktopLayout.floating;
   String _size = '1920x1080/160';
-  String _status = 'Conecta tu Pixel con depuración USB autorizada.';
+  String _status = 'Autoriza la depuración USB o inalámbrica del teléfono.';
   int? _displayId;
   bool _loading = true, _busy = false;
   Timer? _refreshTimer;
@@ -130,7 +130,9 @@ class _AleroDesktopPageState extends State<AleroDesktopPage> {
       final named = await Scrcpy.appsWithNames(widget.serial);
       final apps = [for (final a in named) a.$2];
       final missing = apps.where((p) => !widget.hub.appIcons.containsKey(p));
-      if (widget.peerId != null && missing.isNotEmpty) {
+      if (widget.peerId != null &&
+          missing.isNotEmpty &&
+          widget.hub.connectedPhone?.id == widget.peerId) {
         widget.hub.phoneCmd(widget.peerId!, 'icons', {
           'pkgs': missing.toList(),
         });

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'phone_control.dart';
 import 'scrcpy.dart';
 import 'src/rust/api/engine.dart' as pb;
@@ -23,8 +25,35 @@ AdbDevice? adbFor(List<AdbDevice> devices, pb.Peer phone, String model) {
 
 /// What only adb can do on a phone (Android keeps Wi-Fi and Bluetooth away from ordinary apps).
 abstract final class PhoneAdb {
-  static Future<AdbDevice?> find(pb.Peer phone, String model) async =>
-      Scrcpy.available ? adbFor(await Scrcpy.list(), phone, model) : null;
+  // Shared across Dispositivos, Aplicaciones and Alero Desktop. The user
+  // explicitly chooses an ADB transport; do not silently switch to a different
+  // phone after selecting one. No pairing secrets are stored here.
+  static final selectedChanged = ValueNotifier<int>(0);
+  static final _chosen = <String, String>{};
+
+  static void choose(String peerId, String serial) {
+    _chosen[peerId] = serial;
+    selectedChanged.value++;
+  }
+
+  static void forgetChoice(String peerId) {
+    _chosen.remove(peerId);
+    selectedChanged.value++;
+  }
+
+  static Future<AdbDevice?> find(pb.Peer phone, String model) async {
+    if (!Scrcpy.available) return null;
+    final list = await Scrcpy.list();
+    final serial = _chosen[phone.id];
+    if (serial != null) {
+      return list.where((d) => d.serial == serial && d.ready).firstOrNull;
+    }
+    return adbFor(list, phone, model);
+  }
+
+  /// A selection made by the user in any of the three sections remains
+  /// available to the other sections for that same paired phone.
+  static String? selectedSerial(String peerId) => _chosen[peerId];
 
   /// (Wi-Fi on, Bluetooth on), read from the phone's global settings.
   static Future<(bool, bool)> radios(String serial) async {

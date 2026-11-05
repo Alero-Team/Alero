@@ -30,6 +30,15 @@ import java.io.File
  * working without the UI. Each handler only uses public Android APIs; the special ones (notification access)
  * are granted by the user in system settings.
  */
+/**
+ * The other computer selecting Disconnect produces "paused_remote" locally:
+ * that does NOT mean the Android owner asked Alero to stop listening. Keep the
+ * normal reconnect grace period so Windows can reconnect without re-pairing.
+ * Only a local intentional pause (or revoked trust) requests an immediate stop.
+ */
+internal fun stopServiceImmediately(trusted: Boolean, state: String, detail: String): Boolean =
+    !trusted || state == "Rejected" || detail == "paused"
+
 object Features {
     private lateinit var ctx: Context
     private val main = Handler(Looper.getMainLooper())
@@ -93,7 +102,7 @@ object Features {
                 if (fresh) hello(id)
                 if (!connected) Notifier.controlled(id, "", false) // the computer is gone: so is its session
                 // Unpaired, rejected or disconnected on purpose: stop now instead of waiting for it to come back.
-                val deliberate = !trusted || p.optString("state") == "Rejected" || p.optString("detail").startsWith("paused")
+                val deliberate = stopServiceImmediately(trusted, p.optString("state"), p.optString("detail"))
                 // The foreground service (and its notification) exists only while a computer is connected.
                 PbService.update(ctx, onlineNames(), linger = !deliberate)
             }

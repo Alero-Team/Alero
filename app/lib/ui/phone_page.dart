@@ -17,7 +17,9 @@ class PhonePage extends StatelessWidget {
     required this.title,
     required this.body,
     this.actions,
+    this.allowPairedOffline = false,
   });
+  final bool allowPairedOffline;
   final Hub hub;
   final String title;
   final Widget Function(BuildContext context, pb.Peer phone) body;
@@ -27,7 +29,14 @@ class PhonePage extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: hub,
     builder: (context, _) {
-      final phone = hub.connectedPhone;
+      // ADB can control a previously paired phone even when Alero's app
+      // session is offline; the two connection systems are independent.
+      final phone = hub.connectedPhone ??
+          (allowPairedOffline
+              ? hub.peers.where((p) => p.trusted &&
+                  hub.info[p.id]?.phone == true).firstOrNull ??
+                  hub.peers.where((p) => p.trusted).firstOrNull
+              : null);
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(Gap.xxl, Gap.xl, Gap.xxl, Gap.xl),
@@ -92,21 +101,46 @@ class _AdbFinderState extends State<AdbFinder> {
   @override
   void initState() {
     super.initState();
+    PhoneAdb.selectedChanged.addListener(_look);
     _look();
   }
 
+  @override
+  void didUpdateWidget(AdbFinder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.phone.id != widget.phone.id) _look();
+  }
+
+  @override
+  void dispose() {
+    PhoneAdb.selectedChanged.removeListener(_look);
+    super.dispose();
+  }
+
+  int _request = 0;
+
   Future<void> _look() async {
-    final d = await PhoneAdb.find(
-      widget.phone,
-      widget.hub.info[widget.phone.id]?.model ?? '',
-    );
-    if (!mounted) return;
+    final request = ++_request;
+    AdbDevice? d;
+    try {
+      d = await PhoneAdb.find(
+        widget.phone,
+        widget.hub.info[widget.phone.id]?.model ?? '',
+      );
+    } catch (_) {
+      d = null;
+    }
+    if (!mounted || request != _request) return;
     setState(() {
       _d = d;
       _looking = false;
     });
-    // A cable plugged in, or "Permitir" tapped on the phone, shows up within a few seconds.
-    if (d == null) Future.delayed(const Duration(seconds: 4), _look);
+    // Only poll while no authorised ADB transport exists.
+    if (d == null) {
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted && request == _request) _look();
+      });
+    }
   }
 
   @override
@@ -127,7 +161,7 @@ class NeedsAdb extends StatelessWidget {
     icon: Symbols.usb_rounded,
     title: '$feature necesita la depuración del teléfono',
     body:
-        'Conecta el teléfono por USB con «Depuración USB» activada, o usa la depuración inalámbrica '
-        '(Inicio › Controlar teléfono › Preparar el teléfono). Solo se configura una vez.',
+        'Utiliza «Depuración USB» o «Depuración inalámbrica» en este apartado. '
+        'Android debe autorizar el ordenador para usar ADB; no hace falta root.',
   );
 }

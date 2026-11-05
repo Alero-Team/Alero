@@ -7,6 +7,7 @@ import '../hub.dart';
 import '../native.dart';
 import '../remote.dart';
 import '../src/rust/api/engine.dart' as pb;
+import 'adb_connection.dart';
 import 'connect_help.dart';
 import 'pc_details.dart';
 import 'qr.dart';
@@ -182,6 +183,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
 
     final cablePanel = ConnectionPanel(hub);
+    final adbPanel = Platform.isAndroid
+        ? null
+        : AdbConnectionPanel(
+            hub: hub,
+            phone: hub.connectedPhone ??
+                paired.where((p) => hub.info[p.id]?.phone == true).firstOrNull ??
+                paired.firstOrNull,
+          );
 
     const gap = SizedBox(height: Gap.l, width: Gap.l);
     // A phone sees what each connected computer reports and can do with it (advanced controls).
@@ -208,7 +217,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   gap,
                   Expanded(
                     child: Column(
-                      children: [qrPanel, gap, cablePanel, gap, ipPanel],
+                      children: [qrPanel, gap, cablePanel, gap, if (adbPanel != null) ...[adbPanel, gap], ipPanel],
                     ),
                   ),
                 ],
@@ -224,6 +233,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
               gap,
               cablePanel,
               gap,
+              if (adbPanel != null) ...[adbPanel, gap],
               ipPanel,
             ],
     );

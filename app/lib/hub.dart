@@ -523,7 +523,10 @@ class Hub extends ChangeNotifier {
     String? peerId,
   }) async {
     await PhoneSessions.instance.start(serial, title, o);
-    if (peerId == null) return;
+    // ADB/scrcpy may be authorised even when Alero's own TLS session is
+    // disconnected. The viewer must still launch; only notify the phone
+    // about control when that separate Alero channel is actually online.
+    if (peerId == null || !peers.any((p) => p.id == peerId && _online(p))) return;
     _controlled[serial] = peerId;
     await _send(peerId, 'pb.x.phonecontrol', {'active': true});
   }

@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../hub.dart';
 import '../phone_control.dart';
 import '../scrcpy.dart';
+import 'adb_connection.dart';
 import 'phone_page.dart';
 import 'theme.dart';
 
@@ -19,21 +20,31 @@ class AppsScreen extends StatelessWidget {
   Widget build(BuildContext context) => PhonePage(
     hub: hub,
     title: 'Aplicaciones',
-    body: (context, phone) => AdbFinder(
-      hub: hub,
-      phone: phone,
-      builder: (context, d) => d == null
-          ? const Align(
-              alignment: Alignment.topCenter,
-              child: NeedsAdb('Abrir apps en ventanas'),
-            )
-          : _Apps(hub, d, phone.id, phone.name),
+    allowPairedOffline: true,
+    body: (context, phone) => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AdbConnectionPanel(hub: hub, phone: phone),
+        const SizedBox(height: Gap.m),
+        Expanded(
+          child: AdbFinder(
+            hub: hub,
+            phone: phone,
+            builder: (context, d) => d == null
+                ? const Align(
+                    alignment: Alignment.topCenter,
+                    child: NeedsAdb('Abrir apps en ventanas'),
+                  )
+                : _Apps(hub, d, phone.id, phone.name, key: ValueKey(d.serial)),
+          ),
+        ),
+      ],
     ),
   );
 }
 
 class _Apps extends StatefulWidget {
-  const _Apps(this.hub, this.device, this.phoneId, this.phoneName);
+  const _Apps(this.hub, this.device, this.phoneId, this.phoneName, {super.key});
   final Hub hub;
   final AdbDevice device;
   final String phoneId, phoneName;
@@ -53,7 +64,9 @@ class _AppsState extends State<_Apps> {
       for (final a in apps)
         if (!widget.hub.appIcons.containsKey(a.$2)) a.$2,
     ];
-    if (missing.isNotEmpty) {
+    // Application icons are an optional Alero TLS feature. Opening apps
+    // via authorised ADB must also work while that channel is offline.
+    if (missing.isNotEmpty && widget.hub.connectedPhone?.id == widget.phoneId) {
       widget.hub.phoneCmd(widget.phoneId, 'icons', {'pkgs': missing});
     }
     return apps;

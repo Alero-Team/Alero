@@ -1,5 +1,30 @@
 # Cambios
 
+## 0.1.18 — 2026-11-04
+
+Actualización incremental basada en 0.1.17. Se mantienen todas las funciones existentes, la firma Android original y la compatibilidad de los componentes anteriores.
+
+### Funciones nuevas
+
+- **Depuración USB e inalámbrica por separado:** botones independientes en Dispositivos, Aplicaciones y Alero Desktop (Windows). Las tres pantallas comparten la selección del transporte ADB autorizado del mismo teléfono.
+- **Vinculación ADB por Wi-Fi:** diálogo con dirección IPv4, puerto de vinculación, código temporal de seis dígitos y puerto de conexión distinto, con descubrimiento mDNS cuando sea posible. El código se envía a adb por entrada estándar, no como argumento del proceso.
+- **Aplicaciones y Alero Desktop sin cable:** permiten usar una conexión ADB Wi-Fi autorizada y seleccionar el transporte USB sin rehacer el emparejamiento propio de Alero. Se puede desconectar el transporte Wi-Fi independientemente de la confianza TLS de Alero.
+
+### Errores corregidos
+
+- **Píldora de navegación:** centrado mediante disposición real del grupo icono/etiqueta en lugar de posicionamiento absoluto; una insignia no cambia el centro geométrico del icono. Se conserva la animación entre apartados.
+- **Reconexión:** el cierre tardío de un socket no sustituye el estado «Desconectado voluntariamente» por «Conexión perdida».
+- **Android:** un ordenador que desconecta Alero no provoca la terminación inmediata del servicio del teléfono: se mantiene el margen de reconexión para permitir reanudar sin repetir QR.
+- Actualizaciones del dispositivo ADB seleccionado se propagan a las demás pantallas de Windows sin depender de una recarga completa.
+
+### Pruebas y limitaciones
+
+- Pruebas automáticas de centrado, múltiples ciclos de conexión/desconexión, servicio Android y verificación Rust/Flutter/Kotlin ejecutadas mediante GitHub Actions (consultar la ejecución de cada compilación).
+- La conexión ADB inalámbrica requiere activación y autorización oficiales del usuario desde Android; IP y puertos pueden cambiar.
+- Tras el período de gracia del servicio Android y si Android suspende el proceso, la reconexión en segundo plano puede requerir abrir Alero o activar su opción de ejecución en segundo plano. No se garantiza control remoto sin permisos del sistema.
+- La instalación de la APK con Google Play Protect activado **no está verificada** mediante dispositivo real. No se han eliminado permisos ni funciones.
+- La reproducción de vídeo en directo y demás funciones pendientes de versiones anteriores no se declaran corregidas en esta versión.
+
 ## 0.1.17 — 2026-11-04
 
 Instala juntos el APK de Android y el instalador de Windows de esta versión: la portada de lo que suena en el ordenador necesita ambos lados actualizados.
