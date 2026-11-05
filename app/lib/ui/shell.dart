@@ -267,6 +267,7 @@ class _ShellState extends State<Shell>
   );
 
   int _badge(Section s) => switch (s) {
+    Section.notifications => hub.notifs.values.expand((items) => items).length,
     Section.messages =>
       hub.sms.threads.where((t) => !t.read).length +
           hub.notifs.values.expand((l) => l).where((n) => n.chat).length,
