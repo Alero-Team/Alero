@@ -229,142 +229,153 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = Theme.of(context).colorScheme;
-    final t = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
+    final type = Theme.of(context).textTheme;
     final online = p.state == pb.PeerState.connected;
     final phone = info?.phone ?? !Platform.isAndroid;
-    final facts = [
-      info?.model ?? '',
-      info?.osLabel ?? '',
-      info?.network ?? '',
-      if (online) hub.routeOf(p),
-    ].where((x) => x.isNotEmpty).join(' · ');
     final picture = phone
         ? PhoneMockup(
             info: info,
             wallpaper: hub.wallpaper[p.id],
-            width: 72,
+            width: 84,
             online: online,
           )
         : LaptopMockup(info: info, wallpaper: hub.wallpaper[p.id], width: 104);
+
+    Widget property(IconData icon, String value) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: colors.onSurfaceVariant),
+          const SizedBox(width: 7),
+          Text(value, style: type.labelSmall),
+        ],
+      ),
+    );
+
+    final actions = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        FilledButton.icon(
+          onPressed: online ? () => hub.send(p.id) : null,
+          icon: const Icon(Symbols.upload_rounded, size: 18),
+          label: const Text('Enviar archivos'),
+        ),
+        ClipboardButton(hub, p.id, enabled: online),
+        if (phone && !Platform.isAndroid)
+          OutlinedButton.icon(
+            onPressed: () => go(Section.explorer),
+            icon: const Icon(Symbols.folder_open_rounded, size: 18),
+            label: const Text('Explorar archivos'),
+          ),
+        if (phone && !Platform.isAndroid)
+          OutlinedButton.icon(
+            onPressed: online ? () => openScreen(context, hub, p) : null,
+            icon: const Icon(Symbols.cast_rounded, size: 18),
+            label: const Text('Controlar teléfono'),
+          ),
+      ],
+    );
+
     return Card(
-      color: s.surfaceContainer,
       child: Padding(
-        padding: const EdgeInsets.all(Gap.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        padding: const EdgeInsets.all(20),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final phoneSize = box.maxWidth < 420 ? 70.0 : 104.0;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Semantics(
-                  button: true,
-                  label: 'Ver ${p.name} en Dispositivos',
-                  child: InkWell(
-                    onTap: () => go(Section.devices),
-                    borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.all(Gap.s),
-                      child: picture,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: Gap.xl),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        p.name,
-                        style: t.headlineSmall,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: phoneSize,
+                      child: Semantics(
+                        button: true,
+                        label: 'Dispositivo ' + p.name,
+                        child: InkWell(
+                          onTap: () => go(Section.devices),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Center(child: picture),
+                        ),
                       ),
-                      const SizedBox(height: Gap.xs),
-                      StatusLine(p),
-                      const SizedBox(height: Gap.s),
-                      Wrap(
-                        spacing: Gap.m,
-                        runSpacing: Gap.xs,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (facts.isNotEmpty)
-                            Text(
-                              facts,
-                              style: t.bodyMedium?.copyWith(
-                                color: s.onSurfaceVariant,
-                              ),
-                            ),
-                          if ((info?.battery ?? -1) >= 0) BatteryLine(info!),
-                          if (online)
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 10,
+                            runSpacing: 6,
+                            children: [
+                              Text(p.name, style: type.headlineSmall,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                              StatusLine(p),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: [
+                              if ((info?.model ?? '').isNotEmpty)
+                                property(Symbols.smartphone_rounded, info!.model),
+                              if ((info?.osLabel ?? '').isNotEmpty)
+                                property(Symbols.layers_rounded, info!.osLabel),
+                              if ((info?.network ?? '').isNotEmpty)
+                                property(Symbols.wifi_rounded, info!.network),
+                              if (online)
+                                property(Symbols.verified_user_rounded, 'Conexión cifrada'),
+                            ],
+                          ),
+                          if ((info?.battery ?? -1) >= 0) ...[
+                            const SizedBox(height: 13),
                             Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Symbols.lock_rounded,
-                                  size: 16,
-                                  color: s.onSurfaceVariant,
-                                ),
-                                const SizedBox(width: Gap.xs),
+                                BatteryGlyph(info!.battery, charging: info!.charging),
+                                const SizedBox(width: 8),
                                 Text(
-                                  'Cifrada',
-                                  style: t.bodyMedium?.copyWith(
-                                    color: s.onSurfaceVariant,
+                                  '${info!.battery}%',
+                                  style: type.titleLarge,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: LinearProgressIndicator(
+                                    value: (info!.battery / 100).clamp(0, 1),
+                                    minHeight: 7,
+                                    borderRadius: BorderRadius.circular(30),
                                   ),
                                 ),
                               ],
                             ),
+                          ],
                         ],
                       ),
-                      if (!online) ...[
-                        const SizedBox(height: Gap.s),
-                        Text(
-                          p.state == pb.PeerState.rejected
-                              ? 'Ese dispositivo te quitó de su lista. Vuelve a emparejarlos desde Dispositivos.'
-                              : 'Abre Alero en ${p.name} y comprueba que ambos están en la misma red Wi-Fi o conéctalos con un cable USB.',
-                          style: t.bodyMedium?.copyWith(
-                            color: s.onSurfaceVariant,
-                          ),
-                        ),
-                        if (!Platform.isAndroid &&
-                            p.state != pb.PeerState.rejected) ...[
-                          const SizedBox(height: Gap.s),
-                          OutlinedButton.icon(
-                            onPressed: hub.connectCable,
-                            icon: const Icon(Symbols.usb_rounded, size: 18),
-                            label: const Text('Conectar por cable'),
-                          ),
-                        ],
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (!Platform.isAndroid) ...[
-              const SizedBox(height: Gap.xl),
-              // M3 Expressive button group: one primary action, the rest tonal.
-              Wrap(
-                spacing: Gap.s,
-                runSpacing: Gap.s,
-                children: [
-                  FilledButton.icon(
-                    onPressed: online ? () => hub.send(p.id) : null,
-                    icon: const Icon(Symbols.upload_rounded, size: 18),
-                    label: const Text('Enviar archivos'),
-                  ),
-                  ClipboardButton(hub, p.id, enabled: online),
-                  if (!Platform.isAndroid && phone)
-                    FilledButton.tonalIcon(
-                      onPressed: online
-                          ? () => openScreen(context, hub, p)
-                          : null,
-                      icon: const Icon(Symbols.cast_rounded, size: 18),
-                      label: const Text('Controlar teléfono'),
                     ),
+                  ],
+                ),
+                if (!online) ...[
+                  const SizedBox(height: 12),
+                  Text('Comprueba que ambos dispositivos estén conectados a la misma red.',
+                      style: type.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      )),
                 ],
-              ),
-            ],
-          ],
+                const SizedBox(height: 18),
+                actions,
+              ],
+            );
+          },
         ),
       ),
     );
