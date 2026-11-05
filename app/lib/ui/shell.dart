@@ -15,10 +15,8 @@ import 'devices.dart';
 import 'explorer.dart';
 import 'expressive.dart';
 import 'home.dart';
-import 'apps_screen.dart';
 import 'call_bar.dart';
 import 'calls_screen.dart';
-import 'deck_screen.dart';
 import 'vault.dart';
 import 'messages.dart';
 import 'nav.dart';
@@ -35,8 +33,6 @@ enum Section {
   messages,
   calls,
   photos,
-  apps,
-  deck,
   explorer,
   vault,
   devices,
@@ -243,8 +239,6 @@ class _ShellState extends State<Shell>
     Section.messages => MessagesScreen(hub),
     Section.calls => CallsScreen(hub),
     Section.photos => PhotosScreen(hub),
-    Section.apps => AppsScreen(hub),
-    Section.deck => DeckScreen(hub),
     Section.explorer => ExplorerScreen(hub),
     Section.vault => const VaultScreen(),
     Section.devices => DevicesScreen(hub),
