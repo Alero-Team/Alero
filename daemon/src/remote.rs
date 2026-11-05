@@ -31,6 +31,7 @@ struct Screen {
     peer: String,
     width: u32,
     fps: u32,
+    monitor: usize,
     last_keepalive: Instant,
     inflight: u32,
     last_ack: Instant,
@@ -44,6 +45,7 @@ pub struct Remote {
     noticed: Mutex<HashMap<String, Instant>>,
     denied: Mutex<HashMap<String, Instant>>,
     screen: Mutex<Option<Screen>>,
+    extend: Mutex<Option<(String, usize, bool)>>,
     watchers: Mutex<HashMap<String, Instant>>,
     watching: Mutex<bool>,
     pushed: Mutex<HashMap<String, Value>>,
@@ -76,6 +78,7 @@ impl Remote {
             noticed: Mutex::new(HashMap::new()),
             denied: Mutex::new(HashMap::new()),
             screen: Mutex::new(None),
+            extend: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
             watching: Mutex::new(false),
             pushed: Mutex::new(HashMap::new()),
@@ -220,6 +223,9 @@ impl Remote {
             self.watchers.lock().unwrap().remove(peer);
             return true;
         }
+        if kind.starts_with("pb.x.extend.") {
+            return self.handle_extend(engine, peer, kind);
+        }
         let ours = kind.starts_with("pb.x.remote.")
             || kind.starts_with("pb.x.screen.")
             || kind == "pb.x.shot.request"
@@ -311,6 +317,59 @@ impl Remote {
         true
     }
 
+    /// A paired phone can start a real IddCx-backed Windows display, but
+    /// only after the PC owner enables extension in its own settings.
+    fn handle_extend(self: &Arc<Self>, engine: &Arc<Engine>, peer: &str, kind: &str) -> bool {
+        if !engine.peers().iter()
+            .any(|p| p.id == peer && p.trusted && p.state == PeerState::Connected) {
+            return true;
+        }
+        if !self.allowed() || !crate::extend::config_enabled(&self.data) {
+            let _ = engine.send_message(peer, "pb.x.extend.result",
+                json!({"ok":false, "reason":"not_allowed"}));
+            return true;
+        }
+        match kind {
+            "pb.x.extend.start" => {
+                let mut session = self.extend.lock().unwrap();
+                if let Some((owner, monitor, _)) = session.as_ref() {
+                    let _ = engine.send_message(peer, "pb.x.extend.result",
+                        json!({"ok": owner == peer, "monitor":monitor, "reason":"busy"}));
+                    return true;
+                }
+                match crate::extend::add_display() {
+                    Ok(monitor) => {
+                        #[cfg(windows)]
+                        crate::win::toast("Pantalla extendida", "Un teléfono emparejado inició una pantalla adicional de Windows");
+                        *session = Some((peer.to_owned(), monitor, true));
+                        let _ = engine.send_message(peer, "pb.x.extend.result",
+                            json!({"ok":true, "monitor":monitor}));
+                    }
+                    Err(reason) => {
+                        let _ = engine.send_message(peer, "pb.x.extend.result",
+                            json!({"ok":false,"reason":reason,
+                                "driverUrl":crate::extend::installer_url()}));
+                    }
+                }
+            }
+            "pb.x.extend.stop" => {
+                let mut session = self.extend.lock().unwrap();
+                if session.as_ref().is_some_and(|(owner, _, _)| owner == peer) {
+                    *session = None;
+                    *self.screen.lock().unwrap() = None;
+                    crate::extend::remove_display();
+                }
+                let _ = engine.send_message(peer, "pb.x.extend.result",
+                    json!({"ok":true, "stopped":true}));
+            }
+            _ => {
+                let _ = engine.send_message(peer, "pb.x.extend.result",
+                    json!({"ok":false, "reason":"unsupported_command"}));
+            }
+        }
+        true
+    }
+
     // --- screen ------------------------------------------------------------------------------------------
 
     fn start_screen(self: &Arc<Self>, engine: &Arc<Engine>, peer: &str, b: &Value) {
@@ -327,6 +386,7 @@ impl Remote {
             peer: peer.to_string(),
             width: b["w"].as_u64().unwrap_or(960).clamp(320, 1920) as u32,
             fps: b["fps"].as_u64().unwrap_or(8).clamp(1, 15) as u32,
+            monitor: b["monitor"].as_u64().unwrap_or(0).min(16) as usize,
             last_keepalive: Instant::now(),
             inflight: 0,
             last_ack: Instant::now(),
@@ -341,7 +401,7 @@ impl Remote {
     fn screen_loop(&self, engine: &Engine, gen: u64) {
         let (mut seq, mut last_print, mut last_sent) = (0u64, 0u64, Instant::now() - Duration::from_secs(10));
         loop {
-            let (peer, width, fps) = {
+            let (peer, width, fps, monitor) = {
                 let mut g = self.screen.lock().unwrap();
                 match g.as_mut() {
                     Some(sc) if sc.gen == gen && sc.last_keepalive.elapsed() < SESSION_IDLE => {
@@ -354,7 +414,7 @@ impl Remote {
                             thread::sleep(Duration::from_millis(25));
                             continue;
                         }
-                        (sc.peer.clone(), sc.width, sc.fps)
+                        (sc.peer.clone(), sc.width, sc.fps, sc.monitor)
                     }
                     _ => {
                         let mut g = g;
@@ -372,7 +432,7 @@ impl Remote {
                 thread::sleep(Duration::from_millis(500));
                 continue;
             }
-            if let Some((w, h, rgb)) = sys::capture(width) {
+            if let Some((w, h, rgb)) = sys::capture_monitor(width, monitor) {
                 let print = fingerprint(&rgb);
                 // Unchanged picture: send nothing (the phone keeps showing the last one), except a refresh now and then.
                 if print != last_print || last_sent.elapsed() > Duration::from_secs(2) {
