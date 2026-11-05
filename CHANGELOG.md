@@ -22,7 +22,7 @@
 
 - **Portadas en el teléfono:** el PC descartaba las portadas de más de 150 KB (muchas de Spotify), así que el teléfono mostraba una nota musical. Ahora las reduce a un JPEG de 400 px.
 - **Botón de reproducir vacío en el PC:** el tema pintaba el icono del mismo color que el botón (blanco sobre blanco). Pasaba igual en Enviar de Mensajes y de las respuestas a notificaciones.
-- **Accesos directos unificados:** todos dentro de la tarjeta del dispositivo, con los botones del prototipo (Enviar archivos relleno, Portapapeles tonal, el resto con contorno). En Android: Enviar archivos, Portapapeles, Archivos, Controlar, Pantalla y Captura; ya no están repartidos en tres bloques.
+- **Accesos directos unificados:** en el PC, todos dentro de la tarjeta del dispositivo con los botones del prototipo. En Android, la tarjeta del PC lleva cuatro botones pequeños en una fila (Enviar, Portapapeles, Pantalla y Captura), y una tarjeta nueva, **Control remoto**, reúne «Ratón y teclado» y «Archivos del ordenador».
 - **Estado del dispositivo** dentro de la misma tarjeta, bajo los botones.
 - **Barra de progreso del reproductor en el teléfono:** saltaba hacia atrás porque Windows solo actualiza la posición cuando el reproductor informa (Spotify, cada pocos segundos). El PC ahora suma el tiempo transcurrido desde ese informe.
 - **Alero Vault en Android** sale de la barra inferior y pasa a Ajustes › Seguridad. En el PC sigue en el menú lateral.

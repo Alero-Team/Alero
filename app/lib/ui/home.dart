@@ -97,6 +97,8 @@ class HomeScreen extends StatelessWidget {
               children: [
                 hero,
                 gap,
+                RemoteCard(hub, main),
+                gap,
                 MediaPanel(hub, main.id, computer: true),
                 gap,
                 recent,
@@ -417,7 +419,8 @@ class _Hero extends StatelessWidget {
                                 property(Symbols.layers_rounded, info!.osLabel),
                               if ((info?.network ?? '').isNotEmpty)
                                 property(Symbols.wifi_rounded, info!.network),
-                              if (online)
+                              // The phone keeps this card short: four buttons, no extra row of chips.
+                              if (online && !Platform.isAndroid)
                                 property(
                                   Symbols.verified_user_rounded,
                                   'Conexión cifrada',
