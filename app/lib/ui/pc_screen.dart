@@ -176,9 +176,9 @@ class _PcScreenPageState extends State<PcScreenPage>
               onSelected: (q) => _feed.setQuality(width: q.$1, fps: q.$2),
               itemBuilder: (_) => [
                 for (final q in const [
-                  (640, 8, 'Fluida'),
-                  (960, 5, 'Equilibrada'),
-                  (1280, 3, 'Nítida'),
+                  (640, 12, 'Fluida'),
+                  (960, 8, 'Equilibrada'),
+                  (1280, 4, 'Nítida'),
                 ])
                   CheckedPopupMenuItem(
                     value: (q.$1, q.$2),
