@@ -101,9 +101,15 @@ class _VaultScreenState extends State<VaultScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
             FilledButton(
-              onPressed: () => title.text.trim().isEmpty
-                  ? null
-                  : Navigator.pop(ctx, true),
+              onPressed: () {
+                if (title.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Escribe un título para guardar la nota.')),
+                  );
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
               child: const Text('Guardar cifrada'),
             ),
           ],
