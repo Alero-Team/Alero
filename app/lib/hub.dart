@@ -158,6 +158,8 @@ class Hub extends ChangeNotifier {
   bool remoteAllow = false;
   List<String> pcFolders = const [];
   bool pcFilesWrite = false;
+  bool extendAllow = false;
+  final extendSession = <String, Map<String, dynamic>>{};
   final clips = <ClipItem>[];
 
   /// Android: special access for notifications/media, and the normal notification permission.
@@ -219,6 +221,7 @@ class Hub extends ChangeNotifier {
     remoteAllow = _readRemote();
     pcFolders = _readPcFolders();
     pcFilesWrite = _readRemoteConfig()['allowPcFileEdits'] == true;
+    extendAllow = _readRemoteConfig()['allowExtend'] == true;
     pb.events().listen(_on);
     Native.onShared(takeShare);
     try {
@@ -318,6 +321,14 @@ class Hub extends ChangeNotifier {
   }
 
   /// Separate explicit consent for renaming/deleting shared files.
+  /// Windows owner controls whether paired phones may create a virtual monitor.
+  void setExtendAllow(bool enabled) {
+    if (!Platform.isWindows) return;
+    _writeRemoteConfig({..._readRemoteConfig(), 'allowExtend': enabled});
+    extendAllow = enabled;
+    notifyListeners();
+  }
+
   void setPcFileEdits(bool value) {
     _writeRemoteConfig({..._readRemoteConfig(), 'allowPcFileEdits': value});
     pcFilesWrite = value;
@@ -602,6 +613,11 @@ class Hub extends ChangeNotifier {
     }
     if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
     if (kind.startsWith('pb.x.pcfs.')) return pcFs.onMessage(peerId, kind, b);
+    if (kind == 'pb.x.extend.result') {
+      extendSession[peerId] = b;
+      notifyListeners();
+      return;
+    }
     if (kind.startsWith('pb.x.sms.')) return sms.onMessage(peerId, kind, b);
     switch (kind) {
       case 'pb.x.call':
