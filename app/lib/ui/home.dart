@@ -396,10 +396,12 @@ class BatteryLine extends StatelessWidget {
       children: [
         BatteryGlyph(info.battery, charging: info.charging),
         const SizedBox(width: Gap.xs + 2),
-        Text(
+        AleroMotion.number(
           '${info.battery} %${info.charging ? ' · cargando' : ''}',
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
+          Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: s.onSurfaceVariant,
+            fontFeatures: tabular,
+          ),
         ),
       ],
     );
