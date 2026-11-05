@@ -59,14 +59,14 @@ class Gap {
 }
 
 class Radii {
-  static const card = 28.0, tile = 16.0, chip = 12.0, pill = 999.0;
+  static const card = 16.0, tile = 12.0, chip = 10.0, pill = 999.0;
 }
 
 /// Wider than this: side navigation (desktop, tablets). Narrower: floating bottom bar.
 const wideLayout = 840.0;
 
 /// Used when the system offers no color (older Android, Linux without a portal).
-const brandGraphite = Color(0xFF111315);
+const brandGraphite = Color(0xFF1B1B1D);
 const fallbackSeed = Color(0xFF50565E);
 
 /// Reads the system color once (and again when the app comes back to the front).
@@ -129,17 +129,17 @@ ColorScheme schemeFor(
   }
   final neutral = s.copyWith(
     surface: brandGraphite,
-    surfaceDim: brandGraphite,
-    surfaceBright: const Color(0xFF353A40),
-    surfaceContainerLowest: const Color(0xFF0B0D0F),
-    surfaceContainerLow: const Color(0xFF181B1F),
-    surfaceContainer: const Color(0xFF1E2226),
-    surfaceContainerHigh: const Color(0xFF262A2F),
-    surfaceContainerHighest: const Color(0xFF30353B),
-    onSurface: const Color(0xFFF5F5F2),
-    onSurfaceVariant: const Color(0xFFB8BEC6),
-    outline: const Color(0xFF858D98),
-    outlineVariant: const Color(0xFF353B43),
+    surfaceDim: const Color(0xFF19191A),
+    surfaceBright: const Color(0xFF333335),
+    surfaceContainerLowest: const Color(0xFF171719),
+    surfaceContainerLow: const Color(0xFF1D1D1F),
+    surfaceContainer: const Color(0xFF232325),
+    surfaceContainerHigh: const Color(0xFF28282A),
+    surfaceContainerHighest: const Color(0xFF323234),
+    onSurface: const Color(0xFFF5F5F5),
+    onSurfaceVariant: const Color(0xFFB7B7BD),
+    outline: const Color(0xFF77777B),
+    outlineVariant: const Color(0xFF3C3C3F),
   );
   if (!amoled) return neutral;
   return neutral.copyWith(
@@ -210,7 +210,7 @@ ThemeData buildTheme(
       // A discreet border keeps cards readable on any surface, black included.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Radii.card),
-        side: BorderSide(color: p.line.withValues(alpha: 0.55)),
+        side: BorderSide(color: p.line.withValues(alpha: 0.85)),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
