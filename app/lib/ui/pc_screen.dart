@@ -14,18 +14,19 @@ Future<void> openPcScreen(
   BuildContext context,
   Hub hub,
   String peer,
-  String name,
+  String name, {int monitor = 0}
 ) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => PcScreenPage(hub, peer, name),
+    builder: (_) => PcScreenPage(hub, peer, name, monitor: monitor),
   ),
 );
 
 class PcScreenPage extends StatefulWidget {
-  const PcScreenPage(this.hub, this.peer, this.name, {super.key});
+  const PcScreenPage(this.hub, this.peer, this.name, {super.key, this.monitor = 0});
   final Hub hub;
   final String peer, name;
+  final int monitor;
 
   @override
   State<PcScreenPage> createState() => _PcScreenPageState();
@@ -42,7 +43,7 @@ class _PcScreenPageState extends State<PcScreenPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _feed = ScreenFeed(widget.hub, widget.peer)..addListener(_frameArrived);
+    _feed = ScreenFeed(widget.hub, widget.peer, monitor: widget.monitor)..addListener(_frameArrived);
     widget.hub.screen = _feed;
     _start();
   }
