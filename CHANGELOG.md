@@ -1,5 +1,41 @@
 # Cambios
 
+## 1.0.0 — 2026-11-05
+
+### Rediseño de Windows y Android
+
+- **Windows:** nuevo inicio conforme a las dos capturas proporcionadas: navegación lateral de grafito con apartados agrupados, opción «Contraer menú», tarjeta principal de dispositivo con indicadores de conexión y batería, reproductor compacto, notificaciones, archivos, estado y controles rápidos, y actividad reciente con filtros Todo/Enviados/Recibidos.
+- **Android:** adaptación de las superficies, tarjetas, colores, tipografía y jerarquía del mismo diseño a pantallas estrechas. **Se conserva la píldora flotante de navegación inferior original**, su funcionamiento y todas sus secciones.
+- **Personalizar:** acceso directo a Apariencia y Ajustes desde el inicio de Windows.
+- **Datos reales:** el resumen, los archivos, la reproducción, las notificaciones y los controles siguen conectados a las funciones existentes de Alero; no se utilizan nombres ni mensajes ficticios de las capturas.
+
+### Animaciones
+
+- Se adaptaron los movimientos de Material 3 Expressive/Orion: presión elástica al 95,5 %, entrada y salida de apartados con transición de escala 98–100 % y fundido, aparición escalonada de tarjetas con desplazamiento vertical y movimiento animado de cifras.
+- Indicador de actividad pulsante solo para transferencias reales, detenido durante inactividad.
+- Se respeta la preferencia de accesibilidad «Reducir animaciones» en Windows y Android.
+- **Píldora de Android:** mantiene el mismo diseño y la transición elástica entre opciones.
+
+### Funciones conservadas
+
+- Se mantienen las transferencias de archivos, la sincronización de portapapeles, mensajes, llamadas, notificaciones, fotos, explorador, controles del teléfono, conexiones, dispositivos, configuración y las demás funciones previamente incorporadas.
+- Se mantienen Alero Present, Alero Vault, el acceso remoto y las integraciones de pantalla extendida, webcam y archivos del ordenador incluidas en el código anterior.
+- Los antiguos destinos «Aplicaciones» y «Alero Desktop» continúan retirados, como se solicitó anteriormente; sus opciones no vuelven a aparecer.
+
+### Errores corregidos
+
+- Navegación lateral organizada por secciones con estado y contadores actualizados.
+- Paneles de Windows ajustados a la anchura disponible, evitando columnas desordenadas.
+- Diseño adaptable a Windows y Android sin sustituir ni eliminar la navegación inferior del teléfono.
+- Reproductor compacto sin mostrar un panel multimedia enorme dentro del dashboard.
+
+### Paquetes
+
+- APK Android ARM64 e instalador Windows x64 procedentes del mismo commit de `main`, sujetos a la generación correcta de ambos paquetes en GitHub Actions.
+- Publicación con changelog y sumas SHA-256 una vez que el proceso de compilación finalice correctamente.
+- Por petición expresa, esta entrega no agrega pruebas manuales ni nuevas suites de prueba.
+
+
 ## 0.1.18 — 2026-11-04
 
 Actualización incremental basada en 0.1.17. Se mantienen todas las funciones existentes, la firma Android original y la compatibilidad de los componentes anteriores.
