@@ -15,6 +15,8 @@ import 'devices.dart';
 import 'explorer.dart';
 import 'expressive.dart';
 import 'home.dart';
+import 'notifications.dart';
+import 'alero_motion.dart';
 import 'call_bar.dart';
 import 'calls_screen.dart';
 import 'vault.dart';
@@ -32,6 +34,7 @@ enum Section {
   home,
   messages,
   calls,
+  notifications,
   photos,
   explorer,
   vault,
@@ -52,27 +55,19 @@ class _Dest {
 /// The phone's own file browser is a computer feature: it reads another device's files, so it has no place on a phone.
 final _dests = [
   const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
-  // The phone, used from the computer.
   if (!Platform.isAndroid) ...const [
-    _Dest(
-      Section.messages,
-      'Mensajes',
-      Symbols.chat_rounded,
-      group: 'Teléfono',
-    ),
+    _Dest(Section.messages, 'Mensajes', Symbols.chat_rounded, group: 'COMUNICACIÓN'),
     _Dest(Section.calls, 'Llamadas', Symbols.call_rounded),
-    _Dest(Section.photos, 'Fotos', Symbols.photo_library_rounded),
-    _Dest(
-      Section.explorer,
-      'Explorador',
-      Symbols.perm_media_rounded,
-      group: 'Archivos y equipo',
-    ),
+    _Dest(Section.notifications, 'Notificaciones', Symbols.notifications_rounded),
+    _Dest(Section.photos, 'Fotos', Symbols.photo_library_rounded, group: 'CONTENIDO'),
+    _Dest(Section.explorer, 'Explorador', Symbols.folder_rounded),
   ],
-  const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
-  const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded),
-  const _Dest(Section.settings, 'Ajustes', Symbols.settings_rounded),
-];
+  const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded,
+      ),
+  const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded,
+      group: 'SISTEMA'),
+  const _Dest(Section.settings, 'Ajustes', Symbols.tune_rounded),
+]
 
 /// App frame: side navigation on wide windows, floating glass bar on phones. Owns the questions the engine
 /// asks the user (pairing code, incoming file), the share sheet and the toast messages. Reads Hub, never decides.
@@ -93,6 +88,7 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell>
     with WidgetsBindingObserver, WindowListener {
+  bool _sidebarCollapsed = false;
   Hub get hub => widget.hub;
   // ALERO_SECTION=explorer (etc.) opens that screen first: handy for screenshots and manual checks.
   late Section _section =
@@ -238,6 +234,7 @@ class _ShellState extends State<Shell>
     Section.home => HomeScreen(hub, go: _go),
     Section.messages => MessagesScreen(hub),
     Section.calls => CallsScreen(hub),
+    Section.notifications => NotificationsScreen(hub),
     Section.photos => PhotosScreen(hub),
     Section.explorer => ExplorerScreen(hub),
     Section.vault => const VaultScreen(),
@@ -255,10 +252,10 @@ class _ShellState extends State<Shell>
         // and effect fade, reversed naturally when the destination leaves.
         // Both Windows and Android use this same transition.
         final page = PageTransitionSwitcher(
-          duration: motion(context, const Duration(milliseconds: 320)),
+          duration: AleroMotion.duration(context, 300),
           layoutBuilder: (entries) =>
               Stack(alignment: Alignment.topCenter, children: entries),
-          transitionBuilder: orionTabTransition,
+          transitionBuilder: AleroMotion.tab,
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         // The computer always has the side menu: its phone sections do not fit a bottom bar.
@@ -283,98 +280,100 @@ class _ShellState extends State<Shell>
         .where((p) => p.trusted && p.state == pb.PeerState.connected)
         .toList();
     return Scaffold(
-      backgroundColor: s.surfaceContainer,
+      backgroundColor: s.surfaceContainerLow,
       body: Row(
         children: [
-          SizedBox(
-            width: 240,
+          AnimatedContainer(
+            duration: AleroMotion.duration(context, 310),
+            curve: AleroMotion.spatial,
+            width: _sidebarCollapsed ? 76 : 226,
             child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Gap.m),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        Gap.m,
-                        Gap.xl,
-                        Gap.m,
-                        Gap.l,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const AleroLogo(size: 26),
-                          const SizedBox(height: Gap.l),
-                          Text(
-                            hub.name,
-                            style: t.titleMedium,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            'Este equipo',
-                            style: t.bodySmall?.copyWith(
-                              color: s.onSurfaceVariant,
-                            ),
-                          ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 13, 10, 12),
+                    child: Row(
+                      children: [
+                        const AleroMark(size: 22),
+                        if (!_sidebarCollapsed) ...[
+                          const SizedBox(width: 9),
+                          Expanded(child: Text('Alero', style: t.titleSmall)),
                         ],
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: TextButton.icon(
+                      onPressed: () => setState(
+                        () => _sidebarCollapsed = !_sidebarCollapsed,
+                      ),
+                      icon: Icon(_sidebarCollapsed
+                          ? Symbols.left_panel_open_rounded
+                          : Symbols.left_panel_close_rounded),
+                      label: _sidebarCollapsed
+                          ? const SizedBox.shrink()
+                          : const Text('Contraer menú'),
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        foregroundColor: s.onSurfaceVariant,
                       ),
                     ),
-                    // Scrolls when the window is too short for every destination.
-                    Expanded(
-                      child: ListView(
-                        padding: EdgeInsets.zero,
-                        children: [
-                          for (final d in _dests) ...[
-                            if (d.group != null)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  Gap.l,
-                                  Gap.l,
-                                  Gap.l,
-                                  Gap.xs,
-                                ),
-                                child: Text(
-                                  d.group!,
-                                  style: t.labelMedium?.copyWith(
-                                    color: s.onSurfaceVariant,
-                                  ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 7),
+                      children: [
+                        for (final d in _dests) ...[
+                          if (d.group != null && !_sidebarCollapsed)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
+                              child: Text(
+                                d.group!,
+                                style: t.labelSmall?.copyWith(
+                                  color: s.onSurfaceVariant,
+                                  letterSpacing: .8,
                                 ),
                               ),
-                            _NavItem(
-                              icon: d.icon,
-                              label: d.label,
-                              selected: d.section == _section,
-                              badge: _badge(d.section),
-                              onTap: () => _go(d.section),
                             ),
-                          ],
+                          _NavItem(
+                            icon: d.icon,
+                            label: _sidebarCollapsed ? '' : d.label,
+                            selected: d.section == _section,
+                            badge: _badge(d.section),
+                            onTap: () => _go(d.section),
+                          ),
                         ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: Gap.s),
-                    _PhoneChip(online, hub, onTap: () => _go(Section.devices)),
-                    const SizedBox(height: Gap.m),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: _sidebarCollapsed
+                        ? IconButton(
+                            icon: const Icon(Symbols.smartphone_rounded),
+                            onPressed: () => _go(Section.devices),
+                            tooltip: 'Dispositivos',
+                          )
+                        : _PhoneChip(
+                            online, hub, onTap: () => _go(Section.devices),
+                          ),
+                  ),
+                ],
               ),
             ),
           ),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, Gap.s, Gap.s, Gap.s),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(Radii.card),
-                child: ColoredBox(
-                  color: s.surface,
-                  child: Column(
-                    children: [
-                      CallBar(hub),
-                      Expanded(child: _Drop(hub, child: page)),
-                    ],
-                  ),
-                ),
+            child: ColoredBox(
+              color: s.surfaceContainerLow,
+              child: Column(
+                children: [
+                  CallBar(hub),
+                  Expanded(child: _Drop(hub, child: page)),
+                ],
               ),
             ),
           ),
@@ -442,16 +441,17 @@ class _NavItemState extends State<_NavItem> {
           cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
-          child: OrionPress(
+          child: AleroPress(
+            radius: 12,
             onTap: widget.onTap,
             child: AnimatedContainer(
               duration: motion(context, Spring.spatial.settle),
               curve: Spring.spatial,
-              height: 44,
-              padding: EdgeInsets.symmetric(horizontal: sel ? Gap.l : Gap.m),
+              height: 40,
+              padding: EdgeInsets.symmetric(horizontal: sel ? Gap.m : Gap.m),
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius: BorderRadius.circular(Radii.pill),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: ExcludeSemantics(
                 child: Row(
