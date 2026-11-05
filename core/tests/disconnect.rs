@@ -98,3 +98,44 @@ fn disconnect_keeps_pairing_and_connect_restores_it() {
     }
     let _ = (std::fs::remove_dir_all(da), std::fs::remove_dir_all(db));
 }
+
+/// Bug 01: after "Desvincular" on one side, pairing again from either side must work (the other side still
+/// trusted the first one and used to treat the new attempt as "already paired").
+#[test]
+fn unpair_then_pair_again_from_either_side() {
+    let (da, db) = (dir("ua"), dir("ub"));
+    let (a, ra) = start(&da, "PC", 0);
+    let (b, rb) = start(&db, "Pixel", 0);
+    let (ia, ib) = (a.device_id(), b.device_id());
+    let confirm = |rx: &Receiver<Event>, e: &Engine| {
+        wait("pair request", || matches!(rx.try_recv(), Ok(Event::PairRequest { peer_id, .. }) if { e.respond_pair(&peer_id, true); true }));
+    };
+    let paired = |a: &Engine, b: &Engine| {
+        wait("connected", || state(a, &ib).0 == PeerState::Connected && state(b, &ia).0 == PeerState::Connected);
+    };
+
+    a.pair_with_addr(&format!("127.0.0.1:{}", b.port())).unwrap();
+    confirm(&ra, &a);
+    confirm(&rb, &b);
+    paired(&a, &b);
+
+    for round in 0..2 {
+        // A unpairs B; B still trusts A and is turned away.
+        a.revoke(&ib).unwrap();
+        assert!(!a.peers().iter().any(|p| p.id == ib && p.trusted));
+        // B (the side that kept the stale trust) starts the new pairing, as when the phone scans the QR again.
+        // Round 1 starts it while B may not have noticed the refusal yet.
+        if round == 1 {
+            b.pair_with_addr(&format!("127.0.0.1:{}", a.port())).unwrap();
+        } else {
+            wait("B is refused", || state(&b, &ia).0 == PeerState::Rejected);
+            b.pair_with_addr(&format!("127.0.0.1:{}", a.port())).unwrap();
+        }
+        confirm(&ra, &a);
+        confirm(&rb, &b);
+        paired(&a, &b);
+        assert!(a.peers().iter().any(|p| p.id == ib && p.trusted));
+        assert!(b.peers().iter().any(|p| p.id == ia && p.trusted));
+    }
+    let _ = (std::fs::remove_dir_all(da), std::fs::remove_dir_all(db));
+}

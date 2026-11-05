@@ -1213,10 +1213,25 @@ impl Engine {
                 let mut tls = me.dial(addr, None)?;
                 let peer_id = tls.peer_id()?;
                 if me.is_trusted(&peer_id) {
-                    // Already paired: this address is one more route to it (USB cable, VPN). Dial it right away.
-                    me.note_peer(&peer_id, "", Some(addr));
-                    me.with_peer(&peer_id, |p| p.wait_since = Instant::now().checked_sub(Duration::from_secs(6)));
-                    return Ok(());
+                    // We still trust it, but it may have unpaired us: ask on this route before calling it paired.
+                    let answer = if me.is_paused(&peer_id) { Err(String::new()) } else { me.hello_out(&mut tls, "control") };
+                    match answer {
+                        Ok(_) => {
+                            // Already paired: this address is one more route to it (USB cable, VPN).
+                            me.note_peer(&peer_id, "", Some(addr));
+                            return me.run_control(tls, peer_id, true);
+                        }
+                        Err(e) if e == "NOT_TRUSTED" => {
+                            // Stale trust on our side only: pair again on a fresh connection.
+                            me.set_state(&peer_id, PeerState::Disconnected, "");
+                            tls = me.dial(addr, None)?;
+                        }
+                        Err(_) => {
+                            me.note_peer(&peer_id, "", Some(addr));
+                            me.with_peer(&peer_id, |p| p.wait_since = Instant::now().checked_sub(Duration::from_secs(6)));
+                            return Ok(());
+                        }
+                    }
                 }
                 let name = me.hello_out(&mut tls, "pair")?;
                 me.note_peer(&peer_id, &name, Some(addr));
