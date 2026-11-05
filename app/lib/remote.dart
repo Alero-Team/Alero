@@ -305,10 +305,19 @@ class MediaState {
     return duration > 0 ? p.clamp(0, duration) : p.clamp(0, 1 << 53);
   }
 
+  // The same cover arrives with every update (each few seconds): decode it once and hand back the same bytes,
+  // so the image cache keeps the decoded picture instead of decoding it again.
+  static String? _lastArt;
+  static Uint8List? _lastBytes;
+
   static Uint8List? _art(Object? s) {
     if (s is! String || s.isEmpty) return null;
+    if (s == _lastArt) return _lastBytes;
     try {
-      return base64Decode(s);
+      final bytes = base64Decode(s);
+      _lastArt = s;
+      _lastBytes = bytes;
+      return bytes;
     } catch (_) {
       return null;
     }

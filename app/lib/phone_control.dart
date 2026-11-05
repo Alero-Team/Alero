@@ -161,7 +161,10 @@ class PhoneSessions extends ChangeNotifier {
     if (old != null) {
       // The phone frees the camera only when the old server is gone: opening the other one at once failed both.
       Process.killPid(old.pid);
-      await old.exitCode.timeout(const Duration(seconds: 3), onTimeout: () => -1);
+      await old.exitCode.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => -1,
+      );
       await Future<void>.delayed(const Duration(milliseconds: 400));
     }
     final p = await Scrcpy.launch(scrcpyArgs(serial, title, o));
@@ -169,26 +172,107 @@ class PhoneSessions extends ChangeNotifier {
     // Read both pipes so scrcpy cannot block on full buffers; keep its errors to explain a failure.
     final errors = <String>[];
     void keep(String line) {
-      if (line.contains('ERROR')) errors.add(line.replaceFirst(RegExp(r'^.*ERROR:\s*'), ''));
+      if (line.contains('ERROR')) {
+        errors.add(line.replaceFirst(RegExp(r'^.*ERROR:\s*'), ''));
+      }
     }
-    final out = [p.stdout, p.stderr]
-        .map((s) => s.transform(const Utf8Decoder(allowMalformed: true))
-            .transform(const LineSplitter())
-            .listen(keep).asFuture<void>().catchError((Object _) {}));
+
+    final out = [p.stdout, p.stderr].map(
+      (s) => s
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .transform(const LineSplitter())
+          .listen(keep)
+          .asFuture<void>()
+          .catchError((Object _) {}),
+    );
     // Use the actual process exit, not stdout closing (which is unreliable
     // when native subprocesses inherit a pipe). Scrcpy's SDL window closing
     // terminates scrcpy; Alero's Stop button also kills this same process.
     p.exitCode.then((code) async {
-      await Future.wait(out).timeout(const Duration(seconds: 1), onTimeout: () => []);
+      await Future.wait(out)
+          .timeout(const Duration(seconds: 1), onTimeout: () => []);
       if (_running[key] != p) return; // stopped by Alero
       _running.remove(key);
-      if (code != 0) failures[key] = sessionError(errors, camera: o.camera != null);
+      if (code != 0) {
+        failures[key] = sessionError(errors, camera: o.camera != null);
+      }
       notifyListeners();
     });
     notifyListeners();
   }
 
+  final _rotationWatch = <String, Timer>{};
+
+  /// The phone's camera in a window, upright: the camera sends its frames in the sensor's orientation whatever
+  /// the phone does, so Alero rotates the window (scrcpy `--orientation`) and reopens it when the phone turns.
+  Future<void> startCamera(String serial, String title, String facing) async {
+    final key = '$serial|camera';
+    _rotationWatch.remove(key)?.cancel();
+    var turn = await _cameraTurn(serial, facing);
+    await start(
+      serial,
+      title,
+      SessionOptions(
+        camera: facing,
+        maxSize: 1920,
+        audio: false,
+        orientation: turn,
+      ),
+      extra: 'camera',
+    );
+    var busy = false;
+    _rotationWatch[key] = Timer.periodic(const Duration(seconds: 2), (t) async {
+      if (!runningExtra(serial, 'camera')) {
+        t.cancel();
+        if (_rotationWatch[key] == t) _rotationWatch.remove(key);
+        return;
+      }
+      if (busy) return;
+      busy = true;
+      try {
+        final now = await _cameraTurn(serial, facing);
+        if (now != turn && runningExtra(serial, 'camera')) {
+          turn = now;
+          await start(
+            serial,
+            title,
+            SessionOptions(
+              camera: facing,
+              maxSize: 1920,
+              audio: false,
+              orientation: turn,
+            ),
+            extra: 'camera',
+          );
+        }
+      } catch (_) {
+        // The phone left adb: the session ends by itself and the timer with it.
+      } finally {
+        busy = false;
+      }
+    });
+  }
+
+  static final _sensor = <String, int>{};
+
+  Future<int> _cameraTurn(String serial, String facing) async {
+    final sensorKey = '$serial|$facing';
+    final sensor = _sensor[sensorKey] ??= sensorOrientation(
+      await Scrcpy.shell(serial, 'dumpsys media.camera').catchError((_) => ''),
+      facing,
+    );
+    final rotation = displayRotation(
+      await Scrcpy.shell(
+        serial,
+        'dumpsys window displays | grep -m 3 -E "mCurrentRotation|mRotation="; '
+        'dumpsys input | grep -m 2 -E "SurfaceOrientation|Viewport INTERNAL"',
+      ).catchError((_) => ''),
+    );
+    return cameraTurn(sensor, rotation, facing);
+  }
+
   void stop(String serial) {
+    _rotationWatch.remove(serial)?.cancel();
     final p = _running.remove(serial);
     if (p == null) return;
     Process.killPid(p.pid); // works for detached processes too
@@ -205,13 +289,65 @@ class PhoneSessions extends ChangeNotifier {
 /// scrcpy's own error lines, in words for the user.
 String sessionError(List<String> errors, {bool camera = false}) {
   final all = errors.join(' ').toLowerCase();
-  final busy = all.contains('in use') || all.contains('busy') || all.contains('disconnected');
+  final busy =
+      all.contains('in use') ||
+      all.contains('busy') ||
+      all.contains('disconnected');
   // Another camera session or app holding the camera makes the server die before it connects.
-  if (camera && ((all.contains('camera') && busy) || all.contains('server connection failed'))) {
+  if (camera &&
+      ((all.contains('camera') && busy) ||
+          all.contains('server connection failed'))) {
     return 'La cámara está ocupada o el teléfono la bloqueó. Cierra otras apps de cámara, desbloquea el teléfono y vuelve a intentarlo.';
   }
-  if (camera && all.contains('api')) return 'La cámara en una ventana necesita Android 12 o posterior.';
-  if (all.contains('unauthorized')) return 'Acepta la depuración USB en el teléfono.';
-  if (all.contains('not found') || all.contains('no devices')) return 'El teléfono ya no está conectado por ADB.';
-  return errors.isEmpty ? 'La ventana del teléfono se cerró por un error.' : errors.last;
+  if (camera && all.contains('api')) {
+    return 'La cámara en una ventana necesita Android 12 o posterior.';
+  }
+  if (all.contains('unauthorized')) {
+    return 'Acepta la depuración USB en el teléfono.';
+  }
+  if (all.contains('not found') || all.contains('no devices')) {
+    return 'El teléfono ya no está conectado por ADB.';
+  }
+  return errors.isEmpty
+      ? 'La ventana del teléfono se cerró por un error.'
+      : errors.last;
+}
+
+/// Clockwise degrees to turn a camera's frames so they look upright, from the sensor's mounting
+/// ([sensor], Android's SENSOR_ORIENTATION) and the screen rotation ([rotation], Surface.ROTATION_* in degrees).
+/// The back camera turns against the screen and the front one with it (Android's own preview formula).
+int cameraTurn(int sensor, int rotation, String facing) => facing == 'front'
+    ? (sensor + rotation) % 360
+    : (sensor - rotation + 360) % 360;
+
+/// The screen rotation in degrees from `dumpsys window displays` / `dumpsys input`; 0 when unknown.
+int displayRotation(String dump) {
+  final named = RegExp(r'mCurrentRotation=ROTATION_(\d+)').firstMatch(dump);
+  if (named != null) return _degrees(int.parse(named.group(1)!), named: true);
+  final index =
+      RegExp(r'mRotation=(\d)\b').firstMatch(dump) ??
+      RegExp(r'SurfaceOrientation:\s*(\d)').firstMatch(dump) ??
+      RegExp(r'Viewport INTERNAL:.*?orientation=(\d)').firstMatch(dump);
+  return index == null ? 0 : _degrees(int.parse(index.group(1)!));
+}
+
+int _degrees(int v, {bool named = false}) {
+  final d = named ? v : v * 90;
+  return const [0, 90, 180, 270].contains(d) ? d : 0;
+}
+
+/// SENSOR_ORIENTATION of the first [facing] camera in `dumpsys media.camera`; phones mount the back camera at
+/// 90 and the front one at 270 almost always, which is the fallback when the dump says nothing.
+int sensorOrientation(String dump, String facing) {
+  final want = facing == 'front' ? 'front' : 'back';
+  for (final m in RegExp(
+    r'Facing:\s*(\w+)[^\n]*\n?[^\n]*?Orientation:\s*(\d+)',
+    caseSensitive: false,
+  ).allMatches(dump)) {
+    if (m.group(1)!.toLowerCase() == want) {
+      final o = int.parse(m.group(2)!);
+      if (const [0, 90, 180, 270].contains(o)) return o;
+    }
+  }
+  return want == 'front' ? 270 : 90;
 }

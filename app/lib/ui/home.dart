@@ -82,13 +82,6 @@ class HomeScreen extends StatelessWidget {
           icon: const Icon(Symbols.dashboard_customize_rounded),
         ),
         children: [
-          Text(
-            'Resumen de ${main.name}',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          gap,
           // Same order as the computer's Inicio: device, what it plays, its controls, then activity.
           TileScale(
             scale,
@@ -112,12 +105,15 @@ class HomeScreen extends StatelessWidget {
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-      Text(
-        'Resumen de ${main.name}',
-        style: Theme.of(context).textTheme.bodyMedium
-            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
-      gap,
+      // The phone's Inicio goes straight to the card: its name is already there.
+      if (!Platform.isAndroid) ...[
+        Text(
+          'Resumen de ${main.name}',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        gap,
+      ],
       if (wide && !Platform.isAndroid) ...[
         // Left: the device, its state and what it plays; right: its controls and notifications.
         Row(

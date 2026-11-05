@@ -107,11 +107,10 @@ class _ControlsState extends State<_Controls> {
     await _find();
   }
 
-  Future<void> _camera(String facing) => PhoneSessions.instance.start(
+  Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
     _adb!.serial,
     'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · ${widget.phone.name}',
-    SessionOptions(camera: facing, maxSize: 1920, audio: false),
-    extra: 'camera',
+    facing,
   );
 
   @override

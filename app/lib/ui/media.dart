@@ -659,6 +659,10 @@ class _Art extends StatelessWidget {
                           fit: BoxFit.cover,
                           width: size,
                           height: size,
+                          // Decode at the size shown, not the cover's full resolution.
+                          cacheWidth:
+                              (size * MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
                           gaplessPlayback: true,
                           semanticLabel: 'Portada',
                         )

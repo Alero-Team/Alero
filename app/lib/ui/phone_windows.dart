@@ -16,13 +16,11 @@ class PhoneWindowsPanel extends StatelessWidget {
   });
   final String serial, deviceName;
 
-  Future<void> _camera(String facing) => PhoneSessions.instance.start(
+  Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
     serial,
     'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName',
-    SessionOptions(camera: facing, maxSize: 1920, audio: false),
-    extra: 'camera',
+    facing,
   );
-
 
   Future<void> _webcam(BuildContext context, String facing) async {
     final controller = TextEditingController();
@@ -62,7 +60,8 @@ class PhoneWindowsPanel extends StatelessWidget {
     );
     controller.dispose();
     if (password == null || !context.mounted) return;
-    final title = 'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName';
+    final title =
+        'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName';
     try {
       await _camera(facing);
       await Future<void>.delayed(const Duration(milliseconds: 800));
@@ -70,7 +69,9 @@ class PhoneWindowsPanel extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Webcam de Alero activada: selecciona OBS Virtual Camera en tu videollamada.'),
+            content: Text(
+              'Webcam de Alero activada: selecciona OBS Virtual Camera en tu videollamada.',
+            ),
           ),
         );
       }
@@ -140,8 +141,7 @@ class PhoneWindowsPanel extends StatelessWidget {
                   ),
                   if (cam)
                     OutlinedButton.icon(
-                      onPressed: () =>
-                          _stopCamera(),
+                      onPressed: () => _stopCamera(),
                       icon: const Icon(Symbols.videocam_off_rounded, size: 18),
                       label: const Text('Cerrar cámara'),
                     ),

@@ -2,7 +2,7 @@
 
 Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
 
-**Beta software · Beta 1.1 (1.1.0).** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
+**Beta software · Beta 1.1.1 (1.1.1).** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
 
 ## Use
 

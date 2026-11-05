@@ -1,5 +1,22 @@
 # Cambios
 
+## Beta 1.1.1 (1.1.1) — 2026-11-05
+
+### Android
+
+- **Inicio más limpio:** la tarjeta del PC lleva cuatro botones pequeños en una fila (Enviar, Portapapeles, Pantalla y Captura). Una tarjeta nueva, **Control remoto**, reúne «Ratón y teclado» y «Archivos del ordenador». Desaparece el texto «Resumen de…» y la etiqueta «Conexión cifrada» de la tarjeta.
+- **Alero Vault** sale de la barra inferior y pasa a Ajustes › Seguridad.
+- **Fluidez:** el APK es ahora una compilación release (código compilado de antemano y reducido con R8). La de depuración iba a tirones. La entrada de las pantallas mueve una capa ya pintada en lugar de repintar las tarjetas en cada fotograma, y la portada se decodifica una sola vez y al tamaño en que se muestra.
+- **Portadas:** el PC descartaba las portadas de más de 150 KB (muchas de Spotify); ahora las reduce a un JPEG de 400 px.
+- **Barra de progreso:** saltaba hacia atrás porque Windows solo actualiza la posición cuando el reproductor informa (Spotify, cada pocos segundos). El PC ahora suma el tiempo transcurrido desde ese informe.
+
+### Windows
+
+- **Cámara del teléfono en una ventana, siempre derecha:** el sensor entrega la imagen en su propia orientación, que no sigue la del teléfono. Alero calcula el giro con la orientación del sensor y la rotación del teléfono (fórmula de Android), y si giras el teléfono la ventana se vuelve a abrir con el nuevo giro. Funciona con las cámaras trasera y frontal.
+- **Botones del prototipo** dentro de la tarjeta del dispositivo, con el estado (almacenamiento, conectividad, carga) en la misma tarjeta. «Seguridad» y «Sincronización» desaparecen porque no aportaban información.
+- **Botón de reproducir vacío:** el tema pintaba el icono del mismo color que el botón (blanco sobre blanco). Pasaba igual con Enviar en Mensajes y en las respuestas a notificaciones.
+- **Personalizar › Tema y apariencia** abre Ajustes directamente en Apariencia.
+
 ## Beta 1.1 (1.1.0) — 2026-11-05
 
 ### Rediseño: Alero Fluent Identity
@@ -20,14 +37,6 @@
 
 ### Errores corregidos
 
-- **Portadas en el teléfono:** el PC descartaba las portadas de más de 150 KB (muchas de Spotify), así que el teléfono mostraba una nota musical. Ahora las reduce a un JPEG de 400 px.
-- **Botón de reproducir vacío en el PC:** el tema pintaba el icono del mismo color que el botón (blanco sobre blanco). Pasaba igual en Enviar de Mensajes y de las respuestas a notificaciones.
-- **Accesos directos unificados:** en el PC, todos dentro de la tarjeta del dispositivo con los botones del prototipo. En Android, la tarjeta del PC lleva cuatro botones pequeños en una fila (Enviar, Portapapeles, Pantalla y Captura), y una tarjeta nueva, **Control remoto**, reúne «Ratón y teclado» y «Archivos del ordenador».
-- **Estado del dispositivo** dentro de la misma tarjeta, bajo los botones.
-- **Barra de progreso del reproductor en el teléfono:** saltaba hacia atrás porque Windows solo actualiza la posición cuando el reproductor informa (Spotify, cada pocos segundos). El PC ahora suma el tiempo transcurrido desde ese informe.
-- **Alero Vault en Android** sale de la barra inferior y pasa a Ajustes › Seguridad. En el PC sigue en el menú lateral.
-- **Personalizar › Tema y apariencia** abre Ajustes directamente en Apariencia.
-- **Estado del dispositivo:** sin «Seguridad» ni «Sincronización», que no aportaban información.
 
 - **No se podía volver a vincular un dispositivo después de desvincularlo.** Causa: el otro dispositivo seguía confiando en el primero, y al reintentar (con «Emparejar de nuevo» o escaneando el QR) el motor lo daba por «ya emparejado» y se saltaba la vinculación. Ahora lo comprueba en la misma conexión y, si el otro lado lo rechaza, inicia una vinculación nueva con código de confirmación. La desvinculación sigue borrando la confianza como antes. Lo cubre una prueba automática nueva.
 - **El chat desaparecía mientras se escribía.** Causa: cada cambio del hub (una notificación, la batería, la música) llamaba a la carga de SMS, que vaciaba hilos y mensajes tras un error o un retraso del teléfono. La conversación abierta y el texto escrito se perdían. Ahora solo se reinicia al cambiar de teléfono, y un corte breve de conexión deja el chat abierto con un aviso. Lo cubre una prueba automática nueva.

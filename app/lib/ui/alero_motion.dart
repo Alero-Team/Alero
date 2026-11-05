@@ -8,8 +8,8 @@ class AleroMotion {
 
   static Duration duration(BuildContext context, int ms) =>
       MediaQuery.of(context).disableAnimations
-          ? Duration.zero
-          : Duration(milliseconds: ms);
+      ? Duration.zero
+      : Duration(milliseconds: ms);
 
   static const Curve spatial = _AleroSpring(380, .8);
   static const Curve fastSpatial = _AleroSpring(800, .6);
@@ -17,23 +17,23 @@ class AleroMotion {
 
   /// Compose's MotionNumber: slide a third of text height and fade each way.
   static Widget number(String text, TextStyle? style) => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: effects,
-        switchOutCurve: Curves.easeInOut,
-        transitionBuilder: (child, animation) => ClipRect(
-          child: FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 1 / 3),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          ),
+    duration: const Duration(milliseconds: 300),
+    switchInCurve: effects,
+    switchOutCurve: Curves.easeInOut,
+    transitionBuilder: (child, animation) => ClipRect(
+      child: FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 1 / 3),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
         ),
-        child: Text(text, key: ValueKey(text), style: style),
-      );
+      ),
+    ),
+    child: Text(text, key: ValueKey(text), style: style),
+  );
 
   /// Tab changes: 98%-to-100% fade and a reversed leaving view.
   static Widget tab(
@@ -41,9 +41,7 @@ class AleroMotion {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
   ) {
-    final incoming = animation.drive(
-      CurveTween(curve: Curves.easeOutCubic),
-    );
+    final incoming = animation.drive(CurveTween(curve: Curves.easeOutCubic));
     final leaving = secondaryAnimation.drive(
       CurveTween(curve: Curves.easeOutCubic),
     );
@@ -76,12 +74,10 @@ class AleroMotion {
       curve: const _AleroDelayedSpring(380, .8, .38),
       builder: (_, v, c) => Opacity(
         opacity: v.clamp(0.0, 1.0).toDouble(),
-        child: Transform.translate(
-          offset: Offset(0, (1 - v) * 24),
-          child: c,
-        ),
+        child: Transform.translate(offset: Offset(0, (1 - v) * 24), child: c),
       ),
-      child: child,
+      // Painted once: the fade and slide move a finished layer instead of repainting the card every frame.
+      child: RepaintBoundary(child: child),
     );
   }
 }
@@ -108,21 +104,21 @@ class _AleroPressState extends State<AleroPress> {
 
   @override
   Widget build(BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(widget.radius),
-          onHighlightChanged: (down) {
-            if (mounted) setState(() => _down = down);
-          },
-          child: AnimatedScale(
-            scale: _down ? .955 : 1,
-            duration: AleroMotion.duration(context, 240),
-            curve: AleroMotion.fastSpatial,
-            child: widget.child,
-          ),
-        ),
-      );
+    type: MaterialType.transparency,
+    child: InkWell(
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(widget.radius),
+      onHighlightChanged: (down) {
+        if (mounted) setState(() => _down = down);
+      },
+      child: AnimatedScale(
+        scale: _down ? .955 : 1,
+        duration: AleroMotion.duration(context, 240),
+        curve: AleroMotion.fastSpatial,
+        child: widget.child,
+      ),
+    ),
+  );
 }
 
 /// Activity-only 850ms pulse. Never runs while idle or when reduced
@@ -171,13 +167,13 @@ class _AleroPulseState extends State<AleroPulse>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _pulse,
-        builder: (_, child) => Opacity(
-          opacity: widget.active ? .65 + _pulse.value * .35 : 1,
-          child: child,
-        ),
-        child: widget.child,
-      );
+    animation: _pulse,
+    builder: (_, child) => Opacity(
+      opacity: widget.active ? .65 + _pulse.value * .35 : 1,
+      child: child,
+    ),
+    child: widget.child,
+  );
 }
 
 class _AleroSpring extends Curve {
@@ -186,15 +182,15 @@ class _AleroSpring extends Curve {
 
   @override
   double transformInternal(double t) => SpringSimulation(
-        SpringDescription.withDampingRatio(
-          mass: 1,
-          stiffness: stiffness,
-          ratio: damping,
-        ),
-        0,
-        1,
-        0,
-      ).x(t * .36).clamp(0.0, 1.0).toDouble();
+    SpringDescription.withDampingRatio(
+      mass: 1,
+      stiffness: stiffness,
+      ratio: damping,
+    ),
+    0,
+    1,
+    0,
+  ).x(t * .36).clamp(0.0, 1.0).toDouble();
 }
 
 class _AleroDelayedSpring extends Curve {
@@ -204,6 +200,8 @@ class _AleroDelayedSpring extends Curve {
   @override
   double transformInternal(double t) => t <= delay
       ? 0
-      : _AleroSpring(stiffness, damping)
-          .transform(((t - delay) / (1 - delay)).clamp(0, 1));
+      : _AleroSpring(
+          stiffness,
+          damping,
+        ).transform(((t - delay) / (1 - delay)).clamp(0, 1));
 }
