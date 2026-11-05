@@ -9,6 +9,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'brand.dart';
 import 'clipboard.dart';
 import 'expressive.dart';
+import 'alero_motion.dart';
 import 'media.dart';
 import 'notifications.dart';
 import 'phone_home.dart';
@@ -554,39 +555,73 @@ class _StatusPanel extends StatelessWidget {
   }
 }
 
-class _Recent extends StatelessWidget {
+class _Recent extends StatefulWidget {
   const _Recent(this.hub, {required this.go});
   final Hub hub;
   final void Function(Section s) go;
 
   @override
+  State<_Recent> createState() => _RecentState();
+}
+
+class _RecentState extends State<_Recent> {
+  String filter = 'Todo';
+
+  Widget filters() => Wrap(
+    spacing: 4,
+    children: [
+      for (final value in const ['Todo', 'Enviados', 'Recibidos'])
+        ChoiceChip(
+          label: Text(value),
+          selected: filter == value,
+          onSelected: (_) => setState(() => filter = value),
+          visualDensity: VisualDensity.compact,
+          labelStyle: Theme.of(context).textTheme.labelSmall,
+        ),
+    ],
+  );
+
+  @override
   Widget build(BuildContext context) {
-    final recent = hub.history.take(8).toList();
+    final hub = widget.hub;
+    final matches = (bool incoming) => filter == 'Todo' ||
+        (filter == 'Recibidos' && incoming) ||
+        (filter == 'Enviados' && !incoming);
+    final recent = hub.history.where((h) => matches(h.incoming)).take(8).toList();
+    final active = hub.active.where((x) => matches(x.incoming)).toList();
+    final wide = MediaQuery.sizeOf(context).width >= 1180;
     return Panel(
-      title: 'Recientes',
+      title: 'Actividad reciente',
       icon: Symbols.history_rounded,
-      action: TextButton(
-        onPressed: hub.openDownloads,
-        child: const Text('Abrir carpeta'),
-      ),
+      action: wide ? filters() : null,
       child: AnimatedSize(
-        duration: motion(context, Spring.spatial.settle),
-        curve: Spring.spatial,
+        duration: AleroMotion.duration(context, 320),
+        curve: AleroMotion.spatial,
         alignment: Alignment.topCenter,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final x in hub.active) TransferRow(x, hub),
-            if (recent.isEmpty && hub.active.isEmpty)
+            if (!wide) ...[
+              filters(),
+              const SizedBox(height: 12),
+            ],
+            for (final x in active) TransferRow(x, hub),
+            if (recent.isEmpty && active.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: Gap.m),
                 child: Text(
-                  Platform.isAndroid
-                      ? 'Lo que envíes y recibas aparecerá aquí.'
-                      : 'Lo que envíes y recibas aparecerá aquí. También puedes soltar archivos sobre la ventana.',
+                  'Todavía no hay archivos en esta categoría.',
                   style: TextStyle(color: context.pal.muted),
                 ),
               ),
             for (final h in recent) HistoryTile(h, hub),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: hub.openDownloads,
+                child: const Text('Abrir carpeta de descargas'),
+              ),
+            ),
           ],
         ),
       ),
