@@ -82,7 +82,7 @@ jobs:
           $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
           if (Test-Path -LiteralPath $keyFile) { Remove-Item -LiteralPath $keyFile }
   publish:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.publish
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release: build and publish')) || (github.event_name == 'workflow_dispatch' && inputs.publish))
     needs: packages
     runs-on: ubuntu-latest
     permissions:
@@ -93,7 +93,7 @@ jobs:
         with:
           name: Alero-packages
           path: dist
-      - name: Publish preliminary release
+      - name: Publish Alero release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -113,4 +113,4 @@ jobs:
             while read -r hash file; do echo "| \`${file#\*}\` | \`$hash\` |"; done < dist/SHA256SUMS.txt
           } > notes.md
           grep -q 'SHA-256' notes.md && grep -q 'Errores corregidos' notes.md
-          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "Alero $version" --prerelease --notes-file notes.md
+          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "Alero $version" --notes-file notes.md
