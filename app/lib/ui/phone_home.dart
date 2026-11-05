@@ -9,10 +9,9 @@ import 'pc_files.dart';
 import 'pc_screen.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
-import 'widgets.dart';
 
-/// Four things you do all day with a connected computer, one tap each. Fixed-size tiles: the row never changes
-/// height, so nothing below it moves.
+/// Everything you do with a connected computer, one tap each, inside the device card: send, clipboard,
+/// screenshot, remote screen, control and its files. Fixed-size tiles, so nothing below moves.
 class QuickActions extends StatelessWidget {
   const QuickActions(this.hub, this.peer, {super.key});
   final Hub hub;
@@ -24,43 +23,59 @@ class QuickActions extends StatelessWidget {
     final info = hub.info[peer.id];
     final canShot =
         online && info != null && info.remoteAllowed && info.canScreen;
-    return Row(
+    final blocker = remoteBlocker(info, online);
+    final needsRemote = online && blocker != null ? blocker : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _Tile(
+        ShortcutGrid([
+          ShortcutTile(
             Symbols.upload_rounded,
             'Enviar',
             online ? () => hub.send(peer.id) : null,
           ),
-        ),
-        const SizedBox(width: Gap.s),
-        Expanded(
-          child: _Tile(
+          ShortcutTile(
             Symbols.content_paste_go_rounded,
             'Portapapeles',
             online ? () => openClipboard(context, hub, peer.id) : null,
           ),
-        ),
-        const SizedBox(width: Gap.s),
-        Expanded(
-          child: _Tile(
-            Symbols.screenshot_monitor_rounded,
-            'Captura',
-            canShot ? () => _shot(context) : null,
-            hint: online && !canShot ? 'Requiere control remoto' : null,
+          ShortcutTile(
+            Symbols.folder_open_rounded,
+            'Archivos',
+            online ? () => openPcFiles(context, hub, peer.id, peer.name) : null,
           ),
-        ),
-        const SizedBox(width: Gap.s),
-        Expanded(
-          child: _Tile(
+          ShortcutTile(
+            Symbols.mouse_rounded,
+            'Controlar',
+            blocker == null
+                ? () => openPcControl(context, hub, peer.id, peer.name)
+                : null,
+            hint: needsRemote,
+          ),
+          ShortcutTile(
             Symbols.cast_rounded,
-            'Acceso remoto',
+            'Pantalla',
             canShot
                 ? () => openPcScreen(context, hub, peer.id, peer.name)
                 : null,
             hint: online && !canShot ? 'Requiere control remoto' : null,
           ),
-        ),
+          ShortcutTile(
+            Symbols.screenshot_monitor_rounded,
+            'Captura',
+            canShot ? () => _shot(context) : null,
+            hint: online && !canShot ? 'Requiere control remoto' : null,
+          ),
+        ]),
+        if (needsRemote != null) ...[
+          const SizedBox(height: Gap.s),
+          Text(
+            needsRemote,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -71,8 +86,27 @@ class QuickActions extends StatelessWidget {
   }
 }
 
-class _Tile extends StatelessWidget {
-  const _Tile(this.icon, this.label, this.onTap, {this.hint});
+/// Shortcut tiles in equal columns: 3 on a phone, up to 6 on a wide card.
+class ShortcutGrid extends StatelessWidget {
+  const ShortcutGrid(this.tiles, {super.key});
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      final cols = (box.maxWidth / 104).floor().clamp(3, 6);
+      final w = (box.maxWidth - Gap.s * (cols - 1)) / cols;
+      return Wrap(
+        spacing: Gap.s,
+        runSpacing: Gap.s,
+        children: [for (final t in tiles) SizedBox(width: w, child: t)],
+      );
+    },
+  );
+}
+
+class ShortcutTile extends StatelessWidget {
+  const ShortcutTile(this.icon, this.label, this.onTap, {super.key, this.hint});
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
@@ -118,71 +152,6 @@ class _Tile extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Entry to the remote (touchpad, clicks, keyboard) on its own screen. When the computer has not allowed
-/// control (its owner decides, in its own Settings) the card says so instead of showing dead buttons.
-class ControlCard extends StatelessWidget {
-  const ControlCard(this.hub, this.peer, {super.key});
-  final Hub hub;
-  final pb.Peer peer;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final s = Theme.of(context).colorScheme;
-    final online = peer.state == pb.PeerState.connected;
-    final info = hub.info[peer.id];
-    final blocker = remoteBlocker(info, online);
-    return Panel(
-      title: 'Controlar ${peer.name}',
-      icon: Symbols.mouse_rounded,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          blocker != null
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: Gap.s),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        online
-                            ? Symbols.lock_rounded
-                            : Symbols.link_off_rounded,
-                        size: 20,
-                        color: s.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: Gap.m),
-                      Expanded(
-                        child: Text(
-                          blocker,
-                          style: t.bodyMedium?.copyWith(
-                            color: s.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : FilledButton.icon(
-                  onPressed: () =>
-                      openPcControl(context, hub, peer.id, peer.name),
-                  icon: const Icon(Symbols.mouse_rounded, size: 20),
-                  label: const Text('Controlar'),
-                ),
-          const SizedBox(height: Gap.s),
-          OutlinedButton.icon(
-            onPressed: online
-                ? () => openPcFiles(context, hub, peer.id, peer.name)
-                : null,
-            icon: const Icon(Symbols.folder_open_rounded),
-            label: const Text('Archivos del ordenador'),
-          ),
-        ],
       ),
     );
   }

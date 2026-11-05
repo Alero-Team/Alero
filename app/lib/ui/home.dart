@@ -14,6 +14,7 @@ import 'media.dart';
 import 'notifications.dart';
 import 'phone_home.dart';
 import 'screen.dart';
+import 'settings.dart' show showAppearance;
 import 'shell.dart';
 import 'theme.dart';
 import 'controls.dart';
@@ -96,10 +97,6 @@ class HomeScreen extends StatelessWidget {
                 hero,
                 gap,
                 MediaPanel(hub, main.id, computer: true),
-                gap,
-                QuickActions(hub, main),
-                gap,
-                ControlCard(hub, main),
                 gap,
                 recent,
               ],
@@ -242,6 +239,7 @@ Future<void> _customize(
       TextButton(
         onPressed: () {
           Navigator.pop(ctx);
+          showAppearance.value = true;
           go(Section.settings);
         },
         child: const Text('Tema y apariencia'),
@@ -334,30 +332,33 @@ class _Hero extends StatelessWidget {
       ),
     );
 
-    final actions = Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        FilledButton.icon(
-          onPressed: online ? () => hub.send(p.id) : null,
-          icon: const Icon(Symbols.upload_rounded, size: 18),
-          label: const Text('Enviar archivos'),
-        ),
-        ClipboardButton(hub, p.id, enabled: online),
-        if (phone && !Platform.isAndroid)
-          OutlinedButton.icon(
-            onPressed: () => go(Section.explorer),
-            icon: const Icon(Symbols.folder_open_rounded, size: 18),
-            label: const Text('Explorar archivos'),
-          ),
-        if (phone && !Platform.isAndroid)
-          OutlinedButton.icon(
-            onPressed: online ? () => openScreen(context, hub, p) : null,
-            icon: const Icon(Symbols.cast_rounded, size: 18),
-            label: const Text('Controlar teléfono'),
-          ),
-      ],
-    );
+    // Every shortcut lives in this card, as one grid, on the computer and on the phone.
+    final actions = Platform.isAndroid
+        ? QuickActions(hub, p)
+        : ShortcutGrid([
+            ShortcutTile(
+              Symbols.upload_rounded,
+              'Enviar',
+              online ? () => hub.send(p.id) : null,
+            ),
+            ShortcutTile(
+              Symbols.content_paste_go_rounded,
+              'Portapapeles',
+              online ? () => openClipboard(context, hub, p.id) : null,
+            ),
+            if (phone)
+              ShortcutTile(
+                Symbols.folder_open_rounded,
+                'Explorar',
+                () => go(Section.explorer),
+              ),
+            if (phone)
+              ShortcutTile(
+                Symbols.cast_rounded,
+                'Controlar',
+                online ? () => openScreen(context, hub, p) : null,
+              ),
+          ]);
 
     return Card(
       child: Padding(
@@ -572,16 +573,6 @@ class _StatusPanel extends StatelessWidget {
             Symbols.wifi_rounded,
             'Conectividad',
             info.network.isEmpty ? 'Sin conexión' : info.network,
-          ),
-          metric(
-            Symbols.shield_rounded,
-            'Seguridad',
-            online ? 'Conexión cifrada' : 'Desconectado',
-          ),
-          metric(
-            Symbols.content_paste_rounded,
-            'Sincronización',
-            online ? 'Portapapeles activo' : 'Sin conexión',
           ),
           if (info.chargeLabel != null)
             metric(Symbols.bolt_rounded, 'Carga', info.chargeLabel!),

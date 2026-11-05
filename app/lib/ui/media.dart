@@ -247,6 +247,9 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 8),
                 IconButton.filled(
+                  style: IconButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  ),
                   iconSize: 27,
                   tooltip: active && cm.playing ? 'Pausar' : 'Reproducir',
                   onPressed: active ? () => _command('toggle') : null,

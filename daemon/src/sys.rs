@@ -432,19 +432,61 @@ mod win {
         })
     }
 
-    /// Cover of the current session as the player gave it (JPEG or PNG). None without one or when too big to send.
-    /// shortcut: covers over 150 KB are dropped, not shrunk; re-encode them if a player only sends big ones.
+    /// Cover of the current session (JPEG or PNG). Covers over 150 KB are shrunk to a 400 px JPEG instead of
+    /// dropped: many players hand over a full-size image, which left the phone without a cover.
     pub fn media_art() -> Option<Vec<u8>> {
-        use windows::Storage::Streams::DataReader;
+        cover(150_000)
+    }
+
+    /// The cover as is when it weighs at most `limit` bytes, else shrunk.
+    pub(crate) fn cover(limit: u64) -> Option<Vec<u8>> {
+        use windows::core::Interface;
         let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok()?.join().ok()?;
         let props = mgr.GetCurrentSession().ok()?.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
         let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.join().ok()?;
-        let size = u32::try_from(stream.Size().ok()?).ok().filter(|&n| n > 0 && n <= 150_000)?;
-        let reader = DataReader::CreateDataReader(&stream).ok()?;
+        let size = stream.Size().ok().filter(|&n| n > 0)?;
+        if size <= limit {
+            return read_stream(&stream.cast().ok()?, size as u32);
+        }
+        shrink_cover(&stream.cast().ok()?, 400)
+    }
+
+    fn read_stream(stream: &windows::Storage::Streams::IRandomAccessStream, size: u32) -> Option<Vec<u8>> {
+        use windows::Storage::Streams::DataReader;
+        let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0).ok()?).ok()?;
         let got = reader.LoadAsync(size).ok()?.join().ok()?;
         let mut buf = vec![0u8; got as usize];
         reader.ReadBytes(&mut buf).ok()?;
         Some(buf)
+    }
+
+    /// Decodes any cover Windows can read and re-encodes it as a JPEG whose longest side is `max` pixels.
+    fn shrink_cover(stream: &windows::Storage::Streams::IRandomAccessStream, max: u32) -> Option<Vec<u8>> {
+        use windows::Graphics::Imaging::{BitmapAlphaMode, BitmapDecoder, BitmapEncoder, BitmapInterpolationMode, BitmapPixelFormat};
+        use windows::Storage::Streams::InMemoryRandomAccessStream;
+        let decoder = BitmapDecoder::CreateAsync(stream).ok()?.join().ok()?;
+        let (w, h) = (decoder.PixelWidth().ok()?, decoder.PixelHeight().ok()?);
+        if w == 0 || h == 0 {
+            return None;
+        }
+        let scale = (max as f64 / w.max(h) as f64).min(1.0);
+        let bitmap = decoder
+            .GetSoftwareBitmapConvertedAsync(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Ignore)
+            .ok()?
+            .join()
+            .ok()?;
+        let out = InMemoryRandomAccessStream::new().ok()?;
+        let encoder = BitmapEncoder::CreateAsync(BitmapEncoder::JpegEncoderId().ok()?, &out).ok()?.join().ok()?;
+        encoder.SetSoftwareBitmap(&bitmap).ok()?;
+        let t = encoder.BitmapTransform().ok()?;
+        t.SetScaledWidth(((w as f64 * scale).round() as u32).max(1)).ok()?;
+        t.SetScaledHeight(((h as f64 * scale).round() as u32).max(1)).ok()?;
+        t.SetInterpolationMode(BitmapInterpolationMode::Fant).ok()?;
+        encoder.FlushAsync().ok()?.join().ok()?;
+        use windows::core::Interface;
+        let size = out.Size().ok()? as u32;
+        let jpeg = read_stream(&out.cast().ok()?, size)?;
+        (jpeg.len() <= 150_000).then_some(jpeg)
     }
 }
 
@@ -539,5 +581,21 @@ mod tests {
     fn media_state_survives_its_thread_exiting() {
         keep_com_alive();
         churn();
+    }
+}
+
+/// Manual check with something playing: `cargo test -p pb-daemon -- --ignored cover`.
+#[cfg(all(test, windows))]
+mod live {
+    #[test]
+    #[ignore]
+    fn cover_is_sent_and_fits() {
+        let art = super::media_art().expect("play something with a cover first");
+        assert!(art.len() <= 150_000);
+        println!("cover: {} bytes, starts {:02x?}", art.len(), &art[..4]);
+        // Force the shrinking path on the same cover: a 400 px JPEG.
+        let small = super::win::cover(1).expect("shrunk cover");
+        assert_eq!(&small[..2], &[0xff, 0xd8]);
+        println!("shrunk: {} bytes", small.len());
     }
 }

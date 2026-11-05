@@ -197,12 +197,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
       for (final c in live) c.key: c,
     };
     final q = _search.text.trim().toLowerCase();
-    final list = all.values
-        .where((c) => q.isEmpty ||
-            c.title.toLowerCase().contains(q) ||
-            c.snippet.toLowerCase().contains(q))
-        .toList()
-      ..sort((a, b) => b.time.compareTo(a.time));
+    final list =
+        all.values
+            .where(
+              (c) =>
+                  q.isEmpty ||
+                  c.title.toLowerCase().contains(q) ||
+                  c.snippet.toLowerCase().contains(q),
+            )
+            .toList()
+          ..sort((a, b) => b.time.compareTo(a.time));
     final open = all[_open];
     final notice = phone.state != pb.PeerState.connected
         ? 'El teléfono está sin conexión. Alero se reconecta solo.'
@@ -415,8 +419,11 @@ class _ConversationState extends State<_Conversation> {
       return 'Los grupos se responden en el teléfono: Android solo deja enviar MMS a la app de mensajes predeterminada.';
     }
     if (c.notif != null) {
-      final active = widget.hub.notifs[widget.peerId]
-          ?.any((n) => n.key == c.notif!.key && n.replyable) ?? false;
+      final active =
+          widget.hub.notifs[widget.peerId]?.any(
+            (n) => n.key == c.notif!.key && n.replyable,
+          ) ??
+          false;
       if (!active) {
         return 'La notificación ya no permite responder. Puedes seguir leyendo lo disponible.';
       }
@@ -437,9 +444,7 @@ class _ConversationState extends State<_Conversation> {
         _status = null;
       } else {
         await widget.hub.replyNotif(widget.peerId, c.notif!.key, text);
-        _localReplies.add(
-          ChatMsg(body: text, time: DateTime.now(), out: true),
-        );
+        _localReplies.add(ChatMsg(body: text, time: DateTime.now(), out: true));
         _status = 'Android entregó la respuesta a ${c.source}.';
       }
       _text.clear();
@@ -474,10 +479,12 @@ class _ConversationState extends State<_Conversation> {
     final visibleMsgs = <ChatMsg>[
       ...?msgs,
       for (final reply in _localReplies)
-        if (!(msgs?.any((m) =>
-                m.out &&
-                m.body == reply.body &&
-                m.time.difference(reply.time).inSeconds.abs() < 20) ??
+        if (!(msgs?.any(
+              (m) =>
+                  m.out &&
+                  m.body == reply.body &&
+                  m.time.difference(reply.time).inSeconds.abs() < 20,
+            ) ??
             false))
           reply,
     ];
@@ -578,6 +585,11 @@ class _ConversationState extends State<_Conversation> {
                         ),
                         const SizedBox(width: Gap.s),
                         IconButton.filled(
+                          style: IconButton.styleFrom(
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .onPrimary,
+                          ),
                           tooltip: 'Enviar',
                           onPressed: _sending || _text.text.trim().isEmpty
                               ? null

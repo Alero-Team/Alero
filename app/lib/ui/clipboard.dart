@@ -6,28 +6,6 @@ import 'notifications.dart' show ago;
 import 'theme.dart';
 import 'widgets.dart';
 
-/// Clipboard is an action, not a place: one button of a fixed size that opens a sheet. The sheet holds the
-/// send action and the recent items, so nothing on the screen behind it changes size when the history grows
-/// (the old split button gained an arrow after the first send and pushed the layout down).
-class ClipboardButton extends StatelessWidget {
-  const ClipboardButton(
-    this.hub,
-    this.peerId, {
-    super.key,
-    this.enabled = true,
-  });
-  final Hub hub;
-  final String peerId;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) => FilledButton.tonalIcon(
-    onPressed: enabled ? () => openClipboard(context, hub, peerId) : null,
-    icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
-    label: const Text('Portapapeles'),
-  );
-}
-
 Future<void> openClipboard(BuildContext context, Hub hub, String peerId) =>
     showModalBottomSheet<void>(
       context: context,

@@ -20,6 +20,13 @@
 
 ### Errores corregidos
 
+- **Portadas en el teléfono:** el PC descartaba las portadas de más de 150 KB (muchas de Spotify), así que el teléfono mostraba una nota musical. Ahora las reduce a un JPEG de 400 px.
+- **Botón de reproducir vacío en el PC:** el tema pintaba el icono del mismo color que el botón (blanco sobre blanco). Pasaba igual en Enviar de Mensajes y de las respuestas a notificaciones.
+- **Accesos directos unificados:** todos en una cuadrícula dentro de la tarjeta del dispositivo. En Android: Enviar, Portapapeles, Archivos, Controlar, Pantalla y Captura; ya no están repartidos en tres bloques.
+- **Alero Vault en Android** sale de la barra inferior y pasa a Ajustes › Seguridad. En el PC sigue en el menú lateral.
+- **Personalizar › Tema y apariencia** abre Ajustes directamente en Apariencia.
+- **Estado del dispositivo:** sin «Seguridad» ni «Sincronización», que no aportaban información.
+
 - **No se podía volver a vincular un dispositivo después de desvincularlo.** Causa: el otro dispositivo seguía confiando en el primero, y al reintentar (con «Emparejar de nuevo» o escaneando el QR) el motor lo daba por «ya emparejado» y se saltaba la vinculación. Ahora lo comprueba en la misma conexión y, si el otro lado lo rechaza, inicia una vinculación nueva con código de confirmación. La desvinculación sigue borrando la confianza como antes. Lo cubre una prueba automática nueva.
 - **El chat desaparecía mientras se escribía.** Causa: cada cambio del hub (una notificación, la batería, la música) llamaba a la carga de SMS, que vaciaba hilos y mensajes tras un error o un retraso del teléfono. La conversación abierta y el texto escrito se perdían. Ahora solo se reinicia al cambiar de teléfono, y un corte breve de conexión deja el chat abierto con un aviso. Lo cubre una prueba automática nueva.
 - **La cámara del teléfono no abría.** Causa: al pasar de una cámara a otra se abría la nueva antes de que el teléfono liberase la anterior, y fallaban las dos sin avisar. Ahora Alero espera a que la sesión anterior termine y, si la cámara está ocupada o bloqueada, explica el motivo en pantalla. Probado con las cámaras trasera y frontal de un Pixel 9a (Android 17).

@@ -10,6 +10,7 @@ import '../native.dart';
 import 'shell.dart';
 import 'brand.dart';
 import 'theme.dart';
+import 'vault.dart';
 import 'widgets.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
@@ -25,6 +26,11 @@ String _mediaStatus(Hub hub) {
       : '';
   return '$partial${missing.isEmpty ? '' : 'Sin acceso a: ${missing.join(', ')}. '}Sin el permiso esas secciones salen vacías.';
 }
+
+final _appearanceKey = GlobalKey();
+
+/// Set before opening Ajustes to land on Apariencia (Inicio › Personalizar › Tema y apariencia).
+final showAppearance = ValueNotifier(false);
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen(this.hub, {super.key});
@@ -113,6 +119,19 @@ class SettingsScreen extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     const gap = SizedBox(height: Gap.l, width: Gap.l);
     final wide = MediaQuery.sizeOf(context).width >= 1180;
+    if (showAppearance.value) {
+      showAppearance.value = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final c = _appearanceKey.currentContext;
+        if (c != null) {
+          Scrollable.ensureVisible(
+            c,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+    }
 
     final device = Panel(
       title: 'Este dispositivo',
@@ -172,25 +191,41 @@ class SettingsScreen extends StatelessWidget {
         ? Panel(
             title: 'Seguridad',
             icon: Symbols.lock_rounded,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: Native.lock,
-              builder: (context, enabled, _) => SettingTile(
-                title: 'Bloquear Alero con huella o PIN',
-                subtitle: 'Pide el desbloqueo del sistema al abrir o volver a la app. Las conexiones emparejadas continúan en segundo plano.',
-                trailing: AleroSwitch(
-                  value: enabled,
-                  label: 'Bloquear Alero',
-                  onChanged: (on) async {
-                    try {
-                      await Native.setLock(on);
-                    } on PlatformException catch (e) {
-                      hub.messages.add(
-                        e.message ?? 'No se pudo configurar el bloqueo.',
-                      );
-                    }
-                  },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // On a phone the vault stays out of the bottom bar: it opens from here.
+                SettingTile(
+                  title: 'Alero Vault',
+                  subtitle: 'Notas y archivos cifrados en este teléfono.',
+                  trailing: const Icon(Symbols.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const VaultScreen(),
+                    ),
+                  ),
                 ),
-              ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: Native.lock,
+                  builder: (context, enabled, _) => SettingTile(
+                    title: 'Bloquear Alero con huella o PIN',
+                    subtitle: 'Pide el desbloqueo del sistema al abrir o volver a la app. Las conexiones emparejadas continúan en segundo plano.',
+                    trailing: AleroSwitch(
+                      value: enabled,
+                      label: 'Bloquear Alero',
+                      onChanged: (on) async {
+                        try {
+                          await Native.setLock(on);
+                        } on PlatformException catch (e) {
+                          hub.messages.add(
+                            e.message ?? 'No se pudo configurar el bloqueo.',
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
           )
         : null;
@@ -345,8 +380,10 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: (enabled) => _setSmsAllowed(context, enabled),
                 label: 'Mensajes en el ordenador',
               ),
-              onTap: () =>
-                  _setSmsAllowed(context, !hub.smsAllowed || !hub.smsPermission),
+              onTap: () => _setSmsAllowed(
+                context,
+                !hub.smsAllowed || !hub.smsPermission,
+              ),
             ),
           )
         : null;
@@ -372,56 +409,59 @@ class SettingsScreen extends StatelessWidget {
           )
         : null;
 
-    final look = Panel(
-      title: 'Apariencia',
-      icon: Symbols.palette_rounded,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: Gap.s),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'system',
-                  label: Text('Sistema'),
-                  icon: Icon(Symbols.brightness_auto_rounded, size: 18),
-                ),
-                ButtonSegment(
-                  value: 'light',
-                  label: Text('Claro'),
-                  icon: Icon(Symbols.light_mode_rounded, size: 18),
-                ),
-                ButtonSegment(
-                  value: 'dark',
-                  label: Text('Oscuro'),
-                  icon: Icon(Symbols.dark_mode_rounded, size: 18),
-                ),
-              ],
-              selected: {hub.theme},
-              showSelectedIcon: false,
-              onSelectionChanged: (v) => hub.setTheme(v.first),
-            ),
-          ),
-          SettingTile(
-            title: 'Modo AMOLED',
-            subtitle: 'Negro puro como fondo del tema oscuro. Ahorra batería en pantallas OLED. Solo se nota cuando el tema oscuro está en uso.',
-            trailing: ValueListenableBuilder(
-              valueListenable: hub.amoled,
-              builder: (_, on, _) => AleroSwitch(
-                value: on,
-                onChanged: hub.setAmoled,
-                label: 'Modo AMOLED',
+    final look = KeyedSubtree(
+      key: _appearanceKey,
+      child: Panel(
+        title: 'Apariencia',
+        icon: Symbols.palette_rounded,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: Gap.s),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'system',
+                    label: Text('Sistema'),
+                    icon: Icon(Symbols.brightness_auto_rounded, size: 18),
+                  ),
+                  ButtonSegment(
+                    value: 'light',
+                    label: Text('Claro'),
+                    icon: Icon(Symbols.light_mode_rounded, size: 18),
+                  ),
+                  ButtonSegment(
+                    value: 'dark',
+                    label: Text('Oscuro'),
+                    icon: Icon(Symbols.dark_mode_rounded, size: 18),
+                  ),
+                ],
+                selected: {hub.theme},
+                showSelectedIcon: false,
+                onSelectionChanged: (v) => hub.setTheme(v.first),
               ),
             ),
-            onTap: () => hub.setAmoled(!hub.amoled.value),
-          ),
-          const SizedBox(height: Gap.xs),
-          Text(
-            'Identidad monocroma de Alero: el mismo aspecto en Windows y Android, con el color reservado al estado (conectado, avisos, errores).',
-            style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-          ),
-        ],
+            SettingTile(
+              title: 'Modo AMOLED',
+              subtitle: 'Negro puro como fondo del tema oscuro. Ahorra batería en pantallas OLED. Solo se nota cuando el tema oscuro está en uso.',
+              trailing: ValueListenableBuilder(
+                valueListenable: hub.amoled,
+                builder: (_, on, _) => AleroSwitch(
+                  value: on,
+                  onChanged: hub.setAmoled,
+                  label: 'Modo AMOLED',
+                ),
+              ),
+              onTap: () => hub.setAmoled(!hub.amoled.value),
+            ),
+            const SizedBox(height: Gap.xs),
+            Text(
+              'Identidad monocroma de Alero: el mismo aspecto en Windows y Android, con el color reservado al estado (conectado, avisos, errores).',
+              style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
 

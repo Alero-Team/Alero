@@ -26,15 +26,18 @@ class NotificationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final peer = hub.peers
-        .where((p) => p.trusted)
-        .firstOrNull;
-    final list = peer == null ? const <PhoneNotif>[] : hub.notifs[peer.id] ?? const <PhoneNotif>[];
+    final peer = hub.peers.where((p) => p.trusted).firstOrNull;
+    final list = peer == null
+        ? const <PhoneNotif>[]
+        : hub.notifs[peer.id] ?? const <PhoneNotif>[];
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Text('Notificaciones', style: Theme.of(context).textTheme.headlineMedium),
+          Text(
+            'Notificaciones',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
           const SizedBox(height: 16),
           if (peer == null)
             const Text('Conecta tu teléfono para ver las notificaciones.')
@@ -58,7 +61,12 @@ class NotificationsScreen extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 8),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: _NotifRow(hub, peer.id, n, key: ValueKey((peer.id, n.key))),
+                    child: _NotifRow(
+                      hub,
+                      peer.id,
+                      n,
+                      key: ValueKey((peer.id, n.key)),
+                    ),
                   ),
                 ),
           ],
@@ -350,6 +358,11 @@ class _NotifRowState extends State<_NotifRow> {
                         // Lines the button up with the field, above the helper text.
                         padding: const EdgeInsets.only(bottom: 22),
                         child: IconButton.filled(
+                          style: IconButton.styleFrom(
+                            foregroundColor: Theme.of(context)
+                                .colorScheme
+                                .onPrimary,
+                          ),
                           tooltip: 'Enviar respuesta',
                           onPressed: _sending || _text.text.trim().isEmpty
                               ? null

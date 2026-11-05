@@ -56,15 +56,34 @@ class _Dest {
 final _dests = [
   const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
   if (!Platform.isAndroid) ...const [
-    _Dest(Section.messages, 'Mensajes', Symbols.chat_rounded, group: 'COMUNICACIÓN'),
+    _Dest(
+      Section.messages,
+      'Mensajes',
+      Symbols.chat_rounded,
+      group: 'COMUNICACIÓN',
+    ),
     _Dest(Section.calls, 'Llamadas', Symbols.call_rounded),
-    _Dest(Section.notifications, 'Notificaciones', Symbols.notifications_rounded),
-    _Dest(Section.photos, 'Fotos', Symbols.photo_library_rounded, group: 'CONTENIDO'),
+    _Dest(
+      Section.notifications,
+      'Notificaciones',
+      Symbols.notifications_rounded,
+    ),
+    _Dest(
+      Section.photos,
+      'Fotos',
+      Symbols.photo_library_rounded,
+      group: 'CONTENIDO',
+    ),
     _Dest(Section.explorer, 'Explorador', Symbols.folder_rounded),
   ],
-  const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
-  const _Dest(Section.devices, 'Dispositivos', Symbols.devices_rounded,
-      group: 'SISTEMA'),
+  if (!Platform.isAndroid)
+    const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
+  const _Dest(
+    Section.devices,
+    'Dispositivos',
+    Symbols.devices_rounded,
+    group: 'SISTEMA',
+  ),
   const _Dest(Section.settings, 'Ajustes', Symbols.tune_rounded),
 ];
 
@@ -307,9 +326,11 @@ class _ShellState extends State<Shell>
                       onPressed: () => setState(
                         () => _sidebarCollapsed = !_sidebarCollapsed,
                       ),
-                      icon: Icon(_sidebarCollapsed
-                          ? Symbols.left_panel_open_rounded
-                          : Symbols.left_panel_close_rounded),
+                      icon: Icon(
+                        _sidebarCollapsed
+                            ? Symbols.left_panel_open_rounded
+                            : Symbols.left_panel_close_rounded,
+                      ),
                       label: _sidebarCollapsed
                           ? const SizedBox.shrink()
                           : const Text('Contraer menú'),
@@ -357,7 +378,9 @@ class _ShellState extends State<Shell>
                             tooltip: 'Dispositivos',
                           )
                         : _PhoneChip(
-                            online, hub, onTap: () => _go(Section.devices),
+                            online,
+                            hub,
+                            onTap: () => _go(Section.devices),
                           ),
                   ),
                 ],
