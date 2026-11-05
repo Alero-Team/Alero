@@ -117,6 +117,10 @@ class Native {
   static Future<String?> pickFolder() async =>
       _android ? null : getDirectoryPath(confirmButtonText: 'Enviar');
 
+  /// Windows: owner explicitly shares this folder with paired phones.
+  static Future<String?> pickSharedPcFolder() async =>
+      _android ? null : getDirectoryPath(confirmButtonText: 'Compartir carpeta');
+
   static void closeFd(int fd) => _ch.invokeMethod('closeFd', fd);
 
   /// Android share menu: what another app shared with us, once.
