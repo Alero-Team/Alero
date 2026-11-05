@@ -127,7 +127,7 @@ pub fn handle(
                     "ok": true,
                 })
             }).collect();
-            let _ = engine.send_message(peer, "pb.x.pcfs.roots", json!({"roots": items}));
+            let _ = engine.send_message(peer, "pb.x.pcfs.roots", json!({"roots": items, "writable": cfg["allowPcFileEdits"] == true}));
         }
         "pb.x.pcfs.list" => {
             let Some((root, path)) = resolve(&approved, body, "path") else {
