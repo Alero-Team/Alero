@@ -53,7 +53,7 @@ class QuickActions extends StatelessWidget {
         Expanded(
           child: _Tile(
             Symbols.cast_rounded,
-            'Pantalla',
+            'Acceso remoto',
             canShot
                 ? () => openPcScreen(context, hub, peer.id, peer.name)
                 : null,
