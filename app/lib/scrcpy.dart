@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'adb_mdns.dart';
 import 'phone_control.dart';
 import 'desktop_workspace.dart';
 
@@ -141,9 +142,28 @@ class Scrcpy {
     // Drain stderr but do not return it (errors may echo sensitive data).
     await stderr;
     if (status != 0 || !output.contains('Successfully paired')) {
-      throw StateError('No se pudo vincular ADB. Comprueba la IP, el puerto y el código temporal.');
+      throw StateError(
+        'No se pudo vincular ADB. Comprueba la IP, el puerto y el código temporal.',
+      );
     }
     return 'Dispositivo vinculado correctamente con Android.';
+  }
+
+  /// "Vincular con código QR": the phone, after scanning, announces the QR's service name for pairing.
+  /// Returns its `ip:port`, or null while it has not appeared yet.
+  static Future<String?> findPairing(String name) async {
+    final r = await _run(['mdns', 'services']);
+    for (final l in '${r.stdout}'.split('\n')) {
+      final m = RegExp(
+        r'^(\S+)\s+_adb-tls-pairing\._tcp\.?\s+(\d+\.\d+\.\d+\.\d+:\d+)',
+      ).firstMatch(l.trim());
+      if (m != null && m[1] == name) return m[2];
+    }
+    // The router may drop multicast: ask every neighbour directly.
+    final s = (await AdbMdns.query(AdbMdns.pairing))
+        .where((s) => s.name == name)
+        .firstOrNull;
+    return s == null ? null : '${s.ip}:${s.port}';
   }
 
   /// The phone's wireless-debugging port changes every time; mDNS tells us where it is.
@@ -155,7 +175,8 @@ class Scrcpy {
       ).firstMatch(l);
       if (m != null && m[1] == ip) return '${m[1]}:${m[2]}';
     }
-    return null;
+    final s = (await AdbMdns.query(AdbMdns.connect, hosts: [ip])).firstOrNull;
+    return s == null ? null : '${s.ip}:${s.port}';
   }
 
   static Future<bool> connect(String target) async {

@@ -37,7 +37,6 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final main = mainPeer(hub);
-    final wide = MediaQuery.sizeOf(context).width >= 1180;
     final online = main?.state == pb.PeerState.connected;
     final info = main == null ? null : hub.info[main.id];
     final phone = info?.phone ?? false;
@@ -69,7 +68,10 @@ class HomeScreen extends StatelessWidget {
     // The device card carries its state too: one tile for who it is, what it has and what you can do.
     final hero = _Hero(main, info, hub, go: go, status: status);
     final scale = TileScale.forSize(hub.tileSize.value);
-    final gap = SizedBox(height: Gap.l * scale, width: Gap.l * scale);
+    // Bigger tiles need more room before Home splits into two columns.
+    final wide = MediaQuery.sizeOf(context).width >= 1180 * scale;
+    final fit = ScaledTiles.fit(context, scale);
+    final gap = SizedBox(height: Gap.l * fit, width: Gap.l * fit);
 
     if (Platform.isAndroid && !phone) {
       return ScreenFrame(
@@ -83,7 +85,7 @@ class HomeScreen extends StatelessWidget {
         ),
         children: [
           // Same order as the computer's Inicio: device, what it plays, its controls, then activity.
-          TileScale(
+          ScaledTiles(
             scale,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -105,17 +107,9 @@ class HomeScreen extends StatelessWidget {
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-      // The phone's Inicio goes straight to the card: its name is already there.
-      if (!Platform.isAndroid) ...[
-        Text(
-          'Resumen de ${main.name}',
-          style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
-        gap,
-      ],
       if (wide && !Platform.isAndroid) ...[
-        // Left: the device, its state and what it plays; right: its controls and notifications.
+        // Left: the device, what it plays and recent activity; right: its controls and notifications.
+        // Activity sits under the player so both columns end at a similar height.
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -132,6 +126,8 @@ class HomeScreen extends StatelessWidget {
                         icon: Symbols.music_note_rounded,
                         child: Text('No hay música en reproducción.'),
                       ),
+                  gap,
+                  recent,
                 ],
               ),
             ),
@@ -161,8 +157,6 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
-        gap,
-        recent,
       ] else ...[
         hero,
         gap,
@@ -184,7 +178,7 @@ class HomeScreen extends StatelessWidget {
             )
           : null,
       children: [
-        TileScale(
+        ScaledTiles(
           scale,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -213,15 +207,33 @@ Future<void> _customize(
         children: [
           const Text('Tamaño de los mosaicos'),
           const SizedBox(height: Gap.s),
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 'compact', label: Text('Compacto')),
-              ButtonSegment(value: 'normal', label: Text('Normal')),
-              ButtonSegment(value: 'large', label: Text('Amplio')),
+          Row(
+            children: [
+              const Icon(Symbols.text_decrease_rounded, size: 18),
+              Expanded(
+                child: Slider(
+                  value: TileScale.forSize(hub.tileSize.value),
+                  min: TileScale.minFactor,
+                  max: TileScale.maxFactor,
+                  divisions: 16,
+                  label:
+                      '${(TileScale.forSize(hub.tileSize.value) * 100).round()} %',
+                  onChanged: (v) => hub.setTileSize(v.toStringAsFixed(2)),
+                ),
+              ),
+              const Icon(Symbols.text_increase_rounded, size: 22),
             ],
-            selected: {hub.tileSize.value},
-            onSelectionChanged: (v) => hub.setTileSize(v.first),
+          ),
+          Text(
+            'Cambia el tamaño del texto, los iconos y los espacios. En pantallas estrechas se ajusta solo.',
+            style: Theme.of(ctx).textTheme.bodySmall,
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => hub.setTileSize('normal'),
+              child: const Text('Restablecer'),
+            ),
           ),
         ],
       ),
@@ -325,132 +337,164 @@ class _Hero extends StatelessWidget {
     );
 
     // Every shortcut lives in this card, as the prototype's buttons, on the computer and on the phone.
-    final actions = Platform.isAndroid
-        ? QuickActions(hub, p)
-        : Wrap(
-            spacing: Gap.s,
-            runSpacing: Gap.s,
-            children: [
-              FilledButton.icon(
-                onPressed: online ? () => hub.send(p.id) : null,
-                icon: const Icon(Symbols.upload_rounded, size: 18),
-                label: const Text('Enviar archivos'),
+    final buttons = Platform.isAndroid
+        ? const <Widget>[]
+        : [
+            FilledButton.icon(
+              onPressed: online ? () => hub.send(p.id) : null,
+              icon: const Icon(Symbols.upload_rounded, size: 18),
+              label: const Text('Enviar archivos'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: online
+                  ? () => openClipboard(context, hub, p.id)
+                  : null,
+              icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
+              label: const Text('Portapapeles'),
+            ),
+            if (phone)
+              OutlinedButton.icon(
+                onPressed: online ? () => openScreen(context, hub, p) : null,
+                icon: const Icon(Symbols.cast_rounded, size: 18),
+                label: const Text('Controlar teléfono'),
               ),
-              FilledButton.tonalIcon(
-                onPressed: online
-                    ? () => openClipboard(context, hub, p.id)
-                    : null,
-                icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
-                label: const Text('Portapapeles'),
-              ),
-              if (phone)
-                OutlinedButton.icon(
-                  onPressed: () => go(Section.explorer),
-                  icon: const Icon(Symbols.folder_open_rounded, size: 18),
-                  label: const Text('Explorar archivos'),
-                ),
-              if (phone)
-                OutlinedButton.icon(
-                  onPressed: online ? () => openScreen(context, hub, p) : null,
-                  icon: const Icon(Symbols.cast_rounded, size: 18),
-                  label: const Text('Controlar teléfono'),
-                ),
-            ],
-          );
+          ];
+    // One row when every label fits on one line (150 px each); else the main button gets its own row and the rest share the next.
+    Widget actions(double width) {
+      final n = buttons.length;
+      final oneRow = width / n >= 150;
+      final rest = oneRow ? n : n - 1;
+      final w = (width - Gap.s * (rest - 1)) / rest;
+      final tight = w < 200;
+      return Theme(
+        data: Theme.of(context).copyWith(
+          visualDensity: tight ? VisualDensity.compact : null,
+          textTheme: tight ? type.copyWith(labelLarge: type.labelMedium) : null,
+        ),
+        child: Wrap(
+          spacing: Gap.s,
+          runSpacing: Gap.s,
+          children: [
+            for (var i = 0; i < n; i++)
+              SizedBox(width: !oneRow && i == 0 ? width : w, child: buttons[i]),
+          ],
+        ),
+      );
+    }
 
     return Card(
       child: Padding(
         padding: EdgeInsets.all(20 * TileScale.of(context)),
         child: LayoutBuilder(
-          builder: (context, box) {
+          builder: (context, outer) {
+            // A wide card puts storage, network and battery in its right half instead of leaving it empty.
+            final side = status != null && outer.maxWidth >= 760;
+            final box = BoxConstraints(
+              maxWidth: side ? (outer.maxWidth - 24) * 6 / 11 : outer.maxWidth,
+            );
             final phoneSize = box.maxWidth < 420 ? 70.0 : 104.0;
-            return Column(
+            final identity = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: phoneSize,
-                      child: Semantics(
-                        button: true,
-                        label: 'Ver ${p.name} en Dispositivos',
-                        child: InkWell(
-                          onTap: () => go(Section.devices),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Center(child: picture),
+                // Name on the picture's top edge, buttons on its bottom edge: no empty band above or below.
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: phoneSize,
+                        child: Semantics(
+                          button: true,
+                          label: 'Ver ${p.name} en Dispositivos',
+                          child: InkWell(
+                            onTap: () => go(Section.devices),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Center(child: picture),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 10,
-                            runSpacing: 6,
-                            children: [
-                              Text(
-                                p.name,
-                                style: type.headlineSmall,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              StatusLine(p),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 7,
-                            runSpacing: 7,
-                            children: [
-                              if ((info?.model ?? '').isNotEmpty)
-                                property(
-                                  Symbols.smartphone_rounded,
-                                  info!.model,
-                                ),
-                              if ((info?.osLabel ?? '').isNotEmpty)
-                                property(Symbols.layers_rounded, info!.osLabel),
-                              if ((info?.network ?? '').isNotEmpty)
-                                property(Symbols.wifi_rounded, info!.network),
-                              // The phone keeps this card short: four buttons, no extra row of chips.
-                              if (online && !Platform.isAndroid)
-                                property(
-                                  Symbols.verified_user_rounded,
-                                  'Conexión cifrada',
-                                ),
-                            ],
-                          ),
-                          if ((info?.battery ?? -1) >= 0) ...[
-                            const SizedBox(height: 13),
-                            Row(
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 10,
+                              runSpacing: 6,
                               children: [
-                                BatteryGlyph(
-                                  info!.battery,
-                                  charging: info!.charging,
-                                ),
-                                const SizedBox(width: 8),
                                 Text(
-                                  '${info!.battery}%',
-                                  style: type.titleLarge,
+                                  p.name,
+                                  style: type.headlineSmall,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: LinearProgressIndicator(
-                                    value: (info!.battery / 100).clamp(0, 1),
-                                    minHeight: 7,
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                ),
+                                StatusLine(p),
                               ],
                             ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 7,
+                              runSpacing: 7,
+                              children: [
+                                if ((info?.model ?? '').isNotEmpty)
+                                  property(
+                                    Symbols.smartphone_rounded,
+                                    info!.model,
+                                  ),
+                                if ((info?.osLabel ?? '').isNotEmpty)
+                                  property(
+                                    Symbols.layers_rounded,
+                                    info!.osLabel,
+                                  ),
+                                if ((info?.network ?? '').isNotEmpty)
+                                  property(Symbols.wifi_rounded, info!.network),
+                                // The phone keeps this card short: four buttons, no extra row of chips.
+                                if (online && !Platform.isAndroid)
+                                  property(
+                                    Symbols.verified_user_rounded,
+                                    'Conexión cifrada',
+                                  ),
+                              ],
+                            ),
+                            // With a status panel, the battery bar goes down there.
+                            if ((info?.battery ?? -1) >= 0 &&
+                                status == null) ...[
+                              const SizedBox(height: 13),
+                              Row(
+                                children: [
+                                  BatteryGlyph(
+                                    info!.battery,
+                                    charging: info!.charging,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${info!.battery}%',
+                                    style: type.titleLarge,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: LinearProgressIndicator(
+                                      value: (info!.battery / 100).clamp(0, 1),
+                                      minHeight: 7,
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            // The buttons sit beside the picture, under the chips, instead of in a row of their own.
+                            // Intrinsic height cannot run a LayoutBuilder: the column's width is known here.
+                            if (buttons.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              actions(box.maxWidth - phoneSize - 20),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 if (!online) ...[
                   const SizedBox(height: 12),
@@ -461,13 +505,24 @@ class _Hero extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 18),
-                actions,
-                if (status != null) ...[
+                if (Platform.isAndroid) ...[
+                  const SizedBox(height: 18),
+                  QuickActions(hub, p),
+                ],
+                if (status != null && !side) ...[
                   const SizedBox(height: Gap.l),
                   Divider(color: colors.outlineVariant),
                   status!,
                 ],
+              ],
+            );
+            if (!side) return identity;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 6, child: identity),
+                const SizedBox(width: 24),
+                Expanded(flex: 5, child: status!),
               ],
             );
           },
@@ -563,6 +618,15 @@ class _StatusPanel extends StatelessWidget {
 
     return Column(
       children: [
+        metric(
+          Symbols.wifi_rounded,
+          'Conectividad',
+          info.network.isEmpty
+              ? 'Sin conexión'
+              : info.wifiLabel.isEmpty
+              ? info.network
+              : info.wifiLabel,
+        ),
         if (total > 0)
           metric(
             Symbols.hard_drive_rounded,
@@ -570,13 +634,15 @@ class _StatusPanel extends StatelessWidget {
             '${size(used)} de ${size(total)}',
             progress: used / total,
           ),
-        metric(
-          Symbols.wifi_rounded,
-          'Conectividad',
-          info.network.isEmpty ? 'Sin conexión' : info.network,
-        ),
-        if (info.chargeLabel != null)
-          metric(Symbols.bolt_rounded, 'Carga', info.chargeLabel!),
+        if (info.battery >= 0)
+          metric(
+            info.charging
+                ? Symbols.battery_charging_full_rounded
+                : Symbols.battery_full_rounded,
+            'Batería',
+            ['${info.battery} %', ?info.chargeLabel].join(' · '),
+            progress: info.battery / 100,
+          ),
       ],
     );
   }

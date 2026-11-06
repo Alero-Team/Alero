@@ -202,15 +202,21 @@ class NotifListener : NotificationListenerService() {
     @Suppress("DEPRECATION") // the typed getters need Android 13; these read every version
     private fun messages(sbn: StatusBarNotification): JSONArray {
         val a = JSONArray()
-        val raw = sbn.notification.extras.getParcelableArray(Notification.EXTRA_MESSAGES) ?: return a
+        val extras = sbn.notification.extras
+        val raw = extras.getParcelableArray(Notification.EXTRA_MESSAGES) ?: return a
+        // Apps like WhatsApp tag your own replies with your Person, not a null sender.
+        val self = (if (android.os.Build.VERSION.SDK_INT >= 28)
+            (extras.get(Notification.EXTRA_MESSAGING_PERSON) as? android.app.Person)?.name?.toString() else null)
+            ?: extras.getCharSequence(Notification.EXTRA_SELF_DISPLAY_NAME)?.toString()
         for (p in raw.takeLast(10)) {
             val b = p as? Bundle ?: continue
             val text = b.getCharSequence("text")?.toString() ?: continue
             val sender = if (android.os.Build.VERSION.SDK_INT >= 28)
                 (b.get("sender_person") as? android.app.Person)?.name?.toString() ?: b.getCharSequence("sender")?.toString()
             else b.getCharSequence("sender")?.toString()
-            // No sender means the phone's owner wrote it (MessagingStyle's convention).
-            a.put(JSONObject().put("text", text.take(1000)).put("time", b.getLong("time")).put("sender", sender ?: "").put("out", sender == null))
+            // No sender, or the conversation's own user, means the phone's owner wrote it.
+            val out = sender == null || sender == self
+            a.put(JSONObject().put("text", text.take(1000)).put("time", b.getLong("time")).put("sender", if (out) "" else sender).put("out", out))
         }
         return a
     }

@@ -128,7 +128,7 @@ class _ControlsState extends State<_Controls> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Icon tiles that share the whole width, like the phone's quick settings.
-          _Grid([
+          _Grid(hub, [
             _Tile(
               icon: Symbols.wifi_rounded,
               label: 'Wi-Fi',
@@ -246,21 +246,107 @@ class _ControlsState extends State<_Controls> {
   );
 }
 
-/// Lays tiles out in equal columns that fill the panel's width.
-class _Grid extends StatelessWidget {
-  const _Grid(this.children);
-  final List<Widget> children;
+/// Lays tiles out in equal columns that fill the panel's width; each tile spans the columns its user chose.
+/// Like Android's quick settings: long-press a tile, drag the tick on its edge to resize it, tap the tick when done.
+class _Grid extends StatefulWidget {
+  const _Grid(this.hub, this.children);
+  final Hub hub;
+  final List<_Tile> children;
+
+  @override
+  State<_Grid> createState() => _GridState();
+}
+
+class _GridState extends State<_Grid> {
+  String? _editing;
+  double _drag = 0;
+  int _from = 1;
+
+  Hub get hub => widget.hub;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
       final cols = (box.maxWidth / 92).floor().clamp(3, 8);
       final w = (box.maxWidth - Gap.s * (cols - 1)) / cols;
+      final s = Theme.of(context).colorScheme;
       return Wrap(
         spacing: Gap.s,
         runSpacing: Gap.s,
         children: [
-          for (final c in children) SizedBox(width: w, height: 58, child: c),
+          for (final c in widget.children)
+            Builder(
+              builder: (context) {
+                final span = (hub.controlSpans[c.label] ?? 1).clamp(1, cols);
+                final editing = _editing == c.label;
+                void edit() => setState(() => _editing = c.label);
+                return SizedBox(
+                  width: w * span + Gap.s * (span - 1),
+                  height: 58,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      GestureDetector(
+                        onLongPress: edit,
+                        onSecondaryTap: edit,
+                        // While resizing, a tap must not switch the control.
+                        child: AbsorbPointer(absorbing: editing, child: c),
+                      ),
+                      if (editing) ...[
+                        IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(Radii.tile),
+                              border: Border.all(color: s.primary, width: 2),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: 2,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: Semantics(
+                              button: true,
+                              label:
+                                  'Arrastra para cambiar el tamaño de ${c.label}; toca para terminar',
+                              child: GestureDetector(
+                                onTap: () => setState(() => _editing = null),
+                                onHorizontalDragStart: (_) {
+                                  _drag = 0;
+                                  _from = span;
+                                },
+                                onHorizontalDragUpdate: (d) {
+                                  _drag += d.delta.dx;
+                                  final next = (_from + _drag / (w + Gap.s))
+                                      .round()
+                                      .clamp(1, cols);
+                                  if (next != span) {
+                                    hub.setControlSpan(c.label, next);
+                                  }
+                                },
+                                child: MouseRegion(
+                                  cursor: SystemMouseCursors.resizeLeftRight,
+                                  child: CircleAvatar(
+                                    radius: 13,
+                                    backgroundColor: s.primary,
+                                    child: Icon(
+                                      Symbols.check_rounded,
+                                      size: 16,
+                                      color: s.onPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
         ],
       );
     },
@@ -336,7 +422,12 @@ class _Tile extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final active = on == true;
     final state = on == null ? null : (active ? 'activado' : 'desactivado');
-    final tip = [label, ?state, ?hint].join(' · ');
+    final tip = [
+      label,
+      ?state,
+      ?hint,
+      'Mantén presionado para cambiar su tamaño',
+    ].join(' · ');
     return Tooltip(
       message: tip,
       child: Semantics(

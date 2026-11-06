@@ -142,6 +142,36 @@ class PeerInfo {
     'cellular' => 'Datos móviles',
     _ => '',
   };
+
+  /// "Wi-Fi 6 · 5 GHz · 1201 Mbps · señal buena"; empty when the phone sent no Wi-Fi details (older versions, not on Wi-Fi).
+  String get wifiLabel {
+    final w = j['wifi'] as Map? ?? const {};
+    final mhz = (w['mhz'] as num?)?.toInt();
+    final mbps = (w['mbps'] as num?)?.toInt();
+    final rssi = (w['rssi'] as num?)?.toInt();
+    final band = mhz == null
+        ? null
+        : mhz < 3000
+        ? '2,4 GHz'
+        : mhz < 5925
+        ? '5 GHz'
+        : '6 GHz';
+    final gen = switch ((w['standard'] as num?)?.toInt()) {
+      4 => 'Wi-Fi 4',
+      5 => 'Wi-Fi 5',
+      6 => band == '6 GHz' ? 'Wi-Fi 6E' : 'Wi-Fi 6',
+      8 => 'Wi-Fi 7',
+      _ => null,
+    };
+    final signal = rssi == null
+        ? null
+        : rssi >= -60
+        ? 'señal buena'
+        : rssi >= -72
+        ? 'señal media'
+        : 'señal débil';
+    return [?gen, ?band, if (mbps != null) '$mbps Mbps', ?signal].join(' · ');
+  }
 }
 
 class PhoneNotif {

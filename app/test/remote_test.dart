@@ -136,4 +136,14 @@ void main() {
     final paused = MediaState({'playing': false, 'position': 5000});
     expect(paused.positionNow, 5000);
   });
+
+  test('Wi-Fi label shows generation, band, speed and signal', () {
+    final i = PeerInfo({
+      'network': 'wifi',
+      'wifi': {'mhz': 5180, 'mbps': 1201, 'rssi': -55, 'standard': 6},
+    });
+    expect(i.wifiLabel, 'Wi-Fi 6 · 5 GHz · 1201 Mbps · señal buena');
+    expect(PeerInfo({'wifi': {'mhz': 2437}}).wifiLabel, '2,4 GHz');
+    expect(PeerInfo({'network': 'wifi'}).wifiLabel, '');
+  });
 }

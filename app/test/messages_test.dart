@@ -5,6 +5,28 @@ import 'package:pb_app/sms_client.dart';
 import 'package:pb_app/ui/messages.dart';
 
 void main() {
+  test('a reply echoed with an old time shows once, on the user side', () {
+    final old = ChatMsg(body: 'ok', time: DateTime(2026, 1, 1, 9), out: true);
+    final sticker = ChatMsg(
+      body: 'sticker',
+      time: DateTime(2026, 1, 1, 10),
+      out: false,
+    );
+    final reply = ChatMsg(
+      body: 'ok',
+      time: DateTime(2026, 1, 1, 10, 3),
+      out: true,
+    );
+    final before = {msgKey(old), msgKey(sticker)};
+    // Before the echo: the old "ok" does not hide the new one.
+    expect(mergeReplies([old, sticker], [(reply, before)]).length, 3);
+    // WhatsApp's echo carries the sticker's time and the contact's name.
+    final echo = ChatMsg(body: 'ok', time: sticker.time, out: false);
+    final merged = mergeReplies([old, sticker, echo], [(reply, before)]);
+    expect(merged.length, 3);
+    expect(merged.last.out, true);
+  });
+
   final threads = [
     SmsThread({
       'thread': 1,
@@ -67,33 +89,45 @@ void main() {
     expect((m.out, m.media, m.failed), (true, 2, true));
   });
 
-  test('hub changes never wipe the open chat (bug: chat vanished while typing)', () {
-    final hub = _QuietHub();
-    final sms = SmsClient(hub)..start('phone');
-    sms.onMessage('phone', 'pb.x.sms.threads', {
-      'items': [
-        {'thread': 1, 'name': 'Mamá', 'addresses': ['+34600000001'], 'date': 1},
-      ],
-    });
-    sms.select(1);
-    sms.onMessage('phone', 'pb.x.sms.messages', {
-      'thread': 1,
-      'items': [
-        {'id': 'm1', 'body': 'Hola', 'date': 1, 'incoming': true},
-      ],
-    });
-    // The phone was slow once, then the hub changes many times (notifications, battery, media).
-    sms.error = 'offline';
-    for (var i = 0; i < 5; i++) {
-      sms.start('phone');
-    }
-    expect(sms.threads.map((t) => t.id), [1]);
-    expect(sms.messages[1], hasLength(1));
-    expect(sms.open, 1);
-  });
+  test(
+    'hub changes never wipe the open chat (bug: chat vanished while typing)',
+    () {
+      final hub = _QuietHub();
+      final sms = SmsClient(hub)..start('phone');
+      sms.onMessage('phone', 'pb.x.sms.threads', {
+        'items': [
+          {
+            'thread': 1,
+            'name': 'Mamá',
+            'addresses': ['+34600000001'],
+            'date': 1,
+          },
+        ],
+      });
+      sms.select(1);
+      sms.onMessage('phone', 'pb.x.sms.messages', {
+        'thread': 1,
+        'items': [
+          {'id': 'm1', 'body': 'Hola', 'date': 1, 'incoming': true},
+        ],
+      });
+      // The phone was slow once, then the hub changes many times (notifications, battery, media).
+      sms.error = 'offline';
+      for (var i = 0; i < 5; i++) {
+        sms.start('phone');
+      }
+      expect(sms.threads.map((t) => t.id), [1]);
+      expect(sms.messages[1], hasLength(1));
+      expect(sms.open, 1);
+    },
+  );
 }
 
 class _QuietHub extends Hub {
   @override
-  Future<void> sendMessage(String peer, String kind, Map<String, Object?> body) async {}
+  Future<void> sendMessage(
+    String peer,
+    String kind,
+    Map<String, Object?> body,
+  ) async {}
 }

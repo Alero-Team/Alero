@@ -29,14 +29,45 @@ class TileScale extends InheritedWidget {
   static double of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<TileScale>()?.factor ?? 1;
 
-  static double forSize(String size) => switch (size) {
-    'compact' => 0.75,
-    'large' => 1.3,
-    _ => 1,
-  };
+  /// A number from the slider ("1.15"), or one of the old presets.
+  static double forSize(String size) =>
+      double.tryParse(size)?.clamp(minFactor, maxFactor) ??
+      switch (size) {
+        'compact' => 0.75,
+        'large' => 1.3,
+        _ => 1,
+      };
+
+  static const minFactor = 0.7, maxFactor = 1.5;
 
   @override
   bool updateShouldNotify(TileScale old) => old.factor != factor;
+}
+
+/// Resizes Home's tiles for real: spacing, text and icons, shrunk on narrow screens so nothing overflows.
+class ScaledTiles extends StatelessWidget {
+  const ScaledTiles(this.factor, {super.key, required this.child});
+  final double factor;
+  final Widget child;
+
+  /// The factor this screen can hold: phones under 400 dp wide get proportionally less.
+  static double fit(BuildContext context, double factor) =>
+      factor * (MediaQuery.sizeOf(context).width / 400).clamp(0.85, 1.0);
+
+  @override
+  Widget build(BuildContext context) {
+    final f = fit(context, factor);
+    final mq = MediaQuery.of(context);
+    return MediaQuery(
+      data: mq.copyWith(
+        textScaler: TextScaler.linear(mq.textScaler.scale(14) / 14 * f),
+      ),
+      child: IconTheme.merge(
+        data: IconThemeData(size: 24 * f),
+        child: TileScale(f, child: child),
+      ),
+    );
+  }
 }
 
 class Panel extends StatelessWidget {

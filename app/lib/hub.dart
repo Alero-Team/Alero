@@ -197,6 +197,9 @@ class Hub extends ChangeNotifier {
 
   /// Size of Home's tiles (padding and spacing): compact, normal or large.
   final tileSize = ValueNotifier('normal');
+
+  /// Width of each "Controles del teléfono" tile, in grid columns, by label (long press to change).
+  final controlSpans = <String, int>{};
   String get theme => themeMode.value;
 
   late File _settings;
@@ -222,6 +225,9 @@ class Hub extends ChangeNotifier {
     themeMode.value = s['theme'] as String? ?? 'dark';
     amoled.value = s['amoled'] as bool? ?? true;
     tileSize.value = s['tileSize'] as String? ?? 'normal';
+    (s['controlSpans'] as Map?)?.forEach((k, v) {
+      if (k is String && v is num) controlSpans[k] = v.toInt();
+    });
     remoteAllow = _readRemote();
     pcFolders = _readPcFolders();
     pcFilesWrite = _readRemoteConfig()['allowPcFileEdits'] == true;
@@ -368,6 +374,7 @@ class Hub extends ChangeNotifier {
         'theme': theme,
         'amoled': amoled.value,
         'tileSize': tileSize.value,
+        'controlSpans': controlSpans,
       }),
     );
   }
@@ -586,7 +593,8 @@ class Hub extends ChangeNotifier {
     // ADB/scrcpy may be authorised even when Alero's own TLS session is
     // disconnected. The viewer must still launch; only notify the phone
     // about control when that separate Alero channel is actually online.
-    if (peerId == null || !peers.any((p) => p.id == peerId && _online(p))) return;
+    if (peerId == null || !peers.any((p) => p.id == peerId && _online(p)))
+      return;
     _controlled[serial] = peerId;
     await _send(peerId, 'pb.x.phonecontrol', {'active': true});
   }
@@ -1090,6 +1098,12 @@ class Hub extends ChangeNotifier {
 
   void setAmoled(bool on) {
     amoled.value = on;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setControlSpan(String label, int span) {
+    span <= 1 ? controlSpans.remove(label) : controlSpans[label] = span;
     _saveSettings();
     notifyListeners();
   }

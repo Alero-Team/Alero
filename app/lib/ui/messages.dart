@@ -404,7 +404,8 @@ class _ConversationState extends State<_Conversation> {
   String? _status;
   // Only responses acknowledged by Android; not a delivery receipt from
   // WhatsApp or another destination. Retained in this open conversation.
-  final _localReplies = <ChatMsg>[];
+  // Each reply keeps the messages that existed when it was sent: its echo is a new one with the same text.
+  final _localReplies = <(ChatMsg, Set<String>)>[];
   Convo get c => widget.c;
 
   @override
@@ -444,7 +445,10 @@ class _ConversationState extends State<_Conversation> {
         _status = null;
       } else {
         await widget.hub.replyNotif(widget.peerId, c.notif!.key, text);
-        _localReplies.add(ChatMsg(body: text, time: DateTime.now(), out: true));
+        _localReplies.add((
+          ChatMsg(body: text, time: DateTime.now(), out: true),
+          {for (final m in c.notif!.messages) msgKey(m)},
+        ));
         _status = 'Android entregó la respuesta a ${c.source}.';
       }
       _text.clear();
@@ -474,20 +478,7 @@ class _ConversationState extends State<_Conversation> {
               sender: c.notif!.title,
             ),
           ];
-    // MessagingStyle may already contain the outgoing response. Avoid
-    // displaying the same message twice after an updated notification.
-    final visibleMsgs = <ChatMsg>[
-      ...?msgs,
-      for (final reply in _localReplies)
-        if (!(msgs?.any(
-              (m) =>
-                  m.out &&
-                  m.body == reply.body &&
-                  m.time.difference(reply.time).inSeconds.abs() < 20,
-            ) ??
-            false))
-          reply,
-    ];
+    final visibleMsgs = mergeReplies(msgs ?? const [], _localReplies);
     // A chat app names group conversations apart from the sender (title).
     final n = c.notif;
     final group =
@@ -680,4 +671,37 @@ class _Bubble extends StatelessWidget {
       ),
     );
   }
+}
+
+String msgKey(ChatMsg m) => '${m.time.millisecondsSinceEpoch}|${m.body}';
+
+/// The updated notification may carry each reply again, sometimes under the user's own name and with any time
+/// (WhatsApp stamps it with the last incoming message): show every reply once, on the user's side.
+@visibleForTesting
+List<ChatMsg> mergeReplies(
+  List<ChatMsg> msgs,
+  List<(ChatMsg, Set<String>)> replies,
+) {
+  final out = [...msgs];
+  final echoed = <int>{};
+  final pending = <ChatMsg>[];
+  for (final (reply, before) in replies) {
+    var i = -1;
+    for (var j = 0; j < out.length && i < 0; j++) {
+      final m = out[j];
+      if (m.body == reply.body &&
+          !before.contains(msgKey(m)) &&
+          !echoed.contains(j)) {
+        i = j;
+      }
+    }
+    if (i < 0) {
+      pending.add(reply);
+      continue;
+    }
+    echoed.add(i);
+    final m = out[i];
+    if (!m.out) out[i] = ChatMsg(body: m.body, time: m.time, out: true);
+  }
+  return [...out, ...pending];
 }

@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
@@ -211,6 +213,22 @@ object Features {
         }
     }
 
+    /** Band, link speed, signal and Wi-Fi generation of the current Wi-Fi; empty when not on Wi-Fi. None of these need location. */
+    private fun wifi(): JSONObject {
+        val o = JSONObject()
+        val cm = ctx.getSystemService(ConnectivityManager::class.java)
+        val c = cm.getNetworkCapabilities(cm.activeNetwork) ?: return o
+        if (!c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return o
+        @Suppress("DEPRECATION")
+        val w = (if (Build.VERSION.SDK_INT >= 31) c.transportInfo as? WifiInfo else null)
+            ?: ctx.applicationContext.getSystemService(WifiManager::class.java)?.connectionInfo ?: return o
+        if (w.frequency > 0) o.put("mhz", w.frequency)
+        if (w.linkSpeed > 0) o.put("mbps", w.linkSpeed)
+        if (w.rssi in -126..-1) o.put("rssi", w.rssi)
+        if (Build.VERSION.SDK_INT >= 30 && w.wifiStandard > 1) o.put("standard", w.wifiStandard)
+        return o
+    }
+
     /** Screen geometry in pixels, so the computer can draw a faithful outline of this phone. */
     private fun screen(): JSONObject {
         val wm = ctx.getSystemService(WindowManager::class.java)
@@ -256,6 +274,7 @@ object Features {
             .put("battery", JSONObject().put("level", level).put("charging", charging).put("mw", power()).put("mv", millivolts()))
             .put("storage", JSONObject().put("free", fs.availableBytes).put("total", fs.totalBytes))
             .put("network", network())
+            .put("wifi", wifi())
             .put("screen", screen())
             .put("wallpaper", JSONObject().put("colors", wallpaperColors()).put("custom", wallpaperFile().exists()))
             .put("notifAccess", NotifListener.enabled(ctx))
