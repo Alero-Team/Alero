@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../hub.dart';
 import '../native.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -118,4 +120,122 @@ class _Row extends StatelessWidget {
       subtitle: Text(_size(f)),
     );
   }
+}
+
+/// After «Enviar»: a small dialog with each outgoing file's percentage and progress wave. It closes by
+/// itself once every file of this send has finished; «Ocultar» leaves them running in Actividad reciente.
+void showSendProgress(BuildContext context, Hub hub, int count) {
+  showDialog<void>(context: context, builder: (_) => _SendProgress(hub, count));
+}
+
+class _SendProgress extends StatefulWidget {
+  const _SendProgress(this.hub, this.count);
+  final Hub hub;
+  final int count;
+
+  @override
+  State<_SendProgress> createState() => _SendProgressState();
+}
+
+class _SendProgressState extends State<_SendProgress> {
+  // Outgoing transfers already running before this send are not ours. Taken in initState: a lazy field
+  // would first be read once this send's own file is in the list.
+  late final Set<String> _before;
+  final _seen = <String>{};
+  Timer? _idle;
+  bool _closed = false;
+
+  List<Xfer> get _mine => widget.hub.active
+      .where((x) => !x.incoming && !_before.contains(x.id))
+      .toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _before = {
+      for (final x in widget.hub.active)
+        if (!x.incoming) x.id,
+    };
+    widget.hub.addListener(_check);
+    // A send that never starts (refused, failed) must not leave the dialog open.
+    _idle = Timer(const Duration(seconds: 15), _close);
+  }
+
+  void _check() {
+    final mine = _mine;
+    _seen.addAll(mine.map((x) => x.id));
+    _idle?.cancel();
+    if (mine.isEmpty && _seen.isNotEmpty) {
+      // Several files start one after another: wait briefly for the next before closing.
+      _idle = Timer(
+        Duration(milliseconds: _seen.length >= widget.count ? 700 : 4000),
+        _close,
+      );
+    }
+  }
+
+  void _close() {
+    if (_closed || !mounted) return;
+    _closed = true;
+    // Another dialog may sit on top by now: remove this one, not whatever is current.
+    final r = ModalRoute.of(context);
+    if (r == null || !r.isActive) return;
+    r.isCurrent
+        ? Navigator.of(context).pop()
+        : Navigator.of(context).removeRoute(r);
+  }
+
+  @override
+  void dispose() {
+    _closed = true;
+    _idle?.cancel();
+    widget.hub.removeListener(_check);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(
+      widget.count == 1
+          ? 'Enviando archivo'
+          : 'Enviando ${widget.count} archivos',
+    ),
+    content: SizedBox(
+      width: 420,
+      child: ListenableBuilder(
+        listenable: widget.hub,
+        builder: (context, _) {
+          final mine = _mine;
+          if (mine.isEmpty) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const LinearProgressIndicator(),
+                const SizedBox(height: Gap.s),
+                Text(_seen.isEmpty ? 'Preparando…' : 'Terminado'),
+              ],
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final x in mine.take(3))
+                TransferRow(x, widget.hub, key: ValueKey(x.id)),
+              if (mine.length > 3)
+                Text(
+                  'y ${mine.length - 3} más en curso',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          );
+        },
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Ocultar'),
+      ),
+    ],
+  );
 }

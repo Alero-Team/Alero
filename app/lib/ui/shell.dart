@@ -129,8 +129,12 @@ class _ShellState extends State<Shell>
       }
     });
     hub.addListener(_questions);
-    hub.confirmSend = (files, to) =>
-        mounted ? showSendPreview(context, files, to) : Future.value(true);
+    hub.confirmSend = (files, to) async {
+      if (!mounted) return true;
+      final ok = await showSendPreview(context, files, to);
+      if (ok && mounted) showSendProgress(context, hub, files.length);
+      return ok;
+    };
   }
 
   @override

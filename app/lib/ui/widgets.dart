@@ -328,7 +328,17 @@ class TransferRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final f = x.size == 0 ? null : (x.done / x.size).clamp(0.0, 1.0);
+    final target = x.size == 0 ? null : (x.done / x.size).clamp(0.0, 1.0);
+    // Progress events arrive in steps: glide between them instead of jumping.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: target ?? 0),
+      duration: motion(context, const Duration(milliseconds: 450)),
+      curve: Curves.easeOutCubic,
+      builder: (context, f, _) => _row(context, t, target == null ? null : f),
+    );
+  }
+
+  Widget _row(BuildContext context, TextTheme t, double? f) {
     final pct = f == null ? '' : '${(f * 100).toStringAsFixed(0)} %';
     final detail = x.note.isNotEmpty
         ? x.note
