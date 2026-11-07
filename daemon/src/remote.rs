@@ -324,6 +324,17 @@ impl Remote {
             .any(|p| p.id == peer && p.trusted && p.state == PeerState::Connected) {
             return true;
         }
+        // The driver is needed before extension can be enabled. Fixed URL: the phone never chooses what opens.
+        if kind == "pb.x.extend.driver" {
+            #[cfg(windows)]
+            {
+                let _ = std::process::Command::new("explorer.exe")
+                    .arg(crate::extend::installer_url())
+                    .spawn();
+                crate::win::toast("Controlador IddCx", "Se abrió la página de descarga en el navegador");
+            }
+            return true;
+        }
         if !self.allowed() || !crate::extend::config_enabled(&self.data) {
             let _ = engine.send_message(peer, "pb.x.extend.result",
                 json!({"ok":false, "reason":"not_allowed"}));

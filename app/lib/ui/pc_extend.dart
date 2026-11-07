@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
+import '../native.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'pc_screen.dart';
+
+const _driverUrl = 'https://github.com/VirtualDrivers/Virtual-Display-Driver';
 
 Future<void> openPcExtend(
   BuildContext context,
   Hub hub,
   String peer,
   String name,
-) => Navigator.of(context).push(
-  MaterialPageRoute<void>(builder: (_) => PcExtendPage(hub, peer, name)),
-);
+) => Navigator.of(
+  context,
+).push(MaterialPageRoute<void>(builder: (_) => PcExtendPage(hub, peer, name)));
 
 /// This does not mirror Windows' primary monitor: a signed IddCx virtual
 /// display adds a second monitor in Windows, and Alero streams that monitor.
@@ -57,7 +60,10 @@ class _PcExtendPageState extends State<PcExtendPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         await openPcScreen(
-          context, widget.hub, widget.peer, widget.name,
+          context,
+          widget.hub,
+          widget.peer,
+          widget.name,
           monitor: monitor,
         );
         if (!mounted) return;
@@ -66,14 +72,19 @@ class _PcExtendPageState extends State<PcExtendPage> {
         setState(() => _showing = false);
       });
     } else {
-      setState(() => _message = switch (result['reason']) {
-        'driver_missing' => 'Windows necesita el controlador de pantalla virtual '
-            'firmado IddCx. Instálalo en Windows para que aparezca el segundo monitor.',
-        'not_allowed' => 'Autoriza Pantalla extendida en Ajustes de Alero para Windows.',
-        'busy' => 'El segundo monitor está siendo utilizado por otro dispositivo.',
-        'no_virtual_display' => 'Windows no activó un segundo monitor.',
-        _ => 'Windows no pudo crear la pantalla extendida.',
-      });
+      setState(
+        () => _message = switch (result['reason']) {
+          'driver_missing' =>
+            'Windows necesita el controlador de pantalla virtual '
+                'firmado IddCx. Instálalo en Windows para que aparezca el segundo monitor.',
+          'not_allowed' =>
+            'Autoriza Pantalla extendida en Ajustes de Alero para Windows.',
+          'busy' =>
+            'El segundo monitor está siendo utilizado por otro dispositivo.',
+          'no_virtual_display' => 'Windows no activó un segundo monitor.',
+          _ => 'Windows no pudo crear la pantalla extendida.',
+        },
+      );
     }
   }
 
@@ -88,7 +99,10 @@ class _PcExtendPageState extends State<PcExtendPage> {
     }
     widget.hub.extendSession.remove(widget.peer);
     _requested = true;
-    setState(() { _starting = true; _message = null; });
+    setState(() {
+      _starting = true;
+      _message = null;
+    });
     widget.hub.sendMessage(widget.peer, 'pb.x.extend.start', {});
   }
 
@@ -117,21 +131,47 @@ class _PcExtendPageState extends State<PcExtendPage> {
           FilledButton.icon(
             onPressed: _starting || _showing ? null : _start,
             icon: const Icon(Symbols.add_to_photos_rounded),
-            label: Text(_starting ? 'Creando pantalla…' : 'Activar segunda pantalla'),
+            label: Text(
+              _starting ? 'Creando pantalla…' : 'Activar segunda pantalla',
+            ),
           ),
-          if (_starting) const Padding(
-            padding: EdgeInsets.all(16),
-            child: LinearProgressIndicator(),
-          ),
-          if (_message != null) Padding(
-            padding: const EdgeInsets.only(top: 14),
-            child: Text(_message!, textAlign: TextAlign.center),
-          ),
+          if (_starting)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: LinearProgressIndicator(),
+            ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Text(_message!, textAlign: TextAlign.center),
+            ),
           const SizedBox(height: 16),
-          const SelectableText(
-            'Controlador IddCx para Windows: '
-            'https://github.com/VirtualDrivers/Virtual-Display-Driver',
-            textAlign: TextAlign.center,
+          Text(
+            'Controlador IddCx para Windows',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () {
+                  widget.hub.sendMessage(widget.peer, 'pb.x.extend.driver', {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Abriendo la descarga en ${widget.name}…'),
+                    ),
+                  );
+                },
+                icon: const Icon(Symbols.computer_rounded),
+                label: const Text('Abrir en el PC'),
+              ),
+              TextButton.icon(
+                onPressed: () => Native.openUrl(_driverUrl),
+                icon: const Icon(Symbols.open_in_new_rounded),
+                label: const Text('Ver en el teléfono'),
+              ),
+            ],
           ),
         ],
       ),

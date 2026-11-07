@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../phone_control.dart';
+import '../native.dart';
 import '../obs_webcam.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -170,6 +174,131 @@ class CameraFailure extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.only(top: Gap.s),
         child: ErrorBanner(why),
+      );
+    },
+  );
+}
+
+/// Records the phone's screen (and sound, Android 11+) into a video in the computer's Alero folder, with
+/// no window. A scrcpy session next to the others: «Detener grabación» ends it and the file stays.
+class PhoneRecordPanel extends StatefulWidget {
+  const PhoneRecordPanel({
+    super.key,
+    required this.serial,
+    required this.folder,
+  });
+  final String serial, folder;
+
+  @override
+  State<PhoneRecordPanel> createState() => _PhoneRecordPanelState();
+}
+
+class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
+  String? _file;
+
+  String get _key => '${widget.serial}|record';
+
+  Future<void> _start() async {
+    final n = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final name =
+        'Grabacion-${n.year}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}.mkv';
+    Directory(widget.folder).createSync(recursive: true);
+    final path = '${widget.folder}${Platform.pathSeparator}$name';
+    setState(() => _file = path);
+    await PhoneSessions.instance.start(
+      widget.serial,
+      'Grabación',
+      SessionOptions(record: path),
+      extra: 'record',
+    );
+  }
+
+  Future<void> _stop() async {
+    PhoneSessions.instance.stop(_key);
+    final f = _file;
+    if (f == null) return;
+    // scrcpy writes nothing during its first seconds: a recording stopped that early is an empty file.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final file = File(f);
+    if (!file.existsSync() || file.lengthSync() == 0) {
+      try {
+        file.deleteSync();
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('La grabación fue demasiado corta y no se guardó.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Grabación guardada: ${f.split(Platform.pathSeparator).last}',
+        ),
+        action: SnackBarAction(
+          label: 'Abrir carpeta',
+          onPressed: () => Native.openFolder(widget.folder),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: PhoneSessions.instance,
+    builder: (context, _) {
+      final on = PhoneSessions.instance.runningExtra(widget.serial, 'record');
+      final why = PhoneSessions.instance.failures[_key];
+      return Panel(
+        title: 'Grabar pantalla',
+        icon: Symbols.screen_record_rounded,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: Gap.l),
+            Text(
+              on
+                  ? 'Grabando la pantalla del teléfono…'
+                  : 'Graba la pantalla del teléfono (con sonido en Android 11 o posterior) en un vídeo .mkv dentro de ${widget.folder}.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: Gap.s),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: on
+                  ? FilledButton.tonalIcon(
+                      onPressed: _stop,
+                      icon: AleroPulse(
+                        active: true,
+                        child: Icon(
+                          Symbols.stop_circle_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      label: const Text('Detener grabación'),
+                    )
+                  : FilledButton.icon(
+                      onPressed: _start,
+                      icon: const Icon(
+                        Symbols.fiber_manual_record_rounded,
+                        size: 18,
+                      ),
+                      label: const Text('Grabar'),
+                    ),
+            ),
+            if (why != null)
+              Padding(
+                padding: const EdgeInsets.only(top: Gap.s),
+                child: ErrorBanner(why),
+              ),
+          ],
+        ),
       );
     },
   );

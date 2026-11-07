@@ -51,6 +51,24 @@ emulator-5554          offline
     },
   );
 
+  test('screen recording writes a file with no window and no control', () {
+    final rec = scrcpyArgs(
+      'S',
+      't',
+      const SessionOptions(record: r'C:\Alero\Grabacion.mkv'),
+    );
+    expect(
+      rec,
+      containsAll([
+        r'--record=C:\Alero\Grabacion.mkv',
+        '--no-window',
+        '--no-control',
+      ]),
+    );
+    // scrcpy exits at once with --stay-awake and --no-control together.
+    expect(rec, isNot(contains('--stay-awake')));
+  });
+
   test('desktop mode only where Android really offers it', () {
     expect(
       desktopSupport(sdk: 37, freeform: true, forced: true),

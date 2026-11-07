@@ -64,6 +64,7 @@ class SessionOptions {
     this.startApp,
     this.appWindow = false,
     this.camera,
+    this.record,
   });
 
   /// Longest side in pixels; 0 keeps the phone's own resolution.
@@ -82,6 +83,9 @@ class SessionOptions {
 
   /// `back` or `front`: the window shows that camera instead of the screen (Android 12+).
   final String? camera;
+
+  /// A file the phone's screen is recorded into, with no window (`.mkv`: still playable when the process is killed).
+  final String? record;
 }
 
 /// The scrcpy command line for one session. Keyboard, mouse and clipboard sync are scrcpy's defaults.
@@ -90,7 +94,12 @@ List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
   serial,
   '--window-title=$title',
   // scrcpy refuses --stay-awake with --no-control (the camera) and exits at once.
-  if (o.camera == null) '--stay-awake',
+  if (o.camera == null && o.record == null) '--stay-awake',
+  if (o.record != null) ...[
+    '--record=${o.record}',
+    '--no-window',
+    '--no-control',
+  ],
   if (o.maxSize > 0) '--max-size=${o.maxSize}',
   '--video-bit-rate=${o.bitRate}M',
   '--max-fps=${o.maxFps}',

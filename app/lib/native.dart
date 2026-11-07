@@ -117,8 +117,9 @@ class Native {
       _android ? null : getDirectoryPath(confirmButtonText: 'Enviar');
 
   /// Windows: owner explicitly shares this folder with paired phones.
-  static Future<String?> pickSharedPcFolder() async =>
-      _android ? null : getDirectoryPath(confirmButtonText: 'Compartir carpeta');
+  static Future<String?> pickSharedPcFolder() async => _android
+      ? null
+      : getDirectoryPath(confirmButtonText: 'Compartir carpeta');
 
   static void closeFd(int fd) => _ch.invokeMethod('closeFd', fd);
 
@@ -263,6 +264,12 @@ class Native {
   /// This phone's own info (same JSON it sends as `pb.x.info`).
   static Future<String?> deviceInfo() async =>
       _android ? _ch.invokeMethod<String>('deviceInfo') : null;
+
+  /// Opens an https page in the browser.
+  static Future<void> openUrl(String url) async {
+    if (_android) return _ch.invokeMethod('openUrl', url);
+    await Process.start(Platform.isWindows ? 'explorer' : 'xdg-open', [url]);
+  }
 
   static Future<void> openFolder(String path) async {
     if (_android) return _ch.invokeMethod('openDownloads');

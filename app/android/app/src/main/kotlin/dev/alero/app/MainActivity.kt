@@ -242,6 +242,16 @@ class MainActivity : FlutterActivity() {
                     } catch (_: Exception) {}
                     result.success(null)
                 }
+                "openUrl" -> {
+                    // https only: this opens a browser, never an app-specific scheme.
+                    val url = call.arguments as? String
+                    if (url != null && url.startsWith("https://")) {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                        } catch (_: Exception) {}
+                    }
+                    result.success(null)
+                }
                 "openDevSettings" -> {
                     startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                     result.success(null)

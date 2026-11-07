@@ -540,6 +540,11 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                   if (d != null && d.ready) ...[
                     PhoneWindowsPanel(serial: d.serial, deviceName: d.name),
                     const SizedBox(height: Gap.m),
+                    PhoneRecordPanel(
+                      serial: d.serial,
+                      folder: widget.hub.downloads,
+                    ),
+                    const SizedBox(height: Gap.m),
                   ],
                   _Setup(
                     port: _port,
