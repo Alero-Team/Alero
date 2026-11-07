@@ -191,7 +191,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
           Text(
             _message ??
                 (serial == null
-                    ? 'USB requiere autorización del teléfono. Para Wi-Fi, activa Depuración inalámbrica en Android y utiliza su IP, puerto y código de vinculación.'
+                    ? 'USB requiere autorización del teléfono. Para Wi-Fi, activa Depuración inalámbrica en Android y utiliza su IP, puerto y código de vinculación. Marca «Permitir siempre en esta red» en el teléfono: así Alero se reconecta solo cuando vuelve el Wi-Fi.'
                     : 'Transporte ADB elegido: $serial'),
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: s.onSurfaceVariant),

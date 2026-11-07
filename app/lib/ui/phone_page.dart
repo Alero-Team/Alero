@@ -31,11 +31,15 @@ class PhonePage extends StatelessWidget {
     builder: (context, _) {
       // ADB can control a previously paired phone even when Alero's app
       // session is offline; the two connection systems are independent.
-      final phone = hub.connectedPhone ??
+      final phone =
+          hub.connectedPhone ??
           (allowPairedOffline
-              ? hub.peers.where((p) => p.trusted &&
-                  hub.info[p.id]?.phone == true).firstOrNull ??
-                  hub.peers.where((p) => p.trusted).firstOrNull
+              ? hub.peers
+                        .where(
+                          (p) => p.trusted && hub.info[p.id]?.phone == true,
+                        )
+                        .firstOrNull ??
+                    hub.peers.where((p) => p.trusted).firstOrNull
               : null);
       return SafeArea(
         child: Padding(
@@ -131,16 +135,16 @@ class _AdbFinderState extends State<AdbFinder> {
       d = null;
     }
     if (!mounted || request != _request) return;
-    setState(() {
-      _d = d;
-      _looking = false;
-    });
-    // Only poll while no authorised ADB transport exists.
-    if (d == null) {
-      Future.delayed(const Duration(seconds: 4), () {
-        if (mounted && request == _request) _look();
+    if (_looking || d?.serial != _d?.serial) {
+      setState(() {
+        _d = d;
+        _looking = false;
       });
     }
+    // Keep watching after it is found too: a Wi-Fi drop ends the transport and find() reconnects it.
+    Future.delayed(Duration(seconds: d == null ? 4 : 10), () {
+      if (mounted && request == _request) _look();
+    });
   }
 
   @override

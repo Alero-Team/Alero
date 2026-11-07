@@ -23,11 +23,11 @@ class Spring extends Curve {
   const Spring(this.stiffness, this.damping);
   final double stiffness, damping;
 
-  /// Default spatial (position, size, shape): stiffness 380, damping 0.8.
-  static const spatial = Spring(380, 0.8);
+  /// Default spatial (position, size, shape). Damping raised from M3's 0.8: users found the bounce robotic.
+  static const spatial = Spring(380, 0.9);
 
-  /// Fast spatial (small elements: buttons, chips): stiffness 800, damping 0.6.
-  static const fast = Spring(800, 0.6);
+  /// Fast spatial (small elements: buttons, chips). Damping raised from M3's 0.6 for the same reason.
+  static const fast = Spring(800, 0.75);
 
   /// Effects (color, opacity): no bounce.
   static const effects = Spring(1600, 1);
@@ -58,13 +58,17 @@ class Spring extends Curve {
         0,
       ),
     );
-    return s.x(t * d);
+    // The spring is cut at its settle time a little off 1; spread that rest over the run so it lands without a snap.
+    return s.x(t * d) + (1 - s.x(d)) * t;
   }
 }
 
+/// How much longer every app animation runs than its base value: 1 felt too quick and mechanical.
+const motionScale = 1.45;
+
 /// Animation length, or zero when the system asks for reduced motion.
 Duration motion(BuildContext c, Duration d) =>
-    MediaQuery.of(c).disableAnimations ? Duration.zero : d;
+    MediaQuery.of(c).disableAnimations ? Duration.zero : d * motionScale;
 
 /// The small springy press used throughout Orion Store's navigation and cards.
 /// It stays a normal InkWell: keyboard, hover, focus and accessibility still work.

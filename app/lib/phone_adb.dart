@@ -45,10 +45,49 @@ abstract final class PhoneAdb {
     if (!Scrcpy.available) return null;
     final list = await Scrcpy.list();
     final serial = _chosen[phone.id];
-    if (serial != null) {
-      return list.where((d) => d.serial == serial && d.ready).firstOrNull;
+    final d = serial != null
+        ? list.where((d) => d.serial == serial && d.ready).firstOrNull
+        : adbFor(list, phone, model);
+    if (d != null) return d;
+    // A chosen USB cable that was unplugged has nothing to reconnect over Wi-Fi.
+    if (serial != null && !AdbDevice(serial, '', '').wifi) return null;
+    final t = await (_reconnecting[phone.id] ??= _reconnect(
+      phone,
+      serial,
+    ).whenComplete(() => _reconnecting.remove(phone.id)));
+    if (t == null) return null;
+    return (await Scrcpy.list())
+        .where((d) => d.serial == t && d.ready)
+        .firstOrNull;
+  }
+
+  static final _reconnecting = <String, Future<String?>>{};
+
+  /// After a Wi-Fi drop Android reopens wireless debugging on a new port (and maybe a new IP). The computer
+  /// stays paired, so mDNS finds the new port and `adb connect` needs no code: the user does nothing.
+  static Future<String?> _reconnect(pb.Peer phone, String? stale) async {
+    String ipOf(String a) {
+      final i = a.lastIndexOf(':');
+      return i > 0 ? a.substring(0, i) : '';
     }
-    return adbFor(list, phone, model);
+
+    final ips = {
+      ipOf(phone.addr),
+      if (stale != null) ipOf(stale),
+    }.where((ip) => ip.isNotEmpty && !ip.startsWith('127.'));
+    for (final ip in ips) {
+      final t = await Scrcpy.find(ip).catchError((_) => null);
+      if (t == null || !await Scrcpy.connect(t).catchError((_) => false)) {
+        continue;
+      }
+      if (stale != null && stale != t) {
+        // The old ip:port stays "offline" in adb forever otherwise.
+        await Scrcpy.disconnectWireless(stale).catchError((_) {});
+        choose(phone.id, t);
+      }
+      return t;
+    }
+    return null;
   }
 
   /// A selection made by the user in any of the three sections remains

@@ -1279,6 +1279,9 @@ class Hub extends ChangeNotifier {
     }
   }
 
+  /// Set by the shell: shows the files before they go (name, size, thumbnail). False cancels the send.
+  Future<bool> Function(List<Picked> files, String to)? confirmSend;
+
   /// Desktop: real paths. Android: picks content URIs and sends their descriptors (no copy).
   Future<void> send(String peerId) async =>
       _sendPicked(peerId, await Native.pickFiles());
@@ -1322,6 +1325,14 @@ class Hub extends ChangeNotifier {
       messages.add(
         'La carpeta tiene ${files.length} archivos; el máximo por envío es 5000.',
       );
+      return;
+    }
+    if (files.isEmpty) return;
+    final to = peers.where((p) => p.id == peerId).firstOrNull?.name ?? '';
+    if (confirmSend != null && !await confirmSend!(files, to)) {
+      for (final f in files) {
+        if (f.fd != null) Native.closeFd(f.fd!);
+      }
       return;
     }
     for (final f in files) {

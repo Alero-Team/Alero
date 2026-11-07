@@ -67,12 +67,11 @@ class _ControlsState extends State<_Controls> {
   }
 
   Future<void> _find() async {
-    final d =
-        _adb ??
-        await PhoneAdb.find(
-          widget.phone,
-          hub.info[widget.phone.id]?.model ?? '',
-        );
+    // No caching: after a Wi-Fi drop the old serial is dead and find() reconnects on the new port.
+    final d = await PhoneAdb.find(
+      widget.phone,
+      hub.info[widget.phone.id]?.model ?? '',
+    );
     final r = d == null
         ? null
         : await PhoneAdb.radios(d.serial).catchError((_) => (false, false));
@@ -96,7 +95,10 @@ class _ControlsState extends State<_Controls> {
         )) {
       return;
     }
-    await PhoneAdb.setWifi(_adb!.serial, on);
+    final adb =
+        _adb; // the 5 s poll may have dropped it while the dialog was open
+    if (adb == null) return;
+    await PhoneAdb.setWifi(adb.serial, on);
     await Future.delayed(const Duration(seconds: 1));
     await _find();
   }

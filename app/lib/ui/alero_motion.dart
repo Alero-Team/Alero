@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart';
+
+import 'expressive.dart';
 
 /// Orion-inspired motion and the Material MotionScheme.
 /// Applied on Windows and Android; respects reduced-motion accessibility.
@@ -7,12 +8,11 @@ class AleroMotion {
   const AleroMotion._();
 
   static Duration duration(BuildContext context, int ms) =>
-      MediaQuery.of(context).disableAnimations
-      ? Duration.zero
-      : Duration(milliseconds: ms);
+      motion(context, Duration(milliseconds: ms));
 
-  static const Curve spatial = _AleroSpring(380, .8);
-  static const Curve fastSpatial = _AleroSpring(800, .6);
+  // The old curve clamped the spring to [0, 1], flattening its overshoot into a hard stop.
+  static const Curve spatial = Spring.spatial;
+  static const Curve fastSpatial = Spring.fast;
   static const Curve effects = Curves.easeOutCubic;
 
   /// Compose's MotionNumber: slide a third of text height and fade each way.
@@ -70,8 +70,8 @@ class AleroMotion {
     return TweenAnimationBuilder<double>(
       key: ValueKey('alero-reveal-$index'),
       tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 370 + delay),
-      curve: const _AleroDelayedSpring(380, .8, .38),
+      duration: Duration(milliseconds: 370 + delay) * motionScale,
+      curve: const _AleroDelayedSpring(.38),
       builder: (_, v, c) => Opacity(
         opacity: v.clamp(0.0, 1.0).toDouble(),
         child: Transform.translate(offset: Offset(0, (1 - v) * 24), child: c),
@@ -176,32 +176,12 @@ class _AleroPulseState extends State<AleroPulse>
   );
 }
 
-class _AleroSpring extends Curve {
-  const _AleroSpring(this.stiffness, this.damping);
-  final double stiffness, damping;
-
-  @override
-  double transformInternal(double t) => SpringSimulation(
-    SpringDescription.withDampingRatio(
-      mass: 1,
-      stiffness: stiffness,
-      ratio: damping,
-    ),
-    0,
-    1,
-    0,
-  ).x(t * .36).clamp(0.0, 1.0).toDouble();
-}
-
 class _AleroDelayedSpring extends Curve {
-  const _AleroDelayedSpring(this.stiffness, this.damping, this.delay);
-  final double stiffness, damping, delay;
+  const _AleroDelayedSpring(this.delay);
+  final double delay;
 
   @override
   double transformInternal(double t) => t <= delay
       ? 0
-      : _AleroSpring(
-          stiffness,
-          damping,
-        ).transform(((t - delay) / (1 - delay)).clamp(0, 1));
+      : Spring.spatial.transform(((t - delay) / (1 - delay)).clamp(0, 1));
 }

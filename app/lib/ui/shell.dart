@@ -24,6 +24,7 @@ import 'messages.dart';
 import 'nav.dart';
 import 'pc_control.dart';
 import 'pc_screen.dart';
+import 'send_preview.dart';
 import 'settings.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -128,10 +129,13 @@ class _ShellState extends State<Shell>
       }
     });
     hub.addListener(_questions);
+    hub.confirmSend = (files, to) =>
+        mounted ? showSendPreview(context, files, to) : Future.value(true);
   }
 
   @override
   void dispose() {
+    hub.confirmSend = null;
     WidgetsBinding.instance.removeObserver(this);
     if (Platform.isWindows) windowManager.removeListener(this);
     _msgs.cancel();
