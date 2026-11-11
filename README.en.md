@@ -78,42 +78,11 @@ Android and Windows packages are published on **[GitHub Releases](https://github
 
 Alero is still in Beta. Always download the APK and the installer from the same version.
 
-## Build
-
-Requirements: Flutter **3.47.8** (Dart 3.13.7), Rust stable, Java 17+, Android SDK with NDK **29.0.14206865**, and Visual Studio C++ desktop tools for Windows. Windows packaging also needs Inno Setup 6.
-
-```powershell
-cargo fetch --locked
-cargo test --locked --workspace
-cd app
-flutter pub get --enforce-lockfile
-flutter analyze --no-pub
-flutter test --no-pub
-cd ..
-./tools/build-android.ps1 -FlutterRoot C:/src/flutter
-./tools/build-windows.ps1 -FlutterRoot C:/src/flutter
-```
-
-The build scripts create packages and SHA-256 files in `dist/`. scrcpy is downloaded from its pinned upstream release and checked against its SHA-256 hash. Third-party notices and source licenses are bundled with both apps.
-
-The **Checks** workflow runs static analysis and the tests on every push and pull request. The **Packages** workflow runs on `main`, builds both installers with the Android signing identity kept in encrypted repository secrets, and publishes a release when the version in `app/pubspec.yaml` has a CHANGELOG section and no release yet.
-
 ## Signing and limitations
 
 The Android builds keep one signing identity so each release updates the previous one. It is not a production certificate. Google Play Protect may block APKs downloaded from GitHub because the app declares sensitive capabilities (notification access, SMS), even when the APK is signed correctly; see [Play Protect's developer guidance](https://developers.google.com/android/play-protect/warning-dev-guidance). The Windows installer has no commercial Authenticode signature.
 
 Linux is not packaged. Using the phone from the computer requires Windows.
-
-## Source layout
-
-- `core/`: Rust pairing, TLS and resumable transfers.
-- `daemon/`: Windows tray service and native remote control.
-- `app/`: Flutter UI, Kotlin Android integration and Windows runner.
-- `tools/`, `packaging/`: build scripts, installer and notices.
-
-## Security
-
-Please report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ## App information
 

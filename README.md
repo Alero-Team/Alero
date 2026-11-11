@@ -78,42 +78,11 @@ Los paquetes de Android y Windows se publican en **[GitHub Releases](https://git
 
 Alero sigue en fase Beta. Descarga siempre el APK y el instalador de la misma versión.
 
-## Compilar
-
-Requisitos: Flutter **3.47.8** (Dart 3.13.7), Rust estable, Java 17+, Android SDK con NDK **29.0.14206865** y las herramientas de escritorio de C++ de Visual Studio para Windows. El empaquetado de Windows también requiere Inno Setup 6.
-
-```powershell
-cargo fetch --locked
-cargo test --locked --workspace
-cd app
-flutter pub get --enforce-lockfile
-flutter analyze --no-pub
-flutter test --no-pub
-cd ..
-./tools/build-android.ps1 -FlutterRoot C:/src/flutter
-./tools/build-windows.ps1 -FlutterRoot C:/src/flutter
-```
-
-Los scripts crean los paquetes y sus archivos SHA-256 en `dist/`. scrcpy se descarga de su versión fijada y se verifica con su hash SHA-256. Los avisos de terceros y las licencias de código fuente se incluyen en ambas apps.
-
-El flujo **Checks** ejecuta el análisis estático y las pruebas en cada push y pull request. El flujo **Packages** corre en `main`, compila ambos instaladores con la identidad de firma de Android guardada en secretos cifrados del repositorio y publica una versión cuando la de `app/pubspec.yaml` tiene sección en el CHANGELOG y aún no tiene release.
-
 ## Firma y limitaciones
 
 Las compilaciones de Android conservan una sola identidad de firma para que cada versión actualice a la anterior. No es un certificado de producción. Google Play Protect puede bloquear APK descargados de GitHub porque la app declara capacidades sensibles (acceso a notificaciones, SMS), aunque el APK esté bien firmado; consulta la [guía de Play Protect para desarrolladores](https://developers.google.com/android/play-protect/warning-dev-guidance). El instalador de Windows no tiene firma Authenticode comercial.
 
 Linux no se empaqueta. Usar el teléfono desde la computadora requiere Windows.
-
-## Estructura del código
-
-- `core/`: emparejamiento, TLS y transferencias reanudables en Rust.
-- `daemon/`: servicio de bandeja de Windows y control remoto nativo.
-- `app/`: interfaz Flutter, integración de Android en Kotlin y ejecutable de Windows.
-- `tools/`, `packaging/`: scripts de compilación, instalador y avisos.
-
-## Seguridad
-
-Reporta las vulnerabilidades de forma privada: consulta [SECURITY.md](SECURITY.md).
 
 ## Información de la aplicación
 
