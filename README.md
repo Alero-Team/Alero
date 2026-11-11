@@ -1,44 +1,47 @@
 # Alero
 
-Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control your computer without a cloud account.
+[![Checks](https://github.com/Alero-Team/Alero/actions/workflows/ci.yml/badge.svg)](https://github.com/Alero-Team/Alero/actions/workflows/ci.yml)
+[![Packages](https://github.com/Alero-Team/Alero/actions/workflows/packages.yml/badge.svg)](https://github.com/Alero-Team/Alero/actions/workflows/packages.yml)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 
-**Beta software · Beta 1.1.1 (1.1.1).** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases).
+Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control either device from the other, without a cloud account.
+
+**Beta software · Beta 1.2 (1.2.0).** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases) · [Changelog](CHANGELOG.md)
+
+## Features
+
+| From the computer | From the phone |
+| --- | --- |
+| Send files and folders, with resumable transfers | Send files and share from any app |
+| Browse, rename and delete the phone's files | Browse the folders the computer shares |
+| Notifications with replies, SMS and calls | Touchpad, keyboard and media keys for the computer |
+| Phone screen, camera, webcam and screen recording (scrcpy) | The computer's screen, live, with its pointer |
+| Quick controls: Do Not Disturb, torch, volume, find my phone | The phone as a second Windows monitor |
+| Shared clipboard | Shared clipboard |
+
+Devices pair once with a code or a QR and then talk over mutually authenticated TLS. Nothing passes through a server.
 
 ## Use
 
-1. Install the Android ARM64 APK and the Windows x64 installer from the same release. The installer program itself is 32-bit (Inno Setup); it installs the 64-bit app. Windows 11 on ARM runs it through x64 emulation; native ARM64 and 32-bit x86 builds are not available (see CHANGELOG 0.1.13).
-2. Open Alero on both devices, use the same Wi-Fi network and pair them in **Devices**. Alternatively, scan the computer's QR code.
+1. Install the Android ARM64 APK and the Windows x64 installer from the same release. The installer program itself is 32-bit (Inno Setup); it installs the 64-bit app. Windows 11 on ARM runs it through x64 emulation; native ARM64 and 32-bit x86 builds are not available.
+2. Open Alero on both devices, use the same Wi-Fi network and pair them in **Dispositivos**. Alternatively, scan the computer's QR code.
 3. Allow remote control on Windows and grant only the phone permissions needed for the features you use.
 
-The touchpad moves with one finger and scrolls with two. Tap twice and keep the second touch down to drag or select. The left and right buttons stay selected until tapped again; their label changes to release the button. The keyboard button opens text input and shortcuts.
+The interface is in Spanish.
 
-The file browser's Music section excludes audio lasting 5 seconds or less, ringtones, notification sounds and alarms. **All folders** requires Android's special shared-storage permission. Private app data remains inaccessible. Click a completed transfer to open it with the system's associated application. Android cannot run Windows executables.
+### Controlling the computer from the phone
 
-Android's optional **Security** setting unlocks the app with the system fingerprint or device PIN. It locks the interface when returning from the background; previously paired connections can continue working in the background. Alero never stores the PIN or biometric data.
+The touchpad moves with one finger and scrolls with two. Tap twice and keep the second touch down to drag or select. The left and right buttons stay selected until tapped again. The keyboard button opens text input and shortcuts.
 
-Device previews use the reported screen geometry, hardware identity and built-in system wallpaper. Verified hardware profiles: Google Pixel 9a and Lenovo V15 G4 IAH. Other models use the geometry the device reports. Windows uses its installed stock Windows wallpaper; OEM-specific artwork is not bundled.
+### Using the phone from the computer
 
-## Alero Desktop (0.1.11)
+**Acceso remoto** opens the phone's screen in a window with [scrcpy](https://github.com/Genymobile/scrcpy) over USB debugging or wireless debugging, which the phone's owner authorises on the phone. The same page opens the phone's camera in a window, turns it into a webcam through OBS Studio, and records the screen to a video file.
 
-La versión Windows incluye **scrcpy 5.0.1** (paquete oficial x64 con SHA-256 fijo), para mejorar la compatibilidad de pantallas virtuales con Android 17.
+### Files and privacy
 
-En **Windows → Controlar teléfono → Iniciar Alero Desktop**, conecta el Pixel por USB o Wi-Fi mediante depuración autorizada y pulsa **Iniciar Alero Desktop**. Aparecerá un visor de scrcpy con una **pantalla Android virtual independiente** y un panel Alero Desktop con buscador, favoritos fijados en una barra inferior, selección de resolución/densidad, detección del display, tareas reconocidas por Android, controles de Inicio, maximización y distribución. Las herramientas Dextop y espacios de trabajo anteriores siguen disponibles.
+The file browser's Music section excludes audio lasting 5 seconds or less, ringtones, notification sounds and alarms. **All folders** requires Android's special shared-storage permission. Private app data remains inaccessible. Click a completed transfer to open it with the system's associated application.
 
-- **Apps en la pantalla virtual:** el panel identifica la pantalla creada antes de enviar comandos. Si hay varias pantallas secundarias, escoge explícitamente la virtual; no se redirige a la pantalla del teléfono por error.
-- **Ventanas reales:** mover, redimensionar, minimizar y cerrar una ventana mediante su barra de título depende del modo escritorio nativo de Android y de la elegibilidad del display virtual. No todos los Pixel, ROM o versiones lo ofrecen. Abrir el visor no implica automáticamente disponer de multitarea libre.
-- **Cerrar desde el panel:** la X ofrece **Cerrar ventana** (quita solo la ventana del escritorio virtual; la app sigue en el teléfono) o **Forzar detención** (cierra la app en todas las pantallas). Cada app abierta se verifica: Alero indica si Android la colocó en el escritorio, la movió desde el Pixel o la abrió en el Pixel.
-- **Visor separado:** el contenido Android está en la ventana SDL de scrcpy; el panel Flutter es un lanzador y gestor de escritorio, no una sustitución del compositor Android. Las aplicaciones, interfaz y datos son reales, no una simulación.
-- No requiere root, modificar configuraciones globales ni permisos Android adicionales. La pantalla virtual se cierra al detener la sesión. Usa la firma existente para actualizar el APK.
-
-## Desktop tools (0.1.9)
-
-On Windows, open **Controlar teléfono → Herramientas de escritorio** with an ADB-authorized device. The new Dextop-inspired toolkit reads the actual installed user apps, launches selected apps on an available Android display, saves and restores app sets, supports JSON import/export, and reads real battery/thermal/memory diagnostics on demand. Saved workspaces are local to Alero on Windows; no extra Android permissions or root are requested.
-
-Desktop virtual-screen presets now include 720p, 900p, 1080p and 1440p plus an experimental flexible resize option. The underlying phone input, USB and Wi-Fi controls remain provided by scrcpy.
-
-The multi-window layout selection can **attempt real two-, three- or four-window placement** via ADB's task resize shell command only when Android exposes exact matching task IDs for the selected secondary display. Many OEM builds reject or ignore this command, so a layout is not guaranteed. Cross-display pointer routing or mirroring multiple real Android displays simultaneously depends on Android firmware and additional privileged OEM capabilities. Alero only requests supported Android activity launches and reports failures; it does not silently install or run Dextop's privileged services. Workspaces can be restored manually after reconnecting, not automatically after a phone disconnect.
-
-Design references: [Dextop](https://github.com/NarYuki/Dextop) (GPL-3.0) app catalog, workspace layouts, capability probes and diagnostics. Alero's Flutter models and ADB integration are independently implemented; no Dextop native code or binaries were copied.
+Android's optional **Security** setting unlocks the app with the system fingerprint or device PIN. Alero never stores the PIN or biometric data.
 
 ## Build
 
@@ -58,20 +61,24 @@ cd ..
 
 The build scripts create packages and SHA-256 files in `dist/`. scrcpy is downloaded from its pinned upstream release and checked against its SHA-256 hash. Third-party notices and source licenses are bundled with both apps.
 
-The GitHub **Checks** workflow runs static analysis and regression tests. The **Packages** workflow runs on main and builds both installers, keeps the Android signing identity in encrypted repository secrets, and optionally publishes a preliminary release. It refuses publication without the configured signing key.
+The **Checks** workflow runs static analysis and the tests on every push and pull request. The **Packages** workflow runs on `main`, builds both installers with the Android signing identity kept in encrypted repository secrets, and publishes a release when the version in `app/pubspec.yaml` has a CHANGELOG section and no release yet.
 
 ## Signing and limitations
 
-This alpha retains the existing Android signing identity so it can update test installations. It is not a production signing certificate. The Android build retains notification mirroring and playback control through a notification-listener service. Google Play Protect may automatically block APKs downloaded from GitHub because they declare this sensitive service, even if the APK is signed correctly. For testing with Play Protect enabled, consider [Google Play internal testing](https://google.play/business/internal-testing/) or [appealing a Play Protect classification](https://developers.google.com/android/play-protect/warning-dev-guidance?hl=es-419). The Windows installer has no commercial Authenticode signature. Android installation and opening apps remain subject to the operating system's normal prompts.
+The Android builds keep one signing identity so each release updates the previous one. It is not a production certificate. Google Play Protect may block APKs downloaded from GitHub because the app declares sensitive capabilities (notification access, SMS), even when the APK is signed correctly; see [Play Protect's developer guidance](https://developers.google.com/android/play-protect/warning-dev-guidance). The Windows installer has no commercial Authenticode signature.
 
-Linux is not packaged in this release. Full phone-to-PC control requires Windows. Device authentication and storage permission prompts must be completed on the phone by its owner.
+Linux is not packaged. Using the phone from the computer requires Windows.
 
 ## Source layout
 
 - `core/`: Rust pairing, TLS and resumable transfers.
 - `daemon/`: Windows tray service and native remote control.
 - `app/`: Flutter UI, Kotlin Android integration and Windows runner.
-- `tools/`, `packaging/`: reproducible build scripts, installer and notices.
+- `tools/`, `packaging/`: build scripts, installer and notices.
+
+## Security
+
+Please report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ## License
 

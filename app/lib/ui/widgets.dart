@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' as m show Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -6,6 +9,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'alero_motion.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 String size(int b) {
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -68,6 +72,18 @@ class ScaledTiles extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A button's label that never wraps or spills out: on a narrow button or with big text it shrinks to fit.
+class FitLabel extends StatelessWidget {
+  const FitLabel(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(text, maxLines: 1, softWrap: false),
+  );
 }
 
 class Panel extends StatelessWidget {
@@ -428,6 +444,11 @@ class HistoryTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: InkWell(
         onTap: ok ? () => hub.openHistory(h) : null,
+        onSecondaryTapDown: (d) => _menu(context, d.globalPosition, ok),
+        onLongPress: () {
+          final box = context.findRenderObject() as RenderBox;
+          _menu(context, box.localToGlobal(box.size.center(Offset.zero)), ok);
+        },
         child: Row(
           children: [
             FileTile(h.name),
@@ -481,6 +502,105 @@ class HistoryTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Right click (long press on a phone): what you can do with this transfer and its file.
+  Future<void> _menu(BuildContext context, Offset at, bool ok) async {
+    // A real file on this computer; the phone's received files live behind Android's own storage.
+    final onDisk =
+        !Platform.isAndroid && h.path.isNotEmpty && File(h.path).existsSync();
+    PopupMenuItem<String> item(String v, IconData icon, String label) =>
+        PopupMenuItem(
+          value: v,
+          child: Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: Gap.m),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        );
+    final screen = MediaQuery.sizeOf(context);
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        at.dx,
+        at.dy,
+        screen.width - at.dx,
+        screen.height - at.dy,
+      ),
+      items: [
+        if (ok) item('open', Symbols.open_in_new_rounded, 'Abrir'),
+        if (onDisk) ...[
+          item('show', Symbols.folder_open_rounded, 'Mostrar en la carpeta'),
+          item('path', Symbols.content_copy_rounded, 'Copiar la ruta'),
+          item(
+            'again',
+            Symbols.send_rounded,
+            'Enviar de nuevo a ${h.peerName}',
+          ),
+        ],
+        item('name', Symbols.title_rounded, 'Copiar el nombre'),
+        if (!ok && !h.incoming)
+          item('retry', Symbols.refresh_rounded, 'Reintentar'),
+        const PopupMenuDivider(),
+        item('forget', Symbols.close_rounded, 'Quitar del historial'),
+        if (onDisk)
+          item('delete', Symbols.delete_rounded, 'Eliminar el archivo'),
+      ],
+    );
+    if (choice == null || !context.mounted) return;
+    switch (choice) {
+      case 'open':
+        hub.openHistory(h);
+      case 'show':
+        Process.start('explorer', ['/select,', h.path]);
+      case 'path':
+        hub.copy(h.path);
+      case 'name':
+        hub.copy(h.name);
+      case 'again':
+        hub.sendPaths(h.peerId, [h.path]);
+      case 'retry':
+        hub.retry(h.id);
+      case 'forget':
+        hub.removeHistory(h.id);
+      case 'delete':
+        final sure = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('Eliminar el archivo'),
+            content: Text(
+              '«${h.name}» se borrará de este ordenador. No se puede deshacer.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(c, true),
+                child: const Text('Eliminar'),
+              ),
+            ],
+          ),
+        );
+        if (sure != true) return;
+        try {
+          File(h.path).deleteSync();
+          hub.removeHistory(h.id);
+        } catch (_) {
+          hub.messages.add(
+            'No se pudo eliminar ${h.name}: otro programa lo tiene abierto.',
+          );
+        }
+    }
   }
 
   static String _date(DateTime d) {
@@ -660,7 +780,10 @@ class AleroSwitch extends StatelessWidget {
       onChanged: onChanged,
       thumbIcon: WidgetStateProperty.resolveWith(
         (s) => s.contains(WidgetState.selected)
-            ? const Icon(Symbols.check_rounded, size: 16)
+            ? const m.Icon(
+                Symbols.check_rounded,
+                size: 16,
+              ) // Switch takes Flutter's own Icon
             : null,
       ),
     ),
@@ -778,4 +901,76 @@ class _Battery extends CustomPainter {
       o.fill != fill ||
       o.charging != charging ||
       o.outline != outline;
+}
+
+/// [all] in the user's [order] first, then whatever [order] does not mention (something added by an update
+/// lands at the end instead of vanishing), without the [hidden] ones.
+List<String> ordered(
+  List<String> all,
+  List<String> order,
+  Set<String> hidden,
+) => {
+  ...order.where(all.contains),
+  ...all,
+}.where((t) => !hidden.contains(t)).toList();
+
+/// Rows to drag into order, each with a switch to show or hide it. Hidden ones stay in the list.
+class OrderList extends StatelessWidget {
+  const OrderList({
+    super.key,
+    required this.order,
+    required this.names,
+    required this.hidden,
+    required this.onChanged,
+  });
+
+  /// Every item, shown or not, in its current order.
+  final List<String> order;
+  final Map<String, String> names;
+  final Set<String> hidden;
+  final void Function(List<String> order, Set<String> hidden) onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 48.0 * order.length,
+    child: ReorderableListView(
+      buildDefaultDragHandles: false,
+      physics: const NeverScrollableScrollPhysics(),
+      onReorderItem: (from, to) {
+        final next = [...order];
+        next.insert(to, next.removeAt(from));
+        onChanged(next, hidden);
+      },
+      children: [
+        for (final (i, t) in order.indexed)
+          SizedBox(
+            key: ValueKey(t),
+            height: 48,
+            child: Row(
+              children: [
+                ReorderableDragStartListener(
+                  index: i,
+                  child: const MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: Padding(
+                      padding: EdgeInsets.all(Gap.s),
+                      child: Icon(Symbols.drag_indicator_rounded, size: 20),
+                    ),
+                  ),
+                ),
+                Expanded(child: Text(names[t] ?? t)),
+                AleroSwitch(
+                  value: !hidden.contains(t),
+                  label: names[t] ?? t,
+                  onChanged: (on) => onChanged(order, {
+                    ...hidden.where((h) => h != t),
+                    if (!on) t,
+                  }),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 }

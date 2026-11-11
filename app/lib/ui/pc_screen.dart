@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -9,24 +9,24 @@ import '../pc_remote.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'remote_ui.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 Future<void> openPcScreen(
   BuildContext context,
   Hub hub,
   String peer,
-  String name, {int monitor = 0}
+  String name,
 ) => Navigator.of(context).push(
   MaterialPageRoute<void>(
     fullscreenDialog: true,
-    builder: (_) => PcScreenPage(hub, peer, name, monitor: monitor),
+    builder: (_) => PcScreenPage(hub, peer, name),
   ),
 );
 
 class PcScreenPage extends StatefulWidget {
-  const PcScreenPage(this.hub, this.peer, this.name, {super.key, this.monitor = 0});
+  const PcScreenPage(this.hub, this.peer, this.name, {super.key});
   final Hub hub;
   final String peer, name;
-  final int monitor;
 
   @override
   State<PcScreenPage> createState() => _PcScreenPageState();
@@ -43,7 +43,7 @@ class _PcScreenPageState extends State<PcScreenPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _feed = ScreenFeed(widget.hub, widget.peer, monitor: widget.monitor)..addListener(_frameArrived);
+    _feed = ScreenFeed(widget.hub, widget.peer)..addListener(_frameArrived);
     widget.hub.screen = _feed;
     _start();
   }
@@ -87,13 +87,14 @@ class _PcScreenPageState extends State<PcScreenPage>
     super.dispose();
   }
 
-  Widget _viewer(bool canInput) => ClipRRect(
-    borderRadius: BorderRadius.circular(Radii.tile),
-    child: ColoredBox(
-      color: const Color(0xFF0B0D0F),
-      child: Center(
-        child: AspectRatio(
-          aspectRatio: _feed.w > 0 && _feed.h > 0 ? _feed.w / _feed.h : 16 / 9,
+  /// The computer's picture in a frame of exactly its own shape (no bands around it), as big as the room allows.
+  Widget _viewer(bool canInput) => Center(
+    child: AspectRatio(
+      aspectRatio: _feed.w > 0 && _feed.h > 0 ? _feed.w / _feed.h : 16 / 9,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Radii.chip),
+        child: ColoredBox(
+          color: const Color(0xFF0B0D0F),
           child: LayoutBuilder(
             builder: (context, box) {
               final image = Image.memory(
@@ -108,15 +109,42 @@ class _PcScreenPageState extends State<PcScreenPage>
                           .clamp(1, _feed.w)
                     : null,
               );
+              // As big as Windows draws it on that screen (about a 60th of its width), never unreadable.
+              final pointer = (box.maxWidth / 50).clamp(12.0, 28.0);
+              // The pointer is drawn here, not in the picture: it moves the moment the computer reports it.
+              final view = Stack(
+                fit: StackFit.expand,
+                children: [
+                  image,
+                  IgnorePointer(
+                    child: ValueListenableBuilder<Offset?>(
+                      valueListenable: _feed.cursor,
+                      builder: (_, at, _) => at == null
+                          ? const SizedBox.shrink()
+                          : Align(
+                              alignment: Alignment.topLeft,
+                              // The glyph's tip sits a fifth in and a sixth down inside its box.
+                              child: Transform.translate(
+                                offset: Offset(
+                                  at.dx * box.maxWidth - pointer / 5,
+                                  at.dy * box.maxHeight - pointer / 6,
+                                ),
+                                child: _Pointer(pointer),
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              );
               return canInput
                   ? Touchpad(
                       widget.hub,
                       widget.peer,
                       height: box.maxHeight,
                       gain: _gain,
-                      child: image,
+                      child: view,
                     )
-                  : image;
+                  : view;
             },
           ),
         ),
@@ -177,9 +205,9 @@ class _PcScreenPageState extends State<PcScreenPage>
               onSelected: (q) => _feed.setQuality(width: q.$1, fps: q.$2),
               itemBuilder: (_) => [
                 for (final q in const [
-                  (640, 12, 'Fluida'),
-                  (960, 8, 'Equilibrada'),
-                  (1280, 4, 'Nítida'),
+                  (640, 30, 'Fluida'),
+                  (960, 15, 'Equilibrada'),
+                  (1280, 8, 'Nítida'),
                 ])
                   CheckedPopupMenuItem(
                     value: (q.$1, q.$2),
@@ -273,14 +301,21 @@ class _PcScreenPageState extends State<PcScreenPage>
                           ],
                         );
                       }
+                      // Portrait: the picture takes only its own height; the touchpad gets the rest.
+                      final ratio = _feed.w > 0 && _feed.h > 0
+                          ? _feed.w / _feed.h
+                          : 16 / 9;
                       return Column(
                         children: [
-                          Expanded(child: _viewer(true)),
-                          const SizedBox(height: Gap.m),
                           SizedBox(
-                            height: (box.maxHeight * .28).clamp(112.0, 196.0),
-                            child: _pad(),
+                            height: (box.maxWidth / ratio).clamp(
+                              0.0,
+                              box.maxHeight * .6,
+                            ),
+                            child: _viewer(true),
                           ),
+                          const SizedBox(height: Gap.m),
+                          Expanded(child: _pad()),
                           const SizedBox(height: Gap.m),
                           MouseActionBar(widget.hub, widget.peer),
                         ],
@@ -291,6 +326,33 @@ class _PcScreenPageState extends State<PcScreenPage>
         ),
       );
     },
+  );
+}
+
+/// The computer's pointer over the shared picture: a white arrow with a dark edge, readable on any background.
+class _Pointer extends StatelessWidget {
+  const _Pointer(this.size);
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      Icon(
+        Symbols.arrow_selector_tool_rounded,
+        size: size,
+        fill: 1,
+        color: Colors.black,
+      ),
+      Padding(
+        padding: EdgeInsets.all(size * .06),
+        child: Icon(
+          Symbols.arrow_selector_tool_rounded,
+          size: size * .88,
+          fill: 1,
+          color: Colors.white,
+        ),
+      ),
+    ],
   );
 }
 

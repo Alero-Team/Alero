@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -8,6 +8,7 @@ import 'remote_ui.dart';
 import 'media.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// What a connected computer reports and what the phone may do with it: the advanced side of "controlling the
 /// PC" (the everyday controls are on Home). Only facts the computer actually sent are shown; a laptop's battery

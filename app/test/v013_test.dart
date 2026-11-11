@@ -62,6 +62,15 @@ Widget screen(Widget child) => MaterialApp(
   home: Scaffold(body: child),
 );
 
+/// The reply field appears with «Responder» (or by itself when a draft waits).
+Future<void> openReply(WidgetTester t) async {
+  if (find.byType(TextField).evaluate().isNotEmpty) return;
+  await t.tap(find.byTooltip('Responder'));
+  // The panel grows with a spring; wait for the field to settle where it can be tapped.
+  await t.pump();
+  await t.pump(const Duration(seconds: 1));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
@@ -372,11 +381,13 @@ void main() {
           PhoneNotif({'key': 'n', 'replyable': true}),
         ];
         await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        await openReply(tester);
         await tester.enterText(
           find.byType(TextField),
           'Solo para este teléfono',
         );
         await tester.pumpWidget(screen(NotificationsPanel(hub, 'other')));
+        await openReply(tester);
         expect(
           tester.widget<TextField>(find.byType(TextField)).controller!.text,
           isEmpty,
@@ -385,11 +396,20 @@ void main() {
       },
     );
     testWidgets(
-      'notification reply is disabled when blank and displays sending then acknowledgement',
+      'notification reply is disabled when blank, shows sending, then dismisses the answered notification',
       (tester) async {
         final hub = connected();
         hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
-        await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        // Rebuilt from the hub, as the shell does in the app.
+        await tester.pumpWidget(
+          screen(
+            ListenableBuilder(
+              listenable: hub,
+              builder: (_, _) => NotificationsPanel(hub, peer.id),
+            ),
+          ),
+        );
+        await openReply(tester);
         expect(
           tester
               .widget<IconButton>(
@@ -407,14 +427,10 @@ void main() {
         expect(find.text('Enviando…'), findsOneWidget);
         hub.onNotifReplyResult(peer.id, {...hub.sent.last.$3, 'ok': true});
         await tester.pump();
-        expect(
-          find.textContaining('Android entregó la respuesta'),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining('no puede confirmar que el destinatario'),
-          findsOneWidget,
-        );
+        await tester.pump();
+        expect(hub.notifs[peer.id], isEmpty);
+        expect(find.byType(TextField), findsNothing);
+        expect(find.textContaining('Respuesta enviada'), findsOneWidget);
         await tester.pumpWidget(const SizedBox());
       },
     );
@@ -461,6 +477,7 @@ void main() {
         final hub = connected();
         hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
         await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        await openReply(tester);
         final field = find.byType(TextField);
         expect(tester.widget<TextField>(field).maxLength, isNull);
         expect(tester.widget<TextField>(field).maxLines, greaterThan(1));
@@ -501,9 +518,11 @@ void main() {
         final hub = connected();
         hub.info[peer.id] = PeerInfo({'kind': 'phone', 'notifAccess': true});
         await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        await openReply(tester);
         await tester.enterText(find.byType(TextField), 'Borrador\nlargo');
         await tester.pumpWidget(const SizedBox());
         await tester.pumpWidget(screen(NotificationsPanel(hub, peer.id)));
+        await openReply(tester);
         expect(
           tester.widget<TextField>(find.byType(TextField)).controller!.text,
           'Borrador\nlargo',

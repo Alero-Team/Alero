@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -9,6 +12,8 @@ import 'pc_files.dart';
 import 'pc_screen.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
+import 'widgets.dart' show FitLabel;
+import 'icon.dart';
 
 /// The four things you do all day with the computer, as small equal buttons in one row of the device card.
 class QuickActions extends StatelessWidget {
@@ -146,44 +151,16 @@ class RemoteCard extends StatelessWidget {
     final blocker = remoteBlocker(hub.info[peer.id], online);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(Gap.l + 4, Gap.l, Gap.l + 4, Gap.s),
+        padding: const EdgeInsets.fromLTRB(Gap.m, Gap.m, Gap.m, Gap.s),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Symbols.mouse_rounded,
-                  size: 20,
-                  color: s.onSurfaceVariant,
-                ),
-                const SizedBox(width: Gap.s),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Semantics(
-                        header: true,
-                        child: Text('Control remoto', style: t.titleMedium),
-                      ),
-                      Text(
-                        peer.name,
-                        style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: Gap.m),
-            FilledButton.icon(
-              onPressed: blocker == null
+            _RemotePreview(
+              name: peer.name,
+              wallpaper: hub.wallpaper[peer.id],
+              onOpen: blocker == null
                   ? () => openPcControl(context, hub, peer.id, peer.name)
                   : null,
-              icon: const Icon(Symbols.mouse_rounded, size: 18),
-              label: const Text('Ratón y teclado'),
             ),
             if (blocker != null) ...[
               const SizedBox(height: Gap.s),
@@ -216,6 +193,175 @@ class RemoteCard extends StatelessWidget {
               onTap: () => openPcFiles(context, hub, peer.id, peer.name),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The way into "Control remoto", as a picture of what it is: the computer's screen (its wallpaper) with a
+/// pointer wandering over it. Tapping it opens the touchpad. It is a drawing, not the live screen: watching the
+/// real one always starts from inside, where the computer shows its notice.
+class _RemotePreview extends StatefulWidget {
+  const _RemotePreview({required this.name, this.wallpaper, this.onOpen});
+  final String name;
+  final Uint8List? wallpaper;
+  final VoidCallback? onOpen;
+
+  @override
+  State<_RemotePreview> createState() => _RemotePreviewState();
+}
+
+class _RemotePreviewState extends State<_RemotePreview>
+    with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 7),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_RemotePreview old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.onOpen == null || MediaQuery.of(context).disableAnimations) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    final on = widget.onOpen != null;
+    final paper = widget.wallpaper;
+    return Semantics(
+      button: true,
+      enabled: on,
+      label: 'Control remoto de ${widget.name}: ratón y teclado',
+      child: Opacity(
+        opacity: on ? 1 : .55,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(Radii.tile),
+          child: AspectRatio(
+            aspectRatio: 16 / 7,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (paper != null)
+                  Image.memory(
+                    paper,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    cacheWidth: 720,
+                    excludeFromSemantics: true,
+                    errorBuilder: (_, _, _) =>
+                        ColoredBox(color: s.primaryContainer),
+                  )
+                else
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [s.primaryContainer, s.tertiaryContainer],
+                      ),
+                    ),
+                  ),
+                // Text stays readable on any wallpaper.
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x1A000000), Color(0xB3000000)],
+                    ),
+                  ),
+                ),
+                // The pointer drifts along a slow figure of eight in the upper part.
+                RepaintBoundary(
+                  child: AnimatedBuilder(
+                    animation: _c,
+                    builder: (_, child) {
+                      final a = _c.value * 2 * math.pi;
+                      return Align(
+                        alignment: Alignment(
+                          .55 * math.sin(a),
+                          -.35 + .3 * math.sin(2 * a),
+                        ),
+                        child: child,
+                      );
+                    },
+                    child: const Icon(
+                      Symbols.arrow_selector_tool_rounded,
+                      size: 22,
+                      fill: 1,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(Gap.m),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Control remoto',
+                              style: t.titleMedium?.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Ratón y teclado de ${widget.name}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: t.bodySmall?.copyWith(
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: Gap.s),
+                      IgnorePointer(
+                        child: FilledButton.tonalIcon(
+                          onPressed: on ? () {} : null,
+                          icon: const Icon(Symbols.mouse_rounded, size: 18),
+                          label: const FitLabel('Abrir'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // One touch target for the whole picture, with its ripple on top.
+                Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(onTap: widget.onOpen),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

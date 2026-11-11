@@ -1,13 +1,13 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'pc_screen.dart';
-import 'pc_extend.dart';
 import 'present.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 Future<void> openPcControl(
   BuildContext context,
@@ -65,12 +65,6 @@ class _PcControlPageState extends State<PcControlPage> {
                       onPressed: () =>
                           openPcScreen(context, hub, widget.peer, widget.name),
                     ),
-                  IconButton(
-                    tooltip: 'Extender pantalla',
-                    icon: const Icon(Symbols.desktop_windows_rounded),
-                    onPressed: () => openPcExtend(
-                      context, hub, widget.peer, widget.name),
-                  ),
                   IconButton(
                     tooltip: 'Alero Present',
                     icon: const Icon(Symbols.slideshow_rounded),

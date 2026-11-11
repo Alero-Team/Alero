@@ -1,14 +1,16 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../phone_control.dart';
+import '../scrcpy.dart';
 import '../native.dart';
 import '../obs_webcam.dart';
 import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// Phone apps in their own computer windows (one virtual display each, so the phone's screen stays free) and
 /// the phone's camera in a window. Both are scrcpy sessions next to the main one; closing a window ends it.
@@ -206,10 +208,24 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
     Directory(widget.folder).createSync(recursive: true);
     final path = '${widget.folder}${Platform.pathSeparator}$name';
     setState(() => _file = path);
+    final sdk =
+        int.tryParse(
+          await Scrcpy.shell(
+            widget.serial,
+            'getprop ro.build.version.sdk',
+          ).catchError((Object _) => ''),
+        ) ??
+        0;
     await PhoneSessions.instance.start(
       widget.serial,
       'Grabación',
-      SessionOptions(record: path),
+      // Never a second capture of the whole output (see SessionOptions.audioDup): a copy on Android 13+,
+      // and before that no sound while the session window already has it.
+      SessionOptions(
+        record: path,
+        audioDup: sdk >= 33,
+        audio: sdk >= 33 || !PhoneSessions.instance.running(widget.serial),
+      ),
       extra: 'record',
     );
   }

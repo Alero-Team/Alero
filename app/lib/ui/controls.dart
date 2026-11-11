@@ -1,17 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../phone_adb.dart';
 import '../phone_control.dart';
+import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'phone_page.dart' show NeedsAdb;
+import 'expressive.dart' show Spring, motion;
 import 'phone_windows.dart' show CameraFailure;
+import 'screen.dart' show openScreen;
 import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// "Controles del teléfono", a panel on the computer's Inicio: quick toggles and shortcuts, like the phone's own
 /// quick settings. Do Not Disturb, flashlight, sound, volume and "find my phone" go through Alero on the phone;
@@ -25,15 +30,92 @@ class PhoneControlsPanel extends StatelessWidget {
   Widget build(BuildContext context) => Panel(
     title: 'Controles del teléfono',
     icon: Symbols.tune_rounded,
-    action: IconButton(
-      tooltip: 'Actualizar',
-      onPressed: () => hub.phoneCmd(phone.id, 'state.request'),
-      icon: const Icon(Symbols.refresh_rounded),
+    action: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Elegir y ordenar los controles',
+          onPressed: () => _customize(context, hub),
+          icon: const Icon(Symbols.dashboard_customize_rounded),
+        ),
+        IconButton(
+          tooltip: 'Actualizar',
+          onPressed: () => hub.phoneCmd(phone.id, 'state.request'),
+          icon: const Icon(Symbols.refresh_rounded),
+        ),
+      ],
     ),
     // A new phone gets fresh state and its own adb lookup.
     child: _Controls(hub, phone, key: ValueKey(phone.id)),
   );
 }
+
+/// Every control, by name, in its default order. The first [_mainCount] the user keeps on top are always in
+/// sight; the rest wait under "Controles avanzados".
+const controlNames = {
+  'wifi': 'Wi-Fi',
+  'bt': 'Bluetooth',
+  'hotspot': 'Zona Wi-Fi',
+  'dnd': 'No molestar',
+  'torch': 'Linterna',
+  'lock': 'Bloquear',
+  'camBack': 'Cámara trasera',
+  'camFront': 'Cámara frontal',
+  'screen': 'Ver pantalla',
+  'shot': 'Captura',
+  'rotate': 'Rotación',
+  'mute': 'Silenciar',
+  'find': 'Buscar teléfono',
+  'clip': 'Portapapeles',
+};
+const _mainCount = 8;
+
+Future<void> _customize(BuildContext context, Hub hub) => showDialog<void>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: const Text('Controles del teléfono'),
+    content: SizedBox(
+      width: 380,
+      child: ListenableBuilder(
+        listenable: hub,
+        builder: (ctx, _) => SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Arrastra para ordenar y apaga los que no uses. Los $_mainCount primeros quedan '
+                'siempre a la vista; el resto, en «Controles avanzados».',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: Gap.s),
+              OrderList(
+                order: ordered(
+                  controlNames.keys.toList(),
+                  hub.controlOrder,
+                  const {},
+                ),
+                names: controlNames,
+                hidden: hub.controlHidden,
+                onChanged: hub.setControls,
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => hub.setControls([], {}),
+        child: const Text('Restablecer'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(ctx),
+        child: const Text('Listo'),
+      ),
+    ],
+  ),
+);
 
 class _Controls extends StatefulWidget {
   const _Controls(this.hub, this.phone, {super.key});
@@ -47,7 +129,8 @@ class _Controls extends StatefulWidget {
 class _ControlsState extends State<_Controls> {
   Hub get hub => widget.hub;
   AdbDevice? _adb;
-  (bool, bool)? _radios;
+  (bool, bool, bool)? _radios;
+  bool _more = false;
   // The adb notice waits for the first lookup: it flashed on every open even with debugging on.
   bool _looked = false;
   Timer? _poll;
@@ -74,7 +157,8 @@ class _ControlsState extends State<_Controls> {
     );
     final r = d == null
         ? null
-        : await PhoneAdb.radios(d.serial).catchError((_) => (false, false));
+        : await PhoneAdb.toggles(d.serial)
+              .catchError((_) => (false, false, false));
     if (!mounted) return;
     setState(() {
       _adb = d;
@@ -115,6 +199,30 @@ class _ControlsState extends State<_Controls> {
     facing,
   );
 
+  Future<void> _rotate(bool on) async {
+    await PhoneAdb.setAutoRotate(_adb!.serial, on);
+    await _find();
+  }
+
+  Future<void> _shot() async {
+    final n = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final name =
+        'Captura-telefono-${n.year}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}.png';
+    try {
+      Directory(hub.downloads).createSync(recursive: true);
+      await Scrcpy.screenshot(
+        _adb!.serial,
+        '${hub.downloads}${Platform.pathSeparator}$name',
+      );
+      hub.messages.add('Captura guardada en la carpeta de descargas: $name');
+    } catch (_) {
+      hub.messages.add(
+        'No se pudo capturar la pantalla del teléfono. Desbloquéalo e inténtalo de nuevo.',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: hub,
@@ -122,95 +230,167 @@ class _ControlsState extends State<_Controls> {
       final id = widget.phone.id;
       final st = hub.phoneState[id];
       final adb = _adb;
+      final t = Theme.of(context).textTheme;
+      final s = Theme.of(context).colorScheme;
       void cmd(String what, [Map<String, Object?> b = const {}]) =>
           hub.phoneCmd(id, what, b);
       const needAdb = 'Requiere depuración del teléfono';
       const camHint = 'Abre la cámara en una ventana (Android 12+)';
+      _Tile tile(
+        String key,
+        IconData icon, {
+        bool? on,
+        String? hint,
+        VoidCallback? onTap,
+      }) => _Tile(
+        icon: icon,
+        label: controlNames[key]!,
+        on: on,
+        hint: hint,
+        onTap: onTap,
+      );
+      final tiles = {
+        'wifi': tile(
+          'wifi',
+          Symbols.wifi_rounded,
+          on: _radios?.$1,
+          hint: adb == null ? needAdb : null,
+          onTap: adb == null || _radios == null
+              ? null
+              : () => _wifi(!_radios!.$1),
+        ),
+        'bt': tile(
+          'bt',
+          Symbols.bluetooth_rounded,
+          on: _radios?.$2,
+          hint: adb == null ? needAdb : null,
+          onTap: adb == null || _radios == null
+              ? null
+              : () => _bt(!_radios!.$2),
+        ),
+        'hotspot': tile(
+          'hotspot',
+          Symbols.wifi_tethering_rounded,
+          hint: adb == null ? needAdb : 'Abre sus ajustes en el teléfono',
+          onTap: adb == null ? null : () => PhoneAdb.openHotspot(adb.serial),
+        ),
+        'dnd': tile(
+          'dnd',
+          Symbols.do_not_disturb_on_rounded,
+          on: st?.dnd,
+          hint: st != null && !st.dndAccess
+              ? 'Pide permiso en el teléfono'
+              : null,
+          onTap: st == null ? null : () => cmd('dnd', {'on': !st.dnd}),
+        ),
+        'torch': tile(
+          'torch',
+          Symbols.flashlight_on_rounded,
+          on: st?.torch,
+          onTap: st == null ? null : () => cmd('torch', {'on': !st.torch}),
+        ),
+        'lock': tile(
+          'lock',
+          Symbols.lock_rounded,
+          hint: adb == null ? needAdb : null,
+          onTap: adb == null ? null : () => PhoneAdb.lock(adb.serial),
+        ),
+        'camBack': tile(
+          'camBack',
+          Symbols.photo_camera_back_rounded,
+          hint: adb == null ? needAdb : camHint,
+          onTap: adb == null ? null : () => _camera('back'),
+        ),
+        'camFront': tile(
+          'camFront',
+          Symbols.photo_camera_front_rounded,
+          hint: adb == null ? needAdb : camHint,
+          onTap: adb == null ? null : () => _camera('front'),
+        ),
+        'screen': tile(
+          'screen',
+          Symbols.cast_rounded,
+          hint: 'Abre Acceso remoto',
+          onTap: () => openScreen(context, hub, widget.phone),
+        ),
+        'shot': tile(
+          'shot',
+          Symbols.screenshot_rounded,
+          hint: adb == null ? needAdb : 'La guarda en la carpeta de descargas',
+          onTap: adb == null ? null : _shot,
+        ),
+        'rotate': tile(
+          'rotate',
+          Symbols.screen_rotation_rounded,
+          on: _radios?.$3,
+          hint: adb == null ? needAdb : null,
+          onTap: adb == null || _radios == null
+              ? null
+              : () => _rotate(!_radios!.$3),
+        ),
+        'mute': tile(
+          'mute',
+          Symbols.notifications_off_rounded,
+          on: st == null ? null : st.ringer == 'silent',
+          onTap: st == null
+              ? null
+              : () => cmd('ringer', {
+                  'mode': st.ringer == 'silent' ? 'normal' : 'silent',
+                }),
+        ),
+        'find': tile(
+          'find',
+          Symbols.mobile_sound_rounded,
+          on: st?.finding,
+          hint: 'Lo hace sonar un minuto, aunque esté en silencio',
+          onTap: st == null ? null : () => cmd('find', {'on': !st.finding}),
+        ),
+        'clip': tile(
+          'clip',
+          Symbols.content_paste_go_rounded,
+          hint: 'Envía al teléfono lo que copiaste aquí',
+          onTap: () => hub.sendClipboard(id),
+        ),
+      };
+      final order = ordered(
+        tiles.keys.toList(),
+        hub.controlOrder,
+        hub.controlHidden,
+      );
+      final rest = order.skip(_mainCount).toList();
+      Widget heading(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: Gap.s),
+        child: Text(
+          text,
+          style: t.labelMedium?.copyWith(color: s.onSurfaceVariant),
+        ),
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Icon tiles that share the whole width, like the phone's quick settings.
-          _Grid(hub, [
-            _Tile(
-              icon: Symbols.wifi_rounded,
-              label: 'Wi-Fi',
-              on: _radios?.$1,
-              hint: adb == null ? needAdb : null,
-              onTap: adb == null || _radios == null
-                  ? null
-                  : () => _wifi(!_radios!.$1),
-            ),
-            _Tile(
-              icon: Symbols.bluetooth_rounded,
-              label: 'Bluetooth',
-              on: _radios?.$2,
-              hint: adb == null ? needAdb : null,
-              onTap: adb == null || _radios == null
-                  ? null
-                  : () => _bt(!_radios!.$2),
-            ),
-            _Tile(
-              icon: Symbols.wifi_tethering_rounded,
-              label: 'Zona Wi-Fi',
-              hint: adb == null ? needAdb : 'Abre sus ajustes en el teléfono',
-              onTap: adb == null
-                  ? null
-                  : () => PhoneAdb.openHotspot(adb.serial),
-            ),
-            _Tile(
-              icon: Symbols.do_not_disturb_on_rounded,
-              label: 'No molestar',
-              on: st?.dnd,
-              hint: st != null && !st.dndAccess
-                  ? 'Pide permiso en el teléfono'
-                  : null,
-              onTap: st == null ? null : () => cmd('dnd', {'on': !st.dnd}),
-            ),
-            _Tile(
-              icon: Symbols.flashlight_on_rounded,
-              label: 'Linterna',
-              on: st?.torch,
-              onTap: st == null ? null : () => cmd('torch', {'on': !st.torch}),
-            ),
-            _Tile(
-              icon: Symbols.lock_rounded,
-              label: 'Bloquear',
-              hint: adb == null ? needAdb : null,
-              onTap: adb == null ? null : () => PhoneAdb.lock(adb.serial),
-            ),
-            _Tile(
-              icon: Symbols.photo_camera_back_rounded,
-              label: 'Trasera',
-              hint: adb == null ? needAdb : camHint,
-              onTap: adb == null ? null : () => _camera('back'),
-            ),
-            _Tile(
-              icon: Symbols.photo_camera_front_rounded,
-              label: 'Frontal',
-              hint: adb == null ? needAdb : camHint,
-              onTap: adb == null ? null : () => _camera('front'),
-            ),
-          ]),
+          // Tiles that share the whole width, like the phone's quick settings.
+          _Grid(hub, [for (final k in order.take(_mainCount)) tiles[k]!]),
           if (adb != null) CameraFailure(adb.serial),
           if (st != null) ...[
-            const SizedBox(height: Gap.m),
+            const SizedBox(height: Gap.l),
+            heading('Sonido'),
             SegmentedButton<String>(
               showSelectedIcon: false,
               segments: const [
                 ButtonSegment(
                   value: 'normal',
-                  tooltip: 'Sonido',
-                  icon: Icon(Symbols.notifications_active_rounded),
+                  icon: Icon(Symbols.notifications_active_rounded, size: 18),
+                  label: FitLabel('Sonido'),
                 ),
                 ButtonSegment(
                   value: 'vibrate',
-                  tooltip: 'Vibrar',
-                  icon: Icon(Symbols.vibration_rounded),
+                  icon: Icon(Symbols.vibration_rounded, size: 18),
+                  label: FitLabel('Vibrar'),
                 ),
                 ButtonSegment(
                   value: 'silent',
-                  tooltip: 'Silencio',
-                  icon: Icon(Symbols.notifications_off_rounded),
+                  icon: Icon(Symbols.notifications_off_rounded, size: 18),
+                  label: FitLabel('Silencio'),
                 ),
               ],
               selected: {st.ringer},
@@ -233,14 +413,77 @@ class _ControlsState extends State<_Controls> {
             ),
           ],
           const SizedBox(height: Gap.s),
-          _FindRow(
-            finding: st?.finding == true,
-            onFind: () => cmd('find', {'on': true}),
-            onStop: () => cmd('find', {'on': false}),
+          // The second drawer: every other control, and what is playing on the phone.
+          InkWell(
+            borderRadius: BorderRadius.circular(Radii.chip),
+            onTap: () => setState(() => _more = !_more),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Gap.s),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text('Controles avanzados', style: t.titleSmall),
+                  ),
+                  AnimatedRotation(
+                    turns: _more ? .5 : 0,
+                    duration: motion(
+                      context,
+                      const Duration(milliseconds: 220),
+                    ),
+                    curve: Spring.fast,
+                    child: const Icon(Symbols.expand_more_rounded),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: motion(context, Spring.spatial.settle),
+            curve: Spring.spatial,
+            alignment: Alignment.topCenter,
+            child: !_more
+                ? const SizedBox(width: double.infinity)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (rest.isNotEmpty) ...[
+                        _Grid(hub, [for (final k in rest) tiles[k]!]),
+                        const SizedBox(height: Gap.l),
+                      ],
+                      heading('Reproducción en el teléfono'),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (final (tip, icon, action) in const [
+                            ('Anterior', Symbols.skip_previous_rounded, 'prev'),
+                            (
+                              'Reproducir o pausar',
+                              Symbols.play_pause_rounded,
+                              'toggle',
+                            ),
+                            ('Siguiente', Symbols.skip_next_rounded, 'next'),
+                          ])
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Gap.xs,
+                              ),
+                              child: IconButton.filledTonal(
+                                tooltip: tip,
+                                onPressed: () => hub.mediaCmd(id, action),
+                                icon: Icon(icon),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
           ),
           if (_looked && adb == null) ...[
             const SizedBox(height: Gap.s),
-            const NeedsAdb('Wi-Fi, Bluetooth, bloqueo y cámara', card: false),
+            const NeedsAdb(
+              'Wi-Fi, Bluetooth, bloqueo, rotación, captura y cámara',
+              card: false,
+            ),
           ],
         ],
       );
@@ -269,7 +512,7 @@ class _GridState extends State<_Grid> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
-      final cols = (box.maxWidth / 92).floor().clamp(3, 8);
+      final cols = (box.maxWidth / 172).floor().clamp(2, 6);
       final w = (box.maxWidth - Gap.s * (cols - 1)) / cols;
       final s = Theme.of(context).colorScheme;
       return Wrap(
@@ -284,7 +527,7 @@ class _GridState extends State<_Grid> {
                 void edit() => setState(() => _editing = c.label);
                 return SizedBox(
                   width: w * span + Gap.s * (span - 1),
-                  height: 58,
+                  height: 56,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -355,55 +598,6 @@ class _GridState extends State<_Grid> {
   );
 }
 
-/// "Buscar teléfono" as one quiet line under the controls.
-class _FindRow extends StatelessWidget {
-  const _FindRow({
-    required this.finding,
-    required this.onFind,
-    required this.onStop,
-  });
-  final bool finding;
-  final VoidCallback onFind, onStop;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = Theme.of(context).colorScheme;
-    final t = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        Icon(
-          finding ? Symbols.ring_volume_rounded : Symbols.mobile_sound_rounded,
-          size: 18,
-          fill: finding ? 1 : 0,
-          color: s.onSurfaceVariant,
-        ),
-        const SizedBox(width: Gap.s),
-        Expanded(
-          child: Text(
-            finding
-                ? 'Sonando: se detiene solo en un minuto'
-                : 'Buscar teléfono',
-            style: t.bodyMedium,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        TextButton.icon(
-          style: TextButton.styleFrom(
-            minimumSize: const Size(0, 36),
-            visualDensity: VisualDensity.compact,
-          ),
-          onPressed: finding ? onStop : onFind,
-          icon: Icon(
-            finding ? Symbols.stop_rounded : Symbols.volume_up_rounded,
-            size: 16,
-          ),
-          label: Text(finding ? 'Detener' : 'Hacer sonar'),
-        ),
-      ],
-    );
-  }
-}
-
 /// A quick-settings tile: small icon and name; on (filled), off, or not available. The tooltip says why.
 class _Tile extends StatelessWidget {
   const _Tile({
@@ -422,6 +616,7 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
     final active = on == true;
     final state = on == null ? null : (active ? 'activado' : 'desactivado');
     final tip = [
@@ -449,23 +644,50 @@ class _Tile extends StatelessWidget {
             child: Opacity(
               opacity: onTap == null ? 0.45 : 1,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
                   children: [
-                    Icon(
-                      icon,
-                      size: 18,
-                      fill: active ? 1 : 0,
-                      color: active ? s.onPrimary : s.onSurface,
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: active
+                            ? s.onPrimary.withValues(alpha: .16)
+                            : s.surfaceContainerHighest,
+                      ),
+                      child: Icon(
+                        icon,
+                        size: 18,
+                        fill: active ? 1 : 0,
+                        color: active ? s.onPrimary : s.onSurface,
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: active ? s.onPrimary : s.onSurfaceVariant,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.labelLarge?.copyWith(
+                              color: active ? s.onPrimary : s.onSurface,
+                            ),
+                          ),
+                          if (on != null)
+                            Text(
+                              active ? 'Activado' : 'Desactivado',
+                              maxLines: 1,
+                              style: text.labelSmall?.copyWith(
+                                color: active
+                                    ? s.onPrimary.withValues(alpha: .8)
+                                    : s.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -512,6 +734,15 @@ class _VolumeState extends State<_Volume> {
             widget.onChanged(v.round());
             setState(() => _drag = null);
           },
+        ),
+      ),
+      SizedBox(
+        width: 44,
+        child: Text(
+          '${(_drag ?? widget.value).round()}/${widget.max}',
+          textAlign: TextAlign.end,
+          style: Theme.of(context).textTheme.labelSmall
+              ?.copyWith(fontFeatures: tabular),
         ),
       ),
     ],

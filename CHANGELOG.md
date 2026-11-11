@@ -1,5 +1,91 @@
 # Cambios
 
+## Beta 1.2 (1.2.0) — 2026-11-09
+
+Instala juntos el APK de Android y el instalador de Windows de esta versión: el puntero de la pantalla compartida y el emparejamiento por código necesitan ambos lados actualizados.
+
+### Seguridad
+
+- **Emparejar comparando el código es ahora a prueba de intermediarios.** Antes, un equipo de la misma red que se colocara entre los dos dispositivos podía repetir su parte de la conexión hasta que ambos mostraran el mismo código de 6 dígitos. Ahora cada lado aporta un número al azar y quien inicia se compromete al suyo antes de ver el del otro: el código ya no se puede forzar. Emparejar con el QR no estaba afectado. Los dispositivos ya emparejados siguen igual; para emparejar de nuevo, los dos necesitan esta versión.
+- **Alero no ejecuta programas recibidos.** «Abrir» sobre un `.exe`, `.bat`, `.lnk`, `.msi` y similares lo muestra en su carpeta en vez de lanzarlo (los avisos de Windows ya lo hacían; la ventana no).
+- Los anuncios de la red local, que no van autenticados, ya no pueden llenar la lista de dispositivos ni cambiar la dirección de un dispositivo con el que estás conectado.
+- Android: otra app no puede usar «Compartir con Alero» para apuntar a los archivos privados de Alero.
+- El canal local entre la ventana y el servicio corta a quien se conecta y no presenta la clave en 5 segundos.
+- La compilación publicada fija por commit la acción de terceros que instala Flutter.
+
+### Envío de archivos
+
+- **El aviso de envío termina.** Se quedaba en «Preparando…» cuando el archivo acababa antes de que el aviso se dibujara. Ahora llega a **Finalizado** y se queda hasta que lo cierras.
+- **Vista previa al terminar, en los dos dispositivos:** quien envía y quien recibe ven el archivo (la imagen, si lo es), con Abrir, Ver en carpeta y Copiar (Windows: copia el archivo para pegarlo donde quieras); en Android, Abrir y Ver en Descargas.
+
+### Acceso remoto (ver el teléfono desde el ordenador)
+
+- **La pantalla del teléfono se apaga mientras la ves en el ordenador**, para no tenerla duplicada (se puede desactivar en las opciones). Android no permite mostrar la pantalla siempre activa mientras se transmite; apagada es lo más parecido.
+- **Grabar la pantalla ya no acelera el sonido.** Con la ventana abierta, la grabación abría una segunda captura de todo el audio y Android lo reproducía todo al doble de velocidad. Ahora la grabación toma una copia de lo que suena (Android 13 o posterior; en versiones anteriores graba sin sonido mientras la ventana lo tenga).
+
+### Rendimiento en Windows
+
+- Las animaciones usan el renderizador Impeller, que no compila sombreadores la primera vez que algo se mueve, y el icono que responde al toque ya no redibuja una forma nueva en cada fotograma.
+
+### Segunda pantalla
+
+- **Se retira «Extender pantalla».** El controlador de monitor virtual deja su monitor encendido siempre, y no se consiguió encenderlo y apagarlo de forma fiable desde Alero. Si lo instalaste, puedes desinstalarlo desde el Administrador de dispositivos.
+
+### Pantalla compartida (ver el ordenador desde el teléfono)
+
+- **El puntero va por su cuenta**, hasta 60 veces por segundo, y el teléfono lo dibuja encima de la imagen: sigue al dedo aunque la imagen vaya más lenta.
+- Hasta 30 fotogramas por segundo (antes 15). Calidades: Fluida 640 px · 30, Equilibrada 960 px · 15, Nítida 1280 px · 8.
+- La captura se codifica sin una copia intermedia de cada fotograma.
+
+### Controles del teléfono (Windows)
+
+- **Rediseñados:** cada control es una ficha con su icono, su nombre y su estado (Activado / Desactivado).
+- **Controles avanzados**, en un segundo cajón desplegable: Ver pantalla, Captura (guarda la pantalla del teléfono en la carpeta de descargas), Rotación, Silenciar, Buscar teléfono, Portapapeles y los botones de reproducción.
+- **Tú eliges cuáles ves y en qué orden** (botón junto a Actualizar): los ocho primeros quedan siempre a la vista.
+- El volumen dice su valor y el modo de sonido lleva nombre.
+
+### Notificaciones
+
+- **Tarjetas compactas:** la foto de quien escribe con el icono de la app, el nombre y «app · hora · N mensajes» en una línea, y los dos últimos mensajes debajo (toca la tarjeta para ver más). Responder y Marcar como leído son iconos a la derecha; Silenciar y Descartar, en el menú ⋮. El tamaño se ajusta a la pantalla.
+- **Responder y listo:** la respuesta se escribe en una barra con el botón de enviar dentro; al enviarla, la notificación se descarta en el teléfono y desaparece de la lista.
+
+### Alero Vault
+
+- **Bloqueado siempre:** en Android pide la huella o el PIN cada vez que lo abres; en Windows, una clave propia de la bóveda que creas la primera vez. Se vuelve a bloquear al salir de la sección, al minimizar o con el botón del candado.
+- **En Windows no funcionaba:** al guardar fallaba siempre porque el cifrado de Windows no llegaba a cargarse. Ahora cifra con tu cuenta de Windows y, además, con tu clave: sin ella los archivos no se abren. Alero no la guarda; si la olvidas no hay forma de recuperar el contenido.
+- **Las fotos se ven dentro:** miniatura en la lista y visor propio, sin exportarlas.
+
+### Inicio
+
+- **Personalizar** permite ordenar los mosaicos arrastrándolos y apagar los que no uses, además de cambiar su tamaño. En Windows y en Android.
+- **El orden se nota:** en una ventana ancha los primeros mosaicos van a la columna izquierda y el resto a la derecha (antes cada mosaico tenía su columna fija y moverlo entre columnas no cambiaba nada).
+- **Historial del portapapeles** dentro del botón Portapapeles: lo que viajó entre los dos dispositivos, a un toque de copiarlo otra vez.
+- Los textos de los botones se encogen para caber en vez de partirse o salirse al cambiar el tamaño de los mosaicos.
+- **Mosaicos que se adaptan:** sin música el reproductor es una línea; con una transferencia en curso, la actividad muestra su progreso y solo el último resultado, y si no, los tres últimos con «Ver más»; sin notificaciones, una línea discreta.
+- **Clic derecho en un archivo de la actividad** (pulsación larga en el teléfono): Abrir, Mostrar en la carpeta, Copiar la ruta, Enviar de nuevo, Copiar el nombre, Quitar del historial y Eliminar el archivo.
+- Al cambiar el tamaño de la ventana, el paso de dos columnas a una se funde en vez de saltar.
+
+### Ver el ordenador desde el teléfono
+
+- El marco de la imagen tiene la forma exacta de la pantalla del ordenador (sin bandas negras) y el panel táctil ocupa el resto. El puntero se dibuja a escala de la imagen.
+
+### Animaciones
+
+- **Cada icono responde al toque** en Windows y Android: crece, se inclina y se rellena un instante. Sin movimiento si el sistema pide reducirlo.
+- **Enviar archivos se ve:** el diálogo dibuja tu dispositivo, el otro y unos puntos que viajan entre ambos; la línea se llena con el progreso y al llegar aparece una marca.
+- **Control remoto (Android)** se abre desde una vista previa con el fondo del ordenador y un puntero en movimiento.
+
+### Acceso remoto (antes «Controlar teléfono»)
+
+- **Se retira Alero Desktop** y las herramientas de escritorio (espacios de trabajo, distribución de ventanas, diagnóstico, modo Escritorio). Quedan la pantalla del teléfono, la cámara, la webcam y la grabación.
+- Android ya no declara el permiso «Mostrar sobre otras apps», que solo usaba Alero Desktop.
+- La conexión por depuración inalámbrica se reintenta una vez: el primer intento tras despertar el teléfono solía fallar.
+
+### Seguridad
+
+- Desaparece con «Extender pantalla» la orden con la que un teléfono emparejado abría una página en el navegador del PC.
+- Revisión de dependencias contra osv.dev: sin avisos en lo que se distribuye.
+
 ## Beta 1.1.1 (1.1.1) — 2026-11-05
 
 ### Android

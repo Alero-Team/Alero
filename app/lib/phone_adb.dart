@@ -25,7 +25,7 @@ AdbDevice? adbFor(List<AdbDevice> devices, pb.Peer phone, String model) {
 
 /// What only adb can do on a phone (Android keeps Wi-Fi and Bluetooth away from ordinary apps).
 abstract final class PhoneAdb {
-  // Shared across Dispositivos, Aplicaciones and Alero Desktop. The user
+  // Shared across Dispositivos and the phone pages. The user
   // explicitly chooses an ADB transport; do not silently switch to a different
   // phone after selecting one. No pairing secrets are stored here.
   static final selectedChanged = ValueNotifier<int>(0);
@@ -94,15 +94,24 @@ abstract final class PhoneAdb {
   /// available to the other sections for that same paired phone.
   static String? selectedSerial(String peerId) => _chosen[peerId];
 
-  /// (Wi-Fi on, Bluetooth on), read from the phone's global settings.
-  static Future<(bool, bool)> radios(String serial) async {
+  /// (Wi-Fi on, Bluetooth on, auto-rotate on), read from the phone's settings.
+  static Future<(bool, bool, bool)> toggles(String serial) async {
     final out = await Scrcpy.shell(
       serial,
-      'settings get global wifi_on; settings get global bluetooth_on',
+      'settings get global wifi_on; settings get global bluetooth_on; settings get system accelerometer_rotation',
     );
     final v = out.trim().split(RegExp(r'\s+'));
-    return (v.isNotEmpty && v[0] != '0', v.length > 1 && v[1] == '1');
+    return (
+      v.isNotEmpty && v[0] != '0',
+      v.length > 1 && v[1] == '1',
+      v.length > 2 && v[2] == '1',
+    );
   }
+
+  static Future<void> setAutoRotate(String serial, bool on) => Scrcpy.shell(
+    serial,
+    'settings put system accelerometer_rotation ${on ? 1 : 0}',
+  );
 
   static Future<void> setWifi(String serial, bool on) =>
       Scrcpy.shell(serial, 'svc wifi ${on ? 'enable' : 'disable'}');

@@ -54,8 +54,9 @@ class AdbMdns {
       if (RegExp(
         r'vmware|virtualbox|vethernet|hyper-v|wsl',
         caseSensitive: false,
-      ).hasMatch(i.name))
+      ).hasMatch(i.name)) {
         continue;
+      }
       for (final a in i.addresses) {
         if (a.isLoopback || a.isLinkLocal) continue;
         final p = a.address.split('.');

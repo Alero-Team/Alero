@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -19,6 +19,7 @@ import 'shell.dart';
 import 'theme.dart';
 import 'controls.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// The connected device Home is about: the first paired one online, else the first paired.
 pb.Peer? mainPeer(Hub hub) {
@@ -26,6 +27,27 @@ pb.Peer? mainPeer(Hub hub) {
   return trusted.where((p) => p.state == pb.PeerState.connected).firstOrNull ??
       trusted.firstOrNull;
 }
+
+/// Home's tiles, by name, with the title "Personalizar" shows for each.
+const homeTileNames = {
+  'device': 'Dispositivo',
+  'remote': 'Control remoto',
+  'media': 'Reproductor',
+  'controls': 'Controles rápidos',
+  'notifs': 'Notificaciones',
+  'recent': 'Actividad reciente',
+};
+
+/// The tiles Home shows, in order: the user's [order] first, then any of [all] it does not mention (a tile
+/// added by an update lands at the end instead of vanishing), without the [hidden] ones.
+List<String> homeTiles(
+  List<String> all,
+  List<String> order,
+  Set<String> hidden,
+) => ordered(all, order, hidden);
+
+/// How many of [count] tiles go in the left column of a wide Home: three fifths, rounded up.
+int homeLeftCount(int count) => (count * 3 / 5).ceil();
 
 /// Everything you do with the connected device, in one place: who it is and its state, what you can do
 /// (send, clipboard, screen), what it is playing, its notifications and what moved recently.
@@ -80,7 +102,7 @@ class HomeScreen extends StatelessWidget {
         onRefresh: hub.refresh,
         trailing: IconButton(
           tooltip: 'Personalizar',
-          onPressed: () => _customize(context, hub, go),
+          onPressed: () => _customize(context, hub, go, _phoneTiles),
           icon: const Icon(Symbols.dashboard_customize_rounded),
         ),
         children: [
@@ -90,13 +112,19 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                hero,
-                gap,
-                RemoteCard(hub, main),
-                gap,
-                MediaPanel(hub, main.id, computer: true),
-                gap,
-                recent,
+                for (final (i, t) in homeTiles(
+                  _phoneTiles,
+                  hub.homeOrder,
+                  hub.homeHidden,
+                ).indexed) ...[
+                  if (i > 0) gap,
+                  switch (t) {
+                    'device' => hero,
+                    'remote' => RemoteCard(hub, main),
+                    'media' => MediaPanel(hub, main.id, computer: true),
+                    _ => recent,
+                  },
+                ],
               ],
             ),
           ),
@@ -104,67 +132,86 @@ class HomeScreen extends StatelessWidget {
       );
     }
 
+    final shown = homeTiles(_pcTiles, hub.homeOrder, hub.homeHidden);
+    // A tile with nothing to show yet (phone offline) is skipped, or says so where a column needs it.
+    Widget? tile(String t, {bool placeholder = false}) => switch (t) {
+      'device' => hero,
+      'media' =>
+        media ??
+            (placeholder
+                ? const Panel(
+                    title: 'Reproductor',
+                    icon: Symbols.music_note_rounded,
+                    child: Text('No hay música en reproducción.'),
+                  )
+                : null),
+      'controls' =>
+        controls ??
+            (placeholder
+                ? const Panel(
+                    title: 'Controles rápidos',
+                    icon: Symbols.tune_rounded,
+                    child: Text('Conecta el teléfono para usar sus controles.'),
+                  )
+                : null),
+      'notifs' =>
+        notifs ??
+            (placeholder
+                ? const Panel(
+                    title: 'Notificaciones',
+                    icon: Symbols.notifications_rounded,
+                    child: Text('Sin notificaciones.'),
+                  )
+                : null),
+      _ => recent,
+    };
+    // Two columns on a wide window: the first tiles of the user's order on the left (three fifths of
+    // them), the rest on the right. One column otherwise. A tile with nothing to show takes no room.
+    final two = wide && !Platform.isAndroid && shown.length > 1;
+    final cut = two ? homeLeftCount(shown.length) : shown.length;
+    final columns = [
+      shown.take(cut).map((t) => tile(t, placeholder: two)).nonNulls.toList(),
+      if (two)
+        shown
+            .skip(cut)
+            .map((t) => tile(t, placeholder: true))
+            .nonNulls
+            .toList(),
+    ];
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-      if (wide && !Platform.isAndroid) ...[
-        // Left: the device, what it plays and recent activity; right: its controls and notifications.
-        // Activity sits under the player so both columns end at a similar height.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  hero,
-                  gap,
-                  media ??
-                      const Panel(
-                        title: 'Reproductor',
-                        icon: Symbols.music_note_rounded,
-                        child: Text('No hay música en reproducción.'),
-                      ),
-                  gap,
-                  recent,
-                ],
-              ),
-            ),
-            gap,
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  controls ??
-                      const Panel(
-                        title: 'Controles rápidos',
-                        icon: Symbols.tune_rounded,
-                        child: Text(
-                          'Conecta el teléfono para usar sus controles.',
-                        ),
-                      ),
-                  gap,
-                  notifs ??
-                      const Panel(
-                        title: 'Notificaciones',
-                        icon: Symbols.notifications_rounded,
-                        child: Text('Sin notificaciones.'),
-                      ),
-                ],
-              ),
-            ),
-          ],
+      // Changing between one and two columns fades instead of jumping while the window is resized.
+      AnimatedSwitcher(
+        duration: motion(context, const Duration(milliseconds: 220)),
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.topCenter,
+          children: [...previous, ?current],
         ),
-      ] else ...[
-        hero,
-        gap,
-        if (media != null) ...[media, gap],
-        if (controls != null) ...[controls, gap],
-        if (notifs != null) ...[notifs, gap],
-        recent,
-      ],
+        child: KeyedSubtree(
+          key: ValueKey(columns.length),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (c, column) in columns.indexed) ...[
+                if (c > 0) gap,
+                Expanded(
+                  flex: c == 0 ? 3 : 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final (i, w) in column.indexed) ...[
+                        if (i > 0) gap,
+                        w,
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     ];
 
     return ScreenFrame(
@@ -172,7 +219,7 @@ class HomeScreen extends StatelessWidget {
       maxWidth: 1920,
       trailing: !Platform.isAndroid
           ? OutlinedButton.icon(
-              onPressed: () => _customize(context, hub, go),
+              onPressed: () => _customize(context, hub, go, _pcTiles),
               icon: const Icon(Symbols.dashboard_customize_rounded),
               label: const Text('Personalizar'),
             )
@@ -190,52 +237,83 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Personalizar: the size of Home's tiles, applied at once; theme and the rest stay in Ajustes.
+/// Default order on the phone with a computer, and everywhere else (the computer, or two phones).
+const _phoneTiles = ['device', 'remote', 'media', 'recent'];
+const _pcTiles = ['device', 'media', 'recent', 'controls', 'notifs'];
+
+/// Personalizar: which tiles Home shows, in what order and how big, applied at once; theme and the rest
+/// stay in Ajustes.
 Future<void> _customize(
   BuildContext context,
   Hub hub,
   void Function(Section) go,
+  List<String> tiles,
 ) => showDialog<void>(
   context: context,
   builder: (ctx) => AlertDialog(
     title: const Text('Personalizar inicio'),
     content: ListenableBuilder(
-      listenable: hub.tileSize,
-      builder: (ctx, _) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Tamaño de los mosaicos'),
-          const SizedBox(height: Gap.s),
-          Row(
+      listenable: Listenable.merge([hub, hub.tileSize]),
+      builder: (ctx, _) => SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Symbols.text_decrease_rounded, size: 18),
-              Expanded(
-                child: Slider(
-                  value: TileScale.forSize(hub.tileSize.value),
-                  min: TileScale.minFactor,
-                  max: TileScale.maxFactor,
-                  divisions: 16,
-                  label:
-                      '${(TileScale.forSize(hub.tileSize.value) * 100).round()} %',
-                  onChanged: (v) => hub.setTileSize(v.toStringAsFixed(2)),
+              const Text('Mosaicos'),
+              OrderList(
+                order: homeTiles(tiles, hub.homeOrder, const {}),
+                names: homeTileNames,
+                hidden: hub.homeHidden,
+                // Tiles of the other device kind keep their saved place.
+                onChanged: (order, hidden) => hub.setHome([
+                  ...order,
+                  ...hub.homeOrder.where((t) => !order.contains(t)),
+                ], hidden),
+              ),
+              Text(
+                'Arrastra para ordenar y apaga los que no uses. En una ventana ancha, '
+                'los primeros van a la columna izquierda y el resto a la derecha.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              const SizedBox(height: Gap.l),
+              const Text('Tamaño de los mosaicos'),
+              const SizedBox(height: Gap.s),
+              Row(
+                children: [
+                  const Icon(Symbols.text_decrease_rounded, size: 18),
+                  Expanded(
+                    child: Slider(
+                      value: TileScale.forSize(hub.tileSize.value),
+                      min: TileScale.minFactor,
+                      max: TileScale.maxFactor,
+                      divisions: 16,
+                      label:
+                          '${(TileScale.forSize(hub.tileSize.value) * 100).round()} %',
+                      onChanged: (v) => hub.setTileSize(v.toStringAsFixed(2)),
+                    ),
+                  ),
+                  const Icon(Symbols.text_increase_rounded, size: 22),
+                ],
+              ),
+              Text(
+                'Cambia el tamaño del texto, los iconos y los espacios. En pantallas estrechas se ajusta solo.',
+                style: Theme.of(ctx).textTheme.bodySmall,
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    hub.setTileSize('normal');
+                    hub.setHome([], {});
+                  },
+                  child: const Text('Restablecer'),
                 ),
               ),
-              const Icon(Symbols.text_increase_rounded, size: 22),
             ],
           ),
-          Text(
-            'Cambia el tamaño del texto, los iconos y los espacios. En pantallas estrechas se ajusta solo.',
-            style: Theme.of(ctx).textTheme.bodySmall,
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => hub.setTileSize('normal'),
-              child: const Text('Restablecer'),
-            ),
-          ),
-        ],
+        ),
       ),
     ),
     actions: [
@@ -343,20 +421,20 @@ class _Hero extends StatelessWidget {
             FilledButton.icon(
               onPressed: online ? () => hub.send(p.id) : null,
               icon: const Icon(Symbols.upload_rounded, size: 18),
-              label: const Text('Enviar archivos'),
+              label: const FitLabel('Enviar archivos'),
             ),
             FilledButton.tonalIcon(
               onPressed: online
                   ? () => openClipboard(context, hub, p.id)
                   : null,
               icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
-              label: const Text('Portapapeles'),
+              label: const FitLabel('Portapapeles'),
             ),
             if (phone)
               OutlinedButton.icon(
                 onPressed: online ? () => openScreen(context, hub, p) : null,
                 icon: const Icon(Symbols.cast_rounded, size: 18),
-                label: const Text('Controlar teléfono'),
+                label: const FitLabel('Acceso remoto'),
               ),
           ];
     // One row when every label fits on one line (150 px each); else the main button gets its own row and the rest share the next.
@@ -659,6 +737,7 @@ class _Recent extends StatefulWidget {
 
 class _RecentState extends State<_Recent> {
   String filter = 'Todo';
+  bool more = false;
 
   Widget filters() => Wrap(
     spacing: 4,
@@ -681,11 +760,12 @@ class _RecentState extends State<_Recent> {
         filter == 'Todo' ||
         (filter == 'Recibidos' && incoming) ||
         (filter == 'Enviados' && !incoming);
-    final recent = hub.history
-        .where((h) => matches(h.incoming))
-        .take(8)
-        .toList();
+    final recent = hub.history.where((h) => matches(h.incoming)).toList();
     final active = hub.active.where((x) => matches(x.incoming)).toList();
+    // While something moves, it has the card and only the last result stays under it; otherwise the last
+    // three, or eight on request.
+    final all = recent.length;
+    recent.length = all.clamp(0, active.isNotEmpty ? 1 : (more ? 8 : 3));
     final wide = MediaQuery.sizeOf(context).width >= 1180;
     return Panel(
       title: 'Actividad reciente',
@@ -709,12 +789,19 @@ class _RecentState extends State<_Recent> {
                 ),
               ),
             for (final h in recent) HistoryTile(h, hub),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: hub.openDownloads,
-                child: const Text('Abrir carpeta de descargas'),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (active.isEmpty && all > 3)
+                  TextButton(
+                    onPressed: () => setState(() => more = !more),
+                    child: Text(more ? 'Ver menos' : 'Ver más'),
+                  ),
+                TextButton(
+                  onPressed: hub.openDownloads,
+                  child: const Text('Abrir carpeta de descargas'),
+                ),
+              ],
             ),
           ],
         ),

@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 
 import 'expressive.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 class NavData {
   const NavData(this.icon, this.label, {this.badge = 0});
@@ -220,9 +221,7 @@ class _Item extends StatelessWidget {
                                 top: -6,
                                 right: -8,
                                 child: ExcludeSemantics(
-                                  child: Badge(
-                                    label: Text('${data.badge}'),
-                                  ),
+                                  child: Badge(label: Text('${data.badge}')),
                                 ),
                               ),
                           ],

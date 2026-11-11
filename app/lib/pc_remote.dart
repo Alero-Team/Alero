@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Offset;
 
 import 'package:flutter/foundation.dart';
 
@@ -124,10 +125,9 @@ class PcRemote {
 /// The computer's screen as a stream of JPEG frames (`pb.x.screen.*`). The computer keeps at most two frames in
 /// flight (we acknowledge each one) and stops by itself if we stop sending keepalives.
 class ScreenFeed extends ChangeNotifier {
-  ScreenFeed(this.hub, this.peerId, {this.monitor = 0});
+  ScreenFeed(this.hub, this.peerId);
   final Hub hub;
   final String peerId;
-  final int monitor;
 
   Uint8List? frame;
   int w = 0, h = 0;
@@ -135,12 +135,29 @@ class ScreenFeed extends ChangeNotifier {
   Timer? _keepalive;
 
   /// Frame width asked from the computer, and frames per second.
-  int width = 960, fps = 8;
+  int width = 960, fps = 15;
+
+  /// Where the computer's pointer is, as fractions of the picture; null while hidden. It arrives on its own,
+  /// far more often than the pictures, and is drawn over them: the pointer follows the finger at once.
+  final cursor = ValueNotifier<Offset?>(null);
+
+  void _ask() => hub.sendMessage(peerId, 'pb.x.screen.start', {
+    'w': width,
+    'fps': fps,
+    'cursor': true,
+  });
+
+  void onCursor(Map<String, dynamic> b) {
+    final x = b['x'], y = b['y'];
+    cursor.value = x is num && y is num
+        ? Offset(x.toDouble().clamp(0, 1), y.toDouble().clamp(0, 1))
+        : null;
+  }
 
   void start() {
     _keepalive?.cancel();
     running = true;
-    hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps, 'monitor': monitor});
+    _ask();
     _keepalive = Timer.periodic(
       const Duration(seconds: 5),
       (_) => hub.sendMessage(peerId, 'pb.x.screen.keepalive', {}),
@@ -152,9 +169,7 @@ class ScreenFeed extends ChangeNotifier {
   void setQuality({required int width, required int fps}) {
     this.width = width;
     this.fps = fps;
-    if (running) {
-      hub.sendMessage(peerId, 'pb.x.screen.start', {'w': width, 'fps': fps});
-    }
+    if (running) _ask();
     notifyListeners();
   }
 
@@ -177,6 +192,7 @@ class ScreenFeed extends ChangeNotifier {
     _keepalive?.cancel();
     _keepalive = null;
     frame = null;
+    cursor.value = null;
     hub.sendMessage(peerId, 'pb.x.screen.stop', {});
     notifyListeners();
   }
@@ -184,6 +200,7 @@ class ScreenFeed extends ChangeNotifier {
   @override
   void dispose() {
     stop();
+    cursor.dispose();
     super.dispose();
   }
 }

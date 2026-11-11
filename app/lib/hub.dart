@@ -26,12 +26,27 @@ class Xfer {
   final bool incoming;
   int done = 0, rate = 0;
   String note = '';
+
+  /// A file the app asked for itself (explorer download, screenshot): no transfer dialog for it.
+  bool quiet = false;
+}
+
+/// A transfer that ended in this run: what the transfer dialog shows when it is over.
+class Ended {
+  Ended(this.x, this.ok, this.error, this.picture);
+  final Xfer x;
+  final bool ok;
+  final String error;
+
+  /// Android moves a received file into Descargas: a received picture is kept here to preview it.
+  Uint8List? picture;
 }
 
 /// Single owner of what the UI shows. Mirrors engine events into plain state; no protocol or trust logic here.
 class Hub extends ChangeNotifier {
   List<pb.Peer> peers = [];
   List<Xfer> active = [];
+  final ended = <Ended>[];
   List<pb.HistoryItem> history = [];
   List<String> diagnostics = [];
   pb.Event_PairRequest? pairPrompt;
@@ -158,8 +173,6 @@ class Hub extends ChangeNotifier {
   bool remoteAllow = false;
   List<String> pcFolders = const [];
   bool pcFilesWrite = false;
-  bool extendAllow = false;
-  final extendSession = <String, Map<String, dynamic>>{};
   final clips = <ClipItem>[];
 
   /// Android: special access for notifications/media, and the normal notification permission.
@@ -198,8 +211,16 @@ class Hub extends ChangeNotifier {
   /// Size of Home's tiles (padding and spacing): compact, normal or large.
   final tileSize = ValueNotifier('normal');
 
+  /// Home's tiles in the order the user chose, and the ones switched off (see `homeTiles`).
+  List<String> homeOrder = [];
+  Set<String> homeHidden = {};
+
   /// Width of each "Controles del teléfono" tile, in grid columns, by label (long press to change).
   final controlSpans = <String, int>{};
+
+  /// The phone controls in the order the user chose, and the ones switched off.
+  List<String> controlOrder = [];
+  Set<String> controlHidden = {};
   String get theme => themeMode.value;
 
   late File _settings;
@@ -225,13 +246,20 @@ class Hub extends ChangeNotifier {
     themeMode.value = s['theme'] as String? ?? 'dark';
     amoled.value = s['amoled'] as bool? ?? true;
     tileSize.value = s['tileSize'] as String? ?? 'normal';
+    homeOrder = (s['homeOrder'] as List? ?? []).whereType<String>().toList();
+    homeHidden = (s['homeHidden'] as List? ?? []).whereType<String>().toSet();
+    controlOrder = (s['controlOrder'] as List? ?? [])
+        .whereType<String>()
+        .toList();
+    controlHidden = (s['controlHidden'] as List? ?? [])
+        .whereType<String>()
+        .toSet();
     (s['controlSpans'] as Map?)?.forEach((k, v) {
       if (k is String && v is num) controlSpans[k] = v.toInt();
     });
     remoteAllow = _readRemote();
     pcFolders = _readPcFolders();
     pcFilesWrite = _readRemoteConfig()['allowPcFileEdits'] == true;
-    extendAllow = _readRemoteConfig()['allowExtend'] == true;
     pb.events().listen(_on);
     Native.onShared(takeShare);
     try {
@@ -331,14 +359,6 @@ class Hub extends ChangeNotifier {
   }
 
   /// Separate explicit consent for renaming/deleting shared files.
-  /// Windows owner controls whether paired phones may create a virtual monitor.
-  void setExtendAllow(bool enabled) {
-    if (!Platform.isWindows) return;
-    _writeRemoteConfig({..._readRemoteConfig(), 'allowExtend': enabled});
-    extendAllow = enabled;
-    notifyListeners();
-  }
-
   void setPcFileEdits(bool value) {
     _writeRemoteConfig({..._readRemoteConfig(), 'allowPcFileEdits': value});
     pcFilesWrite = value;
@@ -374,6 +394,10 @@ class Hub extends ChangeNotifier {
         'theme': theme,
         'amoled': amoled.value,
         'tileSize': tileSize.value,
+        'homeOrder': homeOrder,
+        'homeHidden': homeHidden.toList(),
+        'controlOrder': controlOrder,
+        'controlHidden': controlHidden.toList(),
         'controlSpans': controlSpans,
       }),
     );
@@ -450,6 +474,8 @@ class Hub extends ChangeNotifier {
               ? 'Emparejado con ${e.name}'
               : switch (e.code) {
                   'DECLINED' => 'Emparejamiento cancelado',
+                  _ when e.message == 'OUTDATED' =>
+                    'El otro dispositivo no completó la comprobación del código. Actualiza Alero en los dos e inténtalo de nuevo.',
                   'DECLINED_BY_PEER' =>
                     'El otro dispositivo no aceptó el emparejamiento',
                   _ =>
@@ -473,7 +499,10 @@ class Hub extends ChangeNotifier {
         if (offer?.id == e.id) offer = null;
         active = [
           ...active,
-          Xfer(e.id, e.peerName, e.name, e.size.toInt(), e.incoming),
+          Xfer(e.id, e.peerName, e.name, e.size.toInt(), e.incoming)
+            ..quiet =
+                _expected.containsKey(e.name) ||
+                (shotWanted != null && e.name.startsWith('Captura-PC-')),
         ];
       case pb.Event_TransferProgress():
         for (final x in active.where((x) => x.id == e.id)) {
@@ -508,6 +537,41 @@ class Hub extends ChangeNotifier {
     active = active.where((x) => x.id != e.id).toList();
     final fd = _fds.remove(e.id);
     if (fd != null) Native.closeFd(fd);
+    // Recorded before the first await: the dialog sees the end in the same notification that drops it from `active`.
+    if (x != null && !x.quiet) {
+      Uint8List? picture;
+      if (e.ok &&
+          x.incoming &&
+          Platform.isAndroid &&
+          e.path.isNotEmpty &&
+          x.size <= 12 << 20 &&
+          RegExp(
+            r'\.(jpe?g|png|gif|webp|bmp)$',
+            caseSensitive: false,
+          ).hasMatch(x.name)) {
+        try {
+          picture = File(e.path).readAsBytesSync();
+        } catch (_) {
+          // no preview; the file is still saved
+        }
+      }
+      for (final o in ended) {
+        o.picture = null; // one preview in memory at a time
+      }
+      ended.add(
+        Ended(
+          x,
+          e.ok,
+          e.ok
+              ? ''
+              : e.code == 'CANCELLED'
+              ? 'Cancelado'
+              : explain(e.code, e.message),
+          picture,
+        ),
+      );
+      if (ended.length > 40) ended.removeAt(0);
+    }
     var where = '';
     // A screenshot we asked for: read it before the platform moves it to Downloads, so it can be shown at once.
     Shot? arrived;
@@ -540,6 +604,8 @@ class Hub extends ChangeNotifier {
       if (want.$1 && e.path.isNotEmpty) {
         try {
           await Native.openFile(e.path);
+        } on PlatformException catch (e) {
+          messages.add(e.message ?? 'No se pudo abrir ${x.name}.');
         } catch (_) {
           messages.add('No se pudo abrir ${x.name}.');
         }
@@ -593,8 +659,9 @@ class Hub extends ChangeNotifier {
     // ADB/scrcpy may be authorised even when Alero's own TLS session is
     // disconnected. The viewer must still launch; only notify the phone
     // about control when that separate Alero channel is actually online.
-    if (peerId == null || !peers.any((p) => p.id == peerId && _online(p)))
+    if (peerId == null || !peers.any((p) => p.id == peerId && _online(p))) {
       return;
+    }
     _controlled[serial] = peerId;
     await _send(peerId, 'pb.x.phonecontrol', {'active': true});
   }
@@ -626,11 +693,6 @@ class Hub extends ChangeNotifier {
     }
     if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
     if (kind.startsWith('pb.x.pcfs.')) return pcFs.onMessage(peerId, kind, b);
-    if (kind == 'pb.x.extend.result') {
-      extendSession[peerId] = b;
-      notifyListeners();
-      return;
-    }
     if (kind.startsWith('pb.x.sms.')) return sms.onMessage(peerId, kind, b);
     switch (kind) {
       case 'pb.x.call':
@@ -724,6 +786,9 @@ class Hub extends ChangeNotifier {
       case 'pb.x.screen.frame':
         screen?.onFrame(b); // notifies by itself: the whole app does not repaint five times a second
         return;
+      case 'pb.x.screen.cursor':
+        screen?.onCursor(b);
+        return;
       case 'pb.x.pcmedia.state':
         media[peerId] = MediaState(b);
       case 'pb.x.notif.reply.result':
@@ -808,6 +873,27 @@ class Hub extends ChangeNotifier {
   Future<void> copy(String text) async {
     await Clipboard.setData(ClipboardData(text: text));
     messages.add('Copiado');
+  }
+
+  /// Windows: the file itself goes to the clipboard (paste it in a folder or a chat); elsewhere, its path.
+  Future<void> copyFile(String path) async {
+    if (!Platform.isWindows) return copy(path);
+    // The path travels in the environment, never inside the command text.
+    final r = await Process.run(
+      '${Platform.environment['SystemRoot'] ?? r'C:\Windows'}'
+      r'\System32\WindowsPowerShell\v1.0\powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        r'Set-Clipboard -LiteralPath $env:ALERO_COPY',
+      ],
+      environment: {'ALERO_COPY': path},
+    );
+    messages.add(
+      r.exitCode == 0 ? 'Archivo copiado' : 'No se pudo copiar el archivo.',
+    );
   }
 
   /// `action`: toggle, play, pause, next, prev, seek (with [position] ms), volume (with [value]).
@@ -1104,6 +1190,20 @@ class Hub extends ChangeNotifier {
 
   void setControlSpan(String label, int span) {
     span <= 1 ? controlSpans.remove(label) : controlSpans[label] = span;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setControls(List<String> order, Set<String> hidden) {
+    controlOrder = order;
+    controlHidden = hidden;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setHome(List<String> order, Set<String> hidden) {
+    homeOrder = order;
+    homeHidden = hidden;
     _saveSettings();
     notifyListeners();
   }

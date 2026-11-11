@@ -190,6 +190,7 @@ class PhoneNotif {
       mutable = j['mutable'] == true,
       chat = j['chat'] == true,
       conversation = j['conversation'] as String? ?? '',
+      avatar = _picture(j['avatar']),
       messages = [
         for (final m in (j['messages'] as List? ?? []))
           if (m is Map) ChatMsg.fromNotif(m),
@@ -205,6 +206,18 @@ class PhoneNotif {
   final bool chat;
   final String conversation;
   final List<ChatMsg> messages;
+
+  /// The picture the app shows beside it on the phone (a chat's contact photo); null if it has none.
+  final Uint8List? avatar;
+
+  static Uint8List? _picture(Object? v) {
+    if (v is! String || v.isEmpty) return null;
+    try {
+      return base64Decode(v);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 /// The phone's quick controls (`pb.x.phone.state`).

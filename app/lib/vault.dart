@@ -52,12 +52,53 @@ class VaultEntry {
 
 class VaultStore {
   static const maxFileBytes = 8 * 1024 * 1024;
+  static const minKeyLength = 4;
+
+  /// Windows: the vault key the user typed. It goes into DPAPI as extra entropy, so the records open only
+  /// with this Windows account AND this key; Alero keeps it in memory while the vault is open and nowhere
+  /// else. Android asks the system for the fingerprint or PIN instead (see the vault screen).
+  String? _key;
+
+  Future<File> _check() async =>
+      File('${(await _folder()).path}${Platform.pathSeparator}vault.key');
+
+  /// Whether a vault key was ever set on this computer.
+  Future<bool> hasKey() async => (await _check()).exists();
+
+  /// Sets the key for the first time and seals again, under it, whatever the vault already held.
+  Future<void> createKey(String key) async {
+    if (key.length < minKeyLength) {
+      throw const FormatException('La clave necesita al menos 4 caracteres.');
+    }
+    final old = await list();
+    _key = key;
+    for (final entry in old) {
+      await store(entry);
+    }
+    await (await _check()).writeAsBytes(
+      await _seal(Uint8List.fromList(utf8.encode('alero-vault'))),
+      flush: true,
+    );
+  }
+
+  /// True when [key] opens the vault. A wrong key opens nothing: there is no stored copy to compare with.
+  Future<bool> unlock(String key) async {
+    _key = key;
+    try {
+      await _open(await (await _check()).readAsBytes());
+      return true;
+    } catch (_) {
+      _key = null;
+      return false;
+    }
+  }
+
+  void lock() => _key = null;
 
   Future<Directory> _folder() async {
     final base = await getApplicationSupportDirectory();
-    return Directory(
-      '${base.path}${Platform.pathSeparator}secure-vault-v1',
-    ).create(recursive: true);
+    return Directory('${base.path}${Platform.pathSeparator}secure-vault-v1')
+        .create(recursive: true);
   }
 
   static String _newId() {
@@ -72,36 +113,50 @@ class VaultStore {
 
   Future<Uint8List> _seal(Uint8List data) async {
     if (Platform.isAndroid) return Native.vaultSeal(data);
-    if (Platform.isWindows) return _windowsCrypt(data, true);
+    if (Platform.isWindows) return _windowsCrypt(data, true, _key);
     throw UnsupportedError('Alero Vault solo admite Android y Windows.');
   }
 
   Future<Uint8List> _open(Uint8List data) async {
     if (Platform.isAndroid) return Native.vaultOpen(data);
-    if (Platform.isWindows) return _windowsCrypt(data, false);
+    if (Platform.isWindows) return _windowsCrypt(data, false, _key);
     throw UnsupportedError('Alero Vault solo admite Android y Windows.');
   }
 
   /// PowerShell receives the secret on standard input, never in arguments.
   /// DPAPI binds encrypted data to the current Windows user profile.
-  static Future<Uint8List> _windowsCrypt(Uint8List input, bool seal) async {
+  static Future<Uint8List> _windowsCrypt(
+    Uint8List input,
+    bool seal,
+    String? key,
+  ) async {
     final api = seal ? 'Protect' : 'Unprotect';
     final script = [
       "\$ErrorActionPreference = 'Stop'",
+      // Windows PowerShell does not load this assembly by itself: without it the type below does not exist.
+      "Add-Type -AssemblyName System.Security",
       "\$b = [Convert]::FromBase64String([Console]::In.ReadLine())",
-      "\$out = [System.Security.Cryptography.ProtectedData]::$api(\$b, \$null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)",
+      "\$k = [Console]::In.ReadLine()",
+      "\$e = if (\$k) { [Convert]::FromBase64String(\$k) } else { \$null }",
+      "\$out = [System.Security.Cryptography.ProtectedData]::$api(\$b, \$e, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)",
       "[Console]::Out.Write([Convert]::ToBase64String(\$out))",
     ].join('; ');
-    final process = await Process.start(
-      'powershell.exe',
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script],
-    );
+    final process = await Process.start('powershell.exe', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      script,
+    ]);
     process.stdin.writeln(base64Encode(input));
+    process.stdin.writeln(key == null ? '' : base64Encode(utf8.encode(key)));
     await process.stdin.close();
     final stdoutText = await process.stdout.transform(utf8.decoder).join();
     await process.stderr.drain<void>();
     if (await process.exitCode != 0) {
-      throw const FormatException('No se pudo proteger o abrir el contenido de la bóveda.');
+      throw const FormatException(
+        'No se pudo proteger o abrir el contenido de la bóveda.',
+      );
     }
     return base64Decode(stdoutText.trim());
   }
@@ -136,7 +191,9 @@ class VaultStore {
     final sealed = await _seal(
       Uint8List.fromList(utf8.encode(jsonEncode(entry.toMap()))),
     );
-    final target = File('${root.path}${Platform.pathSeparator}${entry.id}.avlt');
+    final target = File(
+      '${root.path}${Platform.pathSeparator}${entry.id}.avlt',
+    );
     final tmp = File('${target.path}.partial');
     try {
       await tmp.writeAsBytes(sealed, flush: true);
@@ -147,7 +204,11 @@ class VaultStore {
     }
   }
 
-  Future<VaultEntry> saveNote(String name, String text, {VaultEntry? existing}) async {
+  Future<VaultEntry> saveNote(
+    String name,
+    String text, {
+    VaultEntry? existing,
+  }) async {
     final entry = VaultEntry(
       id: existing?.id ?? _newId(),
       name: name.trim(),
@@ -163,13 +224,15 @@ class VaultStore {
     if (bytes.length > maxFileBytes) {
       throw const FormatException('Archivo demasiado grande (máximo 8 MB).');
     }
-    await store(VaultEntry(
-      id: _newId(),
-      name: name,
-      kind: 'file',
-      data: base64Encode(bytes),
-      created: DateTime.now().toUtc(),
-    ));
+    await store(
+      VaultEntry(
+        id: _newId(),
+        name: name,
+        kind: 'file',
+        data: base64Encode(bytes),
+        created: DateTime.now().toUtc(),
+      ),
+    );
   }
 
   Future<void> remove(VaultEntry entry) async {

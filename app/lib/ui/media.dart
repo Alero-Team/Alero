@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -11,6 +11,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 String _clock(int ms) {
   final s = ms ~/ 1000;
@@ -161,6 +162,17 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     if (widget.compact) {
       final cm = m ?? MediaState(const {});
       final active = access && cm.active;
+      // Nothing playing: one quiet line, not a player with dead buttons.
+      if (!active) {
+        return Panel(
+          title: 'Reproductor',
+          icon: Symbols.music_note_rounded,
+          child: Text(
+            'No se está reproduciendo música.',
+            style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+          ),
+        );
+      }
       return Panel(
         title: 'Reproductor',
         icon: Symbols.music_note_rounded,

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:animations/animations.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -28,6 +28,7 @@ import 'send_preview.dart';
 import 'settings.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// Four top-level places. Clipboard, notifications, media and screen are things you do with a device, so they
 /// live on Home as panels and actions, not as destinations (fewer places, each with one purpose).
@@ -116,7 +117,8 @@ class _ShellState extends State<Shell>
           .firstOrNull ??
       widget.initialSection;
   late final StreamSubscription<String> _msgs;
-  bool _shareOpen = false, _shotOpen = false;
+  bool _shareOpen = false, _shotOpen = false, _receiveOpen = false;
+  final _received = <String>{};
 
   @override
   void initState() {
@@ -239,6 +241,25 @@ class _ShellState extends State<Shell>
     } else if (o == null && _offerRoute != null && _offerRoute!.isActive) {
       Navigator.of(context).removeRoute(_offerRoute!);
     }
+    // A file starts arriving: its progress, then «Finalizado» with the file. Hidden ones do not come back.
+    final arriving = {
+      for (final x in hub.active)
+        if (x.incoming && !x.quiet) x.id,
+    };
+    if (arriving.difference(_received).isNotEmpty && !_receiveOpen) {
+      _receiveOpen = true;
+      showTransfer(
+        context,
+        hub,
+        incoming: true,
+        before: {
+          for (final x in hub.active)
+            if (!arriving.contains(x.id)) x.id,
+          for (final d in hub.ended) d.x.id,
+        },
+      ).whenComplete(() => _receiveOpen = false);
+    }
+    _received.addAll(arriving);
     if (hub.shot != null && !_shotOpen) {
       _shotOpen = true;
       showShot(context, hub).whenComplete(() => _shotOpen = false);

@@ -76,9 +76,25 @@ class Native {
     if (_android) await _ch.invokeMethod('rememberFile', {'id': id, 'fd': fd});
   }
 
+  /// File types the desktop would run instead of open. The same list as the daemon's `runs_code`.
+  static bool runsCode(String path) => const {
+    'exe', 'msi', 'msix', 'msixbundle', 'appx', 'appxbundle', 'bat', 'cmd', 'com', 'scr', 'pif', 'ps1', 'psm1',
+    'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta', 'cpl', 'msc', 'jar', 'lnk', 'url', 'reg', 'inf', 'dll', 'sys',
+    'appref-ms', 'application', 'gadget', 'settingcontent-ms', 'chm', 'msp', 'scf', 'sct', 'wsc', 'xll', 'website',
+    'library-ms', 'search-ms', 'diagcab', 'iso', 'img', 'vhd', 'vhdx', 'py', 'pyw', 'sh', 'desktop', 'appimage',
+  }.contains(path.split('.').last.toLowerCase());
+
   static Future<void> openFile(String path, {String? id}) async {
     if (_android) {
       await _ch.invokeMethod('openFile', {'path': path, 'id': id});
+    } else if (runsCode(path)) {
+      // A file another device sent is never run from here: it is shown in its folder, and running it stays
+      // a deliberate act of the user in the system's own file manager.
+      if (Platform.isWindows) await Process.start('explorer', ['/select,', path]);
+      throw PlatformException(
+        code: 'runs_code',
+        message: 'Por seguridad, Alero no ejecuta programas: te lo muestra en su carpeta.',
+      );
     } else if (Platform.isWindows) {
       await const MethodChannel('pb/windows').invokeMethod('openFile', path);
     } else {

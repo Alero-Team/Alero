@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -12,6 +12,7 @@ import 'brand.dart';
 import 'theme.dart';
 import 'vault.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
 String _mediaStatus(Hub hub) {
@@ -252,17 +253,6 @@ class SettingsScreen extends StatelessWidget {
                       : null,
                 ),
                 if (Platform.isWindows) ...[
-                  const SizedBox(height: Gap.m),
-                  SettingTile(
-                    title: 'Permitir pantalla extendida',
-                    subtitle: 'Autoriza que un teléfono emparejado cree un monitor virtual real de Windows usando un controlador IddCx firmado. Desactivado por defecto.',
-                    trailing: AleroSwitch(
-                      value: hub.extendAllow,
-                      onChanged: hub.setExtendAllow,
-                      label: 'Pantalla extendida',
-                    ),
-                    onTap: () => hub.setExtendAllow(!hub.extendAllow),
-                  ),
                   const SizedBox(height: Gap.m),
                   SettingTile(
                     title: 'Compartir carpeta con el teléfono',

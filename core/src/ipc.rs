@@ -162,11 +162,14 @@ fn serve(s: TcpStream, token: &str, engine: &Engine, subs: &Subscribers) -> io::
     let mut r = BufReader::new(s.try_clone()?);
     let mut w = s;
     let mut line = String::new();
-    // Unauthenticated input: bounded read, constant-time compare.
+    // Unauthenticated input: bounded read, bounded wait (a silent local client must not keep a thread),
+    // constant-time compare.
+    w.set_read_timeout(Some(Duration::from_secs(5)))?;
     (&mut r).take(128).read_line(&mut line)?;
     if !same(line.trim_end().as_bytes(), token.as_bytes()) {
         return Ok(());
     }
+    w.set_read_timeout(None)?;
     loop {
         line.clear();
         if r.read_line(&mut line)? == 0 {

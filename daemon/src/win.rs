@@ -98,7 +98,8 @@ pub fn runs_code(path: &std::path::Path) -> bool {
     const RISKY: &[&str] = &[
         "exe", "msi", "msix", "msixbundle", "appx", "appxbundle", "bat", "cmd", "com", "scr", "pif", "ps1", "psm1",
         "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "cpl", "msc", "jar", "lnk", "url", "reg", "inf", "dll", "sys",
-        "appref-ms", "application", "gadget", "settingcontent-ms",
+        "appref-ms", "application", "gadget", "settingcontent-ms", "chm", "msp", "scf", "sct", "wsc", "xll", "website",
+        "library-ms", "search-ms", "diagcab", "iso", "img", "vhd", "vhdx", "py", "pyw",
     ];
     path.extension().and_then(|e| e.to_str()).is_some_and(|e| RISKY.contains(&e.to_ascii_lowercase().as_str()))
 }

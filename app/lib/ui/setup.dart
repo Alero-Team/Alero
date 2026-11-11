@@ -1,12 +1,13 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../native.dart';
 import 'brand.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 /// Explanations are visible before any button opens a system permission prompt.
 class SetupScreen extends StatefulWidget {

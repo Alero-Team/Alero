@@ -11,8 +11,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v5
+      # Pinned to a commit (v2.9.1): a moved tag must not run new code next to the signing key.
+      - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba
         with:
           flutter-version: '3.47.8'
           channel: stable

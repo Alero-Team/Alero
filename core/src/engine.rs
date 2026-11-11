@@ -37,6 +37,8 @@ use crate::transfer::{receive_file_ex, safe_rel, send_file_ex, TransferError, DE
 pub const PROTOCOL: u64 = 1;
 pub const DEFAULT_PORT: u16 = 41420;
 const MAX_HANDSHAKES: usize = 16;
+/// Devices listed at once; unpaired ones leave after 25 s of silence.
+const MAX_PEERS: usize = 128;
 const PING_EVERY: Duration = Duration::from_secs(10);
 const PAIR_TIMEOUT: Duration = Duration::from_secs(120);
 const OFFER_TIMEOUT: Duration = Duration::from_secs(120);
@@ -173,16 +175,59 @@ impl Tls {
     }
 }
 
-/// 6-digit code both users compare. Binds the TLS session (exporter) and both identities.
-pub fn sas_code(exporter: &[u8; 32], id_a: &str, id_b: &str) -> String {
+/// 6-digit code both users compare. Binds the TLS session (exporter), both identities and one fresh nonce
+/// from each side (see [`pair_nonces`]).
+pub fn sas_code(exporter: &[u8; 32], id_a: &str, id_b: &str, dialer_nonce: &[u8; 32], listener_nonce: &[u8; 32]) -> String {
     let (lo, hi) = if id_a <= id_b { (id_a, id_b) } else { (id_b, id_a) };
     let mut h = Sha256::new();
-    h.update(b"pb-sas-v1");
+    h.update(b"pb-sas-v2");
     h.update(exporter);
     h.update(lo.as_bytes());
     h.update(hi.as_bytes());
+    h.update(dialer_nonce);
+    h.update(listener_nonce);
     let d = h.finalize();
     format!("{:06}", u32::from_be_bytes([d[0], d[1], d[2], d[3]]) % 1_000_000)
+}
+
+/// The nonces that go into the pairing code, as (dialer's, listener's). The dialer first commits to its own
+/// (sends its hash), the listener answers with its nonce, and only then the dialer reveals.
+///
+/// The exporter alone is not enough: whoever answers a TLS handshake picks the last inputs of that secret, so
+/// a device sitting between two others could retry its answer until both sessions gave the same six digits.
+/// With the nonces, neither side can choose its own after learning the other's, and a wrong guess shows.
+fn pair_nonces(tls: &mut Tls, incoming: bool) -> Result<([u8; 32], [u8; 32]), String> {
+    fn hex32(v: &Value, ty: &str, key: &str) -> Result<[u8; 32], String> {
+        let s = if v["type"] == ty { v["body"][key].as_str().unwrap_or("") } else { "" };
+        let mut out = [0u8; 32];
+        if s.len() != 64 || !s.is_ascii() {
+            return Err("OUTDATED".into());
+        }
+        for (i, b) in out.iter_mut().enumerate() {
+            *b = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).map_err(|_| "OUTDATED".to_string())?;
+        }
+        Ok(out)
+    }
+    let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    // A device that never answers this step runs a version from before it.
+    let read = |tls: &mut Tls| read_frame(tls).map_err(|_| "OUTDATED".to_string());
+    let write = |tls: &mut Tls, v: Value| write_frame(tls, &v).map_err(|e| e.code().to_string());
+    let mut mine = [0u8; 32];
+    rustls::crypto::ring::default_provider().secure_random.fill(&mut mine).map_err(|_| "no secure randomness".to_string())?;
+    if incoming {
+        let commit = hex32(&read(tls)?, "pb.pair.commit", "hash")?;
+        write(tls, json!({"type":"pb.pair.nonce","body":{"nonce":hex(&mine)}}))?;
+        let theirs = hex32(&read(tls)?, "pb.pair.reveal", "nonce")?;
+        if Sha256::digest(theirs).as_slice() != commit {
+            return Err("pairing nonce does not match its commitment".into());
+        }
+        Ok((theirs, mine))
+    } else {
+        write(tls, json!({"type":"pb.pair.commit","body":{"hash":hex(&Sha256::digest(mine))}}))?;
+        let theirs = hex32(&read(tls)?, "pb.pair.nonce", "nonce")?;
+        write(tls, json!({"type":"pb.pair.reveal","body":{"nonce":hex(&mine)}}))?;
+        Ok((mine, theirs))
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -652,8 +697,10 @@ impl Inner {
     // --- pairing -----------------------------------------------------------------------------------------
 
     fn run_pair(self: &Arc<Self>, mut tls: Tls, peer_id: &str, name: &str, incoming: bool) -> Result<(), String> {
+        // Still on the short handshake timeouts: a stranger cannot hold this step open.
+        let (dialer, listener) = pair_nonces(&mut tls, incoming)?;
         tls.timeouts(PAIR_TIMEOUT + Duration::from_secs(10));
-        let code = sas_code(&tls.exporter()?, &self.id.device_id, peer_id);
+        let code = sas_code(&tls.exporter()?, &self.id.device_id, peer_id, &dialer, &listener);
         let (tx, rx) = channel();
         {
             let mut w = lk(&self.pair_wait);
@@ -1039,7 +1086,17 @@ impl Inner {
                 // Someone new (or back after a silence): answer at once so they find us without waiting our slow cadence.
                 // A paired device we are not connected to is answered every time (at most every 5 s): Windows lets a
                 // unicast reply to its broadcast in for 3 s even on a "Public" network, and nothing else gets in.
-                let new = self.note_peer(id, b["name"].as_str().unwrap_or(""), Some(SocketAddr::new(from.ip(), port as u16)));
+                // Announcements are not authenticated. Anyone can send one with any id: they must not fill the
+                // table, nor move a device we are connected to (its real address) somewhere else.
+                let (known, connected, total) = {
+                    let peers = lk(&self.peers);
+                    (peers.contains_key(id), peers.get(id).is_some_and(|p| p.state == PeerState::Connected), peers.len())
+                };
+                if !known && !self.is_trusted(id) && total >= MAX_PEERS {
+                    continue;
+                }
+                let addr = (!connected).then(|| SocketAddr::new(from.ip(), port as u16));
+                let new = self.note_peer(id, b["name"].as_str().unwrap_or(""), addr);
                 let again = self.is_trusted(id)
                     && self.with_peer(id, |p| {
                         let due = p.state != PeerState::Connected && p.replied.map_or(true, |t| t.elapsed() > Duration::from_secs(5));

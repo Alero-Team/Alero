@@ -32,6 +32,8 @@ struct Screen {
     width: u32,
     fps: u32,
     monitor: usize,
+    /// The viewer draws the pointer itself from `pb.x.screen.cursor`, so pictures go without it.
+    cursor: bool,
     last_keepalive: Instant,
     inflight: u32,
     last_ack: Instant,
@@ -45,7 +47,6 @@ pub struct Remote {
     noticed: Mutex<HashMap<String, Instant>>,
     denied: Mutex<HashMap<String, Instant>>,
     screen: Mutex<Option<Screen>>,
-    extend: Mutex<Option<(String, usize, bool)>>,
     watchers: Mutex<HashMap<String, Instant>>,
     watching: Mutex<bool>,
     pushed: Mutex<HashMap<String, Value>>,
@@ -53,16 +54,16 @@ pub struct Remote {
     held: Mutex<HashMap<(String, String), Instant>>,
 }
 
-fn jpeg(w: u32, h: u32, rgb: &[u8], quality: u8) -> Option<Vec<u8>> {
+fn jpeg(w: u32, h: u32, bgra: &[u8], quality: u8) -> Option<Vec<u8>> {
     let mut out = Vec::new();
-    jpeg_encoder::Encoder::new(&mut out, quality).encode(rgb, w as u16, h as u16, jpeg_encoder::ColorType::Rgb).ok()?;
+    jpeg_encoder::Encoder::new(&mut out, quality).encode(bgra, w as u16, h as u16, jpeg_encoder::ColorType::Bgra).ok()?;
     Some(out)
 }
 
 /// Cheap fingerprint of a frame (a sample of its bytes), to skip sending a picture that did not change.
 fn fingerprint(rgb: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
-    for b in rgb.iter().step_by(61) {
+    for b in rgb.iter().step_by(83) {
         h = (h ^ *b as u64).wrapping_mul(0x100000001b3);
     }
     h
@@ -78,7 +79,6 @@ impl Remote {
             noticed: Mutex::new(HashMap::new()),
             denied: Mutex::new(HashMap::new()),
             screen: Mutex::new(None),
-            extend: Mutex::new(None),
             watchers: Mutex::new(HashMap::new()),
             watching: Mutex::new(false),
             pushed: Mutex::new(HashMap::new()),
@@ -223,9 +223,6 @@ impl Remote {
             self.watchers.lock().unwrap().remove(peer);
             return true;
         }
-        if kind.starts_with("pb.x.extend.") {
-            return self.handle_extend(engine, peer, kind);
-        }
         let ours = kind.starts_with("pb.x.remote.")
             || kind.starts_with("pb.x.screen.")
             || kind == "pb.x.shot.request"
@@ -317,70 +314,6 @@ impl Remote {
         true
     }
 
-    /// A paired phone can start a real IddCx-backed Windows display, but
-    /// only after the PC owner enables extension in its own settings.
-    fn handle_extend(self: &Arc<Self>, engine: &Arc<Engine>, peer: &str, kind: &str) -> bool {
-        if !engine.peers().iter()
-            .any(|p| p.id == peer && p.trusted && p.state == PeerState::Connected) {
-            return true;
-        }
-        // The driver is needed before extension can be enabled. Fixed URL: the phone never chooses what opens.
-        if kind == "pb.x.extend.driver" {
-            #[cfg(windows)]
-            {
-                let _ = std::process::Command::new("explorer.exe")
-                    .arg(crate::extend::installer_url())
-                    .spawn();
-                crate::win::toast("Controlador IddCx", "Se abrió la página de descarga en el navegador");
-            }
-            return true;
-        }
-        if !self.allowed() || !crate::extend::config_enabled(&self.data) {
-            let _ = engine.send_message(peer, "pb.x.extend.result",
-                json!({"ok":false, "reason":"not_allowed"}));
-            return true;
-        }
-        match kind {
-            "pb.x.extend.start" => {
-                let mut session = self.extend.lock().unwrap();
-                if let Some((owner, monitor, _)) = session.as_ref() {
-                    let _ = engine.send_message(peer, "pb.x.extend.result",
-                        json!({"ok": owner == peer, "monitor":monitor, "reason":"busy"}));
-                    return true;
-                }
-                match crate::extend::add_display() {
-                    Ok(monitor) => {
-                        #[cfg(windows)]
-                        crate::win::toast("Pantalla extendida", "Un teléfono emparejado inició una pantalla adicional de Windows");
-                        *session = Some((peer.to_owned(), monitor, true));
-                        let _ = engine.send_message(peer, "pb.x.extend.result",
-                            json!({"ok":true, "monitor":monitor}));
-                    }
-                    Err(reason) => {
-                        let _ = engine.send_message(peer, "pb.x.extend.result",
-                            json!({"ok":false,"reason":reason,
-                                "driverUrl":crate::extend::installer_url()}));
-                    }
-                }
-            }
-            "pb.x.extend.stop" => {
-                let mut session = self.extend.lock().unwrap();
-                if session.as_ref().is_some_and(|(owner, _, _)| owner == peer) {
-                    *session = None;
-                    *self.screen.lock().unwrap() = None;
-                    crate::extend::remove_display();
-                }
-                let _ = engine.send_message(peer, "pb.x.extend.result",
-                    json!({"ok":true, "stopped":true}));
-            }
-            _ => {
-                let _ = engine.send_message(peer, "pb.x.extend.result",
-                    json!({"ok":false, "reason":"unsupported_command"}));
-            }
-        }
-        true
-    }
-
     // --- screen ------------------------------------------------------------------------------------------
 
     fn start_screen(self: &Arc<Self>, engine: &Arc<Engine>, peer: &str, b: &Value) {
@@ -396,8 +329,9 @@ impl Remote {
         *self.screen.lock().unwrap() = Some(Screen {
             peer: peer.to_string(),
             width: b["w"].as_u64().unwrap_or(960).clamp(320, 1920) as u32,
-            fps: b["fps"].as_u64().unwrap_or(8).clamp(1, 15) as u32,
+            fps: b["fps"].as_u64().unwrap_or(8).clamp(1, 30) as u32,
             monitor: b["monitor"].as_u64().unwrap_or(0).min(16) as usize,
+            cursor: b["cursor"] == true,
             last_keepalive: Instant::now(),
             inflight: 0,
             last_ack: Instant::now(),
@@ -411,8 +345,9 @@ impl Remote {
 
     fn screen_loop(&self, engine: &Engine, gen: u64) {
         let (mut seq, mut last_print, mut last_sent) = (0u64, 0u64, Instant::now() - Duration::from_secs(10));
+        let mut pointer: Option<Option<(f64, f64)>> = None;
         loop {
-            let (peer, width, fps, monitor) = {
+            let (peer, width, fps, monitor, own_cursor, busy) = {
                 let mut g = self.screen.lock().unwrap();
                 match g.as_mut() {
                     Some(sc) if sc.gen == gen && sc.last_keepalive.elapsed() < SESSION_IDLE => {
@@ -420,12 +355,7 @@ impl Remote {
                         if sc.inflight > 0 && sc.last_ack.elapsed() > Duration::from_secs(3) {
                             sc.inflight = 0;
                         }
-                        if sc.inflight >= 2 {
-                            drop(g);
-                            thread::sleep(Duration::from_millis(25));
-                            continue;
-                        }
-                        (sc.peer.clone(), sc.width, sc.fps, sc.monitor)
+                        (sc.peer.clone(), sc.width, sc.fps, sc.monitor, sc.cursor, sc.inflight >= 2)
                     }
                     _ => {
                         let mut g = g;
@@ -443,36 +373,58 @@ impl Remote {
                 thread::sleep(Duration::from_millis(500));
                 continue;
             }
-            if let Some((w, h, rgb)) = sys::capture_monitor(width, monitor) {
-                let print = fingerprint(&rgb);
-                // Unchanged picture: send nothing (the phone keeps showing the last one), except a refresh now and then.
-                if print != last_print || last_sent.elapsed() > Duration::from_secs(2) {
-                    let mut q = 60u8;
-                    let data = loop {
-                        match jpeg(w, h, &rgb, q) {
-                            Some(d) if d.len() <= MAX_JPEG || q <= 25 => break Some(d),
-                            Some(_) => q -= 12,
-                            None => break None,
-                        }
-                    };
-                    if let Some(d) = data.filter(|d| d.len() <= MAX_JPEG) {
-                        seq += 1;
-                        let body = json!({"seq": seq, "w": w, "h": h, "jpeg": STANDARD.encode(&d)});
-                        if engine.send_message(&peer, "pb.x.screen.frame", body).is_ok() {
-                            if let Some(sc) = self.screen.lock().unwrap().as_mut().filter(|sc| sc.gen == gen) {
-                                sc.inflight += 1;
-                                if sc.inflight == 1 {
-                                    sc.last_ack = Instant::now();
-                                }
+            // While the phone still holds two pictures no new one goes out, but the pointer keeps moving below.
+            if !busy {
+                if let Some((w, h, pixels)) = sys::capture_monitor(width, monitor, !own_cursor) {
+                    let print = fingerprint(&pixels);
+                    // Unchanged picture: send nothing (the phone keeps showing the last one), except a refresh now and then.
+                    if print != last_print || last_sent.elapsed() > Duration::from_secs(2) {
+                        let mut q = 60u8;
+                        let data = loop {
+                            match jpeg(w, h, &pixels, q) {
+                                Some(d) if d.len() <= MAX_JPEG || q <= 25 => break Some(d),
+                                Some(_) => q -= 12,
+                                None => break None,
                             }
-                            last_print = print;
-                            last_sent = Instant::now();
+                        };
+                        if let Some(d) = data.filter(|d| d.len() <= MAX_JPEG) {
+                            seq += 1;
+                            let body = json!({"seq": seq, "w": w, "h": h, "jpeg": STANDARD.encode(&d)});
+                            if engine.send_message(&peer, "pb.x.screen.frame", body).is_ok() {
+                                if let Some(sc) = self.screen.lock().unwrap().as_mut().filter(|sc| sc.gen == gen) {
+                                    sc.inflight += 1;
+                                    if sc.inflight == 1 {
+                                        sc.last_ack = Instant::now();
+                                    }
+                                }
+                                last_print = print;
+                                last_sent = Instant::now();
+                            }
                         }
                     }
                 }
             }
-            let frame = Duration::from_millis(1000 / fps as u64);
-            thread::sleep(frame.saturating_sub(started.elapsed()));
+            // Until the next picture is due, the pointer alone travels at up to 60 times a second: a few bytes
+            // each, so it follows the finger even when the pictures are slow.
+            let frame = Duration::from_millis(if busy { 25 } else { 1000 / fps as u64 });
+            loop {
+                if own_cursor {
+                    let now = sys::cursor_at(monitor);
+                    if pointer != Some(now) {
+                        pointer = Some(now);
+                        let body = match now {
+                            Some((x, y)) => json!({"x": x, "y": y}),
+                            None => json!({"hidden": true}),
+                        };
+                        let _ = engine.send_message(&peer, "pb.x.screen.cursor", body);
+                    }
+                }
+                let left = frame.saturating_sub(started.elapsed());
+                if left.is_zero() {
+                    break;
+                }
+                thread::sleep(left.min(Duration::from_millis(16)));
+            }
         }
     }
 
@@ -480,11 +432,11 @@ impl Remote {
     /// history and saved by the phone like any other received file).
     fn shot(&self, engine: &Engine, peer: &str) {
         self.notice(engine, peer, "pidió una captura de pantalla");
-        let Some((w, h, rgb)) = sys::capture(u32::MAX) else {
+        let Some((w, h, pixels)) = sys::capture(u32::MAX) else {
             let _ = engine.send_message(peer, "pb.x.remote.denied", json!({"reason": "unsupported"}));
             return;
         };
-        let Some(data) = jpeg(w, h, &rgb, 85) else { return };
+        let Some(data) = jpeg(w, h, &pixels, 85) else { return };
         let dir = std::env::temp_dir().join("alero-captures");
         let _ = std::fs::create_dir_all(&dir);
         // Old captures go away: the transfer has long finished with them.
@@ -559,5 +511,21 @@ impl Remote {
                 thread::sleep(Duration::from_millis(1500));
             }
         });
+    }
+}
+
+#[cfg(all(test, windows))]
+mod stream_tests {
+    /// The capture is BGRA and the encoder is told so: a wrong pairing fails here, not as blue faces on a phone.
+    #[test]
+    fn a_captured_frame_encodes_and_the_pointer_is_inside_it() {
+        crate::sys::init();
+        if let Some((w, h, pixels)) = crate::sys::capture_monitor(320, 0, false) {
+            assert_eq!(pixels.len(), (w * h * 4) as usize);
+            assert!(super::jpeg(w, h, &pixels, 60).is_some_and(|d| d.starts_with(&[0xFF, 0xD8])));
+        }
+        if let Some((x, y)) = crate::sys::cursor_at(0) {
+            assert!((0.0..1.0).contains(&x) && (0.0..1.0).contains(&y));
+        }
     }
 }

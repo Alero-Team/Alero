@@ -33,21 +33,6 @@ List<AdbDevice> parseDevices(String out) {
   return list;
 }
 
-/// Android 16+ may expose native desktop windowing without the legacy
-/// 'force desktop mode' developer flag. This is a capability hint, not proof
-/// that an untrusted scrcpy virtual display has window decorations.
-enum Desktop { unsupported, needsSetting, ready }
-
-Desktop desktopSupport({
-  required int sdk,
-  required bool freeform,
-  required bool forced,
-}) => sdk < 29 || !freeform
-    ? Desktop.unsupported
-    : (forced || sdk >= 36)
-    ? Desktop.ready
-    : Desktop.needsSetting;
-
 class SessionOptions {
   const SessionOptions({
     this.maxSize = 1600,
@@ -57,29 +42,23 @@ class SessionOptions {
     this.screenOff = false,
     this.fullscreen = false,
     this.orientation = 0,
-    this.desktop = false,
-    this.desktopSize = '1920x1080',
     this.displayId = 0,
-    this.flexDisplay = false,
-    this.startApp,
-    this.appWindow = false,
     this.camera,
     this.record,
+    this.audioDup = false,
   });
+
+  /// Takes a copy of what apps play (Android 13+) instead of the whole output. Two captures of the whole
+  /// output at once, the session window and a recording, make Android play everything at double speed.
+  final bool audioDup;
 
   /// Longest side in pixels; 0 keeps the phone's own resolution.
   final int maxSize;
 
   /// Megabits per second.
   final int bitRate, maxFps, orientation;
-  final bool audio, screenOff, fullscreen, desktop;
-  final String desktopSize;
+  final bool audio, screenOff, fullscreen;
   final int displayId;
-  final bool flexDisplay;
-  final String? startApp;
-
-  /// One app alone in its own window: a virtual display the size of the phone, without launcher or bars.
-  final bool appWindow;
 
   /// `back` or `front`: the window shows that camera instead of the screen (Android 12+).
   final String? camera;
@@ -108,29 +87,15 @@ List<String> scrcpyArgs(String serial, String title, SessionOptions o) => [
     '--camera-facing=${o.camera}',
     '--no-control',
     if (o.audio) '--audio-source=mic' else '--no-audio',
+  ] else if (o.audioDup) ...[
+    '--audio-source=playback',
+    '--audio-dup',
   ] else if (!o.audio)
     '--no-audio',
   if (o.fullscreen) '--fullscreen',
   if (o.orientation != 0) '--orientation=${o.orientation}',
-  if (!o.desktop && o.displayId > 0) '--display-id=${o.displayId}',
-  // A virtual display shows the phone's desktop; the phone's own screen is untouched, so it is not turned off.
-  if (o.camera != null)
-    ...[]
-  else if (o.appWindow && o.startApp != null) ...[
-    '--new-display',
-    '--no-vd-system-decorations',
-    '--display-ime-policy=local',
-    '--start-app=${o.startApp}',
-  ] else if (o.desktop) ...[
-    '--new-display=${o.desktopSize}',
-    // Android 17 refuses Home on scrcpy's displays and its taskbar covers Alero's: Alero Desktop draws its own.
-    '--no-vd-system-decorations',
-    '--keep-active',
-    '--display-ime-policy=local',
-    if (o.flexDisplay) '--flex-display',
-    if (o.startApp != null) '--start-app=${o.startApp}',
-  ] else if (o.screenOff)
-    '--turn-screen-off',
+  if (o.displayId > 0) '--display-id=${o.displayId}',
+  if (o.camera == null && o.record == null && o.screenOff) '--turn-screen-off',
 ];
 
 /// Android key codes for the toolbar.

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../fs_client.dart';
 import '../hub.dart';
 import '../pc_files.dart';
+import 'icon.dart';
 
 /// Browse folders the Windows owner explicitly selected, over Alero's
 /// authenticated peer channel. ADB and external servers are not involved.
@@ -12,9 +13,9 @@ Future<void> openPcFiles(
   Hub hub,
   String peer,
   String name,
-) => Navigator.of(context).push(MaterialPageRoute<void>(
-  builder: (_) => PcFilesPage(hub, peer, name),
-));
+) => Navigator.of(
+  context,
+).push(MaterialPageRoute<void>(builder: (_) => PcFilesPage(hub, peer, name)));
 
 class PcFilesPage extends StatefulWidget {
   const PcFilesPage(this.hub, this.peer, this.name, {super.key});
@@ -55,7 +56,10 @@ class _PcFilesPageState extends State<PcFilesPage> {
           onSubmitted: (s) => Navigator.pop(ctx, s),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text),
             child: const Text('Renombrar'),
@@ -73,10 +77,18 @@ class _PcFilesPageState extends State<PcFilesPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar archivo del ordenador'),
-        content: Text('Esta acción elimina permanentemente «${entry.name}» del ordenador. No se envía a la papelera. ¿Continuar?'),
+        content: Text(
+          'Esta acción elimina permanentemente «${entry.name}» del ordenador. No se envía a la papelera. ¿Continuar?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );
@@ -87,18 +99,26 @@ class _PcFilesPageState extends State<PcFilesPage> {
     final date = entry.mtime;
     return Card(
       child: ListTile(
-        leading: Icon(entry.dir ? Symbols.folder_rounded : Symbols.insert_drive_file_rounded),
+        leading: Icon(
+          entry.dir
+              ? Symbols.folder_rounded
+              : Symbols.insert_drive_file_rounded,
+        ),
         title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(entry.dir
-            ? 'Carpeta'
-            : '${(entry.size / 1024).toStringAsFixed(1)} KB · ${date.day}/${date.month}/${date.year}'),
+        subtitle: Text(
+          entry.dir
+              ? 'Carpeta'
+              : '${(entry.size / 1024).toStringAsFixed(1)} KB · ${date.day}/${date.month}/${date.year}',
+        ),
         onTap: () {
           if (entry.dir) {
             fs.enter(entry);
           } else {
             fs.download(entry);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Se solicitó el archivo al ordenador.')),
+              const SnackBar(
+                content: Text('Se solicitó el archivo al ordenador.'),
+              ),
             );
           }
         },
@@ -117,10 +137,19 @@ class _PcFilesPageState extends State<PcFilesPage> {
                   }
                 },
                 itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'download', child: Text('Descargar')),
+                  const PopupMenuItem(
+                    value: 'download',
+                    child: Text('Descargar'),
+                  ),
                   if (fs.writable) ...[
-                    const PopupMenuItem(value: 'rename', child: Text('Renombrar')),
-                    const PopupMenuItem(value: 'delete', child: Text('Eliminar permanentemente')),
+                    const PopupMenuItem(
+                      value: 'rename',
+                      child: Text('Renombrar'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Eliminar permanentemente'),
+                    ),
                   ],
                 ],
               ),
@@ -157,7 +186,10 @@ class _PcFilesPageState extends State<PcFilesPage> {
             if (fs.error != null)
               Padding(
                 padding: const EdgeInsets.all(10),
-                child: Text(fs.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                child: Text(
+                  fs.error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               ),
             if (fs.root != null) ...[
               Row(
@@ -193,7 +225,11 @@ class _PcFilesPageState extends State<PcFilesPage> {
               if (!fs.loading && fs.roots.isEmpty && fs.error == null)
                 const Padding(
                   padding: EdgeInsets.all(24),
-                  child: Center(child: Text('No hay carpetas compartidas por el ordenador.')),
+                  child: Center(
+                    child: Text(
+                      'No hay carpetas compartidas por el ordenador.',
+                    ),
+                  ),
                 ),
               for (final root in fs.roots)
                 Card(
@@ -209,7 +245,9 @@ class _PcFilesPageState extends State<PcFilesPage> {
             if (fs.writable)
               const Padding(
                 padding: EdgeInsets.all(12),
-                child: Text('El propietario de Windows ha permitido también renombrar y eliminar archivos.'),
+                child: Text(
+                  'El propietario de Windows ha permitido también renombrar y eliminar archivos.',
+                ),
               ),
           ],
         ),

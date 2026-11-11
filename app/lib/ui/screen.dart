@@ -1,23 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../phone_control.dart';
-import '../desktop_workspace.dart';
 import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
-import 'desktop_workshop.dart';
-import 'alero_desktop.dart';
 import 'phone_windows.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
-/// "Controlar teléfono": view and drive a phone from this computer with scrcpy (ADR-0008), over USB or wireless
+/// "Acceso remoto": view and drive a phone from this computer with scrcpy (ADR-0008), over USB or wireless
 /// debugging. The user authorises it on the phone (adb), a paired phone shows a notice with "Detener", and every
 /// session ends with its window, with "Detener" here or there, or when Alero quits.
 Future<void> openScreen(BuildContext context, Hub hub, pb.Peer phone) =>
@@ -43,10 +41,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
   final _port = TextEditingController(), _code = TextEditingController();
   List<AdbDevice> _devices = [];
   String? _serial;
-  Desktop _desktop = Desktop.unsupported;
-  List<DesktopDisplay> _screens = [
-    const DesktopDisplay(0, 'Pantalla principal'),
-  ];
+  List<PhoneDisplay> _screens = [const PhoneDisplay(0, 'Pantalla principal')];
   int _displayId = 0;
   String _status = '';
   bool _busy = false, _listing = false;
@@ -54,9 +49,8 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
 
   // Session options (scrcpy flags, see scrcpyArgs).
   int _maxSize = 1600, _bitRate = 8, _fps = 60, _orientation = 0;
-  String _desktopSize = '1920x1080';
-  bool _flexDesktop = false;
-  bool _audio = true, _screenOff = false, _fullscreen = false, _desk = false;
+  // The phone's own screen goes dark while its picture is on the computer: one screen, not two.
+  bool _audio = true, _screenOff = true, _fullscreen = false;
 
   AdbDevice? get _device =>
       _devices.where((d) => d.serial == _serial).firstOrNull;
@@ -120,12 +114,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
 
   Future<void> _probe() async {
     final d = _device;
-    final r = d != null && d.ready
-        ? await Scrcpy.desktop(d.serial)
-        : Desktop.unsupported;
-    List<DesktopDisplay> screens = [
-      const DesktopDisplay(0, 'Pantalla principal'),
-    ];
+    List<PhoneDisplay> screens = [const PhoneDisplay(0, 'Pantalla principal')];
     if (d != null && d.ready) {
       try {
         screens = await Scrcpy.displays(d.serial);
@@ -135,10 +124,8 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     }
     if (mounted) {
       setState(() {
-        _desktop = r;
         _screens = screens;
         if (!screens.any((v) => v.id == _displayId)) _displayId = 0;
-        if (r != Desktop.ready) _desk = false;
       });
     }
   }
@@ -211,16 +198,11 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
         screenOff: _screenOff,
         fullscreen: _fullscreen,
         orientation: _orientation,
-        desktop: _desk,
-        desktopSize: _desktopSize,
-        displayId: _desk ? 0 : _displayId,
-        flexDisplay: _flexDesktop,
+        displayId: _displayId,
       ),
       peerId: _peerFor(d),
     );
-    return _desk
-        ? 'Escritorio abierto en otra ventana. Las apps se abren en ventanas que puedes mover y redimensionar.'
-        : 'Pantalla abierta en otra ventana. Usa el ratón y el teclado como si tocaras el teléfono.';
+    return 'Pantalla abierta en otra ventana. Usa el ratón y el teclado como si tocaras el teléfono.';
   }
 
   @override
@@ -230,7 +212,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     final d = _device;
     final live = d != null && PhoneSessions.instance.running(d.serial);
     return Scaffold(
-      appBar: AppBar(title: Text('Controlar ${widget.phone.name}')),
+      appBar: AppBar(title: Text('Acceso remoto a ${widget.phone.name}')),
       body: Platform.isAndroid || !Scrcpy.available
           ? const EmptyState(
               icon: Symbols.cast_rounded,
@@ -240,7 +222,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
           : LayoutBuilder(
               builder: (context, box) {
                 const gap = SizedBox(height: Gap.m);
-                // Connection, mode and picture on the left; desktop tools, windows and setup on the right.
+                // Connection and picture on the left; camera, recording and setup on the right.
                 final left = <Widget>[
                   Reveal(
                     index: 0,
@@ -306,74 +288,35 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                       ),
                     ),
                   ),
-                  gap,
-                  Reveal(
-                    index: 1,
-                    child: Panel(
-                      title: 'Modo',
-                      icon: Symbols.desktop_windows_rounded,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SegmentedButton<bool>(
-                            segments: [
-                              const ButtonSegment(
-                                value: false,
-                                icon: Icon(Symbols.smartphone_rounded),
-                                label: Text('Pantalla del teléfono'),
-                              ),
-                              ButtonSegment(
-                                value: true,
-                                enabled: _desktop == Desktop.ready,
-                                icon: const Icon(
-                                  Symbols.desktop_windows_rounded,
+                  if (_screens.length > 1) ...[
+                    gap,
+                    Reveal(
+                      index: 1,
+                      child: Panel(
+                        title: 'Pantalla',
+                        icon: Symbols.smartphone_rounded,
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: _screens.any((v) => v.id == _displayId)
+                              ? _displayId
+                              : _screens.first.id,
+                          items: [
+                            for (final display in _screens)
+                              DropdownMenuItem(
+                                value: display.id,
+                                child: Text(
+                                  display.description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                label: const Text('Escritorio'),
                               ),
-                            ],
-                            selected: {_desk},
-                            onSelectionChanged: (v) =>
-                                setState(() => _desk = v.first),
-                          ),
-                          const SizedBox(height: Gap.s),
-                          if (!_desk && _screens.length > 1) ...[
-                            const Text(
-                              'Pantalla Android que quieres controlar',
-                            ),
-                            DropdownButton<int>(
-                              isExpanded: true,
-                              value: _screens.any((v) => v.id == _displayId)
-                                  ? _displayId
-                                  : _screens.first.id,
-                              items: [
-                                for (final display in _screens)
-                                  DropdownMenuItem(
-                                    value: display.id,
-                                    child: Text(
-                                      display.description,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                              ],
-                              onChanged: (id) =>
-                                  setState(() => _displayId = id ?? 0),
-                            ),
                           ],
-                          Text(
-                            switch (_desktop) {
-                              Desktop.ready => 'Android declara compatibilidad con ventanas libres. La pantalla virtual puede tener restricciones del fabricante; pruébala en Alero Desktop.',
-                              Desktop.needsSetting => 'Este teléfono admite escritorio. Actívalo en Ajustes › Sistema › Opciones de desarrollador › «Forzar modo de escritorio» y reinicia el teléfono. Mientras tanto se usa su pantalla normal.',
-                              Desktop.unsupported => 'Este teléfono no tiene escritorio de Android: se controla su pantalla normal.',
-                            },
-                            style: t.bodyMedium?.copyWith(
-                              color: s.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                          onChanged: (id) =>
+                              setState(() => _displayId = id ?? 0),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   gap,
                   Reveal(
                     index: 2,
@@ -383,40 +326,6 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (_desk) ...[
-                            const Text('Tamaño del escritorio virtual'),
-                            const SizedBox(height: Gap.s),
-                            DropdownButton<String>(
-                              value: _desktopSize,
-                              isExpanded: true,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: '1280x720',
-                                  child: Text('HD · 1280 × 720'),
-                                ),
-                                DropdownMenuItem(
-                                  value: '1600x900',
-                                  child: Text('HD+ · 1600 × 900'),
-                                ),
-                                DropdownMenuItem(
-                                  value: '1920x1080',
-                                  child: Text('Full HD · 1920 × 1080'),
-                                ),
-                                DropdownMenuItem(
-                                  value: '2560x1440',
-                                  child: Text('QHD · 2560 × 1440'),
-                                ),
-                              ],
-                              onChanged: (v) => setState(
-                                () => _desktopSize = v ?? _desktopSize,
-                              ),
-                            ),
-                            _Toggle(
-                              'Adaptar escritorio al tamaño de la ventana (experimental)',
-                              _flexDesktop,
-                              (v) => setState(() => _flexDesktop = v),
-                            ),
-                          ],
                           _Choice(
                             label: 'Resolución',
                             value: _maxSize,
@@ -464,12 +373,11 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                             _fullscreen,
                             (v) => setState(() => _fullscreen = v),
                           ),
-                          if (!_desk)
-                            _Toggle(
-                              'Apagar la pantalla del teléfono mientras tanto',
-                              _screenOff,
-                              (v) => setState(() => _screenOff = v),
-                            ),
+                          _Toggle(
+                            'Apagar la pantalla del teléfono mientras tanto (no se ve duplicada)',
+                            _screenOff,
+                            (v) => setState(() => _screenOff = v),
+                          ),
                           Text(
                             'En la ventana: Alt+F pantalla completa, Alt+R girar, Ctrl+C y Ctrl+V copian y pegan entre los dos.',
                             style: t.bodySmall?.copyWith(
@@ -482,61 +390,6 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                   ),
                 ];
                 final right = <Widget>[
-                  if (d != null && d.ready)
-                    Panel(
-                      title: 'Herramientas de escritorio',
-                      icon: Symbols.apps_rounded,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Aplicaciones instaladas, espacios guardados, '
-                            'varias pantallas y diagnóstico del teléfono. '
-                            'Basado en las ideas de Dextop.',
-                          ),
-                          const SizedBox(height: Gap.s),
-                          FilledButton.tonalIcon(
-                            onPressed: _busy
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          DesktopWorkshopPage(serial: d.serial),
-                                    ),
-                                  ),
-                            icon: const Icon(
-                              Symbols.dashboard_customize_rounded,
-                            ),
-                            label: const Text('Abrir herramientas'),
-                          ),
-                          const SizedBox(height: Gap.s),
-                          FilledButton.icon(
-                            onPressed: _busy
-                                ? null
-                                : () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => AleroDesktopPage(
-                                        hub: widget.hub,
-                                        serial: d.serial,
-                                        deviceName: d.name,
-                                        peerId: _peerFor(d),
-                                      ),
-                                    ),
-                                  ),
-                            icon: const Icon(Symbols.desktop_windows_rounded),
-                            label: const Text('Iniciar Alero Desktop'),
-                          ),
-                          const SizedBox(height: Gap.xs),
-                          Text(
-                            'Escritorio virtual, lanzador con dock y herramientas '
-                            'para ventanas de Android. Los botones nativos de '
-                            'minimizar, maximizar y cerrar dependen del dispositivo.',
-                            style: t.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  gap,
                   if (d != null && d.ready) ...[
                     PhoneWindowsPanel(serial: d.serial, deviceName: d.name),
                     const SizedBox(height: Gap.m),
@@ -591,7 +444,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                                 : d == null
                                                 ? 'Conecta el teléfono por USB o depuración inalámbrica'
                                                 : d.ready
-                                                ? '${d.name} listo para controlar'
+                                                ? '${d.name} listo'
                                                 : '${d.name}: ${_stateText(d)}',
                                             style: t.titleLarge,
                                           ),
@@ -658,10 +511,8 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                                 Symbols.cast_rounded,
                                                 size: 18,
                                               ),
-                                              label: Text(
-                                                _desk
-                                                    ? 'Abrir escritorio'
-                                                    : 'Iniciar control',
+                                              label: const Text(
+                                                'Abrir pantalla',
                                               ),
                                             ),
                                     ),

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import 'expressive.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 /// The phone's call, floating over every screen of the computer: answer or decline while it rings, hang up
 /// while talking. The voice stays on the phone (or its headset).

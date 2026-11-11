@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -10,6 +10,8 @@ import '../remote.dart';
 import 'expressive.dart';
 import 'shell.dart' show confirm;
 import 'theme.dart';
+import 'widgets.dart' show FitLabel;
+import 'icon.dart';
 
 /// The phone as a touchpad for a paired computer. One finger moves the pointer, a tap clicks, a two-finger tap
 /// right-clicks, two fingers scroll (naturally, both axes),
@@ -937,7 +939,7 @@ class PowerActions extends StatelessWidget {
           }
         },
         icon: const Icon(Symbols.lock_rounded, size: 18),
-        label: const Text('Bloquear'),
+        label: const FitLabel('Bloquear'),
       ),
       OutlinedButton.icon(
         onPressed: () async {
@@ -951,7 +953,7 @@ class PowerActions extends StatelessWidget {
           }
         },
         icon: const Icon(Symbols.bedtime_rounded, size: 18),
-        label: const Text('Suspender'),
+        label: const FitLabel('Suspender'),
       ),
     ],
   );

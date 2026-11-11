@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -12,6 +12,7 @@ import 'call_bar.dart';
 import 'notifications.dart' show ago;
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// One row of the unified inbox: an SMS/MMS conversation from the phone's store, or a messaging app's
 /// conversation as its notification shows it (only while that notification is on the phone).

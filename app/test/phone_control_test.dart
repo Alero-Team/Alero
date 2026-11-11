@@ -69,26 +69,18 @@ emulator-5554          offline
     expect(rec, isNot(contains('--stay-awake')));
   });
 
-  test('desktop mode only where Android really offers it', () {
+  test('a recording never opens a second capture of the whole output', () {
     expect(
-      desktopSupport(sdk: 37, freeform: true, forced: true),
-      Desktop.ready,
+      scrcpyArgs(
+        'S',
+        't',
+        const SessionOptions(record: 'a.mkv', audioDup: true),
+      ),
+      containsAll(['--audio-source=playback', '--audio-dup']),
     );
     expect(
-      desktopSupport(sdk: 37, freeform: true, forced: false),
-      Desktop.ready,
-    );
-    expect(
-      desktopSupport(sdk: 35, freeform: true, forced: false),
-      Desktop.needsSetting,
-    );
-    expect(
-      desktopSupport(sdk: 37, freeform: false, forced: true),
-      Desktop.unsupported,
-    );
-    expect(
-      desktopSupport(sdk: 28, freeform: true, forced: true),
-      Desktop.unsupported,
+      scrcpyArgs('S', 't', const SessionOptions(record: 'a.mkv', audio: false)),
+      contains('--no-audio'),
     );
   });
 
@@ -120,15 +112,6 @@ emulator-5554          offline
         '--turn-screen-off',
       ]),
     );
-
-    // Desktop: a virtual display; the phone's own screen is left alone.
-    final desk = scrcpyArgs(
-      'S1',
-      't',
-      const SessionOptions(desktop: true, screenOff: true),
-    );
-    expect(desk, contains('--new-display=1920x1080'));
-    expect(desk, isNot(contains('--turn-screen-off')));
   });
 
   test('scrcpy camera failures are explained, not swallowed', () {

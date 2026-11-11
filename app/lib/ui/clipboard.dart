@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import 'notifications.dart' show ago;
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 Future<void> openClipboard(BuildContext context, Hub hub, String peerId) =>
     showModalBottomSheet<void>(
@@ -37,7 +38,7 @@ class _Sheet extends StatelessWidget {
               Text('Portapapeles', style: t.titleLarge),
               const SizedBox(height: Gap.xs),
               Text(
-                'Envía lo que copiaste en este dispositivo, o vuelve a copiar algo reciente.',
+                'Envía lo que copiaste en este dispositivo, o vuelve a copiar algo del historial.',
                 style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
               ),
               const SizedBox(height: Gap.l),
@@ -47,13 +48,15 @@ class _Sheet extends StatelessWidget {
                 label: const Text('Enviar mi portapapeles'),
               ),
               const SizedBox(height: Gap.l),
+              Text('Historial', style: t.titleSmall),
+              const SizedBox(height: Gap.xs),
               if (hub.clips.isEmpty)
                 Text(
                   'Aún no hay nada reciente.',
                   style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
                 )
               else
-                for (final c in hub.clips.take(10))
+                for (final c in hub.clips)
                   SettingTile(
                     leading: Icon(
                       c.incoming

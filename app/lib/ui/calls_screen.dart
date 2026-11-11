@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -10,6 +10,7 @@ import 'notifications.dart' show ago;
 import 'phone_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 /// "Llamadas": a dial pad with contact search, and the phone's recent calls. The phone dials; you talk on it
 /// (or its headset). Answering and hanging up are on the call bar at the top of every screen.

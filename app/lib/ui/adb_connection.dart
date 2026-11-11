@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -13,8 +13,9 @@ import '../src/rust/api/engine.dart' as pb;
 import 'qr.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
-/// The same ADB controls in Dispositivos, Aplicaciones and Alero Desktop.
+/// The ADB controls of Dispositivos.
 /// This does not pair/unpair Alero's TLS engine; it only selects an authorised
 /// Android Debug Bridge transport for features implemented through scrcpy.
 class AdbConnectionPanel extends StatefulWidget {
@@ -94,19 +95,22 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
         );
       }
       if (selected == null) return;
-      if (widget.phone != null)
+      if (widget.phone != null) {
         PhoneAdb.choose(widget.phone!.id, selected.serial);
-      if (mounted)
+      }
+      if (mounted) {
         setState(
           () => _message = 'Depuración USB autorizada: ${selected!.name}.',
         );
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _message = e is StateError
               ? e.message
               : 'No se pudo consultar adb por USB.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -140,13 +144,15 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
     try {
       await Scrcpy.disconnectWireless(serial);
       PhoneAdb.forgetChoice(peer.id);
-      if (mounted)
+      if (mounted) {
         setState(
           () => _message = 'ADB inalámbrico desconectado. El emparejamiento Alero se conserva.',
         );
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _message = 'No se pudo desconectar el transporte ADB.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -264,18 +270,20 @@ class _WirelessDialogState extends State<_WirelessDialog> {
       }
       if (mounted) Navigator.of(context).pop(address);
     } on StateError catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = e.message;
           _useQr = false;
           _pair = false;
           _ip.text = ip;
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = 'No fue posible vincular por QR. Prueba con el código de vinculación.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -352,10 +360,11 @@ class _WirelessDialogState extends State<_WirelessDialog> {
     } on StateError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = 'No fue posible establecer ADB por Wi-Fi. Comprueba que los dispositivos estén en la misma red y el teléfono autorice la depuración inalámbrica.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

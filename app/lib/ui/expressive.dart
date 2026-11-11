@@ -4,7 +4,7 @@ import 'dart:ui';
 import 'dart:ui' as ui show Image;
 
 import 'package:flutter/foundation.dart' show listEquals;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/physics.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -12,6 +12,7 @@ import '../device_image.dart';
 import '../remote.dart';
 import 'theme.dart';
 import 'alero_motion.dart';
+import 'icon.dart';
 
 /// Material 3 Expressive pieces Flutter 3.47 does not ship: spring motion, wavy progress, cookie shape, shape
 /// morphing, and a solid floating surface.

@@ -12,13 +12,14 @@ permissions:
   contents: read
 jobs:
   packages:
-    # Preview packages for this development branch; publish only after merge to main.\n    # An explicitly scoped Android-only hotfix must not rebuild Windows.
+    # An explicitly scoped Android-only hotfix must not rebuild Windows.
     if: ${{ !contains(github.event.head_commit.message, '[android-only]') }}
     runs-on: windows-2022
     timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v5
+      # Pinned to a commit (v2.9.1): a moved tag must not run new code next to the signing key.
+      - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba
         with:
           flutter-version: '3.47.8'
           channel: stable
@@ -88,7 +89,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           name: Alero-packages

@@ -167,6 +167,25 @@ class NotifListener : NotificationListenerService() {
 
     private fun icon(pkg: String): String = appIcon(this, pkg)
 
+    /** The picture an app puts beside its notification (a chat's contact photo), as a small JPEG. "" if none. */
+    private fun avatar(sbn: StatusBarNotification): String = try {
+        val d = sbn.notification.getLargeIcon()?.loadDrawable(this)
+        if (d == null) "" else {
+            val b = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+            val out = ByteArrayOutputStream()
+            try {
+                val c = android.graphics.Canvas(b)
+                c.drawColor(android.graphics.Color.WHITE) // JPEG has no transparency
+                d.setBounds(0, 0, 96, 96)
+                d.draw(c)
+                b.compress(Bitmap.CompressFormat.JPEG, 80, out)
+            } finally { b.recycle() }
+            Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        }
+    } catch (_: Exception) {
+        ""
+    }
+
     private fun json(sbn: StatusBarNotification, withIcon: Boolean = true): JSONObject? {
         if (!worth(sbn)) return null
         val x = sbn.notification.extras
@@ -182,6 +201,7 @@ class NotifListener : NotificationListenerService() {
             .put("app", appName(sbn.packageName))
             .put("pkg", sbn.packageName)
             .put("icon", if (withIcon) icon(sbn.packageName) else "")
+            .put("avatar", avatar(sbn))
             .put("title", title.take(200))
             .put("text", text.take(1000))
             .put("time", sbn.postTime)

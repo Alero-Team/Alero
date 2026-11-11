@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -14,6 +14,7 @@ import 'qr.dart';
 import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen(this.hub, {super.key});
@@ -187,8 +188,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
         ? null
         : AdbConnectionPanel(
             hub: hub,
-            phone: hub.connectedPhone ??
-                paired.where((p) => hub.info[p.id]?.phone == true).firstOrNull ??
+            phone:
+                hub.connectedPhone ??
+                paired
+                    .where((p) => hub.info[p.id]?.phone == true)
+                    .firstOrNull ??
                 paired.firstOrNull,
           );
 
@@ -217,7 +221,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   gap,
                   Expanded(
                     child: Column(
-                      children: [qrPanel, gap, cablePanel, gap, if (adbPanel != null) ...[adbPanel, gap], ipPanel],
+                      children: [
+                        qrPanel,
+                        gap,
+                        cablePanel,
+                        gap,
+                        if (adbPanel != null) ...[adbPanel, gap],
+                        ipPanel,
+                      ],
                     ),
                   ),
                 ],

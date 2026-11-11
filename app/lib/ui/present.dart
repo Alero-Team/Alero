@@ -1,16 +1,18 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'remote_ui.dart';
 import 'theme.dart';
+import 'icon.dart';
 
 /// Alero Present uses the existing, authenticated PC input channel.
 /// No ADB, browser automation, or privileged device access is required.
 enum PresentationMode { powerpoint, browser }
+
 enum PresentationAction { next, previous, start, finish }
 
 typedef PresentationShortcut = ({String key, List<String> mods});
@@ -42,9 +44,7 @@ Future<void> openAleroPresent(
   String peer,
   String name,
 ) => Navigator.of(context).push(
-  MaterialPageRoute<void>(
-    builder: (_) => AleroPresentPage(hub, peer, name),
-  ),
+  MaterialPageRoute<void>(builder: (_) => AleroPresentPage(hub, peer, name)),
 );
 
 class AleroPresentPage extends StatefulWidget {
@@ -95,9 +95,11 @@ class _AleroPresentPageState extends State<AleroPresentPage>
   void _tick() {
     if (!mounted) return;
     setState(() {
-      _elapsed = _accumulated + (_resumedAt == null
-          ? Duration.zero
-          : DateTime.now().difference(_resumedAt!));
+      _elapsed =
+          _accumulated +
+          (_resumedAt == null
+              ? Duration.zero
+              : DateTime.now().difference(_resumedAt!));
     });
   }
 
@@ -126,11 +128,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
   void _send(PresentationAction action) {
     final shortcut = presentationShortcut(_mode, action);
     if (shortcut != null) {
-      widget.hub.remote.key(
-        widget.peer,
-        shortcut.key,
-        mods: shortcut.mods,
-      );
+      widget.hub.remote.key(widget.peer, shortcut.key, mods: shortcut.mods);
     }
   }
 
@@ -149,7 +147,8 @@ class _AleroPresentPageState extends State<AleroPresentPage>
         (p) => p.id == widget.peer && p.state == pb.PeerState.connected,
       );
       final info = widget.hub.info[widget.peer];
-      final blocked = remoteBlocker(info, online) ??
+      final blocked =
+          remoteBlocker(info, online) ??
           (info?.canInput == false
               ? 'Este ordenador no permite controlar el teclado.'
               : null);
@@ -184,7 +183,8 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                   ),
                 ],
                 selected: {_mode},
-                onSelectionChanged: (values) => setState(() => _mode = values.first),
+                onSelectionChanged: (values) =>
+                    setState(() => _mode = values.first),
               ),
               const SizedBox(height: Gap.m),
               if (blocked != null)
@@ -193,10 +193,10 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                 Text(
                   _mode == PresentationMode.powerpoint
                       ? 'F5 inicia una presentación de PowerPoint. '
-                        'Las flechas avanzan o retroceden y Esc la termina.'
+                            'Las flechas avanzan o retroceden y Esc la termina.'
                       : 'Inicia el modo Presentar desde Google Slides u otro '
-                        'servicio en la computadora. Las flechas cambian '
-                        'diapositivas y Esc sale del modo presentación.',
+                            'servicio en la computadora. Las flechas cambian '
+                            'diapositivas y Esc sale del modo presentación.',
                   style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
                 ),
               const SizedBox(height: Gap.xxl),

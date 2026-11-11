@@ -58,7 +58,8 @@ mod other {
         None
     }
     pub fn capture(_: u32) -> Option<(u32, u32, Vec<u8>)> { None }
-    pub fn capture_monitor(_: u32, _: usize) -> Option<(u32, u32, Vec<u8>)> { None }
+    pub fn capture_monitor(_: u32, _: usize, _: bool) -> Option<(u32, u32, Vec<u8>)> { None }
+    pub fn cursor_at(_: usize) -> Option<(f64, f64)> { None }
     pub fn monitors() -> Vec<(i32, i32, i32, i32)> { Vec::new() }
     pub fn media_state() -> Option<Media> {
         None
@@ -259,8 +260,7 @@ mod win {
         Some((s.BatteryLifePercent, s.ACLineStatus == 1))
     }
 
-    /// Actual Windows desktop monitors, primary first. An IddCx virtual display
-    /// is a separate monitor here, not a clone of the laptop screen.
+    /// Actual Windows desktop monitors, primary first.
     pub fn monitors() -> Vec<(i32, i32, i32, i32)> {
         unsafe extern "system" fn add(
             monitor: HMONITOR, _: HDC, _: *mut RECT, context: LPARAM,
@@ -286,13 +286,25 @@ mod win {
         out.into_iter().map(|(_, x, y, right, bottom)| (x, y, right, bottom)).collect()
     }
 
-    /// Monitor index 0 is the primary screen. Secondary indexes may be
-    /// physical monitors or a signed IddCx virtual-display driver.
+    /// Monitor index 0 is the primary screen.
     pub fn capture(width: u32) -> Option<(u32, u32, Vec<u8>)> {
-        capture_monitor(width, 0)
+        capture_monitor(width, 0, true)
     }
 
-    pub fn capture_monitor(width: u32, monitor: usize) -> Option<(u32, u32, Vec<u8>)> {
+    /// Where the pointer is on a monitor, as fractions of its width and height. None while it is hidden or on
+    /// another monitor. Costs one system call, so a stream can report it far more often than it sends pictures.
+    pub fn cursor_at(monitor: usize) -> Option<(f64, f64)> {
+        let (left, top, right, bottom) = *monitors().get(monitor)?;
+        let mut ci = CURSORINFO { cbSize: size_of::<CURSORINFO>() as u32, ..Default::default() };
+        unsafe { GetCursorInfo(&mut ci).ok()? };
+        let (x, y) = (ci.ptScreenPos.x, ci.ptScreenPos.y);
+        ((ci.flags.0 & CURSOR_SHOWING.0) != 0 && x >= left && x < right && y >= top && y < bottom)
+            .then(|| ((x - left) as f64 / (right - left) as f64, (y - top) as f64 / (bottom - top) as f64))
+    }
+
+    /// Pixels come back as BGRA rows, top first (what GDI hands over and the JPEG encoder takes as it is).
+    /// `cursor` draws the pointer into the picture; a stream whose viewer draws its own leaves it out.
+    pub fn capture_monitor(width: u32, monitor: usize, cursor: bool) -> Option<(u32, u32, Vec<u8>)> {
         let (left, top, right, bottom) = *monitors().get(monitor)?;
 
         unsafe {
@@ -315,7 +327,7 @@ mod win {
             let mut out = None;
             if ok {
                 let mut ci = CURSORINFO { cbSize: size_of::<CURSORINFO>() as u32, ..Default::default() };
-                if GetCursorInfo(&mut ci).is_ok() && (ci.flags.0 & CURSOR_SHOWING.0) != 0 {
+                if cursor && GetCursorInfo(&mut ci).is_ok() && (ci.flags.0 & CURSOR_SHOWING.0) != 0 {
                     let (x, y) = (((ci.ptScreenPos.x - left) as i64 * dw as i64 / sw as i64) as i32, ((ci.ptScreenPos.y - top) as i64 * dh as i64 / sh as i64) as i32);
                     let icon = HICON(ci.hCursor.0);
                     let (mut native, mut hx, mut hy) = (GetSystemMetrics(SM_CXCURSOR), 0, 0);
@@ -351,11 +363,7 @@ mod win {
                 };
                 let mut bgra = vec![0u8; dw as usize * dh as usize * 4];
                 if GetDIBits(mem, bmp, 0, dh as u32, Some(bgra.as_mut_ptr().cast()), &mut bi, DIB_RGB_COLORS) != 0 {
-                    let mut rgb = Vec::with_capacity(dw as usize * dh as usize * 3);
-                    for p in bgra.chunks_exact(4) {
-                        rgb.extend_from_slice(&[p[2], p[1], p[0]]);
-                    }
-                    out = Some((dw as u32, dh as u32, rgb));
+                    out = Some((dw as u32, dh as u32, bgra));
                 }
             }
             SelectObject(mem, old);

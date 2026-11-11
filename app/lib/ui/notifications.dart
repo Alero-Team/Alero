@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -10,6 +10,7 @@ import '../remote.dart';
 import 'expressive.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 String ago(DateTime t) {
   final d = DateTime.now().difference(t);
@@ -57,18 +58,7 @@ class NotificationsScreen extends StatelessWidget {
               const Text('No hay notificaciones recientes.')
             else
               for (final n in list)
-                Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: _NotifRow(
-                      hub,
-                      peer.id,
-                      n,
-                      key: ValueKey((peer.id, n.key)),
-                    ),
-                  ),
-                ),
+                _NotifRow(hub, peer.id, n, key: ValueKey((peer.id, n.key))),
           ],
         ],
       ),
@@ -97,28 +87,19 @@ class NotificationsPanel extends StatelessWidget {
         body: 'Se concede en los ajustes de Android y puedes retirarlo cuando quieras.',
       );
     } else if (list.isEmpty) {
-      body = const EmptyState(
-        card: false,
-        icon: Symbols.notifications_rounded,
-        title: 'Todo al día',
-        body: 'No hay notificaciones en el teléfono.',
+      body = Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Todo al día: no hay notificaciones en el teléfono.',
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
       );
     } else {
       body = Column(
         children: [
           for (final n in list.take(_shown))
             _NotifRow(hub, peerId, n, key: ValueKey((peerId, n.key))),
-          if (list.length > _shown)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () => showDialog<void>(
-                  context: context,
-                  builder: (_) => _AllDialog(hub, peerId),
-                ),
-                child: Text('Ver todas (${list.length})'),
-              ),
-            ),
         ],
       );
     }
@@ -209,6 +190,8 @@ void clearReplyDrafts() => _drafts.clear();
 class _NotifRowState extends State<_NotifRow> {
   late final _text = TextEditingController(text: _drafts[_draftKey] ?? '');
   bool _sending = false;
+  bool _open = false;
+  late bool _replying = _text.text.isNotEmpty;
   String? _status;
   Hub get hub => widget.hub;
   String get peerId => widget.peerId;
@@ -223,6 +206,7 @@ class _NotifRowState extends State<_NotifRow> {
 
   Future<void> _reply() async {
     if (_sending || _text.text.trim().isEmpty) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
     setState(() {
       _sending = true;
       _status = 'Enviando…';
@@ -230,19 +214,20 @@ class _NotifRowState extends State<_NotifRow> {
     try {
       await hub.replyNotif(peerId, n.key, _text.text);
       _drafts.remove(_draftKey);
-      if (mounted) {
-        setState(() {
-          // Android only confirms that the app's reply action took the text.
-          _status =
-              'Android entregó la respuesta a ${n.app.isEmpty ? 'la app' : n.app}. '
-              'Alero no puede confirmar que el destinatario la haya recibido.';
-          _text.clear();
-        });
-      }
+      // Answered: the notification has done its job, so it leaves the phone and this list.
+      unawaited(hub.dismissNotif(peerId, n.key));
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Respuesta enviada${n.title.isEmpty ? '' : ' a ${n.title}'}',
+          ),
+        ),
+      );
     } on TimeoutException {
       if (mounted) {
         setState(
-          () => _status = 'Sin confirmación del teléfono. El texto sigue aquí: comprueba el chat antes de repetir.',
+          () => _status =
+              'Sin confirmación del teléfono. Revisa el chat antes de repetir.',
         );
       }
     } catch (e) {
@@ -258,178 +243,296 @@ class _NotifRowState extends State<_NotifRow> {
     }
   }
 
+  // Compact card: picture with the app badge, sender and «app · when» on one line, the latest messages
+  // underneath, and the actions as small icons. Sizes follow the window's short side, so the card keeps
+  // its proportion on a laptop and on a large monitor.
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final s = Theme.of(context).colorScheme;
+    final k = (MediaQuery.sizeOf(context).shortestSide / 900).clamp(0.8, 1.0);
+    final avatar = 36 * k;
+    final appIcon = hub.appIcons[n.pkg];
+    final muted = t.labelSmall?.copyWith(
+      color: s.onSurfaceVariant,
+      fontWeight: FontWeight.w400,
+    );
+    Widget round(Uint8List? bytes, double side) => ClipOval(
+      child: bytes != null
+          ? Image.memory(
+              bytes,
+              width: side,
+              height: side,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            )
+          : Container(
+              width: side,
+              height: side,
+              color: s.secondaryContainer,
+              child: Icon(
+                Symbols.notifications_rounded,
+                size: side / 2,
+                color: s.onSecondaryContainer,
+              ),
+            ),
+    );
+    Widget tool(IconData icon, String tip, VoidCallback onTap) => IconButton(
+      tooltip: tip,
+      onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+      constraints: BoxConstraints.tight(Size.square(32 * k)),
+      padding: EdgeInsets.zero,
+      iconSize: 18 * k,
+      color: s.onSurfaceVariant,
+      icon: Icon(icon),
+    );
+    // What others wrote, oldest first; a notification that is not a chat has only its text.
+    final lines = [
+      for (final m in n.messages)
+        if (!m.out && m.body.isNotEmpty)
+          m.sender.isEmpty || m.sender == n.title
+              ? m.body
+              : '${m.sender}: ${m.body}',
+    ];
+    if (lines.isEmpty && n.text.isNotEmpty) lines.add(n.text);
+    final keep = _open ? 6 : 2;
+    final shown = lines.skip((lines.length - keep).clamp(0, lines.length));
+    final canReply = Platform.isWindows && n.replyable;
+    final title = n.title.isNotEmpty ? n.title : n.app;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Gap.s),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          hub.appIcons[n.pkg] != null
-              ? ExcludeSemantics(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(
-                      hub.appIcons[n.pkg]!,
-                      width: 36,
-                      height: 36,
-                      gaplessPlayback: true,
-                    ),
-                  ),
-                )
-              : Container(
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: s.secondaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: ExcludeSemantics(
-                    child: Icon(
-                      Symbols.notifications_rounded,
-                      size: 20,
-                      color: s.onSecondaryContainer,
-                    ),
-                  ),
-                ),
-          const SizedBox(width: Gap.m),
-          Expanded(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Material(
+        color: s.surfaceContainer,
+        borderRadius: BorderRadius.circular(Radii.card),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: lines.length > keep || _open
+              ? () => setState(() => _open = !_open)
+              : null,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              Gap.m * k,
+              Gap.s * k,
+              Gap.xs,
+              Gap.s * k,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${n.app} · ${ago(n.time)}',
-                  style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
-                ),
-                if (n.title.isNotEmpty)
-                  Text(
-                    n.title,
-                    style: t.titleSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                if (n.text.isNotEmpty)
-                  Text(
-                    n.text,
-                    style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                if (Platform.isWindows && n.replyable) ...[
-                  const SizedBox(height: Gap.s),
-                  Row(
-                    // The send button stays beside the last line as the field grows.
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        // Enter sends; Shift+Enter is a line break (the field's own behaviour).
-                        child: CallbackShortcuts(
-                          bindings: {
-                            const SingleActivator(LogicalKeyboardKey.enter):
-                                _reply,
-                            const SingleActivator(
-                              LogicalKeyboardKey.numpadEnter,
-                            ): _reply,
-                          },
-                          // No maxLength: the phone and the messaging app set the real limits.
-                          child: TextField(
-                            controller: _text,
-                            readOnly: _sending,
-                            minLines: 1,
-                            maxLines: 6,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            decoration: const InputDecoration(
-                              labelText: 'Responder',
-                              helperText: 'Intro envía · Mayús+Intro añade un salto de línea',
-                            ),
-                            onChanged: (v) {
-                              _drafts[_draftKey] = v;
-                              setState(() {});
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: Gap.s),
-                      Padding(
-                        // Lines the button up with the field, above the helper text.
-                        padding: const EdgeInsets.only(bottom: 22),
-                        child: IconButton.filled(
-                          style: IconButton.styleFrom(
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimary,
-                          ),
-                          tooltip: 'Enviar respuesta',
-                          onPressed: _sending || _text.text.trim().isEmpty
-                              ? null
-                              : _reply,
-                          icon: _sending
-                              ? const SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ExcludeSemantics(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: SizedBox.square(
+                          dimension: avatar,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              round(n.avatar ?? appIcon, avatar),
+                              if (n.avatar != null && appIcon != null)
+                                Positioned(
+                                  right: -2,
+                                  bottom: -2,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(1.5),
+                                    decoration: BoxDecoration(
+                                      color: s.surfaceContainer,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: round(appIcon, avatar * 0.38),
                                   ),
-                                )
-                              : const Icon(Symbols.send_rounded),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  if (_status != null)
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(_status!, style: t.bodySmall),
                     ),
-                ],
+                    SizedBox(width: Gap.m * k),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  title,
+                                  style: t.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: Gap.s),
+                              Flexible(
+                                child: Text(
+                                  [
+                                    if (n.title.isNotEmpty && n.app.isNotEmpty)
+                                      n.app,
+                                    ago(n.time),
+                                    if (lines.length > 1)
+                                      '${lines.length} mensajes',
+                                  ].join(' · '),
+                                  style: muted,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          for (final line in shown)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1),
+                              child: Text(
+                                line,
+                                style: t.bodyMedium?.copyWith(
+                                  color: s.onSurfaceVariant,
+                                ),
+                                maxLines: _open ? 4 : 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (canReply)
+                      tool(
+                        _replying
+                            ? Symbols.close_rounded
+                            : Symbols.reply_rounded,
+                        _replying ? 'Cerrar respuesta' : 'Responder',
+                        () => setState(() => _replying = !_replying),
+                      ),
+                    if (n.markable || n.clearable)
+                      tool(
+                        Symbols.done_rounded,
+                        'Marcar como leído',
+                        () => hub.notifAction(peerId, n, 'read'),
+                      ),
+                    PopupMenuButton<String>(
+                      tooltip: 'Más opciones',
+                      iconSize: 18 * k,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 200),
+                      style: IconButton.styleFrom(
+                        minimumSize: Size.square(32 * k),
+                        fixedSize: Size.square(32 * k),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: Icon(
+                        Symbols.more_vert_rounded,
+                        color: s.onSurfaceVariant,
+                      ),
+                      onSelected: (a) => a == 'dismiss'
+                          ? hub.dismissNotif(peerId, n.key)
+                          : hub.notifAction(peerId, n, a),
+                      itemBuilder: (_) => [
+                        if (n.clearable)
+                          const PopupMenuItem(
+                            value: 'dismiss',
+                            child: Text('Descartar en el teléfono'),
+                          ),
+                        if (n.mutable)
+                          const PopupMenuItem(
+                            value: 'mute',
+                            child: Text('Silenciar conversación'),
+                          ),
+                        PopupMenuItem(
+                          value: 'muteApp',
+                          child: Text(
+                            'Silenciar ${n.app.isEmpty ? 'esta app' : n.app} en el ordenador',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (canReply && _replying)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      avatar + Gap.m * k,
+                      Gap.s,
+                      Gap.s,
+                      0,
+                    ),
+                    // Enter sends; Shift+Enter is a line break (the field's own behaviour).
+                    child: CallbackShortcuts(
+                      bindings: {
+                        const SingleActivator(LogicalKeyboardKey.enter): _reply,
+                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                            _reply,
+                      },
+                      // No maxLength: the phone and the messaging app set the real limits.
+                      child: TextField(
+                        controller: _text,
+                        autofocus: true,
+                        readOnly: _sending,
+                        minLines: 1,
+                        maxLines: 5,
+                        style: t.bodyMedium,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: true,
+                          fillColor: s.surfaceContainerHighest,
+                          hintText:
+                              'Responder${n.title.isEmpty ? '' : ' a ${n.title}'}',
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            14,
+                            10,
+                            4,
+                            10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(Radii.card),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: 'Enviar respuesta',
+                            iconSize: 18,
+                            color: s.primary,
+                            onPressed: _sending || _text.text.trim().isEmpty
+                                ? null
+                                : _reply,
+                            icon: _sending
+                                ? const SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Symbols.send_rounded),
+                          ),
+                        ),
+                        onChanged: (v) {
+                          _drafts[_draftKey] = v;
+                          setState(() {});
+                        },
+                      ),
+                    ),
+                  ),
+                if (_status != null)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      avatar + Gap.m * k,
+                      Gap.xs,
+                      Gap.s,
+                      0,
+                    ),
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(_status!, style: muted),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (n.markable || n.clearable)
-            IconButton(
-              tooltip: 'Marcar como leído',
-              icon: const Icon(Symbols.mark_chat_read_rounded, size: 18),
-              onPressed: () => hub.notifAction(peerId, n, 'read'),
-            ),
-          PopupMenuButton<String>(
-            tooltip: 'Más opciones',
-            icon: const Icon(Symbols.more_vert_rounded, size: 18),
-            onSelected: (a) => a == 'dismiss'
-                ? hub.dismissNotif(peerId, n.key)
-                : hub.notifAction(peerId, n, a),
-            itemBuilder: (_) => [
-              if (n.mutable)
-                const PopupMenuItem(
-                  value: 'mute',
-                  child: ListTile(
-                    leading: Icon(Symbols.notifications_paused_rounded),
-                    title: Text('Silenciar conversación'),
-                  ),
-                ),
-              PopupMenuItem(
-                value: 'muteApp',
-                child: ListTile(
-                  leading: const Icon(Symbols.notifications_off_rounded),
-                  title: Text(
-                    'Silenciar ${n.app.isEmpty ? 'esta app' : n.app} en el ordenador',
-                  ),
-                  subtitle: const Text('Se reactiva en Ajustes del teléfono'),
-                ),
-              ),
-              if (n.clearable)
-                const PopupMenuItem(
-                  value: 'dismiss',
-                  child: ListTile(
-                    leading: Icon(Symbols.close_rounded),
-                    title: Text('Descartar en el teléfono'),
-                  ),
-                ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import 'ui/shell.dart';
 import 'ui/brand.dart';
 import 'ui/setup.dart';
 import 'ui/app_lock.dart';
+import 'ui/icon.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
@@ -86,7 +87,10 @@ class App extends StatelessWidget {
             data: th.copyWith(snackBarTheme: toast),
             child: MediaQuery.withClampedTextScaling(
               maxScaleFactor: 1.5,
-              child: boot.value == null ? AppLock(child: child!) : child!,
+              // Every icon springs when its control is tapped (ui/icon.dart).
+              child: IconTaps.listen(
+                boot.value == null ? AppLock(child: child!) : child!,
+              ),
             ),
           );
         },

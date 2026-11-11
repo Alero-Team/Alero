@@ -428,8 +428,20 @@ class MainActivity : FlutterActivity() {
     }
 
     // The descriptor stays open until Dart calls closeFd when the transfer ends: the engine reads from it.
+    /** Another app's share must never point Alero at its own private files (keys, pairings) to send them out. */
+    private fun ownData(uri: Uri): Boolean = when (uri.scheme) {
+        "content" -> uri.authority?.startsWith(packageName) == true
+        "file" -> try {
+            val path = File(uri.path ?: "").canonicalPath
+            listOfNotNull(applicationInfo.dataDir, applicationInfo.deviceProtectedDataDir, externalCacheDir?.parentFile?.path)
+                .any { path == File(it).canonicalPath || path.startsWith(File(it).canonicalPath + File.separator) }
+        } catch (_: Exception) { true }
+        else -> true
+    }
+
     private fun descriptors(uris: List<Uri>) =
         uris.mapNotNull { uri ->
+            if (ownData(uri)) return@mapNotNull null
             val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null } ?: return@mapNotNull null
             synchronized(open) { open[pfd.fd] = pfd }
             sourceUris[pfd.fd] = uri

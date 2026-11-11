@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../fs_client.dart';
@@ -8,6 +8,7 @@ import 'phone_page.dart';
 import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart';
+import 'icon.dart';
 
 String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
