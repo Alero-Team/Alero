@@ -2,11 +2,6 @@
 
 <div align="center">
 
-  <p>
-    <a href="README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-2563EB?style=flat-square" alt="Leer en español" /></a>
-    <a href="README.en.md"><img src="https://img.shields.io/badge/Language-English-6B7280?style=flat-square" alt="Read in English" /></a>
-  </p>
-
   <img src="branding/alero_icon.svg" alt="Logo oficial de Alero" width="180" />
 
   <h2>Una conexión. Sin fricción.</h2>
@@ -19,6 +14,8 @@
     <a href="https://github.com/Alero-Team/Alero/releases">
       <img src="https://img.shields.io/badge/Descargar-GitHub%20Releases-238636?style=for-the-badge&logo=github&logoColor=white" alt="Descargar Alero desde GitHub Releases" />
     </a>
+    <a href="README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-2563EB?style=for-the-badge" alt="Leer en español" /></a>
+    <a href="README.en.md"><img src="https://img.shields.io/badge/Language-English-6B7280?style=for-the-badge" alt="Read in English" /></a>
   </p>
 
   <p>
