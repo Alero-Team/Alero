@@ -2,6 +2,11 @@
 
 <div align="center">
 
+  <p>
+    <a href="README.md"><img src="https://img.shields.io/badge/Idioma-Espa%C3%B1ol-2563EB?style=flat-square" alt="Leer en español" /></a>
+    <a href="README.en.md"><img src="https://img.shields.io/badge/Language-English-6B7280?style=flat-square" alt="Read in English" /></a>
+  </p>
+
   <img src="branding/alero_icon.svg" alt="Logo oficial de Alero" width="180" />
 
   <h2>Una conexión. Sin fricción.</h2>
