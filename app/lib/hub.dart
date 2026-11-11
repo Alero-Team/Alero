@@ -27,6 +27,9 @@ class Xfer {
   int done = 0, rate = 0;
   String note = '';
 
+  /// Who sends or receives it (set when the engine reports the transfer).
+  String peerId = '';
+
   /// A file the app asked for itself (explorer download, screenshot): no transfer dialog for it.
   bool quiet = false;
 }
@@ -154,13 +157,15 @@ class Hub extends ChangeNotifier {
   late final fs = FsClient(this);
   late final pcFs = PcFilesClient(this);
   late final sms = SmsClient(this);
-  final _expected = <String, (bool, DateTime)>{};
 
-  void expectFromPhone(String name, {bool open = false}) {
+  /// Files the user asked a device for, by (device, name): only that device's offer skips the question.
+  final _expected = <(String, String), (bool, DateTime)>{};
+
+  void expectFromPhone(String peerId, String name, {bool open = false}) {
     _expected.removeWhere(
       (_, v) => DateTime.now().difference(v.$2) > const Duration(minutes: 10),
     );
-    _expected[name] = (open, DateTime.now());
+    _expected[(peerId, name)] = (open, DateTime.now());
   }
 
   ScreenFeed? screen;
@@ -474,8 +479,8 @@ class Hub extends ChangeNotifier {
               ? 'Emparejado con ${e.name}'
               : switch (e.code) {
                   'DECLINED' => 'Emparejamiento cancelado',
-                  _ when e.message == 'OUTDATED' =>
-                    'El otro dispositivo no completó la comprobación del código. Actualiza Alero en los dos e inténtalo de nuevo.',
+                  _ when e.message == 'BUSY' => 'Demasiados intentos de emparejar en poco tiempo. Espera un minuto e inténtalo de nuevo.',
+                  _ when e.message == 'OUTDATED' => 'El otro dispositivo no completó la comprobación del código. Actualiza Alero en los dos e inténtalo de nuevo.',
                   'DECLINED_BY_PEER' =>
                     'El otro dispositivo no aceptó el emparejamiento',
                   _ =>
@@ -484,7 +489,7 @@ class Hub extends ChangeNotifier {
         );
         refresh();
       case pb.Event_TransferOffer()
-          when _expected.containsKey(e.name) &&
+          when _expected.containsKey((e.peerId, e.name)) &&
               peers.any((p) => p.id == e.peerId && p.trusted):
         // A file we asked a phone for (explorer): no question.
         pb.respondTransfer(id: e.id, accept: true);
@@ -500,8 +505,9 @@ class Hub extends ChangeNotifier {
         active = [
           ...active,
           Xfer(e.id, e.peerName, e.name, e.size.toInt(), e.incoming)
+            ..peerId = e.peerId
             ..quiet =
-                _expected.containsKey(e.name) ||
+                _expected.containsKey((e.peerId, e.name)) ||
                 (shotWanted != null && e.name.startsWith('Captura-PC-')),
         ];
       case pb.Event_TransferProgress():
@@ -597,7 +603,7 @@ class Hub extends ChangeNotifier {
       _ => 'Falló $n: ${explain(e.code, e.message)}',
     });
     final want = x != null && e.ok && x.incoming
-        ? _expected.remove(x.name)
+        ? _expected.remove((x.peerId, x.name))
         : null;
     if (want != null) {
       messages.add('Descargado: ${x!.name}');
@@ -611,7 +617,7 @@ class Hub extends ChangeNotifier {
         }
       }
     } else if (!e.ok && x != null) {
-      _expected.remove(x.name);
+      _expected.remove((x.peerId, x.name));
     }
     if (arrived != null) {
       shot = arrived;

@@ -113,7 +113,10 @@ class Scrcpy {
       ).firstMatch(l);
       if (m != null && m[1] == ip) return '${m[1]}:${m[2]}';
     }
-    final s = (await AdbMdns.query(AdbMdns.connect, hosts: [ip])).firstOrNull;
+    final s = (await AdbMdns.query(
+      AdbMdns.connect,
+      hosts: [ip],
+    )).where((s) => s.ip == ip).firstOrNull;
     return s == null ? null : '${s.ip}:${s.port}';
   }
 

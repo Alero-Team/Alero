@@ -1,5 +1,25 @@
 # Cambios
 
+## Beta 1.2.1 (1.2.1) — 2026-11-10
+
+Instala juntos el APK de Android y el instalador de Windows: el límite de emparejamiento y los cambios de llamadas necesitan ambos lados.
+
+### Notificaciones (Windows)
+
+- **Diseño nuevo, como Enlace Móvil:** lista limpia con el icono de la app, «App · hora», el nombre en negrita y el mensaje; a la derecha ⋯ y ×. Al pasar el ratón aparecen Responder, Marcar como leído y Silenciar. Arriba, «Historial» y «Borrar todo». El tamaño sigue la pantalla y el tamaño de mosaicos.
+- **Responder y listo:** la respuesta se escribe en una barra con el botón de enviar dentro; al enviarla, la notificación se descarta en el teléfono y desaparece de la lista.
+
+### Seguridad (auditoría)
+
+- **Archivos recibidos:** un archivo llamado solo «.bat», «.lnk» u otra extensión ya no recibe el botón «Abrir»; la lista de tipos que no se abren suma Office con macros, temas, Escritorio remoto, instaladores por referencia y similares. Los archivos recibidos en Windows llevan la marca de Internet, así que SmartScreen y la Vista protegida de Office actúan como con una descarga.
+- **Desconectar corta de verdad:** un teléfono desconectado ya no puede seguir enviando órdenes (ratón, teclado, bloquear) por la conexión que tenía abierta.
+- **Emparejamiento:** como mucho 6 intentos por minuto desde una misma dirección (20 en total), y emparejar con un dispositivo de la lista fija su identidad. Si se supera: «Demasiados intentos… espera un minuto».
+- **Olvidar dispositivo es definitivo:** la lista de emparejados se guarda de uno en uno; un anuncio de red a la vez ya no puede devolver un dispositivo olvidado, y un archivo dañado nunca se sobrescribe con una lista vacía.
+- **Android:** el registro de llamadas solo se comparte con Llamadas activado, y los contactos con Llamadas o SMS. Desde el ordenador ya no se pueden marcar códigos con * o # (desvíos, PIN de la SIM, USSD).
+- **Pedir un archivo:** solo el dispositivo al que se lo pediste puede enviarlo sin pregunta.
+- **ADB inalámbrico:** la dirección del teléfono solo se acepta si responde el propio teléfono.
+- **Publicación:** la clave de firma de Android solo existe durante el paso que compila el APK, y la publicación comprueba que el APK lleva el certificado de siempre.
+
 ## Beta 1.2 (1.2.0) — 2026-11-09
 
 Instala juntos el APK de Android y el instalador de Windows de esta versión: el puntero de la pantalla compartida y el emparejamiento por código necesitan ambos lados actualizados.

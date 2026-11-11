@@ -28,32 +28,33 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Prepare signing identity
-        shell: pwsh
-        env:
-          SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          SIGNING_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          SIGNING_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if (!$env:SIGNING_KEY) { throw 'Configure the Android signing secrets before building packages.' }
-          $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
-          [IO.File]::WriteAllBytes($keyFile, [Convert]::FromBase64String($env:SIGNING_KEY))
-          "ALERO_ANDROID_KEYSTORE=$keyFile" >> $env:GITHUB_ENV
-          "ALERO_ANDROID_KEYSTORE_PASSWORD=$env:SIGNING_PASSWORD" >> $env:GITHUB_ENV
-          "ALERO_ANDROID_KEY_ALIAS=$env:SIGNING_ALIAS" >> $env:GITHUB_ENV
-          "ALERO_ANDROID_KEY_PASSWORD=$env:SIGNING_KEY_PASSWORD" >> $env:GITHUB_ENV
       - run: cargo fetch --locked
       - name: Resolve Flutter dependencies
         shell: pwsh
         working-directory: app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - run: rustup target add aarch64-linux-android
+      # The signing key exists only inside this step: it is written, used by Gradle and deleted here, so no
+      # other step (dependency fetches, choco, the Windows build, uploads) ever sees it or its passwords.
       - name: Build signed Android APK
         shell: pwsh
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ALERO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALERO_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ALERO_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
-          ./tools/build-android.ps1 -FlutterRoot $flutterRoot -AndroidSdk $env:ANDROID_HOME -SkipAnalyze
+          if (!$env:SIGNING_KEY) { throw 'Configure the Android signing secrets before building packages.' }
+          $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
+          [IO.File]::WriteAllBytes($keyFile, [Convert]::FromBase64String($env:SIGNING_KEY))
+          $env:SIGNING_KEY = $null
+          $env:ALERO_ANDROID_KEYSTORE = $keyFile
+          try {
+            $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
+            ./tools/build-android.ps1 -FlutterRoot $flutterRoot -AndroidSdk $env:ANDROID_HOME -SkipAnalyze
+          } finally {
+            Remove-Item -LiteralPath $keyFile -ErrorAction SilentlyContinue
+          }
       - name: Verify signed release APK
         shell: pwsh
         run: |
@@ -62,8 +63,13 @@ jobs:
           $tool = Get-ChildItem "$env:ANDROID_HOME/build-tools" -Filter apksigner.bat -Recurse |
             Sort-Object FullName -Descending | Select-Object -First 1
           if (!$tool) { throw 'Android apksigner unavailable' }
-          & $tool.FullName verify --verbose --print-certs $apk.FullName
+          $out = & $tool.FullName verify --verbose --print-certs $apk.FullName
           if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed' }
+          $out
+          # Installed copies only accept updates from this signer: a different key must never be published.
+          if (-not ($out -match '59b6277d2183eda236122557e8f55f4d55fc62bf6071e2f6111a1dccdc20adaa')) {
+            throw 'APK is not signed with the expected release certificate'
+          }
       - name: Install packaging tools
         run: choco install innosetup --yes --no-progress
       - name: Windows package

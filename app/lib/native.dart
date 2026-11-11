@@ -82,7 +82,12 @@ class Native {
     'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta', 'cpl', 'msc', 'jar', 'lnk', 'url', 'reg', 'inf', 'dll', 'sys',
     'appref-ms', 'application', 'gadget', 'settingcontent-ms', 'chm', 'msp', 'scf', 'sct', 'wsc', 'xll', 'website',
     'library-ms', 'search-ms', 'diagcab', 'iso', 'img', 'vhd', 'vhdx', 'py', 'pyw', 'sh', 'desktop', 'appimage',
-  }.contains(path.split('.').last.toLowerCase());
+    // Active content handed to a privileged handler (same additions as runs_code).
+    'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm', 'potm', 'ppam', 'ppsm', 'sldm', 'theme', 'themepack',
+    'deskthemepack', 'rdp', 'appinstaller', 'jnlp', 'iqy', 'slk', 'psc1', 'ps1xml', 'psd1', 'shs', 'mht',
+    'mhtml', 'xbap', 'vsto', 'mcl', 'mof', 'wsb',
+    // The text after the last dot of the file name itself (folders may contain dots).
+  }.contains(path.split(RegExp(r'[\\/]')).last.split('.').last.toLowerCase());
 
   static Future<void> openFile(String path, {String? id}) async {
     if (_android) {

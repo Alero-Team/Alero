@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,10 +66,20 @@ Widget screen(Widget child) => MaterialApp(
 /// The reply field appears with «Responder» (or by itself when a draft waits).
 Future<void> openReply(WidgetTester t) async {
   if (find.byType(TextField).evaluate().isNotEmpty) return;
-  await t.tap(find.byTooltip('Responder'));
+  // The actions show while the pointer is on the notification, as in Phone Link.
+  final mouse = await t.createGesture(kind: PointerDeviceKind.mouse);
+  await mouse.addPointer(
+    location: t.getCenter(find.byTooltip('Más opciones').first),
+  );
+  for (var i = 0; i < 4; i++) {
+    await t.pump(const Duration(milliseconds: 400));
+  }
+  await t.tap(find.widgetWithText(FilledButton, 'Responder'));
+  await mouse.removePointer(); // replying keeps the actions open without the pointer
   // The panel grows with a spring; wait for the field to settle where it can be tapped.
-  await t.pump();
-  await t.pump(const Duration(seconds: 1));
+  for (var i = 0; i < 4; i++) {
+    await t.pump(const Duration(milliseconds: 400));
+  }
 }
 
 void main() {

@@ -102,10 +102,13 @@ object Calls {
         return null
     }
 
-    /** Only digits, +, *, # and separators: the computer cannot pass anything else to the phone's dialer. */
+    /**
+     * Only digits, a leading + and separators. No * or #: those make carrier codes (call forwarding, SIM PIN,
+     * USSD) that a computer must not be able to send through the phone's dialer.
+     */
     fun cleanNumber(n: String): String? {
         val t = n.trim()
-        return if (t.length in 1..32 && t.all { it.isDigit() || it in "+*#() -." } && t.any { it.isDigit() }) t.filter { it != ' ' && it != '(' && it != ')' && it != '-' && it != '.' } else null
+        return if (t.length in 1..32 && t.all { it.isDigit() || it in "+() -." } && t.lastIndexOf('+') <= 0 && t.any { it.isDigit() }) t.filter { it != ' ' && it != '(' && it != ')' && it != '-' && it != '.' } else null
     }
 
     private fun dial(number: String): String? {

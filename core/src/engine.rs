@@ -41,6 +41,9 @@ const MAX_HANDSHAKES: usize = 16;
 const MAX_PEERS: usize = 128;
 const PING_EVERY: Duration = Duration::from_secs(10);
 const PAIR_TIMEOUT: Duration = Duration::from_secs(120);
+/// Pairing handshakes accepted per minute: from one address, and from all of them together.
+const PAIR_TRIES_PER_IP: u32 = 6;
+const PAIR_TRIES_ALL: u32 = 20;
 const OFFER_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_SEND_ATTEMPTS: u32 = 6;
 /// A peer silent for this long is not dialed any more (it is off or away); hearing it again resumes at once.
@@ -290,6 +293,8 @@ struct Inner {
     server_cfg: Arc<ServerConfig>,
     peers: Mutex<HashMap<String, Peer>>,
     pair_wait: Mutex<HashMap<String, Sender<bool>>>,
+    /// Pairing attempts per source address (None = all of them) in the current minute.
+    pair_tries: Mutex<HashMap<Option<IpAddr>, (Instant, u32)>>,
     conns: Mutex<HashMap<String, ConnHandle>>,
     xfers: Mutex<HashMap<String, Arc<Xfer>>>,
     cancelled: Mutex<HashSet<String>>,
@@ -381,14 +386,13 @@ impl Inner {
                 p.remove(id);
             }
         }
-        let mut list = self.store.peers();
-        if let Some(r) = list.iter_mut().find(|r| r.id == id) {
-            if r.paused != on {
+        self.store.update_peers(|list| match list.iter_mut().find(|r| r.id == id) {
+            Some(r) if r.paused != on => {
                 r.paused = on;
-                self.store.save_peers(&list)?;
+                true
             }
-        }
-        Ok(())
+            _ => false,
+        })
     }
 
     fn hello(&self, kind: &str) -> Value {
@@ -481,15 +485,17 @@ impl Inner {
         if addr.ip().is_loopback() || !self.is_trusted(id) {
             return;
         }
-        let mut list = self.store.peers();
         let text = addr.to_string();
-        if let Some(r) = list.iter_mut().find(|r| r.id == id) {
-            if r.addr.as_deref() != Some(text.as_str()) {
+        // Trust is checked again inside the update: a revoke that landed meanwhile wins.
+        let r = self.store.update_peers(|list| match list.iter_mut().find(|r| r.id == id) {
+            Some(r) if self.is_trusted(id) && r.addr.as_deref() != Some(text.as_str()) => {
                 r.addr = Some(text);
-                if let Err(e) = self.store.save_peers(&list) {
-                    self.log(format!("could not save peers: {e}"));
-                }
+                true
             }
+            _ => false,
+        });
+        if let Err(e) = r {
+            self.log(format!("could not save peers: {e}"));
         }
     }
 
@@ -509,14 +515,16 @@ impl Inner {
         if let Ok(mut t) = self.trusted.write() {
             t.insert(id.to_string());
         }
-        let mut list = self.store.peers();
-        list.retain(|p| p.id != id);
         let addr = self.with_peer(id, |p| p.addr).filter(|a| !a.ip().is_loopback()).map(|a| a.to_string());
-        list.push(PeerRecord { id: id.into(), name: clean(name), addr, paused: false });
         if let Ok(mut p) = self.paused.write() {
             p.remove(id); // pairing again is an explicit choice to connect
         }
-        if let Err(e) = self.store.save_peers(&list) {
+        let saved = self.store.update_peers(|list| {
+            list.retain(|p| p.id != id);
+            list.push(PeerRecord { id: id.into(), name: clean(name), addr, paused: false });
+            true
+        });
+        if let Err(e) = saved {
             self.log(format!("could not save peers: {e}"));
         }
         self.with_peer(id, |p| {
@@ -602,6 +610,11 @@ impl Inner {
             let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"NOT_TRUSTED"}}));
             return Ok(());
         }
+        if kind == "pair" && !self.pair_attempt_allowed(ip) {
+            // A code is 6 digits: without a limit, a host could abort handshakes until one matches.
+            let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"BUSY"}}));
+            return Ok(());
+        }
         if kind != "pair" && self.is_paused(&peer_id) {
             let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PAUSED"}}));
             return Ok(());
@@ -615,6 +628,11 @@ impl Inner {
             "msg" => self.run_msg_in(tls, &peer_id),
             _ => self.run_data_in(tls, &peer_id),
         }
+    }
+
+    /// At most PAIR_TRIES_PER_IP pairing handshakes a minute from one address and PAIR_TRIES_ALL in total.
+    fn pair_attempt_allowed(&self, ip: IpAddr) -> bool {
+        allow_pair_try(&mut lk(&self.pair_tries), ip, Instant::now())
     }
 
     // --- app messages ------------------------------------------------------------------------------------
@@ -632,7 +650,9 @@ impl Inner {
                 let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PROTOCOL"}}));
                 return Err(format!("not an app message: {kind}"));
             }
-            if !self.is_trusted(peer_id) {
+            // Revoked or disconnected by the user: the connection opened before stops carrying anything.
+            if !self.is_trusted(peer_id) || self.is_paused(peer_id) {
+                let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PAUSED"}}));
                 return Ok(());
             }
             if kind == "pb.x.history.remove" {
@@ -1163,6 +1183,7 @@ impl Engine {
             server_cfg,
             peers: Mutex::new(HashMap::new()),
             pair_wait: Mutex::new(HashMap::new()),
+            pair_tries: Mutex::new(HashMap::new()),
             conns: Mutex::new(HashMap::new()),
             xfers: Mutex::new(HashMap::new()),
             cancelled: Mutex::new(HashSet::new()),
@@ -1252,22 +1273,24 @@ impl Engine {
     /// Start pairing with a device by id (its address must be known) or directly by `ip[:port]`.
     pub fn pair_with_peer(&self, peer_id: &str) -> Result<(), String> {
         let addr = self.inner.with_peer(peer_id, |p| p.addr).ok_or("address of that device is unknown")?;
-        self.pair_addr_parsed(addr);
+        // The device picked from the list is the one paired: its identity is pinned, so a forged announce
+        // cannot slip another device in.
+        self.pair_addr_parsed(addr, Some(peer_id.to_string()));
         Ok(())
     }
 
     pub fn pair_with_addr(&self, addr: &str) -> Result<(), String> {
         let with_port = if addr.contains(':') && !addr.ends_with(']') { addr.to_string() } else { format!("{addr}:{DEFAULT_PORT}") };
         let a = with_port.to_socket_addrs().map_err(|e| format!("bad address: {e}"))?.next().ok_or("bad address")?;
-        self.pair_addr_parsed(a);
+        self.pair_addr_parsed(a, None);
         Ok(())
     }
 
-    fn pair_addr_parsed(&self, addr: SocketAddr) {
+    fn pair_addr_parsed(&self, addr: SocketAddr, expected: Option<String>) {
         let me = self.inner.clone();
         thread::spawn(move || {
             let r = (|| {
-                let mut tls = me.dial(addr, None)?;
+                let mut tls = me.dial(addr, expected.as_deref())?;
                 let peer_id = tls.peer_id()?;
                 if me.is_trusted(&peer_id) {
                     // We still trust it, but it may have unpaired us: ask on this route before calling it paired.
@@ -1281,7 +1304,7 @@ impl Engine {
                         Err(e) if e == "NOT_TRUSTED" => {
                             // Stale trust on our side only: pair again on a fresh connection.
                             me.set_state(&peer_id, PeerState::Disconnected, "");
-                            tls = me.dial(addr, None)?;
+                            tls = me.dial(addr, Some(&peer_id))?;
                         }
                         Err(_) => {
                             me.note_peer(&peer_id, "", Some(addr));
@@ -1315,9 +1338,11 @@ impl Engine {
         if let Ok(mut p) = self.inner.paused.write() {
             p.remove(peer_id);
         }
-        let mut list = self.inner.store.peers();
-        list.retain(|p| p.id != peer_id);
-        self.inner.store.save_peers(&list)?;
+        self.inner.store.update_peers(|list| {
+            let before = list.len();
+            list.retain(|p| p.id != peer_id);
+            list.len() != before
+        })?;
         if let Some(c) = lk(&self.inner.conns).get(peer_id) {
             let _ = c.sock.shutdown(std::net::Shutdown::Both);
         }
@@ -1503,5 +1528,37 @@ impl Engine {
 impl Drop for Engine {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+
+/// Counts one pairing handshake from `ip` unless that address or all of them used up this minute.
+fn allow_pair_try(tries: &mut HashMap<Option<IpAddr>, (Instant, u32)>, ip: IpAddr, now: Instant) -> bool {
+    tries.retain(|_, (since, _)| now.duration_since(*since) < Duration::from_secs(60));
+    let over = |k: Option<IpAddr>, max: u32| tries.get(&k).is_some_and(|(_, n)| *n >= max);
+    if over(Some(ip), PAIR_TRIES_PER_IP) || over(None, PAIR_TRIES_ALL) {
+        return false;
+    }
+    for k in [Some(ip), None] {
+        tries.entry(k).or_insert((now, 0)).1 += 1;
+    }
+    true
+}
+
+#[cfg(test)]
+mod pair_limit_tests {
+    use super::*;
+
+    #[test]
+    fn pairing_handshakes_are_limited_per_address_and_overall() {
+        let (mut t, now) = (HashMap::new(), Instant::now());
+        let a: IpAddr = "192.168.1.9".parse().unwrap();
+        for _ in 0..PAIR_TRIES_PER_IP {
+            assert!(allow_pair_try(&mut t, a, now));
+        }
+        assert!(!allow_pair_try(&mut t, a, now)); // a code cannot be ground by aborting handshakes
+        assert!(allow_pair_try(&mut t, a, now + Duration::from_secs(61))); // a minute later it may try again
+        let mut t = HashMap::new();
+        let n = (0..100u8).filter(|i| allow_pair_try(&mut t, IpAddr::from([10, 0, 0, *i]), now)).count();
+        assert_eq!(n, PAIR_TRIES_ALL as usize); // many addresses together share one budget
     }
 }

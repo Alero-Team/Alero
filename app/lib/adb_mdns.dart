@@ -24,6 +24,8 @@ class AdbMdns {
       if (e != RawSocketEvent.read) return;
       final d = socket.receive();
       if (d == null) return;
+      // Asked specific hosts: only their answers count, not whoever on the network answers first.
+      if (hosts != null && !hosts.contains(d.address.address)) return;
       try {
         found.addAll(parse(d.data, d.address.address, type));
       } catch (_) {

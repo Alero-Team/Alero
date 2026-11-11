@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-const aleroVersion = '1.2.0-beta';
+const aleroVersion = '1.2.1-beta';
 
 /// The release name people see.
 const aleroRelease = 'Beta 1.2';

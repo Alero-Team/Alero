@@ -257,7 +257,7 @@ class FsClient extends ChangeNotifier {
   /// Asks the phone to send these files; the transfers show up in Files with progress and retry.
   void download(Iterable<FsEntry> files, {bool openWhenDone = false}) {
     for (final f in files.where((f) => !f.dir)) {
-      hub.expectFromPhone(f.name, open: openWhenDone);
+      hub.expectFromPhone(peerId!, f.name, open: openWhenDone);
       hub.sendMessage(peerId!, 'pb.x.fs.get', {
         'root': root,
         'id': f.id,

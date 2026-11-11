@@ -252,6 +252,19 @@ fn send_inner<S: Read + Write>(
     Ok(Report { name, size, resumed_from_block: from, bytes })
 }
 
+/// Windows: tags a received file as coming from another computer (Mark of the Web, Internet zone), so
+/// SmartScreen, Office Protected View and the macro block treat it like a download. Best effort.
+fn mark_from_elsewhere(path: &Path) {
+    #[cfg(windows)]
+    {
+        let mut ads = path.as_os_str().to_owned();
+        ads.push(":Zone.Identifier");
+        let _ = std::fs::write(ads, "[ZoneTransfer]\r\nZoneId=3\r\n");
+    }
+    #[cfg(not(windows))]
+    let _ = path;
+}
+
 fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let first = dir.join(name);
     if !first.exists() {
@@ -384,6 +397,7 @@ fn receive_inner<S: Read + Write>(
     drop(part);
     let final_path = unique_path(dest_dir, file);
     std::fs::rename(&part_path, &final_path)?;
+    mark_from_elsewhere(&final_path);
     Ok((Report { name, size, resumed_from_block: from, bytes: written - from * bs as u64 }, final_path))
 }
 
@@ -415,7 +429,14 @@ mod tests {
         send_file_ex(&mut s, &src, "Viaje/día 1/nota.txt", "t", DEFAULT_BLOCK, None, &AtomicBool::new(false), &mut |_, _| {}).unwrap();
         let got = rx.join().unwrap();
         assert_eq!(got, dir.join("out").join("Viaje").join("día 1").join("nota.txt"));
-        assert_eq!(std::fs::read(got).unwrap(), b"hola");
+        assert_eq!(std::fs::read(&got).unwrap(), b"hola");
+        // Marked as coming from another computer, like a download.
+        #[cfg(windows)]
+        {
+            let mut ads = got.as_os_str().to_owned();
+            ads.push(":Zone.Identifier");
+            assert!(std::fs::read_to_string(ads).unwrap().contains("ZoneId=3"));
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 }

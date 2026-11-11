@@ -92,7 +92,7 @@ class PcFilesClient extends ChangeNotifier {
 
   void download(FsEntry item) {
     if (peerId == null || root == null || item.dir) return;
-    hub.expectFromPhone(item.name);
+    hub.expectFromPhone(peerId!, item.name);
     hub.sendMessage(peerId!, 'pb.x.pcfs.get', {
       'root': root,
       'id': item.id,

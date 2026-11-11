@@ -79,9 +79,11 @@ object Phone {
                     "pb.x.phone.ringer" -> ringer(b.optString("mode"))
                     "pb.x.phone.volume" -> { volume(b.optString("stream"), b.optInt("value")); null }
                     "pb.x.phone.find" -> { if (b.optBoolean("on")) find() else stopFind(); null }
-                    "pb.x.phone.calllog.request" -> { Thread { Bridge.sendTo(peer, "pb.x.phone.calllog", calls()) }.start(); return@post }
+                    // The call log belongs to the Calls switch, contacts to Calls or SMS: the Android
+                    // permission alone outlives the owner turning the switch off.
+                    "pb.x.phone.calllog.request" -> if (!Prefs.calls(ctx)) "not_allowed" else { Thread { Bridge.sendTo(peer, "pb.x.phone.calllog", calls()) }.start(); return@post }
                     "pb.x.phone.icons" -> { val pkgs = b.optJSONArray("pkgs") ?: JSONArray(); Thread { icons(peer, pkgs) }.start(); return@post }
-                    "pb.x.phone.contacts" -> { val q = b.optString("q"); Thread { Bridge.sendTo(peer, "pb.x.phone.contacts.result", contacts(q)) }.start(); return@post }
+                    "pb.x.phone.contacts" -> if (!Prefs.calls(ctx) && !Prefs.sms(ctx)) "not_allowed" else { val q = b.optString("q"); Thread { Bridge.sendTo(peer, "pb.x.phone.contacts.result", contacts(q)) }.start(); return@post }
                     else -> "unknown"
                 }
             } catch (_: SecurityException) { "no_permission" } catch (_: Exception) { "failed" }

@@ -230,6 +230,10 @@ impl Remote {
         if !ours {
             return false;
         }
+        // As pc_files: input and the screen only for a phone that is paired and connected right now.
+        if !engine.peers().iter().any(|p| p.id == peer && p.trusted && p.state == PeerState::Connected) {
+            return true;
+        }
         if !self.allowed() {
             self.deny(engine, peer, "not_allowed");
             return true;

@@ -66,7 +66,8 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
-/// The phone's notifications, newest first: a panel on Home with the latest few and "Ver todas".
+/// The phone's notifications, newest first: a flat list like the phone's shade, with the latest few on Home
+/// and the rest under «Historial».
 class NotificationsPanel extends StatelessWidget {
   const NotificationsPanel(this.hub, this.peerId, {super.key});
   final Hub hub;
@@ -78,6 +79,7 @@ class NotificationsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final list = hub.notifs[peerId] ?? const <PhoneNotif>[];
     final access = hub.info[peerId]?.notifAccess ?? false;
+    final s = Theme.of(context).colorScheme;
     final Widget body;
     if (!access) {
       body = const EmptyState(
@@ -92,7 +94,7 @@ class NotificationsPanel extends StatelessWidget {
         child: Text(
           'Todo al día: no hay notificaciones en el teléfono.',
           style: Theme.of(context).textTheme.bodyMedium
-              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ?.copyWith(color: s.onSurfaceVariant),
         ),
       );
     } else {
@@ -104,25 +106,34 @@ class NotificationsPanel extends StatelessWidget {
       );
     }
     return Panel(
-      title: 'Notificaciones',
-      icon: Symbols.notifications_rounded,
+      title: list.isEmpty
+          ? 'Notificaciones'
+          : 'Notificaciones · ${list.length}',
       action: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (list.isNotEmpty)
-            TextButton(
+            TextButton.icon(
               onPressed: () => showDialog<void>(
                 context: context,
                 builder: (_) => _AllDialog(hub, peerId),
               ),
-              child: Text('Ver todas (${list.length})'),
+              icon: const Icon(Symbols.history_rounded, size: 18),
+              label: const Text('Historial'),
             ),
-          if (list.any((n) => n.clearable))
-            IconButton(
-              tooltip: 'Borrar todas',
-              icon: const Icon(Symbols.clear_all_rounded),
+          if (list.any((n) => n.clearable)) ...[
+            const SizedBox(width: Gap.xs),
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                backgroundColor: s.surfaceContainerHighest,
+                foregroundColor: s.onSurface,
+                shape: const StadiumBorder(),
+              ),
               onPressed: () => hub.clearNotifs(peerId),
+              icon: const Icon(Symbols.close_rounded, size: 18),
+              label: const Text('Borrar todo'),
             ),
+          ],
         ],
       ),
       child: AnimatedSize(
@@ -146,7 +157,7 @@ class _AllDialog extends StatelessWidget {
     builder: (context, _) {
       final list = hub.notifs[peerId] ?? const <PhoneNotif>[];
       return AlertDialog(
-        title: const Text('Notificaciones'),
+        title: Text('Notificaciones · ${list.length}'),
         content: SizedBox(
           width: 520,
           child: list.isEmpty
@@ -191,6 +202,7 @@ class _NotifRowState extends State<_NotifRow> {
   late final _text = TextEditingController(text: _drafts[_draftKey] ?? '');
   bool _sending = false;
   bool _open = false;
+  bool _hover = false, _focus = false;
   late bool _replying = _text.text.isNotEmpty;
   String? _status;
   Hub get hub => widget.hub;
@@ -243,24 +255,57 @@ class _NotifRowState extends State<_NotifRow> {
     }
   }
 
-  // Compact card: picture with the app badge, sender and «app · when» on one line, the latest messages
-  // underneath, and the actions as small icons. Sizes follow the window's short side, so the card keeps
-  // its proportion on a laptop and on a large monitor.
+  // Like Phone Link: the app's icon, «App · when», the sender in bold and the message, with ⋯ and × on the
+  // right. Responder, Marcar como leído and Silenciar appear under the row while the pointer is on it.
+  // Sizes follow the window's short side and the user's tile size.
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final s = Theme.of(context).colorScheme;
-    final k = (MediaQuery.sizeOf(context).shortestSide / 900).clamp(0.8, 1.0);
-    final avatar = 36 * k;
+    final k =
+        (MediaQuery.sizeOf(context).shortestSide / 900).clamp(0.8, 1.0) *
+        TileScale.of(context);
+    final side = 32 * k;
     final appIcon = hub.appIcons[n.pkg];
-    final muted = t.labelSmall?.copyWith(
-      color: s.onSurfaceVariant,
-      fontWeight: FontWeight.w400,
+    final muted = t.labelSmall?.copyWith(color: s.onSurfaceVariant);
+    // What others wrote, oldest first; a notification that is not a chat has only its text.
+    final lines = [
+      for (final m in n.messages)
+        if (!m.out && m.body.isNotEmpty)
+          m.sender.isEmpty || m.sender == n.title
+              ? m.body
+              : '${m.sender}: ${m.body}',
+    ];
+    if (lines.isEmpty && n.text.isNotEmpty) lines.add(n.text);
+    final shown = lines.skip(
+      (lines.length - (_open ? 6 : 1)).clamp(0, lines.length),
     );
-    Widget round(Uint8List? bytes, double side) => ClipOval(
-      child: bytes != null
+    final canReply = Platform.isWindows && n.replyable;
+    final actions = _hover || _focus || _replying;
+    Widget small(IconData icon, String tip, VoidCallback onTap) => IconButton(
+      tooltip: tip,
+      onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+      constraints: BoxConstraints.tight(Size.square(30 * k)),
+      padding: EdgeInsets.zero,
+      iconSize: 18 * k,
+      color: s.onSurfaceVariant,
+      icon: Icon(icon),
+    );
+    Widget word(String label, VoidCallback onTap) => TextButton(
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        foregroundColor: s.primary,
+      ),
+      onPressed: onTap,
+      child: Text(label),
+    );
+    final icon = ClipRRect(
+      borderRadius: BorderRadius.circular(side * 0.28),
+      child: appIcon != null || n.avatar != null
           ? Image.memory(
-              bytes,
+              appIcon ?? n.avatar!,
               width: side,
               height: side,
               fit: BoxFit.cover,
@@ -277,89 +322,56 @@ class _NotifRowState extends State<_NotifRow> {
               ),
             ),
     );
-    Widget tool(IconData icon, String tip, VoidCallback onTap) => IconButton(
-      tooltip: tip,
-      onPressed: onTap,
-      visualDensity: VisualDensity.compact,
-      constraints: BoxConstraints.tight(Size.square(32 * k)),
-      padding: EdgeInsets.zero,
-      iconSize: 18 * k,
-      color: s.onSurfaceVariant,
-      icon: Icon(icon),
-    );
-    // What others wrote, oldest first; a notification that is not a chat has only its text.
-    final lines = [
-      for (final m in n.messages)
-        if (!m.out && m.body.isNotEmpty)
-          m.sender.isEmpty || m.sender == n.title
-              ? m.body
-              : '${m.sender}: ${m.body}',
-    ];
-    if (lines.isEmpty && n.text.isNotEmpty) lines.add(n.text);
-    final keep = _open ? 6 : 2;
-    final shown = lines.skip((lines.length - keep).clamp(0, lines.length));
-    final canReply = Platform.isWindows && n.replyable;
-    final title = n.title.isNotEmpty ? n.title : n.app;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Material(
-        color: s.surfaceContainer,
-        borderRadius: BorderRadius.circular(Radii.card),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: lines.length > keep || _open
-              ? () => setState(() => _open = !_open)
-              : null,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              Gap.m * k,
-              Gap.s * k,
-              Gap.xs,
-              Gap.s * k,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ExcludeSemantics(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: SizedBox.square(
-                          dimension: avatar,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              round(n.avatar ?? appIcon, avatar),
-                              if (n.avatar != null && appIcon != null)
-                                Positioned(
-                                  right: -2,
-                                  bottom: -2,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(1.5),
-                                    decoration: BoxDecoration(
-                                      color: s.surfaceContainer,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: round(appIcon, avatar * 0.38),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: Gap.m * k),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (f) => setState(() => _focus = f),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Material(
+          color: _hover ? s.surfaceContainerHigh : Colors.transparent,
+          borderRadius: BorderRadius.circular(Radii.tile),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: lines.length > 1
+                ? () => setState(() => _open = !_open)
+                : null,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                Gap.s * k,
+                Gap.s * k,
+                Gap.xs,
+                Gap.s * k,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ExcludeSemantics(child: icon),
+                      SizedBox(width: Gap.m * k),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              [
+                                if (n.app.isNotEmpty) n.app,
+                                ago(n.time),
+                                if (lines.length > 1)
+                                  '${lines.length} mensajes',
+                              ].join(' · '),
+                              style: muted,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (n.title.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
                                 child: Text(
-                                  title,
+                                  n.title,
                                   style: t.titleSmall?.copyWith(
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -367,169 +379,177 @@ class _NotifRowState extends State<_NotifRow> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              const SizedBox(width: Gap.s),
-                              Flexible(
+                            for (final line in shown)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
                                 child: Text(
-                                  [
-                                    if (n.title.isNotEmpty && n.app.isNotEmpty)
-                                      n.app,
-                                    ago(n.time),
-                                    if (lines.length > 1)
-                                      '${lines.length} mensajes',
-                                  ].join(' · '),
-                                  style: muted,
-                                  maxLines: 1,
+                                  line,
+                                  style: t.bodyMedium,
+                                  maxLines: _open ? 4 : 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ],
-                          ),
-                          for (final line in shown)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1),
-                              child: Text(
-                                line,
-                                style: t.bodyMedium?.copyWith(
-                                  color: s.onSurfaceVariant,
-                                ),
-                                maxLines: _open ? 4 : 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                          ],
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: 'Más opciones',
+                        iconSize: 18 * k,
+                        padding: EdgeInsets.zero,
+                        style: IconButton.styleFrom(
+                          minimumSize: Size.square(30 * k),
+                          fixedSize: Size.square(30 * k),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: Icon(
+                          Symbols.more_horiz_rounded,
+                          color: s.onSurfaceVariant,
+                        ),
+                        onSelected: (a) => hub.notifAction(peerId, n, a),
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'muteApp',
+                            child: Text(
+                              'Silenciar ${n.app.isEmpty ? 'esta app' : n.app} en el ordenador',
                             ),
+                          ),
                         ],
                       ),
-                    ),
-                    if (canReply)
-                      tool(
-                        _replying
-                            ? Symbols.close_rounded
-                            : Symbols.reply_rounded,
-                        _replying ? 'Cerrar respuesta' : 'Responder',
-                        () => setState(() => _replying = !_replying),
-                      ),
-                    if (n.markable || n.clearable)
-                      tool(
-                        Symbols.done_rounded,
-                        'Marcar como leído',
-                        () => hub.notifAction(peerId, n, 'read'),
-                      ),
-                    PopupMenuButton<String>(
-                      tooltip: 'Más opciones',
-                      iconSize: 18 * k,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 200),
-                      style: IconButton.styleFrom(
-                        minimumSize: Size.square(32 * k),
-                        fixedSize: Size.square(32 * k),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      icon: Icon(
-                        Symbols.more_vert_rounded,
-                        color: s.onSurfaceVariant,
-                      ),
-                      onSelected: (a) => a == 'dismiss'
-                          ? hub.dismissNotif(peerId, n.key)
-                          : hub.notifAction(peerId, n, a),
-                      itemBuilder: (_) => [
-                        if (n.clearable)
-                          const PopupMenuItem(
-                            value: 'dismiss',
-                            child: Text('Descartar en el teléfono'),
-                          ),
-                        if (n.mutable)
-                          const PopupMenuItem(
-                            value: 'mute',
-                            child: Text('Silenciar conversación'),
-                          ),
-                        PopupMenuItem(
-                          value: 'muteApp',
-                          child: Text(
-                            'Silenciar ${n.app.isEmpty ? 'esta app' : n.app} en el ordenador',
-                          ),
+                      if (n.clearable)
+                        small(
+                          Symbols.close_rounded,
+                          'Descartar',
+                          () => hub.dismissNotif(peerId, n.key),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (canReply && _replying)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      avatar + Gap.m * k,
-                      Gap.s,
-                      Gap.s,
-                      0,
-                    ),
-                    // Enter sends; Shift+Enter is a line break (the field's own behaviour).
-                    child: CallbackShortcuts(
-                      bindings: {
-                        const SingleActivator(LogicalKeyboardKey.enter): _reply,
-                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                            _reply,
-                      },
-                      // No maxLength: the phone and the messaging app set the real limits.
-                      child: TextField(
-                        controller: _text,
-                        autofocus: true,
-                        readOnly: _sending,
-                        minLines: 1,
-                        maxLines: 5,
-                        style: t.bodyMedium,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          filled: true,
-                          fillColor: s.surfaceContainerHighest,
-                          hintText:
-                              'Responder${n.title.isEmpty ? '' : ' a ${n.title}'}',
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            14,
-                            10,
-                            4,
-                            10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(Radii.card),
-                            borderSide: BorderSide.none,
-                          ),
-                          suffixIcon: IconButton(
-                            tooltip: 'Enviar respuesta',
-                            iconSize: 18,
-                            color: s.primary,
-                            onPressed: _sending || _text.text.trim().isEmpty
-                                ? null
-                                : _reply,
-                            icon: _sending
-                                ? const SizedBox.square(
-                                    dimension: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+                    ],
+                  ),
+                  // Same height whether the actions show or not would leave a gap: they slide in instead.
+                  AnimatedSize(
+                    duration: motion(context, Spring.fast.settle),
+                    curve: Spring.fast,
+                    alignment: Alignment.topLeft,
+                    child:
+                        !actions ||
+                            !(canReply ||
+                                n.markable ||
+                                n.clearable ||
+                                n.mutable)
+                        ? const SizedBox(width: double.infinity)
+                        : Padding(
+                            padding: EdgeInsets.only(
+                              left: side + Gap.m * k - 12,
+                              top: Gap.xs,
+                            ),
+                            child: Wrap(
+                              spacing: Gap.xs,
+                              children: [
+                                if (canReply)
+                                  FilledButton.tonal(
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                      ),
                                     ),
-                                  )
-                                : const Icon(Symbols.send_rounded),
+                                    onPressed: () =>
+                                        setState(() => _replying = !_replying),
+                                    child: const Text('Responder'),
+                                  ),
+                                if (n.markable || n.clearable)
+                                  word(
+                                    'Marcar como leído',
+                                    () => hub.notifAction(peerId, n, 'read'),
+                                  ),
+                                if (n.mutable)
+                                  word(
+                                    'Silenciar',
+                                    () => hub.notifAction(peerId, n, 'mute'),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                        onChanged: (v) {
-                          _drafts[_draftKey] = v;
-                          setState(() {});
+                  ),
+                  if (canReply && _replying)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        side + Gap.m * k,
+                        Gap.s,
+                        Gap.s,
+                        0,
+                      ),
+                      // Enter sends; Shift+Enter is a line break (the field's own behaviour).
+                      child: CallbackShortcuts(
+                        bindings: {
+                          const SingleActivator(LogicalKeyboardKey.enter):
+                              _reply,
+                          const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                              _reply,
                         },
+                        // No maxLength: the phone and the messaging app set the real limits.
+                        child: TextField(
+                          controller: _text,
+                          autofocus: true,
+                          readOnly: _sending,
+                          minLines: 1,
+                          maxLines: 5,
+                          style: t.bodyMedium,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor: s.surfaceContainerHighest,
+                            hintText:
+                                'Responder${n.title.isEmpty ? '' : ' a ${n.title}'}',
+                            contentPadding: const EdgeInsets.fromLTRB(
+                              16,
+                              10,
+                              4,
+                              10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(Radii.pill),
+                              borderSide: BorderSide.none,
+                            ),
+                            suffixIcon: IconButton(
+                              tooltip: 'Enviar respuesta',
+                              iconSize: 18,
+                              color: s.primary,
+                              onPressed: _sending || _text.text.trim().isEmpty
+                                  ? null
+                                  : _reply,
+                              icon: _sending
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Symbols.send_rounded),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            _drafts[_draftKey] = v;
+                            setState(() {});
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                if (_status != null)
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      avatar + Gap.m * k,
-                      Gap.xs,
-                      Gap.s,
-                      0,
+                  if (_status != null)
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        side + Gap.m * k,
+                        Gap.xs,
+                        Gap.s,
+                        0,
+                      ),
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(_status!, style: muted),
+                      ),
                     ),
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Text(_status!, style: muted),
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

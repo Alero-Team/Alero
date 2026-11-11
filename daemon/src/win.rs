@@ -100,8 +100,15 @@ pub fn runs_code(path: &std::path::Path) -> bool {
         "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "cpl", "msc", "jar", "lnk", "url", "reg", "inf", "dll", "sys",
         "appref-ms", "application", "gadget", "settingcontent-ms", "chm", "msp", "scf", "sct", "wsc", "xll", "website",
         "library-ms", "search-ms", "diagcab", "iso", "img", "vhd", "vhdx", "py", "pyw",
+        // Active content the shell hands to a privileged handler: macro Office files, themes, remote desktop,
+        // installers by reference, web queries and old shell scraps.
+        "docm", "dotm", "xlsm", "xltm", "xlam", "pptm", "potm", "ppam", "ppsm", "sldm", "theme", "themepack",
+        "deskthemepack", "rdp", "appinstaller", "jnlp", "iqy", "slk", "psc1", "ps1xml", "psd1", "shs", "mht",
+        "mhtml", "xbap", "vsto", "mcl", "mof", "wsb",
     ];
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| RISKY.contains(&e.to_ascii_lowercase().as_str()))
+    // The text after the last dot, as the shell reads it: Path::extension() says a file named ".bat" has none.
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    name.rsplit_once('.').is_some_and(|(_, e)| RISKY.contains(&e.to_ascii_lowercase().as_str()))
 }
 
 /// `file:///C:/…` with everything but plain path characters percent-encoded (spaces, accents, `#`, `%`).
@@ -203,6 +210,7 @@ mod tests {
     fn received_file_buttons_are_safe() {
         assert_eq!(file_uri(Path::new(r"C:\Users\Nicolás\Downloads\Alero\a b#1.pdf")), "file:///C:/Users/Nicol%C3%A1s/Downloads/Alero/a%20b%231.pdf");
         assert!(runs_code(Path::new("setup.EXE")) && runs_code(Path::new("x.ps1")) && runs_code(Path::new("a.lnk")));
+        assert!(runs_code(Path::new(".bat")) && runs_code(Path::new(r"C:\x\.LNK")) && runs_code(Path::new("q.docm")) && runs_code(Path::new("a.theme")));
         assert!(!runs_code(Path::new("foto.jpg")) && !runs_code(Path::new("doc.pdf")) && !runs_code(Path::new("sin_extension")));
     }
 }
