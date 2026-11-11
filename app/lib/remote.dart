@@ -4,7 +4,7 @@ import 'dart:ui' show Color;
 
 import 'device_image.dart';
 
-/// Plain views of the app messages a paired device sends (`pb.x.*`, Protocol.md §6). Parsing only: unknown or
+/// Plain views of the app messages a paired device sends (`pb.x.*`). Parsing only: unknown or
 /// missing fields fall back to empty values, because the other side may be an older or newer version.
 
 class ScreenShape {

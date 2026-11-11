@@ -1,4 +1,4 @@
-//! The engine: everything a front end needs, with no UI inside (Protocol.md §3–§7).
+//! The engine: everything a front end needs, with no UI inside.
 //!
 //! Connections, all TLS 1.3 with mutual pinning (see `tls`). The first frame the initiator sends is
 //! `pb.hello {kind}` and decides what the connection is for:
@@ -97,7 +97,7 @@ pub enum Event {
     TransferFinished { id: String, ok: bool, code: String, message: String, path: String },
     Log { message: String },
     /// An app message (`pb.x.*`) from a paired device: device info, clipboard, notifications, media…
-    /// The core only carries it; each app gives it meaning (Protocol.md §6).
+    /// The core only carries it; each app gives it meaning.
     Message { peer_id: String, kind: String, body: Value },
 }
 

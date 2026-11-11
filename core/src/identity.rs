@@ -1,4 +1,4 @@
-//! Device identity (Protocol.md §2): self-signed ECDSA P-256 cert; deviceId = SHA-256(SPKI), lowercase hex.
+//! Device identity: self-signed ECDSA P-256 cert; deviceId = SHA-256(SPKI), lowercase hex.
 //! The id is derived from the certificate, never from anything a peer merely announces.
 
 use rcgen::{CertificateParams, KeyPair, PKCS_ECDSA_P256_SHA256};

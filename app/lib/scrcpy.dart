@@ -23,7 +23,7 @@ class PhoneDisplay {
   }
 }
 
-/// Desktop wrapper around the bundled scrcpy + adb (Apache-2.0, ADR-0008). The phone must have wireless
+/// Desktop wrapper around the bundled scrcpy + adb (Apache-2.0). The phone must have wireless
 /// debugging on (Developer options); this is the "ADB" permission class in the project rules, chosen by the user
 /// and explained in the UI. Nothing here touches the engine or the trust store.
 class Scrcpy {

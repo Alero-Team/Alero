@@ -1,7 +1,7 @@
 //! What the phone can do to this computer, one small function per capability. Windows implements them with
 //! documented user-mode APIs (`SendInput`, GDI, `GetSystemPowerStatus`, the media-session WinRT API). Other
 //! systems report "not supported" so the phone never shows a control that would do nothing (Linux would need
-//! uinput/evdev and a Wayland portal: documented as pending in ADR-0011).
+//! uinput/evdev and a Wayland portal: documented as pending).
 
 /// Which groups of controls this build can actually carry out.
 pub struct Caps {

@@ -28,7 +28,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * Phone side of the app messages (Protocol.md §6, `pb.x.*`). Runs in the foreground service, so it keeps
+ * Phone side of the app messages (`pb.x.*`). Runs in the foreground service, so it keeps
  * working without the UI. Each handler only uses public Android APIs; the special ones (notification access)
  * are granted by the user in system settings.
  */

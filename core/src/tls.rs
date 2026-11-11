@@ -1,4 +1,4 @@
-//! TLS 1.3 with mutual authentication and pinning by deviceId (Protocol.md §4).
+//! TLS 1.3 with mutual authentication and pinning by deviceId.
 //! A certificate is accepted only if its deviceId is trusted, or while pairing (the caller
 //! then checks `peer_device_id` against the QR/SAS). Early data stays off: rustls' default
 //! `max_early_data_size` is 0, so there is no 0-RTT.

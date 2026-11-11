@@ -43,7 +43,7 @@ class FsEntry {
       : '$size elementos';
 }
 
-/// The computer's side of browsing a phone's files (ADR-0011). It only asks (`pb.x.fs.*`): the phone decides what
+/// The computer's side of browsing a phone's files. It only asks (`pb.x.fs.*`): the phone decides what
 /// it shows, and files travel as ordinary transfers, so progress, errors and retries are the app's usual ones.
 class FsClient extends ChangeNotifier {
   FsClient(this.hub);

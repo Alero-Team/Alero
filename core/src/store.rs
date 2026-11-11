@@ -1,6 +1,6 @@
 //! Persistent state in one directory: identity, trusted peers, transfer history.
 //! shortcut: the private key is a plain file (0600 on Unix; private app dir on Android). Before 1.0 wrap it
-//! with the Android Keystore / Windows DPAPI / Secret Service (Protocol.md §2).
+//! with the Android Keystore / Windows DPAPI / Secret Service.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;

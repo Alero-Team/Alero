@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'hub.dart';
 import 'src/rust/api/engine.dart' as pb;
 
-/// The phone side of controlling a computer (ADR-0011): every action is a `pb.x.remote.*` message to a paired
+/// The phone side of controlling a computer: every action is a `pb.x.remote.*` message to a paired
 /// computer. The computer carries it out only if its owner switched "Control remoto" on there; otherwise it
 /// answers `pb.x.remote.denied` and the Hub tells the user. Nothing here decides trust.
 class PcRemote {

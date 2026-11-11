@@ -1,14 +1,13 @@
 //! Control-message framing: u32 big-endian length + compact UTF-8 JSON body.
-//! Spec: docs/architecture/Protocol.md §6. Vectors: protocol/vectors/framing.json.
 
 use std::io::{Read, Write};
 
 use serde_json::Value;
 
-/// Max control body size (Protocol.md §6, proposal; revisit after spike S1).
+/// Max control body size (proposal; revisit after spike S1).
 pub const MAX_BODY: usize = 64 * 1024;
 
-/// Max body of an application message (pb.x.*, Protocol.md §6.1): remote-screen frames and thumbnails.
+/// Max body of an application message (pb.x.*): remote-screen frames and thumbnails.
 /// Only paired devices reach that connection kind, so the larger buffer is not exposed to strangers.
 pub const MAX_APP_BODY: usize = 256 * 1024;
 

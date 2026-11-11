@@ -1,9 +1,9 @@
-//! A paired phone controlling and watching this computer (ADR-0011). Everything here arrives as `pb.x.*`
+//! A paired phone controlling and watching this computer. Everything here arrives as `pb.x.*`
 //! app messages from a paired device (the engine already refuses anyone else) and is carried out only while the
 //! user has switched on "Control remoto" in Alero (a file in the data folder, off by default). While a phone
 //! watches the screen or drives the input, a toast says so.
 //!
-//! Messages (all JSON bodies; Protocol.md §6.2):
+//! Messages (all JSON bodies):
 //!   phone -> PC   pb.x.remote.{move,button,click,scroll,key,text,media,power}   pb.x.screen.{start,keepalive,ack,stop}
 //!                 pb.x.shot.request   pb.x.pcmedia.watch
 //!   PC -> phone   pb.x.info (battery, capabilities, allowed)   pb.x.screen.frame   pb.x.pcmedia.state

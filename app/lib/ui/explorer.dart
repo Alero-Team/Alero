@@ -149,7 +149,7 @@ Future<void> _menu(
   }
 }
 
-/// The phone's files, on the computer (ADR-0011). It lists what the phone chooses to show (photos, videos, music,
+/// The phone's files, on the computer. It lists what the phone chooses to show (photos, videos, music,
 /// Alero's received files and the folders its owner added) and asks it to send files; downloads and uploads are
 /// the app's normal transfers, so they appear with progress, errors and retry in Archivos and under the list.
 class ExplorerScreen extends StatefulWidget {

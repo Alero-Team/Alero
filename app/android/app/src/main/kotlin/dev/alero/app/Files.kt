@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
- * The phone's files for a paired computer (`pb.x.fs.*`, ADR-0011). Only what Android lets an ordinary app see:
+ * The phone's files for a paired computer (`pb.x.fs.*`). Only what Android lets an ordinary app see:
  *  - photos, videos and music through MediaStore (needs the "Photos and videos" / "Music and audio" permission);
  *  - the files Alero itself received (Download/Alero), no permission;
  *  - folders the user picked with the system folder picker (a persisted grant for that folder only).
