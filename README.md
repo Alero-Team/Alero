@@ -1,51 +1,84 @@
-# Alero
+# Alero — Android y Windows, conectados
 
-[![Checks](https://github.com/Alero-Team/Alero/actions/workflows/ci.yml/badge.svg)](https://github.com/Alero-Team/Alero/actions/workflows/ci.yml)
-[![Packages](https://github.com/Alero-Team/Alero/actions/workflows/packages.yml/badge.svg)](https://github.com/Alero-Team/Alero/actions/workflows/packages.yml)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+<div align="center">
 
-Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control either device from the other, without a cloud account.
+  <img src="branding/alero_icon.svg" alt="Logo oficial de Alero" width="180" />
 
-**Beta software · Beta 1.2.1 (1.2.1).** [Download Android and Windows](https://github.com/Alero-Team/Alero/releases) · [Changelog](CHANGELOG.md)
+  <h2>Una conexión. Sin fricción.</h2>
 
-## Features
+  <p>Alero conecta tu teléfono Android y tu PC con Windows directamente por tu red local o por cable USB, con <strong>Flutter</strong>, <strong>Rust</strong> y <strong>Kotlin</strong>.</p>
 
-| From the computer | From the phone |
+  <p>Transfiere archivos, explora tu teléfono, comparte el portapapeles, replica notificaciones y controla un equipo desde el otro, sin cuenta ni nube.</p>
+
+  <p>
+    <a href="https://github.com/Alero-Team/Alero/releases">
+      <img src="https://img.shields.io/badge/Descargar-GitHub%20Releases-238636?style=for-the-badge&logo=github&logoColor=white" alt="Descargar Alero desde GitHub Releases" />
+    </a>
+  </p>
+
+  <p>
+    <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=black" alt="Android 8.0 o posterior" />
+    <img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white" alt="Windows x64" />
+    <img src="https://img.shields.io/badge/Flutter-Rust-02569B?logo=flutter&logoColor=white" alt="Flutter y Rust" />
+    <img src="https://img.shields.io/badge/Estado-Beta-F59E0B" alt="Versión Beta" />
+    <img src="https://img.shields.io/badge/Licencia-GPL--3.0--or--later-blue" alt="Licencia GPL-3.0 o posterior" />
+  </p>
+
+</div>
+
+## Descripción general
+
+**Alero** te permite usar tu teléfono y tu computadora como un solo equipo. Los dispositivos se emparejan una vez con un código o un QR y desde entonces hablan por TLS con autenticación mutua. Nada pasa por un servidor ni necesitas crear una cuenta.
+
+## Desarrolladores
+
+Un proyecto de **Alero Team**, desarrollado por:
+
+- **[@edwindidier17](https://github.com/edwindidier17)**
+- **[@k0op4](https://github.com/k0op4)**
+
+## Funciones principales
+
+| Desde la computadora | Desde el teléfono |
 | --- | --- |
-| Send files and folders, with resumable transfers | Send files and share from any app |
-| Browse, rename and delete the phone's files | Browse the folders the computer shares |
-| Notifications with replies, SMS and calls | Touchpad, keyboard and media keys for the computer |
-| Phone screen, camera, webcam and screen recording (scrcpy) | The computer's screen, live, with its pointer |
-| Quick controls: Do Not Disturb, torch, volume, find my phone | The phone as a second Windows monitor |
-| Shared clipboard | Shared clipboard |
+| Enviar archivos y carpetas, con transferencias reanudables | Enviar archivos y compartir desde cualquier app |
+| Explorar, renombrar y borrar los archivos del teléfono | Explorar las carpetas que comparte la computadora |
+| Notificaciones con respuesta, SMS y llamadas | Touchpad, teclado y teclas multimedia para la computadora |
+| Pantalla, cámara, webcam y grabación del teléfono (scrcpy) | La pantalla de la computadora en vivo, con su puntero |
+| Controles rápidos: No molestar, linterna, volumen, buscar mi teléfono | El teléfono como segundo monitor de Windows |
+| Portapapeles compartido | Portapapeles compartido |
 
-Devices pair once with a code or a QR and then talk over mutually authenticated TLS. Nothing passes through a server.
+## Cómo funciona
 
-## Use
+1. Instala el APK de Android y el instalador de Windows de la misma versión.
+2. Abre Alero en ambos dispositivos, conéctalos a la misma red Wi-Fi y empareja en **Dispositivos**, o escanea el QR de la computadora.
+3. Permite el control remoto en Windows y concede al teléfono solo los permisos de las funciones que vayas a usar.
 
-1. Install the Android ARM64 APK and the Windows x64 installer from the same release. The installer program itself is 32-bit (Inno Setup); it installs the 64-bit app. Windows 11 on ARM runs it through x64 emulation; native ARM64 and 32-bit x86 builds are not available.
-2. Open Alero on both devices, use the same Wi-Fi network and pair them in **Dispositivos**. Alternatively, scan the computer's QR code.
-3. Allow remote control on Windows and grant only the phone permissions needed for the features you use.
+La interfaz está en español.
 
-The interface is in Spanish.
+### Controlar la computadora desde el teléfono
 
-### Controlling the computer from the phone
+El touchpad mueve el puntero con un dedo y desplaza con dos. Toca dos veces y mantén el segundo toque para arrastrar o seleccionar. Los botones izquierdo y derecho quedan activos hasta que los vuelves a tocar. El botón del teclado abre la entrada de texto y los atajos.
 
-The touchpad moves with one finger and scrolls with two. Tap twice and keep the second touch down to drag or select. The left and right buttons stay selected until tapped again. The keyboard button opens text input and shortcuts.
+### Usar el teléfono desde la computadora
 
-### Using the phone from the computer
+**Acceso remoto** abre la pantalla del teléfono en una ventana con [scrcpy](https://github.com/Genymobile/scrcpy), por depuración USB o inalámbrica, que el dueño del teléfono autoriza en Android. La misma página abre la cámara del teléfono, la convierte en webcam mediante OBS Studio y graba la pantalla en un archivo de video.
 
-**Acceso remoto** opens the phone's screen in a window with [scrcpy](https://github.com/Genymobile/scrcpy) over USB debugging or wireless debugging, which the phone's owner authorises on the phone. The same page opens the phone's camera in a window, turns it into a webcam through OBS Studio, and records the screen to a video file.
+### Archivos y privacidad
 
-### Files and privacy
+La sección Música del explorador excluye audios de 5 segundos o menos, tonos de llamada, sonidos de notificación y alarmas. **Todas las carpetas** requiere el permiso especial de almacenamiento compartido de Android. Los datos privados de otras apps siguen inaccesibles. Pulsa una transferencia completada para abrirla con la aplicación asociada del sistema.
 
-The file browser's Music section excludes audio lasting 5 seconds or less, ringtones, notification sounds and alarms. **All folders** requires Android's special shared-storage permission. Private app data remains inaccessible. Click a completed transfer to open it with the system's associated application.
+El ajuste opcional **Seguridad** de Android desbloquea la app con la huella del sistema o el PIN del dispositivo. Alero nunca guarda el PIN ni datos biométricos.
 
-Android's optional **Security** setting unlocks the app with the system fingerprint or device PIN. Alero never stores the PIN or biometric data.
+## Descargas
 
-## Build
+Los paquetes de Android y Windows se publican en **[GitHub Releases](https://github.com/Alero-Team/Alero/releases)** junto con las novedades de cada versión. Consulta también el [historial de cambios](CHANGELOG.md).
 
-Requirements: Flutter **3.47.8** (Dart 3.13.7), Rust stable, Java 17+, Android SDK with NDK **29.0.14206865**, and Visual Studio C++ desktop tools for Windows. Windows packaging also needs Inno Setup 6.
+Alero sigue en fase Beta. Descarga siempre el APK y el instalador de la misma versión.
+
+## Compilar
+
+Requisitos: Flutter **3.47.8** (Dart 3.13.7), Rust estable, Java 17+, Android SDK con NDK **29.0.14206865** y las herramientas de escritorio de C++ de Visual Studio para Windows. El empaquetado de Windows también requiere Inno Setup 6.
 
 ```powershell
 cargo fetch --locked
@@ -59,27 +92,40 @@ cd ..
 ./tools/build-windows.ps1 -FlutterRoot C:/src/flutter
 ```
 
-The build scripts create packages and SHA-256 files in `dist/`. scrcpy is downloaded from its pinned upstream release and checked against its SHA-256 hash. Third-party notices and source licenses are bundled with both apps.
+Los scripts crean los paquetes y sus archivos SHA-256 en `dist/`. scrcpy se descarga de su versión fijada y se verifica con su hash SHA-256. Los avisos de terceros y las licencias de código fuente se incluyen en ambas apps.
 
-The **Checks** workflow runs static analysis and the tests on every push and pull request. The **Packages** workflow runs on `main`, builds both installers with the Android signing identity kept in encrypted repository secrets, and publishes a release when the version in `app/pubspec.yaml` has a CHANGELOG section and no release yet.
+El flujo **Checks** ejecuta el análisis estático y las pruebas en cada push y pull request. El flujo **Packages** corre en `main`, compila ambos instaladores con la identidad de firma de Android guardada en secretos cifrados del repositorio y publica una versión cuando la de `app/pubspec.yaml` tiene sección en el CHANGELOG y aún no tiene release.
 
-## Signing and limitations
+## Firma y limitaciones
 
-The Android builds keep one signing identity so each release updates the previous one. It is not a production certificate. Google Play Protect may block APKs downloaded from GitHub because the app declares sensitive capabilities (notification access, SMS), even when the APK is signed correctly; see [Play Protect's developer guidance](https://developers.google.com/android/play-protect/warning-dev-guidance). The Windows installer has no commercial Authenticode signature.
+Las compilaciones de Android conservan una sola identidad de firma para que cada versión actualice a la anterior. No es un certificado de producción. Google Play Protect puede bloquear APK descargados de GitHub porque la app declara capacidades sensibles (acceso a notificaciones, SMS), aunque el APK esté bien firmado; consulta la [guía de Play Protect para desarrolladores](https://developers.google.com/android/play-protect/warning-dev-guidance). El instalador de Windows no tiene firma Authenticode comercial.
 
-Linux is not packaged. Using the phone from the computer requires Windows.
+Linux no se empaqueta. Usar el teléfono desde la computadora requiere Windows.
 
-## Source layout
+## Estructura del código
 
-- `core/`: Rust pairing, TLS and resumable transfers.
-- `daemon/`: Windows tray service and native remote control.
-- `app/`: Flutter UI, Kotlin Android integration and Windows runner.
-- `tools/`, `packaging/`: build scripts, installer and notices.
+- `core/`: emparejamiento, TLS y transferencias reanudables en Rust.
+- `daemon/`: servicio de bandeja de Windows y control remoto nativo.
+- `app/`: interfaz Flutter, integración de Android en Kotlin y ejecutable de Windows.
+- `tools/`, `packaging/`: scripts de compilación, instalador y avisos.
 
-## Security
+## Seguridad
 
-Please report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
+Reporta las vulnerabilidades de forma privada: consulta [SECURITY.md](SECURITY.md).
 
-## License
+## Información de la aplicación
 
-GNU GPL-3.0-or-later. See [LICENSE](LICENSE). Third-party components retain their own licenses.
+| | |
+| --- | --- |
+| **Nombre** | Alero |
+| **Plataformas** | Android 8.0 o posterior y Windows (x64) |
+| **Paquete** | `dev.alero.app` |
+| **Tecnologías** | Flutter, Rust y Kotlin |
+| **Conexión** | Red local o USB, TLS con autenticación mutua, sin servidores |
+| **Licencia** | GNU GPL-3.0-or-later. Consulta [LICENSE](LICENSE); los componentes de terceros conservan sus licencias |
+
+---
+
+<div align="center">
+  <sub>Diseñado para Android y Windows · Alero Team</sub>
+</div>
