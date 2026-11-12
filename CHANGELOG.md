@@ -1,5 +1,11 @@
 # Cambios
 
+## Beta 1.3.1 (1.3.1) — 2026-11-12
+
+### Windows y Linux
+
+- **Inicio igual en todas las pantallas:** con la escala de Windows al 125 % o en una ventana más pequeña, la tarjeta del dispositivo mantiene la conexión, el almacenamiento y la batería al lado de los botones, en la columna izquierda, en lugar de apilarse y mover el resto de tarjetas.
+
 ## Beta 1.3 (1.3.0) — 2026-11-12
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
