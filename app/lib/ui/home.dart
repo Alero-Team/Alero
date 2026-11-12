@@ -210,49 +210,74 @@ class HomeScreen extends StatelessWidget {
     // Two columns on a wide window: the first tiles of the user's order on the left (three fifths of
     // them), the rest on the right. One column otherwise. A tile with nothing to show takes no room.
     final two = wide && !Platform.isAndroid && shown.length > 1;
-    final cut = two ? homeLeftCount(shown.length) : shown.length;
-    final columns = [
-      shown.take(cut).map((t) => tile(t, placeholder: two)).nonNulls.toList(),
-      if (two)
-        shown
-            .skip(cut)
-            .map((t) => tile(t, placeholder: true))
-            .nonNulls
-            .toList(),
-    ];
+    Widget board(double width) {
+      // The device card needs ~760 px inside to put its status beside the buttons. When the left column is
+      // narrower (Windows at 125 %, a smaller window), it takes the whole top row instead of stacking, so the
+      // board keeps the same look on every screen.
+      final lift =
+          two &&
+          shown.length > 2 &&
+          shown.first == 'device' &&
+          (width - Gap.l * fit) * 3 / 5 - 40 * fit < 760;
+      final rest = lift ? shown.skip(1).toList() : shown;
+      final cut = !two
+          ? rest.length
+          : lift
+          ? (rest.length / 2).ceil()
+          : homeLeftCount(rest.length);
+      final columns = [
+        rest.take(cut).map((t) => tile(t, placeholder: two)).nonNulls.toList(),
+        if (two)
+          rest
+              .skip(cut)
+              .map((t) => tile(t, placeholder: true))
+              .nonNulls
+              .toList(),
+      ];
+      return KeyedSubtree(
+        key: ValueKey((columns.length, lift)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (lift) ...[hero, gap],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (c, column) in columns.indexed) ...[
+                  if (c > 0) gap,
+                  Expanded(
+                    flex: c == 0 ? 3 : 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (i, w) in column.indexed) ...[
+                          if (i > 0) gap,
+                          w,
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       _DevicePicker(hub, main),
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
-      // Changing between one and two columns fades instead of jumping while the window is resized.
-      AnimatedSwitcher(
-        duration: motion(context, const Duration(milliseconds: 220)),
-        layoutBuilder: (current, previous) => Stack(
-          alignment: Alignment.topCenter,
-          children: [...previous, ?current],
-        ),
-        child: KeyedSubtree(
-          key: ValueKey(columns.length),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final (c, column) in columns.indexed) ...[
-                if (c > 0) gap,
-                Expanded(
-                  flex: c == 0 ? 3 : 2,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final (i, w) in column.indexed) ...[
-                        if (i > 0) gap,
-                        w,
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ],
+      // Changing layout fades instead of jumping while the window is resized.
+      LayoutBuilder(
+        builder: (context, box) => AnimatedSwitcher(
+          duration: motion(context, const Duration(milliseconds: 220)),
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.topCenter,
+            children: [...previous, ?current],
           ),
+          child: board(box.maxWidth),
         ),
       ),
     ];
