@@ -114,6 +114,9 @@ class PeerInfo {
   bool get remoteAllowed => _remote?['allowed'] == true;
   bool get canInput => _remote?['input'] == true;
   bool get canScreen => _remote?['screen'] == true;
+
+  /// Why this computer cannot share its screen (for example, Wayland without spectacle); empty when it can.
+  String get screenNote => _remote?['screenNote'] as String? ?? '';
   bool get canMedia => _remote?['media'] == true;
   bool get canPower => _remote?['power'] == true;
 

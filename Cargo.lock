@@ -1789,7 +1789,9 @@ name = "pb-daemon"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "dbus",
  "jpeg-encoder",
+ "libc",
  "pb-core",
  "png",
  "serde_json",
@@ -1797,6 +1799,7 @@ dependencies = [
  "tray-icon",
  "windows",
  "windows-version",
+ "x11-dl",
 ]
 
 [[package]]

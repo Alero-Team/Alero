@@ -217,7 +217,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
           ? const EmptyState(
               icon: Symbols.cast_rounded,
               title: 'Falta el componente de pantalla',
-              body: 'Esta instalación no incluye scrcpy. Reinstala Alero o copia la carpeta «scrcpy» junto al programa.',
+              body: 'Esta instalación no incluye scrcpy. Reinstala Alero, copia la carpeta «scrcpy» junto al programa o, en Linux, instala los paquetes adb y scrcpy.',
             )
           : LayoutBuilder(
               builder: (context, box) {

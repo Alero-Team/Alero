@@ -54,7 +54,7 @@ class AdbMdns {
     )) {
       // Virtual machines' adapters never hold the phone and only slow the sweep down.
       if (RegExp(
-        r'vmware|virtualbox|vethernet|hyper-v|wsl',
+        r'vmware|virtualbox|vethernet|hyper-v|wsl|docker|virbr|veth|^br-|tailscale|^zt',
         caseSensitive: false,
       ).hasMatch(i.name)) {
         continue;

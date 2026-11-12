@@ -130,6 +130,9 @@ class ScreenFeed extends ChangeNotifier {
   final String peerId;
 
   Uint8List? frame;
+
+  /// Set when the computer says it cannot capture its screen; cleared by the next picture.
+  bool failed = false;
   int w = 0, h = 0;
   bool running = false;
   Timer? _keepalive;
@@ -147,6 +150,12 @@ class ScreenFeed extends ChangeNotifier {
     'cursor': true,
   });
 
+  void onError(Map<String, dynamic> b) {
+    if (frame != null) return; // a hiccup after pictures were arriving: keep the last one
+    failed = true;
+    notifyListeners();
+  }
+
   void onCursor(Map<String, dynamic> b) {
     final x = b['x'], y = b['y'];
     cursor.value = x is num && y is num
@@ -157,6 +166,7 @@ class ScreenFeed extends ChangeNotifier {
   void start() {
     _keepalive?.cancel();
     running = true;
+    failed = false;
     _ask();
     _keepalive = Timer.periodic(
       const Duration(seconds: 5),
@@ -180,6 +190,7 @@ class ScreenFeed extends ChangeNotifier {
     } catch (_) {
       return; // damaged frame: wait for the next one
     }
+    failed = false;
     w = (b['w'] as num?)?.toInt() ?? w;
     h = (b['h'] as num?)?.toInt() ?? h;
     hub.sendMessage(peerId, 'pb.x.screen.ack', {'seq': b['seq']});
@@ -192,6 +203,7 @@ class ScreenFeed extends ChangeNotifier {
     _keepalive?.cancel();
     _keepalive = null;
     frame = null;
+    failed = false;
     cursor.value = null;
     hub.sendMessage(peerId, 'pb.x.screen.stop', {});
     notifyListeners();

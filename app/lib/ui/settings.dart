@@ -240,19 +240,19 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 SettingTile(
                   title: 'Permitir que mis teléfonos controlen este equipo',
-                  subtitle: Platform.isWindows
+                  subtitle: Native.pc
                       ? 'Mover el ratón, escribir, cambiar el volumen y la música, ver la pantalla y pedir capturas. Solo desde dispositivos emparejados; verás un aviso cuando se use. Bloquear o suspender siempre se confirman en el teléfono. Apagado por defecto.'
-                      : 'Todavía no está disponible en este sistema (hace falta uinput y el portal de pantalla). Solo Windows por ahora.',
+                      : 'Todavía no está disponible en este sistema. Solo Windows y Linux por ahora.',
                   trailing: AleroSwitch(
                     value: hub.remoteAllow,
-                    onChanged: Platform.isWindows ? hub.setRemoteAllow : (_) {},
+                    onChanged: Native.pc ? hub.setRemoteAllow : (_) {},
                     label: 'Control remoto',
                   ),
-                  onTap: Platform.isWindows
+                  onTap: Native.pc
                       ? () => hub.setRemoteAllow(!hub.remoteAllow)
                       : null,
                 ),
-                if (Platform.isWindows) ...[
+                if (Native.pc) ...[
                   const SizedBox(height: Gap.m),
                   SettingTile(
                     title: 'Compartir carpeta con el teléfono',

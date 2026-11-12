@@ -75,6 +75,8 @@ class ObsWebcam {
     required String windowTitle,
     required String password,
   }) async {
+    // The window-capture source below exists only in OBS for Windows (Linux uses xcomposite_input).
+    if (!Platform.isWindows) throw StateError('La webcam con OBS solo está disponible en Windows por ahora.');
     await stop(silent: true);
     final connection = await _connect(password);
     try {

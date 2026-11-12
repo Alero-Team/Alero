@@ -220,6 +220,9 @@ class Hub extends ChangeNotifier {
   List<String> homeOrder = [];
   Set<String> homeHidden = {};
 
+  /// The paired device Home and its shortcuts act on when several are paired (empty: the first online).
+  String activePeerId = '';
+
   /// Width of each "Controles del teléfono" tile, in grid columns, by label (long press to change).
   final controlSpans = <String, int>{};
 
@@ -241,7 +244,7 @@ class Hub extends ChangeNotifier {
     );
     final dl = Platform.isAndroid
         ? '${(await getApplicationSupportDirectory()).path}/incoming' // moved to Downloads by Native.publish
-        : '${(await getDownloadsDirectory())!.path}${Platform.pathSeparator}Alero';
+        : '${(await getDownloadsDirectory())?.path ?? '${Platform.environment['HOME']}/Downloads'}${Platform.pathSeparator}Alero';
     downloads = Platform.isAndroid ? 'Descargas/Alero' : dl;
     _settings = File('${data.path}/settings.json');
     final s = _readSettings();
@@ -253,6 +256,7 @@ class Hub extends ChangeNotifier {
     tileSize.value = s['tileSize'] as String? ?? 'normal';
     homeOrder = (s['homeOrder'] as List? ?? []).whereType<String>().toList();
     homeHidden = (s['homeHidden'] as List? ?? []).whereType<String>().toSet();
+    activePeerId = s['activePeer'] as String? ?? '';
     controlOrder = (s['controlOrder'] as List? ?? [])
         .whereType<String>()
         .toList();
@@ -344,7 +348,7 @@ class Hub extends ChangeNotifier {
 
   /// Windows folders stay private unless the owner chooses them explicitly.
   Future<void> addPcFolder() async {
-    if (!Platform.isWindows) return;
+    if (!Native.pc) return;
     final selected = await Native.pickSharedPcFolder();
     if (selected == null) return;
     final folder = Directory(selected);
@@ -401,6 +405,7 @@ class Hub extends ChangeNotifier {
         'tileSize': tileSize.value,
         'homeOrder': homeOrder,
         'homeHidden': homeHidden.toList(),
+        'activePeer': activePeerId,
         'controlOrder': controlOrder,
         'controlHidden': controlHidden.toList(),
         'controlSpans': controlSpans,
@@ -794,6 +799,9 @@ class Hub extends ChangeNotifier {
         return;
       case 'pb.x.screen.cursor':
         screen?.onCursor(b);
+        return;
+      case 'pb.x.screen.error':
+        screen?.onError(b);
         return;
       case 'pb.x.pcmedia.state':
         media[peerId] = MediaState(b);
@@ -1210,6 +1218,12 @@ class Hub extends ChangeNotifier {
   void setHome(List<String> order, Set<String> hidden) {
     homeOrder = order;
     homeHidden = hidden;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void selectPeer(String id) {
+    activePeerId = id;
     _saveSettings();
     notifyListeners();
   }

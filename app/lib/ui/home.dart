@@ -21,11 +21,52 @@ import 'controls.dart';
 import 'widgets.dart';
 import 'icon.dart';
 
-/// The connected device Home is about: the first paired one online, else the first paired.
+/// The device Home is about: the one the user picked, else the first paired one online, else the first paired.
 pb.Peer? mainPeer(Hub hub) {
   final trusted = hub.peers.where((p) => p.trusted);
-  return trusted.where((p) => p.state == pb.PeerState.connected).firstOrNull ??
+  return trusted.where((p) => p.id == hub.activePeerId).firstOrNull ??
+      trusted.where((p) => p.state == pb.PeerState.connected).firstOrNull ??
       trusted.firstOrNull;
+}
+
+/// Chips to switch the active device; nothing when only one is paired.
+class _DevicePicker extends StatelessWidget {
+  const _DevicePicker(this.hub, this.current);
+  final Hub hub;
+  final pb.Peer current;
+
+  @override
+  Widget build(BuildContext context) {
+    final paired = hub.peers.where((p) => p.trusted).toList();
+    if (paired.length < 2) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Gap.m),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final p in paired)
+              Padding(
+                padding: const EdgeInsets.only(right: Gap.s),
+                child: ChoiceChip(
+                  selected: p.id == current.id,
+                  // The device icon stays; a checkmark would replace it and change the chip's look.
+                  showCheckmark: false,
+                  onSelected: (_) => hub.selectPeer(p.id),
+                  avatar: Icon(
+                    hub.info[p.id]?.phone == true
+                        ? Symbols.smartphone_rounded
+                        : Symbols.computer_rounded,
+                    size: 18,
+                  ),
+                  label: Text(p.name),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Home's tiles, by name, with the title "Personalizar" shows for each.
@@ -106,6 +147,7 @@ class HomeScreen extends StatelessWidget {
           icon: const Icon(Symbols.dashboard_customize_rounded),
         ),
         children: [
+          _DevicePicker(hub, main),
           // Same order as the computer's Inicio: device, what it plays, its controls, then activity.
           ScaledTiles(
             scale,
@@ -180,6 +222,7 @@ class HomeScreen extends StatelessWidget {
     ];
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
+      _DevicePicker(hub, main),
       if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
       // Changing between one and two columns fades instead of jumping while the window is resized.
       AnimatedSwitcher(

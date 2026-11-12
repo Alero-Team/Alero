@@ -1,7 +1,7 @@
 //! What the phone can do to this computer, one small function per capability. Windows implements them with
 //! documented user-mode APIs (`SendInput`, GDI, `GetSystemPowerStatus`, the media-session WinRT API). Other
-//! systems report "not supported" so the phone never shows a control that would do nothing (Linux would need
-//! uinput/evdev and a Wayland portal: documented as pending).
+//! systems report "not supported" so the phone never shows a control that would do nothing. Linux uses uinput,
+//! Xlib, MPRIS and the compositor's screenshot tool (see `sys_linux.rs`).
 
 /// Which groups of controls this build can actually carry out.
 pub struct Caps {
@@ -33,10 +33,16 @@ pub fn stream_pointer(native: i32, hot_x: i32, hot_y: i32) -> (i32, i32, i32) {
 
 #[cfg(windows)]
 pub use win::*;
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub use linux::*;
+#[cfg(not(any(windows, target_os = "linux")))]
 pub use other::*;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[path = "sys_linux.rs"]
+mod linux;
+
+#[cfg(not(any(windows, target_os = "linux")))]
 mod other {
     use super::*;
     pub const CAPS: Caps = Caps { input: false, screen: false, media: false, power: false };
@@ -544,7 +550,18 @@ try {
             if let Ok(value) = serde_json::from_slice(&out.stdout) { return value; }
         }
     }
+    #[cfg(target_os = "linux")]
+    return linux::device_metadata();
+    #[cfg(not(target_os = "linux"))]
     serde_json::json!({})
+}
+
+/// Why the screen cannot be shared on this system (shown on the phone); empty when it can.
+pub fn screen_note() -> &'static str {
+    #[cfg(target_os = "linux")]
+    return linux::screen_note();
+    #[cfg(not(target_os = "linux"))]
+    ""
 }
 
 pub fn screen_size() -> (i32, i32) {
@@ -553,7 +570,9 @@ pub fn screen_size() -> (i32, i32) {
         use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
         return (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    return linux::screen_size();
+    #[cfg(not(any(windows, target_os = "linux")))]
     (0, 0)
 }
 

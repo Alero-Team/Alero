@@ -25,3 +25,63 @@ jobs:
         working-directory: app
       - run: flutter test --no-pub
         working-directory: app
+  linux:
+    # Ubuntu 22.04 (glibc 2.35): the package built here also runs on Debian 12 and later.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      # Same pinned commit and Flutter version as the other jobs.
+      - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba
+        with:
+          flutter-version: '3.47.8'
+          channel: stable
+          cache: true
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang cmake ninja-build pkg-config libgtk-3-dev \
+            libayatana-appindicator3-dev libdbus-1-dev libxdo-dev liblzma-dev rpm
+      # appimagetool 1.9.1, pinned by hash (same as the Packages workflow).
+      - name: Install appimagetool
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  /usr/local/bin/appimagetool' | sha256sum -c -
+          sudo chmod +x /usr/local/bin/appimagetool
+      - run: cargo test --locked -p pb-daemon -p pb-core
+      - run: bash tools/build-linux.sh
+      - name: Check that every package was built
+        run: |
+          ls -l dist
+          for pattern in '*.deb' '*.rpm' '*.AppImage' '*.tar.gz'; do
+            test -n "$(find dist -maxdepth 1 -name "$pattern" -print -quit)" || { echo "Missing $pattern"; exit 1; }
+          done
+          # scrcpy and adb must be inside each package.
+          tar tzf dist/*.tar.gz | grep -q '/scrcpy/adb$'
+          tar tzf dist/*.tar.gz | grep -q '/scrcpy/scrcpy-server$'
+          rpm -qpl dist/*.rpm | grep -q '^/usr/lib/alero/scrcpy/adb$'
+          dpkg-deb -c dist/*.deb | grep -q ' ./usr/lib/alero/scrcpy/adb$'
+          rpm -qp --requires dist/*.rpm
+          chmod +x dist/*.AppImage
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE"/dist/*.AppImage --appimage-extract >/dev/null && test -x squashfs-root/usr/lib/alero/scrcpy/adb)
+      - name: Install the .deb and start the daemon
+        run: |
+          sudo apt-get install -y ./dist/*.deb
+          if ldd /usr/lib/alero/alero_daemon /usr/lib/alero/alero | grep 'not found'; then exit 1; fi
+          # Without arguments the daemon prints its usage and exits with 2, before it needs a display.
+          code=0; /usr/lib/alero/alero_daemon || code=$?; test "$code" = 2
+      # The dependencies resolve and the bundled scrcpy and adb run on the distributions users have: Debian 13
+      # (trixie, which has no scrcpy package) for the .deb and Fedora for the .rpm.
+      - name: Install on Debian 13 and Fedora
+        run: |
+          check='ldd /usr/lib/alero/alero /usr/lib/alero/alero_daemon /usr/lib/alero/scrcpy/scrcpy /usr/lib/alero/scrcpy/adb | grep "not found" && exit 1
+            /usr/lib/alero/scrcpy/adb version
+            /usr/lib/alero/scrcpy/scrcpy --version
+            code=0; /usr/lib/alero/alero_daemon || code=$?; test "$code" = 2'
+          docker run --rm -v "$PWD/dist:/dist:ro" debian:trixie sh -ec "apt-get update -qq && apt-get install -y -qq /dist/*.deb >/dev/null; $check"
+          docker run --rm -v "$PWD/dist:/dist:ro" fedora:42 sh -ec "dnf -y -q --setopt=install_weak_deps=False install /dist/*.rpm; $check"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alero-linux
+          path: dist/*
+          if-no-files-found: error

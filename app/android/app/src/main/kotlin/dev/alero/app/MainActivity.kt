@@ -101,12 +101,6 @@ class MainActivity : FlutterActivity() {
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "pb/android")
         channel!!.setMethodCallHandler { call, result ->
             when (call.method) {
-                "firstLaunch" -> {
-                    val prefs = getSharedPreferences("startup", MODE_PRIVATE)
-                    val first = !prefs.getBoolean("introSeen", false)
-                    prefs.edit().putBoolean("introSeen", true).apply()
-                    result.success(first)
-                }
                 "vaultSeal", "vaultOpen" -> {
                     val bytes = call.arguments as? ByteArray
                     if (bytes == null) {

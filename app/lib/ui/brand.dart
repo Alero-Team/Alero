@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -119,4 +120,55 @@ class AleroIntro extends StatelessWidget {
       color: Theme.of(context).colorScheme.primary,
     ),
   );
+}
+
+/// Base length of [AleroSplash]; main holds the first screen at least this long (scaled like every animation).
+const splashBase = Duration(milliseconds: 650);
+
+/// Start-up screen on every launch. On Android it continues the native splash (res/drawable/alero_splash.xml:
+/// same centre, same ~41 dp mark, same colour), so the mark starts complete and only the wordmark and tint
+/// appear; elsewhere there is no native splash, so the mark is drawn on.
+class AleroSplash extends StatelessWidget {
+  const AleroSplash({super.key});
+  static const _size = 41.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: motion(context, splashBase),
+      curve: Curves.easeInOutCubic,
+      builder: (context, v, _) {
+        final name = const Interval(.4, 1, curve: Curves.easeOut).transform(v);
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            AleroMark(
+              size: _size,
+              draw: Platform.isAndroid ? 1 : const Interval(0, .7).transform(v),
+              color: Color.lerp(s.onSurface, s.primary, v),
+            ),
+            Transform.translate(
+              offset: Offset(0, 38 + (1 - name) * 8),
+              child: Opacity(
+                opacity: name,
+                child: ExcludeSemantics(
+                  child: Text(
+                    'Alero',
+                    style: weight(
+                      Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(letterSpacing: -.9),
+                      500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

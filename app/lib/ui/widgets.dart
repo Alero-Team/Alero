@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' as m show Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
+import '../native.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'alero_motion.dart';
@@ -560,7 +561,7 @@ class HistoryTile extends StatelessWidget {
       case 'open':
         hub.openHistory(h);
       case 'show':
-        Process.start('explorer', ['/select,', h.path]);
+        Native.showInFolder(h.path);
       case 'path':
         hub.copy(h.path);
       case 'name':

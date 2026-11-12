@@ -7,6 +7,7 @@ import 'native.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/shell.dart';
 import 'ui/brand.dart';
+import 'ui/expressive.dart' show motion, motionScale;
 import 'ui/setup.dart';
 import 'ui/app_lock.dart';
 import 'ui/icon.dart';
@@ -18,15 +19,24 @@ Future<void> main() async {
   final color = SystemColor();
   final hub = Hub();
   final boot = ValueNotifier<String?>('');
-  final animate = await Native.firstLaunch();
-  runApp(App(hub, color, boot: boot, animate: animate));
+  runApp(App(hub, color, boot: boot));
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // The splash plays out even if the engine is quicker; a slower engine just keeps the logo on screen.
+    final reduced = WidgetsBinding
+        .instance
+        .platformDispatcher
+        .accessibilityFeatures
+        .disableAnimations;
+    final hold = Future<void>.delayed(
+      reduced ? Duration.zero : splashBase * motionScale,
+    );
     try {
       await RustLib.init();
       await color.load();
       await Native.initDesktop();
       await Native.loadLock();
       await hub.start();
+      await hold;
       boot.value = null;
     } catch (e) {
       boot.value = 'No se pudo iniciar Alero: $e';
@@ -35,15 +45,8 @@ Future<void> main() async {
 }
 
 class App extends StatelessWidget {
-  const App(
-    this.hub,
-    this.color, {
-    super.key,
-    required this.boot,
-    required this.animate,
-  });
+  const App(this.hub, this.color, {super.key, required this.boot});
   final ValueNotifier<String?> boot;
-  final bool animate;
   final Hub hub;
   final SystemColor color;
 
@@ -94,27 +97,49 @@ class App extends StatelessWidget {
             ),
           );
         },
-        home: boot.value != null
-            ? Scaffold(
-                body: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: boot.value!.isNotEmpty
-                        ? SelectableText(boot.value!)
-                        : animate
-                        ? const AleroIntro(size: 72)
-                        : const AleroMark(size: 72),
-                  ),
-                ),
-              )
-            : _ReadyHome(hub, color),
+        home: _Root(boot.value, hub, color),
       );
     },
   );
 }
 
+/// Splash (or the start error) until the engine is ready, then a fade-and-scale into Home or Setup.
+class _Root extends StatelessWidget {
+  const _Root(this.error, this.hub, this.color);
+  final String? error;
+  final Hub hub;
+  final SystemColor color;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: motion(context, const Duration(milliseconds: 250)),
+    switchInCurve: Curves.easeOutCubic,
+    switchOutCurve: Curves.easeIn,
+    transitionBuilder: (child, a) => FadeTransition(
+      opacity: a,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: .97, end: 1).animate(a),
+        child: child,
+      ),
+    ),
+    child: error == null
+        ? _ReadyHome(hub, color, key: const ValueKey('ready'))
+        : Scaffold(
+            key: ValueKey(error!.isEmpty ? 'splash' : 'error'),
+            body: Center(
+              child: error!.isEmpty
+                  ? const AleroSplash()
+                  : Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: SelectableText(error!),
+                    ),
+            ),
+          ),
+  );
+}
+
 class _ReadyHome extends StatefulWidget {
-  const _ReadyHome(this.hub, this.color);
+  const _ReadyHome(this.hub, this.color, {super.key});
   final Hub hub;
   final SystemColor color;
   @override

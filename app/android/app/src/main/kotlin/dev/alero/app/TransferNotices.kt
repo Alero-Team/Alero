@@ -8,6 +8,9 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.SystemClock
 import org.json.JSONObject
 
@@ -57,11 +60,37 @@ object TransferNotices {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
+    /** The file's type as a large icon (system glyphs, so no new assets); an image gets its own thumbnail via [thumb]. */
+    private fun typeIcon(c: Context, name: String): Icon {
+        val res = when (name.substringAfterLast('.', "").lowercase()) {
+            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "avif" -> android.R.drawable.ic_menu_gallery
+            "mp4", "mkv", "mov", "webm", "avi", "mp3", "flac", "wav", "ogg", "m4a", "opus" -> android.R.drawable.ic_media_play
+            else -> android.R.drawable.ic_menu_save
+        }
+        return Icon.createWithResource(c, res)
+    }
+
+    /** A small thumbnail when the engine reports a readable image path; null otherwise (never throws). */
+    private fun thumb(path: String): Icon? = try {
+        val f = java.io.File(path)
+        if (path.isEmpty() || !f.isFile) null else {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(path, bounds)
+            val side = maxOf(bounds.outWidth, bounds.outHeight)
+            if (side <= 0) null else {
+                val o = BitmapFactory.Options().apply { inSampleSize = maxOf(1, side / 256) }
+                BitmapFactory.decodeFile(path, o)?.let { Icon.createWithBitmap(it) }
+            }
+        }
+    } catch (_: Throwable) { null }
+
     fun offer(e: JSONObject) {
         val c = ctx ?: return
         val id = e.getString("id")
         synchronized(live) { live[id] = Info(e.optString("name"), true, e.optString("peer_name")) }
         val n = Notification.Builder(c, ALERT).setSmallIcon(R.drawable.ic_stat_alero)
+            .setLargeIcon(typeIcon(c, e.optString("name")))
+            .setSubText(e.optString("peer_name").ifEmpty { null })
             .setContentTitle("${e.optString("peer_name").ifEmpty { "Un dispositivo" }} quiere enviarte un archivo")
             .setContentText("${e.optString("name")} · ${WidgetText.size(e.optLong("size"))}")
             .setContentIntent(openApp(c, "files"))
@@ -86,15 +115,31 @@ object TransferNotices {
         val now = SystemClock.elapsedRealtime()
         if (!force && now - info.drawn < 1000) return
         info.drawn = now
-        val n = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_stat_alero)
+        val pct = if (total > 0) (done * 1000 / total).toInt() else 0
+        val b = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_stat_alero)
+            .setLargeIcon(typeIcon(c, info.name))
+            .setSubText(info.peer.ifEmpty { null })
             .setContentTitle((if (info.incoming) "Recibiendo " else "Enviando ") + info.name)
             .setContentText(if (total > 0) "${WidgetText.size(done)} de ${WidgetText.size(total)}" else info.peer)
-            .setProgress(1000, if (total > 0) (done * 1000 / total).toInt() else 0, total <= 0)
             .setOngoing(true).setOnlyAlertOnce(true)
             .setContentIntent(openApp(c, "files"))
             .addAction(act(c, id, TransferAction.CANCEL, "Cancelar"))
-            .build()
-        notify(c, nid(id), n)
+        if (Build.VERSION.SDK_INT >= 36) {
+            // Live update card (like Quick Share): the system promotes it to the status bar chip and lock screen.
+            b.setStyle(
+                Notification.ProgressStyle().setStyledByProgress(false)
+                    .setProgressSegments(listOf(Notification.ProgressStyle.Segment(1000)))
+                    .setProgress(pct).setProgressIndeterminate(total <= 0),
+            )
+            // Extras, not the 36.1 setters: the project compiles against API 36, and older builds ignore the keys.
+            b.addExtras(android.os.Bundle().apply {
+                putBoolean("android.requestPromotedOngoing", true)
+                if (total > 0) putCharSequence("android.shortCriticalText", "${pct / 10}%")
+            })
+        } else {
+            b.setProgress(1000, pct, total <= 0)
+        }
+        notify(c, nid(id), b.build())
     }
 
     fun finished(e: JSONObject) {
@@ -108,7 +153,9 @@ object TransferNotices {
         val b = Notification.Builder(c, ALERT).setSmallIcon(R.drawable.ic_stat_alero).setAutoCancel(true)
             .setContentIntent(openApp(c, "files"))
         if (ok && info.incoming) {
-            b.setContentTitle("Archivo recibido").setContentText(info.name)
+            b.setLargeIcon(thumb(e.optString("path")) ?: typeIcon(c, info.name))
+                .setSubText(info.peer.ifEmpty { null })
+                .setContentTitle("Archivo recibido").setContentText(info.name)
                 .addAction(Notification.Action.Builder(null, "Abrir en Alero", openApp(c, "files")).build())
                 .addAction(Notification.Action.Builder(null, "Descargas", PendingIntent.getActivity(
                     c, "downloads".hashCode(),

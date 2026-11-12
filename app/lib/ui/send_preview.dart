@@ -311,7 +311,7 @@ class _TransferState extends State<_Transfer> {
               ),
             if (onDisk)
               TextButton(
-                onPressed: () => Process.start('explorer', ['/select,', h.path]),
+                onPressed: () => Native.showInFolder(h.path),
                 child: const Text('Ver en carpeta'),
               )
             else if (Platform.isAndroid && widget.incoming)

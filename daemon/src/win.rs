@@ -2,11 +2,13 @@
 //! Toasts need an AppUserModelID; an unpackaged app registers one under HKCU (documented by Microsoft for
 //! "other types of unpackaged apps"), so the toast shows "Alero" instead of an unknown app.
 
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 use windows::core::{HSTRING, PCWSTR};
 use windows::Data::Xml::Dom::XmlDocument;
 use windows::core::{IInspectable, Interface, Ref};
 use windows::Foundation::TypedEventHandler;
-use windows::UI::Notifications::{ToastActivatedEventArgs, ToastNotification, ToastNotificationManager};
+use windows::UI::Notifications::{NotificationData, ToastActivatedEventArgs, ToastNotification, ToastNotificationManager};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
@@ -126,10 +128,65 @@ pub fn file_uri(path: &std::path::Path) -> String {
 
 /// Toasts with buttons stay referenced here so their click handler outlives `Show` (a handful at most).
 static LIVE: std::sync::Mutex<Vec<ToastNotification>> = std::sync::Mutex::new(Vec::new());
+const GROUP: &str = "transfer";
+static SEQ: AtomicU32 = AtomicU32::new(1);
+/// Transfer id and time of the last card redraw: progress events come much faster than a card needs.
+static DRAWN: std::sync::Mutex<Option<(String, Instant)>> = std::sync::Mutex::new(None);
 
 /// Toast with buttons. `Call` buttons reach `on_click` while this process runs (the tray daemon always does);
 /// `Open` buttons hand a file or folder to Explorer, which opens it with the user's default app.
 pub fn toast_buttons(title: &str, body: &str, buttons: &[Button], on_click: impl Fn(&str) + Send + 'static) {
+    show_card("", title, body, None, buttons, None, on_click);
+}
+
+/// Tags are limited to 64 characters.
+fn tag_of(id: &str) -> String {
+    id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').take(60).collect()
+}
+
+fn is_image(path: &std::path::Path) -> bool {
+    let e = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    // Toasts drop images over 3 MB; these are the formats the toast engine decodes by itself.
+    ["jpg", "jpeg", "png", "gif", "bmp"].contains(&e.as_str()) && std::fs::metadata(path).is_ok_and(|m| m.len() <= 3 << 20)
+}
+
+fn mb(b: u64) -> String {
+    if b >= 1 << 30 {
+        format!("{:.1} GB", b as f64 / (1u64 << 30) as f64)
+    } else {
+        format!("{:.1} MB", b as f64 / (1u64 << 20) as f64)
+    }
+}
+
+/// Values bound to the card's `<progress>`: (value 0..1 or "indeterminate", "x MB de y MB", speed).
+fn progress_text(done: u64, total: u64, rate: u64) -> (String, String, String) {
+    let value = if total > 0 { format!("{:.3}", (done as f64 / total as f64).min(1.0)) } else { "indeterminate".into() };
+    let amount = if total > 0 { format!("{} de {}", mb(done), mb(total)) } else { mb(done) };
+    (value, amount, if rate > 0 { format!("{}/s", mb(rate)) } else { String::new() })
+}
+
+fn progress_data(name: &str, done: u64, total: u64, rate: u64) -> windows::core::Result<NotificationData> {
+    let (value, amount, status) = progress_text(done, total, rate);
+    let d = NotificationData::new()?;
+    let v = d.Values()?;
+    for (k, val) in [("progressTitle", name.to_string()), ("progressValue", value), ("progressValueString", amount), ("progressStatus", status)] {
+        v.Insert(&HSTRING::from(k), &HSTRING::from(val))?;
+    }
+    d.SetSequenceNumber(SEQ.fetch_add(1, Ordering::Relaxed))?;
+    Ok(d)
+}
+
+/// Card with title, file name, optional thumbnail and buttons. A non-empty `tag` makes it replace the card
+/// shown earlier with that tag (the progress card turns into the result). `data` fills a `<progress>` binding.
+fn show_card(
+    tag: &str,
+    title: &str,
+    body: &str,
+    image: Option<&std::path::Path>,
+    buttons: &[Button],
+    data: Option<NotificationData>,
+    on_click: impl Fn(&str) + Send + 'static,
+) {
     let actions: String = buttons
         .iter()
         .map(|b| match b {
@@ -143,14 +200,27 @@ pub fn toast_buttons(title: &str, body: &str, buttons: &[Button], on_click: impl
             }
         })
         .collect();
+    let image = image.map(|p| format!("<image placement=\"appLogoOverride\" src=\"{}\"/>", esc(&file_uri(p)))).unwrap_or_default();
+    let progress = if data.is_some() {
+        "<progress title=\"{progressTitle}\" value=\"{progressValue}\" valueStringOverride=\"{progressValueString}\" status=\"{progressStatus}\"/>"
+    } else {
+        ""
+    };
     let r = (|| -> windows::core::Result<()> {
         let xml = XmlDocument::new()?;
         xml.LoadXml(&HSTRING::from(format!(
-            "<toast><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual><actions>{actions}</actions></toast>",
+            "<toast><visual><binding template=\"ToastGeneric\">{image}<text>{}</text><text>{}</text>{progress}</binding></visual><actions>{actions}</actions></toast>",
             esc(title),
             esc(body)
         )))?;
         let n = ToastNotification::CreateToastNotification(&xml)?;
+        if !tag.is_empty() {
+            n.SetTag(&HSTRING::from(tag))?;
+            n.SetGroup(&HSTRING::from(GROUP))?;
+        }
+        if let Some(d) = &data {
+            n.SetData(d)?;
+        }
         n.Activated(&TypedEventHandler::<ToastNotification, IInspectable>::new(
             move |_: Ref<ToastNotification>, args: Ref<IInspectable>| {
                 if let Some(a) = args.as_ref().and_then(|a| a.cast::<ToastActivatedEventArgs>().ok()) {
@@ -173,6 +243,58 @@ pub fn toast_buttons(title: &str, body: &str, buttons: &[Button], on_click: impl
     if let Err(e) = r {
         eprintln!("toast: {e}");
     }
+}
+
+/// The card of a transfer in progress: peer, file name, "x MB de y MB" and Cancelar.
+pub fn transfer_start(id: &str, incoming: bool, peer: &str, name: &str, total: u64, on_click: impl Fn(&str) + Send + 'static) {
+    let title = format!("{} {}", if incoming { "Recibiendo de" } else { "Enviando a" }, if peer.is_empty() { "un dispositivo" } else { peer });
+    *DRAWN.lock().unwrap_or_else(|e| e.into_inner()) = Some((id.to_string(), Instant::now()));
+    let data = progress_data(name, 0, total, 0).ok();
+    show_card(&tag_of(id), &title, "", None, &[Button::Call("Cancelar".into(), format!("cancel:{id}"))], data, on_click);
+}
+
+/// Moves the bar of the card started by [`transfer_start`], at most once a second.
+pub fn transfer_progress(id: &str, name: &str, done: u64, total: u64, rate: u64) {
+    {
+        let mut last = DRAWN.lock().unwrap_or_else(|e| e.into_inner());
+        if last.as_ref().is_some_and(|(i, t)| i == id && t.elapsed() < Duration::from_secs(1)) {
+            return;
+        }
+        *last = Some((id.to_string(), Instant::now()));
+    }
+    let r = (|| -> windows::core::Result<()> {
+        let d = progress_data(name, done, total, rate)?;
+        let notifier = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(AUMID))?;
+        notifier.UpdateWithTagAndGroup(&d, &HSTRING::from(tag_of(id)), &HSTRING::from(GROUP))?;
+        Ok(())
+    })();
+    if let Err(e) = r {
+        eprintln!("toast: {e}");
+    }
+}
+
+/// Closes the card of a transfer that ended without a result worth showing (sent, cancelled).
+pub fn transfer_clear(id: &str) {
+    let r = ToastNotificationManager::History()
+        .and_then(|h| h.RemoveGroupedTagWithId(&HSTRING::from(tag_of(id)), &HSTRING::from(GROUP), &HSTRING::from(AUMID)));
+    if let Err(e) = r {
+        eprintln!("toast: {e}");
+    }
+}
+
+/// The result card of a received file: replaces the progress card, with a thumbnail when it is a small image.
+/// Opening a file that runs code is never offered; only its folder.
+pub fn transfer_done(id: &str, file: &std::path::Path) {
+    let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut buttons = Vec::new();
+    if !runs_code(file) {
+        buttons.push(Button::Open("Abrir".into(), file.to_path_buf()));
+    }
+    if let Some(dir) = file.parent() {
+        buttons.push(Button::Open("Abrir carpeta".into(), dir.to_path_buf()));
+    }
+    let image = if is_image(file) { Some(file) } else { None };
+    show_card(&tag_of(id), "Archivo recibido", &name, image, &buttons, None, |_| {});
 }
 
 pub fn set_clipboard(text: &str) {
@@ -211,6 +333,9 @@ mod tests {
         assert_eq!(file_uri(Path::new(r"C:\Users\Nicolás\Downloads\Alero\a b#1.pdf")), "file:///C:/Users/Nicol%C3%A1s/Downloads/Alero/a%20b%231.pdf");
         assert!(runs_code(Path::new("setup.EXE")) && runs_code(Path::new("x.ps1")) && runs_code(Path::new("a.lnk")));
         assert!(runs_code(Path::new(".bat")) && runs_code(Path::new(r"C:\x\.LNK")) && runs_code(Path::new("q.docm")) && runs_code(Path::new("a.theme")));
+        let (v, a, r) = progress_text(5 << 20, 10 << 20, 1 << 20);
+        assert_eq!((v.as_str(), a.as_str(), r.as_str()), ("0.500", "5.0 MB de 10.0 MB", "1.0 MB/s"));
+        assert_eq!(progress_text(0, 0, 0).0, "indeterminate");
         assert!(!runs_code(Path::new("foto.jpg")) && !runs_code(Path::new("doc.pdf")) && !runs_code(Path::new("sin_extension")));
     }
 }

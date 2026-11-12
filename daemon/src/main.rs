@@ -19,8 +19,15 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEv
 mod pc_files;
 mod remote;
 mod sys;
+#[cfg(target_os = "linux")]
+mod linux;
 #[cfg(windows)]
 mod win;
+// The platform's toasts, clipboard and file helpers, behind one name.
+#[cfg(target_os = "linux")]
+use linux as platform;
+#[cfg(windows)]
+use win as platform;
 
 use remote::Remote;
 
@@ -30,6 +37,8 @@ struct Ui {
     last_launch: Mutex<Option<Instant>>,
     engine: OnceLock<Arc<Engine>>,
     remote: Arc<Remote>,
+    /// Transfers whose progress card is on screen (id -> file name, which the card's updates repeat).
+    cards: Mutex<std::collections::HashMap<String, String>>,
 }
 
 impl Ui {
@@ -69,6 +78,13 @@ impl EventSink for Sink {
         // Undelivered requests are replayed by `Subscribers` to the window we start here.
         let delivered = self.0.subs.push(&Push::Event { event: e.clone() });
         if delivered {
+            // The window took over mid-transfer: its own UI shows the result, so the card must not linger.
+            #[cfg(any(windows, target_os = "linux"))]
+            if let Event::TransferFinished { id, .. } = &e {
+                if self.0.cards.lock().unwrap().remove(id).is_some() {
+                    platform::transfer_clear(id);
+                }
+            }
             return;
         }
         if needs_user {
@@ -88,29 +104,29 @@ impl Ui {
             Event::Message { peer_id, kind, body } => {
                 let s = |k: &str| body[k].as_str().unwrap_or("").to_string();
                 match kind.as_str() {
-                    #[cfg(windows)]
+                    #[cfg(any(windows, target_os = "linux"))]
                     "pb.x.notif.posted" => {
                         let title = if s("title").is_empty() { s("app") } else { format!("{} · {}", s("app"), s("title")) };
-                        win::toast_icon(&title, &s("text"), &s("pkg"), &s("icon"));
+                        platform::toast_icon(&title, &s("text"), &s("pkg"), &s("icon"));
                     }
-                    #[cfg(windows)]
+                    #[cfg(any(windows, target_os = "linux"))]
                     "pb.x.clip" if !s("text").is_empty() => {
-                        win::set_clipboard(&s("text"));
+                        platform::set_clipboard(&s("text"));
                         let from = engine.peers().into_iter().find(|p| p.id == peer_id).map(|p| p.name).unwrap_or_default();
-                        win::toast("Portapapeles copiado", &format!("Recibido de {from}"));
+                        platform::toast("Portapapeles copiado", &format!("Recibido de {from}"));
                     }
                     _ => {}
                 }
             }
             // A file waits for consent: answer from the toast. Nothing is downloaded until Aceptar.
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "linux"))]
             Event::TransferOffer { id, peer_name, name, size, .. } => {
                 let engine = engine.clone();
                 let mb = size as f64 / (1024.0 * 1024.0);
-                win::toast_buttons(
+                platform::toast_buttons(
                     &format!("{peer_name} quiere enviarte un archivo"),
                     &format!("{name} · {mb:.1} MB"),
-                    &[win::Button::Call("Rechazar".into(), format!("decline:{id}")), win::Button::Call("Aceptar".into(), format!("accept:{id}"))],
+                    &[platform::Button::Call("Rechazar".into(), format!("decline:{id}")), platform::Button::Call("Aceptar".into(), format!("accept:{id}"))],
                     // The engine ignores a second answer, so repeated clicks cannot start two downloads.
                     move |arg| match arg.split_once(':') {
                         Some(("accept", id)) => engine.respond_transfer(id, true),
@@ -119,19 +135,32 @@ impl Ui {
                     },
                 );
             }
-            #[cfg(windows)]
-            Event::TransferFinished { ok: true, path, .. } if !path.is_empty() => {
-                let file = std::path::PathBuf::from(&path);
-                let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let mut buttons = Vec::new();
-                // Opening an executable would run it: for those only the folder is offered.
-                if !win::runs_code(&file) {
-                    buttons.push(win::Button::Open("Abrir".into(), file.clone()));
+            #[cfg(any(windows, target_os = "linux"))]
+            Event::TransferStarted { id, peer_name, name, size, incoming, .. } => {
+                self.cards.lock().unwrap().insert(id.clone(), name.clone());
+                let engine = engine.clone();
+                platform::transfer_start(&id, incoming, &peer_name, &name, size, move |arg| {
+                    if let Some(("cancel", id)) = arg.split_once(':') {
+                        engine.cancel_transfer(id);
+                    }
+                });
+            }
+            #[cfg(any(windows, target_os = "linux"))]
+            Event::TransferProgress { id, done, total, bytes_per_sec } => {
+                let name = self.cards.lock().unwrap().get(&id).cloned();
+                if let Some(name) = name {
+                    platform::transfer_progress(&id, &name, done, total, bytes_per_sec);
                 }
-                if let Some(dir) = file.parent() {
-                    buttons.push(win::Button::Open("Abrir carpeta".into(), dir.to_path_buf()));
+            }
+            #[cfg(any(windows, target_os = "linux"))]
+            Event::TransferFinished { id, ok, path, .. } => {
+                let had_card = self.cards.lock().unwrap().remove(&id).is_some();
+                if ok && !path.is_empty() {
+                    // Opening an executable would run it: transfer_done offers only its folder.
+                    platform::transfer_done(&id, std::path::Path::new(&path));
+                } else if had_card {
+                    platform::transfer_clear(&id);
                 }
-                win::toast_buttons("Archivo recibido", &name, &buttons, |_| {});
             }
             _ => {}
         }
@@ -165,9 +194,10 @@ fn main() {
         last_launch: Mutex::new(None),
         engine: OnceLock::new(),
         remote: Remote::new(data.clone()),
+        cards: Mutex::new(Default::default()),
     });
-    #[cfg(windows)]
-    win::register_app();
+    #[cfg(any(windows, target_os = "linux"))]
+    platform::register_app();
     sys::keep_com_alive();
     let engine = match Engine::start(launch.config, Arc::new(Sink(ui.clone()))) {
         Ok(e) => Arc::new(e),

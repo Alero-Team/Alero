@@ -10,6 +10,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'remote_ui.dart';
 import 'theme.dart';
 import 'icon.dart';
+import 'widgets.dart';
 
 Future<void> openPcScreen(
   BuildContext context,
@@ -168,6 +169,31 @@ class _PcScreenPageState extends State<PcScreenPage>
     ],
   );
 
+  /// What replaces the picture when the computer cannot send one: why, and the touchpad if the controls work.
+  Widget _unavailable(String note, bool canInput) => Padding(
+    padding: const EdgeInsets.all(Gap.m),
+    child: Column(
+      children: [
+        EmptyState(
+          icon: Symbols.desktop_access_disabled_rounded,
+          title: 'La pantalla del PC no está disponible',
+          body: [
+            note.isNotEmpty ? note : 'El ordenador no está enviando imágenes.',
+            if (canInput) 'El panel táctil sigue funcionando.',
+          ].join(' '),
+          action: 'Reintentar',
+          onAction: () => setState(_start),
+        ),
+        if (canInput) ...[
+          const SizedBox(height: Gap.m),
+          Expanded(child: _pad()),
+          const SizedBox(height: Gap.m),
+          MouseActionBar(widget.hub, widget.peer),
+        ],
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: Listenable.merge([_feed, widget.hub]),
@@ -176,12 +202,13 @@ class _PcScreenPageState extends State<PcScreenPage>
       final online = widget.hub.peers.any(
         (p) => p.id == widget.peer && p.state == pb.PeerState.connected,
       );
-      final blocker =
-          remoteBlocker(info, online) ??
-          (info?.canScreen == false
-              ? 'Este ordenador no permite ver su pantalla.'
-              : null);
+      final blocker = remoteBlocker(info, online);
       final canInput = blocker == null && (info?.canInput ?? false);
+      // No picture will come: the computer cannot capture, said so, or has been silent too long. The touchpad still works.
+      final unavailable =
+          blocker == null &&
+          _feed.frame == null &&
+          (info?.canScreen == false || _feed.failed || _waitingTooLong);
       final s = Theme.of(context).colorScheme;
       final t = Theme.of(context).textTheme;
       return Scaffold(
@@ -234,7 +261,9 @@ class _PcScreenPageState extends State<PcScreenPage>
           ],
         ),
         body: SafeArea(
-          child: blocker != null || _feed.frame == null
+          child: unavailable
+              ? _unavailable(info?.screenNote ?? '', canInput)
+              : blocker != null || _feed.frame == null
               ? Center(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(Gap.xl),

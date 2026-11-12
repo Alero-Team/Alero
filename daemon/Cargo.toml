@@ -22,6 +22,14 @@ jpeg-encoder = "0.6.1"
 # Already in Cargo.lock (0.21.7).
 base64 = "0.21.7"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# All three are already in Cargo.lock (pulled by tao / tray-icon): no new download or review.
+# dbus: notifications and MPRIS over the session bus. x11-dl: Xlib/XTest/XRandR loaded at run time (no link-time
+# dependency, so a Wayland-only machine without libX11 still starts). libc: uinput ioctls.
+dbus = "0.9.12"
+x11-dl = "2.21"
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 # Same versions already in Cargo.lock (pulled by tao): toasts, clipboard and OS version without new crates.
 windows = { version = "0.62", features = [
@@ -39,6 +47,7 @@ windows = { version = "0.62", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
     "Foundation",
+    "Foundation_Collections",
     "Graphics_Imaging",
     "Media_Control",
     "Storage_Streams",

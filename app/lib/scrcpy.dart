@@ -29,21 +29,35 @@ class PhoneDisplay {
 class Scrcpy {
   static final _exe = File(Platform.resolvedExecutable).parent.path;
   static String get _dir => '$_exe${Platform.pathSeparator}scrcpy';
-  static String get _adb =>
-      '$_dir${Platform.pathSeparator}${Platform.isWindows ? 'adb.exe' : 'adb'}';
-  static String get _scrcpy =>
-      '$_dir${Platform.pathSeparator}${Platform.isWindows ? 'scrcpy.exe' : 'scrcpy'}';
 
-  static bool get available =>
-      !Platform.isAndroid &&
-      File(_scrcpy).existsSync() &&
-      File(_adb).existsSync();
+  /// The copy next to the app (Windows bundle) or, on Linux, the distro's package from PATH.
+  static String _tool(String name) {
+    final bundled = '$_dir${Platform.pathSeparator}$name${Platform.isWindows ? '.exe' : ''}';
+    if (!Platform.isLinux || File(bundled).existsSync()) return bundled;
+    for (final d in (Platform.environment['PATH'] ?? '').split(':')) {
+      if (d.isNotEmpty && File('$d/$name').existsSync()) return '$d/$name';
+    }
+    return bundled;
+  }
 
-  static Future<ProcessResult> _run(List<String> args) => Process.run(
-    _adb,
-    args,
-    environment: {'ADB_MDNS_AUTO_CONNECT': 'adb-tls-connect'},
-  ).timeout(const Duration(seconds: 20));
+  static String get _adb => _tool('adb');
+  static String get _scrcpy => _tool('scrcpy');
+
+  /// adb alone is enough for the phone controls (Wi-Fi, Bluetooth, torch, lock, cameras).
+  static bool get hasAdb => !Platform.isAndroid && File(_adb).existsSync();
+
+  /// adb and scrcpy: the phone's screen on this computer.
+  static bool get available => hasAdb && File(_scrcpy).existsSync();
+
+  /// Debian's adb (34) and older ones only do mDNS through openscreen when asked; later ones ignore it.
+  /// Whoever starts the adb server decides, so every call carries it.
+  static final _env = {
+    'ADB_MDNS_AUTO_CONNECT': 'adb-tls-connect',
+    if (Platform.isLinux) 'ADB_MDNS_OPENSCREEN': '1',
+  };
+
+  static Future<ProcessResult> _run(List<String> args) =>
+      Process.run(_adb, args, environment: _env).timeout(const Duration(seconds: 20));
 
   /// Serials adb can use right now (e.g. `192.0.2.29:41257`).
   static Future<List<String>> devices() async {
@@ -63,7 +77,7 @@ class Scrcpy {
     final process = await Process.start(
       _adb,
       ['pair', '$ip:$port'],
-      environment: {'ADB_MDNS_AUTO_CONNECT': 'adb-tls-connect'},
+      environment: _env,
     );
     final stdout = process.stdout.transform(utf8.decoder).join();
     final stderr = process.stderr.transform(utf8.decoder).join();
@@ -163,8 +177,10 @@ class Scrcpy {
   }) async {
     if (!await _AdbServer.up()) {
       if (!startServer) return 'adb no está en marcha.';
-      if (!available) {
-        return 'Falta adb: vuelve a compilar con tools\\fetch-scrcpy.ps1.';
+      if (!hasAdb) {
+        return Platform.isLinux
+            ? 'Falta adb: instala los paquetes adb y scrcpy de tu distribución.'
+            : 'Falta adb: vuelve a compilar con tools\\fetch-scrcpy.ps1.';
       }
       await _run(['start-server']);
     }
@@ -216,7 +232,7 @@ class Scrcpy {
       'exec-out',
       'screencap',
       '-p',
-    ], stdoutEncoding: null).timeout(const Duration(seconds: 20));
+    ], stdoutEncoding: null, environment: _env).timeout(const Duration(seconds: 20));
     final bytes = r.stdout as List<int>;
     // A locked or protected screen answers with an error text instead of a picture.
     if (r.exitCode != 0 || bytes.length < 8 || bytes[1] != 0x50) {
@@ -234,7 +250,7 @@ class Scrcpy {
     final r = await Process.run(
       _scrcpy,
       ['-s', serial, '--list-displays'],
-      environment: {'ADB': _adb},
+      environment: {'ADB': _adb, ..._env},
     ).timeout(const Duration(seconds: 20));
     if (r.exitCode != 0) throw StateError('${r.stderr}');
     final found = PhoneDisplay.parse('${r.stdout}\n${r.stderr}');
@@ -252,7 +268,7 @@ class Scrcpy {
   static Future<Process> launch(List<String> args) => Process.start(
     _scrcpy,
     args,
-    environment: {'ADB': _adb},
+    environment: {'ADB': _adb, ..._env},
     // Attached stdio uses CREATE_NO_WINDOW for Windows console programs in
     // Dart's process launcher. This hides scrcpy's auxiliary console but
     // keeps its SDL phone window visible. It also exposes the real exit code

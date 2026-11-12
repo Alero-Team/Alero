@@ -1,0 +1,4 @@
+# Alero: lets a paired phone move the mouse and type on this computer, on X11 and Wayland, through /dev/uinput.
+# "uaccess" gives the user at the console (the active seat) write access without adding anyone to a group; the
+# "input" group is the fallback for remote or headless sessions: sudo usermod -aG input "$USER", then log in again.
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"

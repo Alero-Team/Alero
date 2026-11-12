@@ -42,7 +42,7 @@ abstract final class PhoneAdb {
   }
 
   static Future<AdbDevice?> find(pb.Peer phone, String model) async {
-    if (!Scrcpy.available) return null;
+    if (!Scrcpy.hasAdb) return null;
     final list = await Scrcpy.list();
     final serial = _chosen[phone.id];
     final d = serial != null

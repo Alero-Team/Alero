@@ -1,4 +1,4 @@
-# Alero — Android y Windows, conectados
+# Alero — Android, Windows y Linux, conectados
 
 <div align="center">
 
@@ -6,7 +6,7 @@
 
   <h2>Una conexión. Sin fricción.</h2>
 
-  <p>Alero conecta tu teléfono Android y tu PC con Windows directamente por tu red local o por cable USB, con <strong>Flutter</strong>, <strong>Rust</strong> y <strong>Kotlin</strong>.</p>
+  <p>Alero conecta tu teléfono Android y tu PC con Windows o Linux directamente por tu red local o por cable USB, con <strong>Flutter</strong>, <strong>Rust</strong> y <strong>Kotlin</strong>.</p>
 
   <p>Transfiere archivos, explora tu teléfono, comparte el portapapeles, replica notificaciones y controla un equipo desde el otro, sin cuenta ni nube.</p>
 
@@ -21,6 +21,7 @@
   <p>
     <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=black" alt="Android 8.0 o posterior" />
     <img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white" alt="Windows x64" />
+    <img src="https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black" alt="Linux x64" />
     <img src="https://img.shields.io/badge/Flutter-Rust-02569B?logo=flutter&logoColor=white" alt="Flutter y Rust" />
     <img src="https://img.shields.io/badge/Estado-Beta-F59E0B" alt="Versión Beta" />
     <img src="https://img.shields.io/badge/Licencia-GPL--3.0--or--later-blue" alt="Licencia GPL-3.0 o posterior" />
@@ -52,7 +53,7 @@ Un proyecto de **Alero Team**, desarrollado por:
 
 ## Cómo funciona
 
-1. Instala el APK de Android y el instalador de Windows de la misma versión.
+1. Instala el APK de Android y el instalador de Windows o el paquete de Linux (.deb, .rpm, AppImage o .tar.gz) de la misma versión.
 2. Abre Alero en ambos dispositivos, conéctalos a la misma red Wi-Fi y empareja en **Dispositivos**, o escanea el QR de la computadora.
 3. Permite el control remoto en Windows y concede al teléfono solo los permisos de las funciones que vayas a usar.
 
@@ -74,7 +75,7 @@ El ajuste opcional **Seguridad** de Android desbloquea la app con la huella del 
 
 ## Descargas
 
-Los paquetes de Android y Windows se publican en **[GitHub Releases](https://github.com/Alero-Team/Alero/releases)** junto con las novedades de cada versión. Consulta también el [historial de cambios](CHANGELOG.md).
+Los paquetes de Android, Windows y Linux se publican en **[GitHub Releases](https://github.com/Alero-Team/Alero/releases)** junto con las novedades de cada versión. Consulta también el [historial de cambios](CHANGELOG.md).
 
 Alero sigue en fase Beta. Descarga siempre el APK y el instalador de la misma versión.
 
@@ -82,14 +83,14 @@ Alero sigue en fase Beta. Descarga siempre el APK y el instalador de la misma ve
 
 Las compilaciones de Android conservan una sola identidad de firma para que cada versión actualice a la anterior. No es un certificado de producción. Google Play Protect puede bloquear APK descargados de GitHub porque la app declara capacidades sensibles (acceso a notificaciones, SMS), aunque el APK esté bien firmado; consulta la [guía de Play Protect para desarrolladores](https://developers.google.com/android/play-protect/warning-dev-guidance). El instalador de Windows no tiene firma Authenticode comercial.
 
-Linux no se empaqueta. Usar el teléfono desde la computadora requiere Windows.
+En Linux (x64), los paquetes incluyen scrcpy y adb. En Wayland, la pantalla del PC en el teléfono se actualiza despacio.
 
 ## Información de la aplicación
 
 | | |
 | --- | --- |
 | **Nombre** | Alero |
-| **Plataformas** | Android 8.0 o posterior y Windows (x64) |
+| **Plataformas** | Android 8.0 o posterior, Windows (x64) y Linux (x64) |
 | **Paquete** | `dev.alero.app` |
 | **Tecnologías** | Flutter, Rust y Kotlin |
 | **Conexión** | Red local o USB, TLS con autenticación mutua, sin servidores |
@@ -98,5 +99,5 @@ Linux no se empaqueta. Usar el teléfono desde la computadora requiere Windows.
 ---
 
 <div align="center">
-  <sub>Diseñado para Android y Windows · Alero Team</sub>
+  <sub>Diseñado para Android, Windows y Linux · Alero Team</sub>
 </div>

@@ -8,6 +8,8 @@ import '../native.dart';
 import 'brand.dart';
 import 'theme.dart';
 import 'icon.dart';
+import 'expressive.dart' show motion;
+import 'alero_motion.dart';
 
 /// Explanations are visible before any button opens a system permission prompt.
 class SetupScreen extends StatefulWidget {
@@ -21,6 +23,7 @@ class SetupScreen extends StatefulWidget {
 class _SetupScreenState extends State<SetupScreen> {
   late final _name = TextEditingController(text: widget.hub.name);
   int _step = 0;
+  bool _back = false;
   bool _busy = false, _startup = false;
   String? _error;
 
@@ -34,7 +37,7 @@ class _SetupScreenState extends State<SetupScreen> {
     super.initState();
     _life;
     widget.hub.checkPermissions();
-    if (Platform.isWindows) {
+    if (Native.pc) {
       _act(() async {
         _startup = await Native.startupEnabled();
       });
@@ -146,142 +149,192 @@ class _SetupScreenState extends State<SetupScreen> {
             child: ListView(
               padding: const EdgeInsets.all(Gap.xl),
               children: [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: AleroMark(size: 48),
+                AleroMotion.reveal(
+                  context,
+                  0,
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: AleroMark(size: 48),
+                  ),
                 ),
                 const SizedBox(height: Gap.xl),
-                Text(switch (_step) {
-                  0 => 'Bienvenido a Alero',
-                  1 => 'Elige qué compartir',
-                  _ => 'Conecta tus dispositivos',
-                }, style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: Gap.m),
-                if (_step == 0) ...[
-                  const Text(
-                    'Conecta tu teléfono y tu ordenador por Wi-Fi o USB. Tus archivos viajan directamente entre dispositivos emparejados.',
-                  ),
-                  const SizedBox(height: Gap.xl),
-                  // Keep the label OUTSIDE the filled field. Flutter's floating
-                  // label overlaid the default device name on both platforms,
-                  // especially with Google Sans Flex and larger text scaling.
-                  Text(
-                    'Nombre del dispositivo',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: Gap.s),
-                  TextField(
-                    controller: _name,
-                    maxLength: 64,
-                    textAlignVertical: TextAlignVertical.center,
-                    textInputAction: TextInputAction.done,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      counterText: '',
-                      hintText: 'Escribe el nombre del equipo',
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: Gap.l,
-                        vertical: Gap.l,
-                      ),
+                // The first step enters staggered (logo, then this block); later steps slide sideways.
+                AleroMotion.reveal(
+                  context,
+                  1,
+                  AnimatedSwitcher(
+                    duration: motion(
+                      context,
+                      const Duration(milliseconds: 250),
+                    ),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.passthrough,
+                      alignment: Alignment.topLeft,
+                      children: [...previous, ?current],
+                    ),
+                    transitionBuilder: (child, a) {
+                      final entering = child.key == ValueKey(_step);
+                      // Entering comes from the travel side; leaving goes out the other (shared axis X).
+                      final dx = (entering != _back ? 1 : -1) * 28.0;
+                      return FadeTransition(
+                        opacity: a,
+                        child: AnimatedBuilder(
+                          animation: a,
+                          builder: (_, c) => Transform.translate(
+                            offset: Offset((1 - a.value) * dx, 0),
+                            child: c,
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Column(
+                      key: ValueKey(_step),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(switch (_step) {
+                          0 => 'Bienvenido a Alero',
+                          1 => 'Elige qué compartir',
+                          _ => 'Conecta tus dispositivos',
+                        }, style: Theme.of(context).textTheme.headlineSmall),
+                        const SizedBox(height: Gap.m),
+                        if (_step == 0) ...[
+                          const Text(
+                            'Conecta tu teléfono y tu ordenador por Wi-Fi o USB. Tus archivos viajan directamente entre dispositivos emparejados.',
+                          ),
+                          const SizedBox(height: Gap.xl),
+                          // Keep the label OUTSIDE the filled field. Flutter's floating
+                          // label overlaid the default device name on both platforms,
+                          // especially with Google Sans Flex and larger text scaling.
+                          Text(
+                            'Nombre del dispositivo',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          const SizedBox(height: Gap.s),
+                          TextField(
+                            controller: _name,
+                            maxLength: 64,
+                            textAlignVertical: TextAlignVertical.center,
+                            textInputAction: TextInputAction.done,
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(
+                              counterText: '',
+                              hintText: 'Escribe el nombre del equipo',
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: Gap.l,
+                                vertical: Gap.l,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: Gap.s),
+                          Text(
+                            'Así aparecerá en el otro equipo.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                        if (_step == 1 && Platform.isAndroid) ...[
+                          const Text(
+                            'Todo es opcional. Android te pedirá confirmar cada permiso; puedes cambiarlo después en Ajustes.',
+                          ),
+                          _permission(
+                            'Avisos de Alero',
+                            'Para avisarte de transferencias y solicitudes de emparejamiento.',
+                            'Permitir avisos',
+                            Native.requestNotifications,
+                            ok: hub.notifPermission,
+                          ),
+                          _permission(
+                            'Notificaciones del teléfono',
+                            'Muestra tus notificaciones y permite responder y controlar la música desde el PC.',
+                            'Revisar acceso',
+                            hub.openNotifAccess,
+                            ok: hub.notifAccess,
+                          ),
+                          _permission(
+                            'Fotos, vídeos y música',
+                            'Un ordenador emparejado podrá explorar y descargar los archivos que autorices.',
+                            'Elegir archivos compartidos',
+                            () => hub.setFilesAllowed(true),
+                            ok: hub.filesAllowed && hub.filesPermission,
+                          ),
+                          _permission(
+                            'Todas las carpetas',
+                            'Comparte el almacenamiento común. Las carpetas privadas de otras apps siguen protegidas.',
+                            'Revisar acceso a carpetas',
+                            Native.requestAllFiles,
+                            ok: hub.allFiles,
+                          ),
+                          _permission(
+                            'Instalar apps recibidas',
+                            'Abre el instalador al tocar un APK. Android seguirá pidiendo confirmar cada instalación.',
+                            'Revisar instalación de apps',
+                            Native.requestInstallPermission,
+                            ok: hub.installAllowed,
+                          ),
+                          _permission(
+                            'Mensajes SMS',
+                            'Lee y envía tus SMS desde el ordenador. Incluye los nombres de tus contactos.',
+                            'Permitir mensajes',
+                            () => hub.setSmsAllowed(true),
+                            ok: hub.smsAllowed && hub.smsPermission,
+                          ),
+                          _permission(
+                            'Llamadas',
+                            'Contesta, cuelga y llama desde el ordenador; hablas por el teléfono.',
+                            'Permitir llamadas',
+                            () => hub.setCallsAllowed(true),
+                            ok: hub.callsAllowed && hub.callsPermission,
+                          ),
+                        ],
+                        if (_step == 1 && !Platform.isAndroid) ...[
+                          const Text(
+                            'Solo los dispositivos emparejados pueden usar estas funciones. Puedes cambiarlas después en Ajustes.',
+                          ),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Permitir control remoto'),
+                            subtitle: const Text(
+                              'El teléfono podrá mover el ratón, escribir, controlar música y ver la pantalla.',
+                            ),
+                            value: hub.remoteAllow,
+                            onChanged: _busy
+                                ? null
+                                : (on) =>
+                                      setState(() => hub.setRemoteAllow(on)),
+                          ),
+                          if (Native.pc)
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text(
+                                'Abrir Alero al iniciar sesión',
+                              ),
+                              subtitle: const Text(
+                                'Inicia la app y su conexión al iniciar sesión.',
+                              ),
+                              value: _startup,
+                              onChanged: _busy
+                                  ? null
+                                  : (on) => _act(() async {
+                                      await Native.setStartup(on);
+                                      _startup = on;
+                                    }),
+                            ),
+                        ],
+                        if (_step == 2)
+                          const Text(
+                            'Abre Alero en el otro dispositivo y usa la misma red Wi-Fi o un cable USB. En Dispositivos, elige el equipo y comprueba el código en ambos.',
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: Gap.s),
-                  Text(
-                    'Así aparecerá en el otro equipo.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-                if (_step == 1 && Platform.isAndroid) ...[
-                  const Text(
-                    'Todo es opcional. Android te pedirá confirmar cada permiso; puedes cambiarlo después en Ajustes.',
-                  ),
-                  _permission(
-                    'Avisos de Alero',
-                    'Para avisarte de transferencias y solicitudes de emparejamiento.',
-                    'Permitir avisos',
-                    Native.requestNotifications,
-                    ok: hub.notifPermission,
-                  ),
-                  _permission(
-                    'Notificaciones del teléfono',
-                    'Muestra tus notificaciones y permite responder y controlar la música desde el PC.',
-                    'Revisar acceso',
-                    hub.openNotifAccess,
-                    ok: hub.notifAccess,
-                  ),
-                  _permission(
-                    'Fotos, vídeos y música',
-                    'Un ordenador emparejado podrá explorar y descargar los archivos que autorices.',
-                    'Elegir archivos compartidos',
-                    () => hub.setFilesAllowed(true),
-                    ok: hub.filesAllowed && hub.filesPermission,
-                  ),
-                  _permission(
-                    'Todas las carpetas',
-                    'Comparte el almacenamiento común. Las carpetas privadas de otras apps siguen protegidas.',
-                    'Revisar acceso a carpetas',
-                    Native.requestAllFiles,
-                    ok: hub.allFiles,
-                  ),
-                  _permission(
-                    'Instalar apps recibidas',
-                    'Abre el instalador al tocar un APK. Android seguirá pidiendo confirmar cada instalación.',
-                    'Revisar instalación de apps',
-                    Native.requestInstallPermission,
-                    ok: hub.installAllowed,
-                  ),
-                  _permission(
-                    'Mensajes SMS',
-                    'Lee y envía tus SMS desde el ordenador. Incluye los nombres de tus contactos.',
-                    'Permitir mensajes',
-                    () => hub.setSmsAllowed(true),
-                    ok: hub.smsAllowed && hub.smsPermission,
-                  ),
-                  _permission(
-                    'Llamadas',
-                    'Contesta, cuelga y llama desde el ordenador; hablas por el teléfono.',
-                    'Permitir llamadas',
-                    () => hub.setCallsAllowed(true),
-                    ok: hub.callsAllowed && hub.callsPermission,
-                  ),
-                ],
-                if (_step == 1 && !Platform.isAndroid) ...[
-                  const Text(
-                    'Solo los dispositivos emparejados pueden usar estas funciones. Puedes cambiarlas después en Ajustes.',
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Permitir control remoto'),
-                    subtitle: const Text(
-                      'El teléfono podrá mover el ratón, escribir, controlar música y ver la pantalla.',
-                    ),
-                    value: hub.remoteAllow,
-                    onChanged: _busy
-                        ? null
-                        : (on) => setState(() => hub.setRemoteAllow(on)),
-                  ),
-                  if (Platform.isWindows)
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Abrir Alero al iniciar sesión'),
-                      subtitle: const Text(
-                        'Inicia la app y su conexión al entrar en Windows.',
-                      ),
-                      value: _startup,
-                      onChanged: _busy
-                          ? null
-                          : (on) => _act(() async {
-                              await Native.setStartup(on);
-                              _startup = on;
-                            }),
-                    ),
-                ],
-                if (_step == 2)
-                  const Text(
-                    'Abre Alero en el otro dispositivo y usa la misma red Wi-Fi o un cable USB. En Dispositivos, elige el equipo y comprueba el código en ambos.',
-                  ),
+                ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: Gap.m),
@@ -299,7 +352,12 @@ class _SetupScreenState extends State<SetupScreen> {
                   children: [
                     if (_step > 0)
                       TextButton(
-                        onPressed: _busy ? null : () => setState(() => _step--),
+                        onPressed: _busy
+                            ? null
+                            : () => setState(() {
+                                _back = true;
+                                _step--;
+                              }),
                         child: const Text('Atrás'),
                       ),
                     FilledButton(
@@ -313,7 +371,10 @@ class _SetupScreenState extends State<SetupScreen> {
                               }
                               await _act(() async {
                                 if (_step == 0) await hub.setName(_name.text);
-                                if (mounted) _step++;
+                                if (mounted) {
+                                  _back = false;
+                                  _step++;
+                                }
                               });
                             },
                       child: Text(

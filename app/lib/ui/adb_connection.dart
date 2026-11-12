@@ -33,10 +33,10 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
   String? _message;
 
   Future<void> _usb() async {
-    if (!Scrcpy.available) {
+    if (!Scrcpy.hasAdb) {
       setState(
         () => _message =
-            'El paquete adb/scrcpy no está instalado en este ordenador.',
+            'adb no está instalado en este ordenador (en Debian: sudo apt install adb).',
       );
       return;
     }
@@ -117,10 +117,10 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
   }
 
   Future<void> _wireless() async {
-    if (!Scrcpy.available) {
+    if (!Scrcpy.hasAdb) {
       setState(
         () => _message =
-            'El paquete adb/scrcpy no está instalado en este ordenador.',
+            'adb no está instalado en este ordenador (en Debian: sudo apt install adb).',
       );
       return;
     }

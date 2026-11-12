@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../hub.dart';
+import '../native.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'brand.dart';
 import 'clipboard.dart';
@@ -124,7 +125,7 @@ class _ShellState extends State<Shell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (Platform.isWindows) windowManager.addListener(this);
+    if (Native.pc) windowManager.addListener(this);
     _msgs = hub.messages.stream.listen((m) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -143,7 +144,7 @@ class _ShellState extends State<Shell>
   void dispose() {
     hub.confirmSend = null;
     WidgetsBinding.instance.removeObserver(this);
-    if (Platform.isWindows) windowManager.removeListener(this);
+    if (Native.pc) windowManager.removeListener(this);
     _msgs.cancel();
     hub.removeListener(_questions);
     super.dispose();
@@ -182,9 +183,12 @@ class _ShellState extends State<Shell>
   void _widgetAction() {
     final a = hub.widgetAction;
     if (a == null) return;
-    final pc = hub.peers
-        .where((p) => p.trusted && p.state == pb.PeerState.connected)
-        .firstOrNull;
+    final main = mainPeer(hub);
+    final pc = main?.state == pb.PeerState.connected
+        ? main
+        : hub.peers
+              .where((p) => p.trusted && p.state == pb.PeerState.connected)
+              .firstOrNull;
     if (pc == null && const {'send', 'clip', 'control', 'screen'}.contains(a)) {
       if (!hub.widgetWaited) return; // still connecting
       hub.widgetAction = null;

@@ -1,5 +1,30 @@
 # Cambios
 
+## Beta 1.3 (1.3.0) — 2026-11-12
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Linux (nuevo)
+
+- **Alero para Linux:** paquetes .deb (Debian, Ubuntu), .rpm (Fedora, openSUSE), AppImage y .tar.gz portátil. Incluyen scrcpy y adb, así que no hay que instalar nada más.
+- Notificaciones del teléfono, transferencias, portapapeles, multimedia (MPRIS), ratón y teclado desde el teléfono (uinput) y controles del teléfono por ADB, también inalámbrico.
+- El teléfono muestra el modelo del equipo y el sistema («Debian GNU/Linux 13 · KDE»).
+- Limitación conocida: en Wayland la pantalla del PC en el teléfono se actualiza despacio (menos de 1 imagen por segundo).
+
+### Android
+
+- **Acceso rápido «Alero»** en los ajustes rápidos: añádelo en «Editar» en lugar del de Quick Share; abre Alero como su icono.
+- **Tarjetas de transferencia** en la barra de notificaciones, como las de Quick Share, con el progreso en vivo.
+- **Varios ordenadores:** en Inicio eliges con qué ordenador trabajas; los widgets y las acciones usan ese.
+
+### Windows
+
+- **Tarjetas de transferencia** con progreso; al terminar, «Abrir» y «Abrir carpeta».
+
+### Todas
+
+- Animación de inicio al abrir la app y transiciones nuevas en la configuración inicial.
+
 ## Beta 1.2.1 (1.2.1) — 2026-11-10
 
 Instala juntos el APK de Android y el instalador de Windows: el límite de emparejamiento y los cambios de llamadas necesitan ambos lados.

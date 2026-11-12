@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Alero
+GenericName=Compañero del teléfono Android
+Comment=Conecta tu teléfono Android con este equipo: archivos, notificaciones, portapapeles y control remoto
+Exec=alero
+Icon=dev.alero.app
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=android;teléfono;archivos;scrcpy;
+StartupWMClass=dev.alero.app

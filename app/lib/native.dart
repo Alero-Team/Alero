@@ -52,8 +52,6 @@ class Native {
     return ok;
   }
 
-  static Future<bool> firstLaunch() async =>
-      !_android || (await _ch.invokeMethod<bool>('firstLaunch') ?? false);
   static Future<void> requestNotifications() async =>
       _ch.invokeMethod('requestNotifications');
   static Future<bool> installPermission() async =>
@@ -61,12 +59,41 @@ class Native {
 
   static Future<void> requestInstallPermission() async =>
       _ch.invokeMethod('requestInstallPermission');
-  static Future<bool> startupEnabled() async =>
-      await const MethodChannel('pb/windows')
-          .invokeMethod<bool>('startupEnabled') ??
-      false;
-  static Future<void> setStartup(bool on) async =>
-      const MethodChannel('pb/windows').invokeMethod('setStartup', on);
+
+  /// Windows and Linux: the computers that can run the remote controls, the daemon's file sharing and autostart.
+  static final pc = Platform.isWindows || Platform.isLinux;
+
+  /// Linux "open at login" is an XDG autostart entry; Windows keeps it in its registry (runner).
+  static File get _autostart {
+    final env = Platform.environment;
+    final home = env['XDG_CONFIG_HOME'] ?? '${env['HOME']}/.config';
+    return File('$home/autostart/dev.alero.app.desktop');
+  }
+
+  static Future<bool> startupEnabled() async => Platform.isLinux
+      ? _autostart.existsSync()
+      : await const MethodChannel('pb/windows')
+                .invokeMethod<bool>('startupEnabled') ??
+            false;
+  static Future<void> setStartup(bool on) async {
+    if (!Platform.isLinux) {
+      return const MethodChannel('pb/windows').invokeMethod('setStartup', on);
+    }
+    if (!on) {
+      if (_autostart.existsSync()) _autostart.deleteSync();
+      return;
+    }
+    // Exec= quoting: the path goes in double quotes with \, ", $ and ` escaped.
+    final exe = Platform.resolvedExecutable.replaceAllMapped(
+      RegExp(r'[\\"$`]'),
+      (m) => '\\${m[0]}',
+    );
+    _autostart.parent.createSync(recursive: true);
+    _autostart.writeAsStringSync(
+      '[Desktop Entry]\nType=Application\nName=Alero\nExec="$exe"\n'
+      'Icon=dev.alero.app\nTerminal=false\nX-GNOME-Autostart-enabled=true\n',
+    );
+  }
 
   static Future<bool> allFiles() async =>
       _android && (await _ch.invokeMethod<bool>('allFiles') ?? false);
@@ -82,6 +109,9 @@ class Native {
     'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta', 'cpl', 'msc', 'jar', 'lnk', 'url', 'reg', 'inf', 'dll', 'sys',
     'appref-ms', 'application', 'gadget', 'settingcontent-ms', 'chm', 'msp', 'scf', 'sct', 'wsc', 'xll', 'website',
     'library-ms', 'search-ms', 'diagcab', 'iso', 'img', 'vhd', 'vhdx', 'py', 'pyw', 'sh', 'desktop', 'appimage',
+    // Linux: scripts, installers and launchers the file manager would run or hand to a privileged installer.
+    'run', 'bin', 'deb', 'rpm', 'flatpakref', 'flatpakrepo', 'snap', 'pl', 'rb', 'php', 'bash', 'zsh', 'fish', 'ksh',
+    'csh', 'tcsh', 'command', 'workflow', 'service', 'timer', 'so', 'out',
     // Active content handed to a privileged handler (same additions as runs_code).
     'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm', 'potm', 'ppam', 'ppsm', 'sldm', 'theme', 'themepack',
     'deskthemepack', 'rdp', 'appinstaller', 'jnlp', 'iqy', 'slk', 'psc1', 'ps1xml', 'psd1', 'shs', 'mht',
@@ -95,7 +125,7 @@ class Native {
     } else if (runsCode(path)) {
       // A file another device sent is never run from here: it is shown in its folder, and running it stays
       // a deliberate act of the user in the system's own file manager.
-      if (Platform.isWindows) await Process.start('explorer', ['/select,', path]);
+      await showInFolder(path);
       throw PlatformException(
         code: 'runs_code',
         message: 'Por seguridad, Alero no ejecuta programas: te lo muestra en su carpeta.',
@@ -119,7 +149,7 @@ class Native {
     }
     return Platform.environment['COMPUTERNAME'] ??
         Platform.environment['HOSTNAME'] ??
-        'Ordenador';
+        (Platform.isLinux ? Platform.localHostname : 'Ordenador');
   }
 
   static Future<List<Picked>> pickFiles() async {
@@ -290,6 +320,15 @@ class Native {
   static Future<void> openUrl(String url) async {
     if (_android) return _ch.invokeMethod('openUrl', url);
     await Process.start(Platform.isWindows ? 'explorer' : 'xdg-open', [url]);
+  }
+
+  /// Desktop: the file's folder, with the file selected where the file manager supports it (Windows Explorer).
+  static Future<void> showInFolder(String path) async {
+    if (Platform.isWindows) {
+      await Process.start('explorer', ['/select,', path]);
+    } else {
+      await Process.start('xdg-open', [File(path).parent.path]);
+    }
   }
 
   static Future<void> openFolder(String path) async {

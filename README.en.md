@@ -1,4 +1,4 @@
-# Alero — Android and Windows, connected
+# Alero — Android, Windows and Linux, connected
 
 <div align="center">
 
@@ -6,7 +6,7 @@
 
   <h2>One connection. No friction.</h2>
 
-  <p>Alero connects your Android phone and your Windows PC directly over your local network or a USB cable, built with <strong>Flutter</strong>, <strong>Rust</strong> and <strong>Kotlin</strong>.</p>
+  <p>Alero connects your Android phone and your Windows or Linux PC directly over your local network or a USB cable, built with <strong>Flutter</strong>, <strong>Rust</strong> and <strong>Kotlin</strong>.</p>
 
   <p>Transfer files, browse your phone, share the clipboard, mirror notifications and control either device from the other, with no account and no cloud.</p>
 
@@ -21,6 +21,7 @@
   <p>
     <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=black" alt="Android 8.0 or later" />
     <img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white" alt="Windows x64" />
+    <img src="https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black" alt="Linux x64" />
     <img src="https://img.shields.io/badge/Flutter-Rust-02569B?logo=flutter&logoColor=white" alt="Flutter and Rust" />
     <img src="https://img.shields.io/badge/Status-Beta-F59E0B" alt="Beta version" />
     <img src="https://img.shields.io/badge/License-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later license" />
@@ -52,7 +53,7 @@ A project by **Alero Team**, developed by:
 
 ## How it works
 
-1. Install the Android APK and the Windows installer from the same release.
+1. Install the Android APK and the Windows installer or the Linux package (.deb, .rpm, AppImage or .tar.gz) from the same release.
 2. Open Alero on both devices, join the same Wi-Fi network and pair them in **Dispositivos** (Devices), or scan the computer's QR code.
 3. Allow remote control on Windows and grant the phone only the permissions needed for the features you use.
 
@@ -74,7 +75,7 @@ Android's optional **Security** setting unlocks the app with the system fingerpr
 
 ## Downloads
 
-Android and Windows packages are published on **[GitHub Releases](https://github.com/Alero-Team/Alero/releases)** together with the release notes of each version. See also the [changelog](CHANGELOG.md).
+Android, Windows and Linux packages are published on **[GitHub Releases](https://github.com/Alero-Team/Alero/releases)** together with the release notes of each version. See also the [changelog](CHANGELOG.md).
 
 Alero is still in Beta. Always download the APK and the installer from the same version.
 
@@ -82,14 +83,14 @@ Alero is still in Beta. Always download the APK and the installer from the same 
 
 The Android builds keep one signing identity so each release updates the previous one. It is not a production certificate. Google Play Protect may block APKs downloaded from GitHub because the app declares sensitive capabilities (notification access, SMS), even when the APK is signed correctly; see [Play Protect's developer guidance](https://developers.google.com/android/play-protect/warning-dev-guidance). The Windows installer has no commercial Authenticode signature.
 
-Linux is not packaged. Using the phone from the computer requires Windows.
+On Linux (x64) the packages bundle scrcpy and adb. On Wayland, the PC screen on the phone updates slowly.
 
 ## App information
 
 | | |
 | --- | --- |
 | **Name** | Alero |
-| **Platforms** | Android 8.0 or later and Windows (x64) |
+| **Platforms** | Android 8.0 or later, Windows (x64) and Linux (x64) |
 | **Package** | `dev.alero.app` |
 | **Technologies** | Flutter, Rust and Kotlin |
 | **Connection** | Local network or USB, mutually authenticated TLS, no servers |
@@ -98,5 +99,5 @@ Linux is not packaged. Using the phone from the computer requires Windows.
 ---
 
 <div align="center">
-  <sub>Designed for Android and Windows · Alero Team</sub>
+  <sub>Designed for Android, Windows and Linux · Alero Team</sub>
 </div>

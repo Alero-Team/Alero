@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
+import '../native.dart';
 import '../remote.dart';
 import 'expressive.dart';
 import 'theme.dart';
@@ -280,7 +280,7 @@ class _NotifRowState extends State<_NotifRow> {
     final shown = lines.skip(
       (lines.length - (_open ? 6 : 1)).clamp(0, lines.length),
     );
-    final canReply = Platform.isWindows && n.replyable;
+    final canReply = Native.pc && n.replyable;
     final actions = _hover || _focus || _replying;
     Widget small(IconData icon, String tip, VoidCallback onTap) => IconButton(
       tooltip: tip,

@@ -107,7 +107,9 @@ impl Remote {
     pub fn info(&self, engine: &Engine) -> Value {
         #[cfg(windows)]
         let (os, version) = ("Windows", crate::win::os_version());
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        let (os, version) = (crate::linux::os_version(), String::new());
+        #[cfg(not(any(windows, target_os = "linux")))]
         let (os, version) = (std::env::consts::OS, String::new());
         let (w, h) = sys::screen_size();
         let name = engine.name();
@@ -125,6 +127,7 @@ impl Remote {
                 "screen": sys::CAPS.screen,
                 "media": sys::CAPS.media,
                 "power": sys::CAPS.power,
+                "screenNote": sys::screen_note(),
             },
         });
         if self.device["product"] == "83FS" {
@@ -150,9 +153,9 @@ impl Remote {
             return;
         }
         n.insert(peer.to_string(), Instant::now());
-        #[cfg(windows)]
-        crate::win::toast("Control remoto", &format!("{} {what}", Self::peer_name(engine, peer)));
-        #[cfg(not(windows))]
+        #[cfg(any(windows, target_os = "linux"))]
+        crate::platform::toast("Control remoto", &format!("{} {what}", Self::peer_name(engine, peer)));
+        #[cfg(not(any(windows, target_os = "linux")))]
         let _ = (engine, what);
     }
 
@@ -341,8 +344,8 @@ impl Remote {
             last_ack: Instant::now(),
             gen,
         });
-        #[cfg(windows)]
-        crate::win::toast("Pantalla compartida", &format!("{} está viendo la pantalla de este equipo", Self::peer_name(engine, peer)));
+        #[cfg(any(windows, target_os = "linux"))]
+        crate::platform::toast("Pantalla compartida", &format!("{} está viendo la pantalla de este equipo", Self::peer_name(engine, peer)));
         let (me, engine) = (self.clone(), engine.clone());
         thread::spawn(move || me.screen_loop(&engine, gen));
     }
@@ -350,6 +353,7 @@ impl Remote {
     fn screen_loop(&self, engine: &Engine, gen: u64) {
         let (mut seq, mut last_print, mut last_sent) = (0u64, 0u64, Instant::now() - Duration::from_secs(10));
         let mut pointer: Option<Option<(f64, f64)>> = None;
+        let mut misses = 0u32;
         loop {
             let (peer, width, fps, monitor, own_cursor, busy) = {
                 let mut g = self.screen.lock().unwrap();
@@ -379,7 +383,13 @@ impl Remote {
             }
             // While the phone still holds two pictures no new one goes out, but the pointer keeps moving below.
             if !busy {
-                if let Some((w, h, pixels)) = sys::capture_monitor(width, monitor, !own_cursor) {
+                let captured = sys::capture_monitor(width, monitor, !own_cursor);
+                // Three failures in a row: tell the phone once, so it can say so instead of waiting for ever.
+                misses = if captured.is_some() { 0 } else { misses + 1 };
+                if misses == 3 {
+                    let _ = engine.send_message(&peer, "pb.x.screen.error", json!({"reason": "capture_failed"}));
+                }
+                if let Some((w, h, pixels)) = captured {
                     let print = fingerprint(&pixels);
                     // Unchanged picture: send nothing (the phone keeps showing the last one), except a refresh now and then.
                     if print != last_print || last_sent.elapsed() > Duration::from_secs(2) {
