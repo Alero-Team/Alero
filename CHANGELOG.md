@@ -1,5 +1,21 @@
 # Cambios
 
+## Beta 1.4.1 (1.4.1) — 2026-11-14
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Windows y Linux
+
+- **Menú en píldora:** el menú lateral es ahora una píldora flotante anclada al borde izquierdo, como la Dynamic Island del iPhone. Con el menú contraído, al pasar el puntero por encima se abre sobre la página sin moverla y se cierra al salir; con «Fijar menú» queda abierto junto a la página. Conserva el mismo muelle y todas las animaciones de siempre.
+
+### English
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+#### Windows and Linux
+
+- **Pill menu:** the side menu is now a floating pill anchored to the left edge, like the iPhone's Dynamic Island. With the menu collapsed, hovering it opens it over the page without moving the page, and it closes when the pointer leaves; "Pin menu" keeps it open beside the page. It keeps the same spring and every existing animation.
+
 ## Beta 1.4 (1.4.0) — 2026-11-14
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
