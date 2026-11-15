@@ -111,6 +111,9 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell>
     with WidgetsBindingObserver, WindowListener {
   bool _sidebarCollapsed = false;
+
+  /// The pointer is on the pill: a collapsed pill opens over the page while it stays true.
+  bool _islandHover = false;
   Hub get hub => widget.hub;
   // ALERO_SECTION=explorer (etc.) opens that screen first: handy for screenshots and manual checks.
   late Section _section =
@@ -348,104 +351,130 @@ class _ShellState extends State<Shell>
     _ => 0,
   };
 
+  /// The computer's menu is a floating pill, like the iPhone's Dynamic Island, anchored to the left edge. Pinned
+  /// open it sits beside the page; collapsed it is a narrow capsule of icons that opens over the page, with the same
+  /// spring, while the pointer is on it, so the page never moves when it only peeks.
   Widget _wide(Widget page) {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final online = hub.peers
         .where((p) => p.trusted && p.state == pb.PeerState.connected)
         .toList();
-    return Scaffold(
-      backgroundColor: s.surface,
-      body: Row(
-        children: [
-          AnimatedContainer(
-            duration: AleroMotion.duration(context, 310),
-            curve: AleroMotion.spatial,
-            width: _sidebarCollapsed ? 76 : 226,
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+    const edge = 12.0, openW = 226.0, closedW = 76.0, corner = 32.0;
+    final open = !_sidebarCollapsed || _islandHover;
+    final pill = MouseRegion(
+      onEnter: (_) {
+        if (!_islandHover) setState(() => _islandHover = true);
+      },
+      onExit: (_) {
+        if (_islandHover) setState(() => _islandHover = false);
+      },
+      child: AnimatedContainer(
+        duration: AleroMotion.duration(context, 310),
+        curve: AleroMotion.spatial,
+        width: open ? openW : closedW,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: s.surfaceContainer,
+          borderRadius: BorderRadius.circular(corner),
+          border: Border.all(color: s.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: s.shadow.withValues(alpha: _islandHover ? .22 : .10),
+              blurRadius: _islandHover ? 28 : 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 13, 10, 12),
+              child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 13, 10, 12),
-                    child: Row(
-                      children: [
-                        const AleroMark(size: 22),
-                        if (!_sidebarCollapsed) ...[
-                          const SizedBox(width: 9),
-                          Expanded(child: Text('Alero', style: t.titleSmall)),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: TextButton.icon(
-                      onPressed: () => setState(
-                        () => _sidebarCollapsed = !_sidebarCollapsed,
-                      ),
-                      icon: Icon(
-                        _sidebarCollapsed
-                            ? Symbols.left_panel_open_rounded
-                            : Symbols.left_panel_close_rounded,
-                      ),
-                      label: _sidebarCollapsed
-                          ? const SizedBox.shrink()
-                          : const Text('Contraer menú'),
-                      style: TextButton.styleFrom(
-                        alignment: Alignment.centerLeft,
-                        foregroundColor: s.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 7),
-                      children: [
-                        for (final d in _dests) ...[
-                          if (d.group != null && !_sidebarCollapsed)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
-                              child: Text(
-                                d.group!,
-                                style: t.labelSmall?.copyWith(
-                                  color: s.onSurfaceVariant,
-                                  letterSpacing: .8,
-                                ),
-                              ),
-                            ),
-                          _NavItem(
-                            icon: d.icon,
-                            label: _sidebarCollapsed ? '' : d.label,
-                            selected: d.section == _section,
-                            badge: _badge(d.section),
-                            onTap: () => _go(d.section),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: _sidebarCollapsed
-                        ? IconButton(
-                            icon: const Icon(Symbols.smartphone_rounded),
-                            onPressed: () => _go(Section.devices),
-                            tooltip: tx('Dispositivos'),
-                          )
-                        : _PhoneChip(
-                            online,
-                            hub,
-                            onTap: () => _go(Section.devices),
-                          ),
-                  ),
+                  const AleroMark(size: 22),
+                  if (open) ...[
+                    const SizedBox(width: 9),
+                    Expanded(child: Text('Alero', style: t.titleSmall)),
+                  ],
                 ],
               ),
             ),
-          ),
-          Expanded(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: TextButton.icon(
+                onPressed: () =>
+                    setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                icon: Icon(
+                  _sidebarCollapsed
+                      ? Symbols.left_panel_open_rounded
+                      : Symbols.left_panel_close_rounded,
+                ),
+                label: !open
+                    ? const SizedBox.shrink()
+                    : Text(_sidebarCollapsed ? 'Fijar menú' : 'Contraer menú'),
+                style: TextButton.styleFrom(
+                  alignment: Alignment.centerLeft,
+                  foregroundColor: s.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                children: [
+                  for (final d in _dests) ...[
+                    if (d.group != null && open)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
+                        child: Text(
+                          d.group!,
+                          style: t.labelSmall?.copyWith(
+                            color: s.onSurfaceVariant,
+                            letterSpacing: .8,
+                          ),
+                        ),
+                      ),
+                    _NavItem(
+                      icon: d.icon,
+                      label: open ? d.label : '',
+                      selected: d.section == _section,
+                      badge: _badge(d.section),
+                      onTap: () => _go(d.section),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+              child: !open
+                  ? IconButton(
+                      icon: const Icon(Symbols.smartphone_rounded),
+                      onPressed: () => _go(Section.devices),
+                      tooltip: tx('Dispositivos'),
+                    )
+                  : _PhoneChip(online, hub, onTap: () => _go(Section.devices)),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Scaffold(
+      backgroundColor: s.surface,
+      body: Stack(
+        children: [
+          // The page keeps the room of the pinned state only: a collapsed pill that peeks floats over it.
+          AnimatedPadding(
+            duration: AleroMotion.duration(context, 310),
+            curve: AleroMotion.spatial,
+            padding: EdgeInsets.only(
+              left: (_sidebarCollapsed ? closedW : openW) + edge * 2,
+            ),
             child: ColoredBox(
               color: s.surface,
               child: Column(
@@ -456,6 +485,7 @@ class _ShellState extends State<Shell>
               ),
             ),
           ),
+          Positioned(left: edge, top: edge, bottom: edge, child: pill),
         ],
       ),
     );
