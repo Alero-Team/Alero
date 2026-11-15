@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'hub.dart';
 import 'remote.dart';
+import 'l10n.dart' show tx;
 
 class SmsThread {
   SmsThread(Map j)
@@ -100,17 +101,17 @@ class SmsClient extends ChangeNotifier {
     return done.future
         .timeout(
           const Duration(seconds: 15),
-          onTimeout: () => throw TimeoutException('sin respuesta'),
+          onTimeout: () => throw TimeoutException(tx('sin respuesta')),
         )
         .whenComplete(() => _sends.remove(request));
   }
 
   static String sendError(String? e) => switch (e) {
-    'group' => 'Los grupos necesitan MMS: solo la app de mensajes del teléfono puede enviarlos.',
-    'no_permission' => 'Falta el permiso para enviar SMS en el teléfono.',
-    'no_thread' => 'La conversación ya no existe en el teléfono.',
-    'empty' => 'El mensaje está vacío.',
-    _ => 'El teléfono no pudo enviar el SMS.',
+    'group' => tx('Los grupos necesitan MMS: solo la app de mensajes del teléfono puede enviarlos.'),
+    'no_permission' => tx('Falta el permiso para enviar SMS en el teléfono.'),
+    'no_thread' => tx('La conversación ya no existe en el teléfono.'),
+    'empty' => tx('El mensaje está vacío.'),
+    _ => tx('El teléfono no pudo enviar el SMS.'),
   };
 
   void onMessage(String peer, String kind, Map<String, dynamic> b) {

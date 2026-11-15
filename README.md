@@ -57,7 +57,7 @@ Un proyecto de **Alero Team**, desarrollado por:
 2. Abre Alero en ambos dispositivos, conéctalos a la misma red Wi-Fi y empareja en **Dispositivos**, o escanea el QR de la computadora.
 3. Permite el control remoto en Windows y concede al teléfono solo los permisos de las funciones que vayas a usar.
 
-La interfaz está en español.
+La interfaz está en español e inglés (Ajustes → Apariencia → Idioma; «Sistema» sigue el idioma del dispositivo).
 
 ### Controlar la computadora desde el teléfono
 

@@ -57,13 +57,14 @@ object Notifier {
 
     fun init(c: Context) {
         ctx = c.applicationContext
+        Tr.load(c)
         val nm = c.getSystemService(NotificationManager::class.java)
         // MIN: no status-bar icon, no sound, collapsed in the shade. Android still lists a foreground service in
         // its task manager, which is why the service only exists while there is something to keep alive.
-        nm.createNotificationChannel(NotificationChannel(QUIET, "Conexión con tu ordenador", NotificationManager.IMPORTANCE_MIN).apply {
+        nm.createNotificationChannel(NotificationChannel(QUIET, Tr.t("Conexión con tu ordenador", "Connection to your computer"), NotificationManager.IMPORTANCE_MIN).apply {
             setShowBadge(false)
         })
-        nm.createNotificationChannel(NotificationChannel(ALERT, "Avisos", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(ALERT, Tr.t("Avisos", "Notices"), NotificationManager.IMPORTANCE_DEFAULT))
     }
 
     private fun open(c: Context) = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
@@ -78,7 +79,7 @@ object Notifier {
             .setOnlyAlertOnce(true)
             .apply {
                 // Opens Alero's file picker for the connected computer (same path as the widgets' Enviar).
-                if (connected) addAction(Notification.Action.Builder(null, "Enviar archivo", PendingIntent.getActivity(
+                if (connected) addAction(Notification.Action.Builder(null, Tr.t("Enviar archivo", "Send file"), PendingIntent.getActivity(
                     c, "notice-send".hashCode(),
                     Intent(c, MainActivity::class.java).putExtra(MainActivity.WIDGET, "send")
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -99,10 +100,10 @@ object Notifier {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = Notification.Builder(c, ALERT).setSmallIcon(R.drawable.ic_stat_alero)
-            .setContentTitle("$pc controla este teléfono")
-            .setContentText("Ve la pantalla y usa el ratón y el teclado.")
+            .setContentTitle(Tr.t("$pc controla este teléfono", "$pc is controlling this phone"))
+            .setContentText(Tr.t("Ve la pantalla y usa el ratón y el teclado.", "Viewing the screen and using the mouse and keyboard."))
             .setContentIntent(open(c)).setOngoing(true).setOnlyAlertOnce(true)
-            .addAction(Notification.Action.Builder(null, "Detener", stop).build())
+            .addAction(Notification.Action.Builder(null, Tr.t("Detener", "Stop"), stop).build())
             .build()
         try { nm.notify(CONTROLLED, n) } catch (_: SecurityException) {}
     }
@@ -159,7 +160,7 @@ class PbService : Service() {
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
         Notifier.init(this)
         val text = i?.getStringExtra(TEXT) ?: WAITING
-        val n = Notifier.status(this, text, connected = text != WAITING)
+        val n = Notifier.status(this, if (text == WAITING) Tr.t("Esperando a tu ordenador", "Waiting for your computer") else text, connected = text != WAITING)
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
         return START_NOT_STICKY
     }
@@ -184,7 +185,7 @@ class PbService : Service() {
                 stopper?.let(main::removeCallbacks)
                 stopper = null
                 if (names.isNotEmpty() || Prefs.background(app)) {
-                    val text = if (names.isEmpty()) WAITING else "Conectado a ${names.joinToString(", ")}"
+                    val text = if (names.isEmpty()) WAITING else Tr.t("Conectado a ${names.joinToString(", ")}", "Connected to ${names.joinToString(", ")}")
                     try {
                         app.startForegroundService(Intent(app, PbService::class.java).putExtra(TEXT, text))
                     } catch (_: Exception) {

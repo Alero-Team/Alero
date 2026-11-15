@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 
 import 'native.dart';
+import 'l10n.dart' show tx;
 
 /// Local, device-bound encryption: Android Keystore AES-256-GCM; Windows
 /// DPAPI CurrentUser. The plaintext title and content are both encrypted.
@@ -31,11 +32,11 @@ class VaultEntry {
   factory VaultEntry.fromMap(String id, Map<String, dynamic> map) {
     final kind = map['kind'] as String?;
     if (kind != 'note' && kind != 'file') {
-      throw const FormatException('Formato de bóveda no admitido');
+      throw FormatException(tx('Formato de bóveda no admitido'));
     }
     return VaultEntry(
       id: id,
-      name: map['name'] as String? ?? 'Sin nombre',
+      name: map['name'] as String? ?? tx('Sin nombre'),
       kind: kind!,
       data: map['data'] as String? ?? '',
       created: DateTime.parse(map['created'] as String),
@@ -68,7 +69,7 @@ class VaultStore {
   /// Sets the key for the first time and seals again, under it, whatever the vault already held.
   Future<void> createKey(String key) async {
     if (key.length < minKeyLength) {
-      throw const FormatException('La clave necesita al menos 4 caracteres.');
+      throw FormatException(tx('La clave necesita al menos 4 caracteres.'));
     }
     final old = await list();
     _key = key;
@@ -114,13 +115,13 @@ class VaultStore {
   Future<Uint8List> _seal(Uint8List data) async {
     if (Platform.isAndroid) return Native.vaultSeal(data);
     if (Platform.isWindows) return _windowsCrypt(data, true, _key);
-    throw UnsupportedError('Alero Vault solo admite Android y Windows.');
+    throw UnsupportedError(tx('Alero Vault solo admite Android y Windows.'));
   }
 
   Future<Uint8List> _open(Uint8List data) async {
     if (Platform.isAndroid) return Native.vaultOpen(data);
     if (Platform.isWindows) return _windowsCrypt(data, false, _key);
-    throw UnsupportedError('Alero Vault solo admite Android y Windows.');
+    throw UnsupportedError(tx('Alero Vault solo admite Android y Windows.'));
   }
 
   /// PowerShell receives the secret on standard input, never in arguments.
@@ -154,8 +155,8 @@ class VaultStore {
     final stdoutText = await process.stdout.transform(utf8.decoder).join();
     await process.stderr.drain<void>();
     if (await process.exitCode != 0) {
-      throw const FormatException(
-        'No se pudo proteger o abrir el contenido de la bóveda.',
+      throw FormatException(
+        tx('No se pudo proteger o abrir el contenido de la bóveda.'),
       );
     }
     return base64Decode(stdoutText.trim());
@@ -174,7 +175,7 @@ class VaultStore {
         utf8.decode(await _open(await item.readAsBytes())),
       );
       if (decoded is! Map<String, dynamic>) {
-        throw const FormatException('Registro cifrado inválido');
+        throw FormatException(tx('Registro cifrado inválido'));
       }
       entries.add(VaultEntry.fromMap(id, decoded));
     }
@@ -183,9 +184,9 @@ class VaultStore {
   }
 
   Future<void> store(VaultEntry entry) async {
-    if (!_validId(entry.id)) throw const FormatException('ID inválido');
+    if (!_validId(entry.id)) throw FormatException(tx('ID inválido'));
     if (entry.name.trim().isEmpty || entry.name.length > 180) {
-      throw const FormatException('Nombre inválido');
+      throw FormatException(tx('Nombre inválido'));
     }
     final root = await _folder();
     final sealed = await _seal(
@@ -222,7 +223,7 @@ class VaultStore {
 
   Future<void> saveFile(String name, Uint8List bytes) async {
     if (bytes.length > maxFileBytes) {
-      throw const FormatException('Archivo demasiado grande (máximo 8 MB).');
+      throw FormatException(tx('Archivo demasiado grande (máximo 8 MB).'));
     }
     await store(
       VaultEntry(
@@ -236,7 +237,7 @@ class VaultStore {
   }
 
   Future<void> remove(VaultEntry entry) async {
-    if (!_validId(entry.id)) throw const FormatException('ID inválido');
+    if (!_validId(entry.id)) throw FormatException(tx('ID inválido'));
     final root = await _folder();
     final file = File('${root.path}${Platform.pathSeparator}${entry.id}.avlt');
     if (await file.exists()) await file.delete();

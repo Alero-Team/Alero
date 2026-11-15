@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -10,6 +10,7 @@ import 'theme.dart';
 import 'icon.dart';
 import 'expressive.dart' show motion;
 import 'alero_motion.dart';
+import '../l10n.dart';
 
 /// Explanations are visible before any button opens a system permission prompt.
 class SetupScreen extends StatefulWidget {
@@ -219,9 +220,9 @@ class _SetupScreenState extends State<SetupScreen> {
                             textAlignVertical: TextAlignVertical.center,
                             textInputAction: TextInputAction.done,
                             onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               counterText: '',
-                              hintText: 'Escribe el nombre del equipo',
+                              hintText: tx('Escribe el nombre del equipo'),
                               contentPadding: EdgeInsets.symmetric(
                                 horizontal: Gap.l,
                                 vertical: Gap.l,

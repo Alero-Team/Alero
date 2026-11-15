@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -11,13 +11,14 @@ import 'expressive.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 String ago(DateTime t) {
   final d = DateTime.now().difference(t);
   if (d.inMinutes < 1) return 'ahora';
-  if (d.inHours < 1) return 'hace ${d.inMinutes} min';
-  if (d.inDays < 1) return 'hace ${d.inHours} h';
-  return 'hace ${d.inDays} d';
+  if (d.inHours < 1) return tr('hace {} min', [d.inMinutes]);
+  if (d.inDays < 1) return tr('hace {} h', [d.inHours]);
+  return tr('hace {} d', [d.inDays]);
 }
 
 /// Full notifications destination for the desktop sidebar.
@@ -45,7 +46,7 @@ class NotificationsScreen extends StatelessWidget {
           else ...[
             Row(
               children: [
-                Expanded(child: Text('Notificaciones de ${peer.name}')),
+                Expanded(child: Text(tr('Notificaciones de {}', [peer.name]))),
                 TextButton.icon(
                   onPressed: () => hub.clearNotifs(peer.id),
                   icon: const Icon(Symbols.clear_all_rounded),
@@ -108,7 +109,7 @@ class NotificationsPanel extends StatelessWidget {
     return Panel(
       title: list.isEmpty
           ? 'Notificaciones'
-          : 'Notificaciones · ${list.length}',
+          : tr('Notificaciones · {}', [list.length]),
       action: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -157,7 +158,7 @@ class _AllDialog extends StatelessWidget {
     builder: (context, _) {
       final list = hub.notifs[peerId] ?? const <PhoneNotif>[];
       return AlertDialog(
-        title: Text('Notificaciones · ${list.length}'),
+        title: Text(tr('Notificaciones · {}', [list.length])),
         content: SizedBox(
           width: 520,
           child: list.isEmpty
@@ -231,7 +232,7 @@ class _NotifRowState extends State<_NotifRow> {
       messenger?.showSnackBar(
         SnackBar(
           content: Text(
-            'Respuesta enviada${n.title.isEmpty ? '' : ' a ${n.title}'}',
+            tr('Respuesta enviada{}', [n.title.isEmpty ? '' : tr(' a {}', [n.title])]),
           ),
         ),
       );
@@ -283,7 +284,7 @@ class _NotifRowState extends State<_NotifRow> {
     final canReply = Native.pc && n.replyable;
     final actions = _hover || _focus || _replying;
     Widget small(IconData icon, String tip, VoidCallback onTap) => IconButton(
-      tooltip: tip,
+      tooltip: tx(tip),
       onPressed: onTap,
       visualDensity: VisualDensity.compact,
       constraints: BoxConstraints.tight(Size.square(30 * k)),
@@ -361,7 +362,7 @@ class _NotifRowState extends State<_NotifRow> {
                                 if (n.app.isNotEmpty) n.app,
                                 ago(n.time),
                                 if (lines.length > 1)
-                                  '${lines.length} mensajes',
+                                  tr('{} mensajes', [lines.length]),
                               ].join(' · '),
                               style: muted,
                               maxLines: 1,
@@ -393,7 +394,7 @@ class _NotifRowState extends State<_NotifRow> {
                         ),
                       ),
                       PopupMenuButton<String>(
-                        tooltip: 'Más opciones',
+                        tooltip: tx('Más opciones'),
                         iconSize: 18 * k,
                         padding: EdgeInsets.zero,
                         style: IconButton.styleFrom(
@@ -410,7 +411,7 @@ class _NotifRowState extends State<_NotifRow> {
                           PopupMenuItem(
                             value: 'muteApp',
                             child: Text(
-                              'Silenciar ${n.app.isEmpty ? 'esta app' : n.app} en el ordenador',
+                              tr('Silenciar {} en el ordenador', [n.app.isEmpty ? 'esta app' : n.app]),
                             ),
                           ),
                         ],
@@ -500,7 +501,7 @@ class _NotifRowState extends State<_NotifRow> {
                             filled: true,
                             fillColor: s.surfaceContainerHighest,
                             hintText:
-                                'Responder${n.title.isEmpty ? '' : ' a ${n.title}'}',
+                                tr('Responder{}', [n.title.isEmpty ? '' : tr(' a {}', [n.title])]),
                             contentPadding: const EdgeInsets.fromLTRB(
                               16,
                               10,
@@ -512,7 +513,7 @@ class _NotifRowState extends State<_NotifRow> {
                               borderSide: BorderSide.none,
                             ),
                             suffixIcon: IconButton(
-                              tooltip: 'Enviar respuesta',
+                              tooltip: tx('Enviar respuesta'),
                               iconSize: 18,
                               color: s.primary,
                               onPressed: _sending || _text.text.trim().isEmpty

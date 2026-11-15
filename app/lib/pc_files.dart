@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'fs_client.dart';
 import 'hub.dart';
+import 'l10n.dart' show tx;
 
 /// Android-side browser for explicitly shared Windows folders.
 /// All requests use the authenticated Alero peer channel, not ADB.
@@ -27,7 +28,7 @@ class PcFilesClient extends ChangeNotifier {
     _timeout = Timer(const Duration(seconds: 8), () {
       if (loading) {
         loading = false;
-        error ??= 'El ordenador no respondió. Comprueba que Alero esté conectado.';
+        error ??= tx('El ordenador no respondió. Comprueba que Alero esté conectado.');
         notifyListeners();
       }
     });
@@ -146,18 +147,18 @@ class PcFilesClient extends ChangeNotifier {
         }
       case 'pb.x.pcfs.done':
         hub.messages.add(body['ok'] == true
-            ? 'Archivo actualizado en Windows.'
-            : 'Windows no pudo realizar el cambio solicitado.');
+            ? tx('Archivo actualizado en Windows.')
+            : tx('Windows no pudo realizar el cambio solicitado.'));
         list();
         return;
       case 'pb.x.pcfs.denied':
         _timeout?.cancel();
         loading = false;
         error = switch (body['reason']) {
-          'not_allowed' => 'Windows no ha autorizado ninguna carpeta. Añade una carpeta en Alero para Windows › Ajustes.',
-          'read_only' => 'La carpeta es de solo lectura. Windows debe autorizar cambios en sus ajustes.',
-          'invalid_path' => 'Ruta rechazada por motivos de seguridad.',
-          _ => 'El ordenador rechazó el acceso a este archivo.',
+          'not_allowed' => tx('Windows no ha autorizado ninguna carpeta. Añade una carpeta en Alero para Windows › Ajustes.'),
+          'read_only' => tx('La carpeta es de solo lectura. Windows debe autorizar cambios en sus ajustes.'),
+          'invalid_path' => tx('Ruta rechazada por motivos de seguridad.'),
+          _ => tx('El ordenador rechazó el acceso a este archivo.'),
         };
       default:
         return;

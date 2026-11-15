@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -13,6 +13,7 @@ import 'notifications.dart' show ago;
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// One row of the unified inbox: an SMS/MMS conversation from the phone's store, or a messaging app's
 /// conversation as its notification shows it (only while that notification is on the phone).
@@ -153,7 +154,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ),
                   if (phone != null && hub.info[phone.id]?.sms == true)
                     IconButton(
-                      tooltip: 'Actualizar',
+                      tooltip: tx('Actualizar'),
                       onPressed: sms.refresh,
                       icon: const Icon(Symbols.refresh_rounded),
                     ),
@@ -234,8 +235,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   child: TextField(
                     controller: _search,
                     onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      hintText: 'Buscar conversaciones',
+                    decoration: InputDecoration(
+                      hintText: tx('Buscar conversaciones'),
                       prefixIcon: Icon(Symbols.search_rounded),
                     ),
                   ),
@@ -450,7 +451,7 @@ class _ConversationState extends State<_Conversation> {
           ChatMsg(body: text, time: DateTime.now(), out: true),
           {for (final m in c.notif!.messages) msgKey(m)},
         ));
-        _status = 'Android entregó la respuesta a ${c.source}.';
+        _status = tr('Android entregó la respuesta a {}.', [c.source]);
       }
       _text.clear();
     } on TimeoutException {
@@ -501,7 +502,7 @@ class _ConversationState extends State<_Conversation> {
                     Text(
                       c.thread != null
                           ? c.thread!.addresses.join(', ')
-                          : '${c.source} · solo los últimos mensajes de la notificación',
+                          : tr('{} · solo los últimos mensajes de la notificación', [c.source]),
                       style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
                     ),
                   ],
@@ -511,7 +512,7 @@ class _ConversationState extends State<_Conversation> {
                   !c.thread!.group &&
                   widget.hub.info[widget.peerId]?.calls == true)
                 IconButton.filledTonal(
-                  tooltip: 'Llamar a ${c.title}',
+                  tooltip: tr('Llamar a {}', [c.title]),
                   onPressed: () => dialDialog(
                     context,
                     widget.hub,
@@ -570,7 +571,7 @@ class _ConversationState extends State<_Conversation> {
                               decoration: InputDecoration(
                                 hintText: c.thread != null
                                     ? 'SMS'
-                                    : 'Responder en ${c.source}',
+                                    : tr('Responder en {}', [c.source]),
                               ),
                             ),
                           ),
@@ -582,7 +583,7 @@ class _ConversationState extends State<_Conversation> {
                                 .colorScheme
                                 .onPrimary,
                           ),
-                          tooltip: 'Enviar',
+                          tooltip: tx('Enviar'),
                           onPressed: _sending || _text.text.trim().isEmpty
                               ? null
                               : _send,
@@ -656,7 +657,7 @@ class _Bubble extends StatelessWidget {
                 ),
               if (m.media > 0)
                 Text(
-                  '${m.media == 1 ? 'Un adjunto' : '${m.media} adjuntos'} (en el teléfono)',
+                  tr('{} (en el teléfono)', [m.media == 1 ? tx('Un adjunto') : tr('{} adjuntos', [m.media])]),
                   style: t.bodySmall?.copyWith(
                     color: fg,
                     fontStyle: FontStyle.italic,

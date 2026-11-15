@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'adb_mdns.dart';
 import 'phone_control.dart';
+import 'l10n.dart' show tr, tx;
 
 /// A screen of the phone as `scrcpy --list-displays` prints it.
 class PhoneDisplay {
@@ -95,10 +96,10 @@ class Scrcpy {
     await stderr;
     if (status != 0 || !output.contains('Successfully paired')) {
       throw StateError(
-        'No se pudo vincular ADB. Comprueba la IP, el puerto y el código temporal.',
+        tx('No se pudo vincular ADB. Comprueba la IP, el puerto y el código temporal.'),
       );
     }
-    return 'Dispositivo vinculado correctamente con Android.';
+    return tx('Dispositivo vinculado correctamente con Android.');
   }
 
   /// "Vincular con código QR": the phone, after scanning, announces the QR's service name for pairing.
@@ -176,11 +177,11 @@ class Scrcpy {
     bool startServer = true,
   }) async {
     if (!await _AdbServer.up()) {
-      if (!startServer) return 'adb no está en marcha.';
+      if (!startServer) return tx('adb no está en marcha.');
       if (!hasAdb) {
         return Platform.isLinux
-            ? 'Falta adb: instala los paquetes adb y scrcpy de tu distribución.'
-            : 'Falta adb: vuelve a compilar con tools\\fetch-scrcpy.ps1.';
+            ? tx('Falta adb: instala los paquetes adb y scrcpy de tu distribución.')
+            : tx('Falta adb: vuelve a compilar con tools\\fetch-scrcpy.ps1.');
       }
       await _run(['start-server']);
     }
@@ -189,10 +190,10 @@ class Scrcpy {
           .where((d) => !d.contains(':'))
           .toList();
       if (usb.isEmpty) {
-        return 'No veo ningún teléfono por USB. Conéctalo, activa «Depuración USB» y acepta la autorización en su pantalla.';
+        return tx('No veo ningún teléfono por USB. Conéctalo, activa «Depuración USB» y acepta la autorización en su pantalla.');
       }
       if (usb.length > 1) {
-        return 'Hay más de un dispositivo USB conectado. Deja solo el teléfono.';
+        return tx('Hay más de un dispositivo USB conectado. Deja solo el teléfono.');
       }
       if (!await _AdbServer.hasTunnel(usb.first, phonePort, pcPort)) {
         await _AdbServer.forward(usb.first, phonePort);
@@ -200,7 +201,7 @@ class Scrcpy {
       }
       return null;
     } catch (e) {
-      return 'adb no pudo abrir el túnel: $e';
+      return tr('adb no pudo abrir el túnel: {}', [e]);
     }
   }
 
@@ -236,7 +237,7 @@ class Scrcpy {
     final bytes = r.stdout as List<int>;
     // A locked or protected screen answers with an error text instead of a picture.
     if (r.exitCode != 0 || bytes.length < 8 || bytes[1] != 0x50) {
-      throw StateError('Android no entregó la captura.');
+      throw StateError(tx('Android no entregó la captura.'));
     }
     await File(path).writeAsBytes(bytes, flush: true);
   }
@@ -255,7 +256,7 @@ class Scrcpy {
     if (r.exitCode != 0) throw StateError('${r.stderr}');
     final found = PhoneDisplay.parse('${r.stdout}\n${r.stderr}');
     return found.isEmpty
-        ? [const PhoneDisplay(0, 'Pantalla principal')]
+        ? [PhoneDisplay(0, tx('Pantalla principal'))]
         : found;
   }
 
@@ -331,7 +332,7 @@ class _AdbServer {
             utf8.decode(buf.skip(8).toList(), allowMalformed: true),
           );
         }
-        if (status != 'OKAY') throw Exception('respuesta inesperada de adb');
+        if (status != 'OKAY') throw Exception(tx('respuesta inesperada de adb'));
         buf.removeRange(0, 4);
         if (i < requests.length - 1) continue;
         // Let any second OKAY or payload arrive.

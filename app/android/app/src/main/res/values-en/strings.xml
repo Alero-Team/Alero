@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Alero</string>
+    <string name="w_devices_label">Devices</string>
+    <string name="w_devices_desc">Your paired computers, their connection and battery.</string>
+    <string name="w_status_label">Status</string>
+    <string name="w_status_desc">The connected computer, its battery and this phone's.</string>
+    <string name="w_actions_label">Remote control</string>
+    <string name="w_actions_desc">Connection status and shortcuts to control, screen, files and clipboard.</string>
+    <string name="w_transfer_label">Transfers</string>
+    <string name="w_transfer_desc">Send a file, the active transfer's progress and recent ones.</string>
+    <string name="w_media_label">Computer media</string>
+    <string name="w_media_desc">What's playing on your computer, with play, pause and track controls.</string>
+    <string name="w_panel_label">Alero panel</string>
+    <string name="w_panel_desc">Computer, battery, transfer and quick actions in one.</string>
+    <string name="l_no_transfers">No transfers</string>
+    <string name="l_no_pc_paired">No computer paired</string>
+    <string name="l_play">Play</string>
+    <string name="l_previous">Previous</string>
+    <string name="l_files">Files</string>
+    <string name="l_control">Control</string>
+    <string name="l_send">Send</string>
+    <string name="l_devices">Devices</string>
+    <string name="l_next">Next</string>
+    <string name="l_screen">Screen</string>
+    <string name="l_no_pcs_yet">No computer paired yet. Tap to pair.</string>
+    <string name="l_connect">Connect</string>
+    <string name="l_send_file">Send file</string>
+    <string name="l_clipboard">Clipboard</string>
+</resources>

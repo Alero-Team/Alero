@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -7,6 +7,7 @@ import '../phone_control.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Frame of the computer's phone sections (Mensajes, Llamadas, Fotos…): title, actions, and the connected
 /// phone handed to [body]; without one, a single "connect a phone" message.
@@ -163,7 +164,7 @@ class NeedsAdb extends StatelessWidget {
   Widget build(BuildContext context) => EmptyState(
     card: card,
     icon: Symbols.usb_rounded,
-    title: '$feature necesita la depuración del teléfono',
+    title: tr('{} necesita la depuración del teléfono', [feature]),
     body:
         'Utiliza «Depuración USB» o «Depuración inalámbrica» en este apartado. '
         'Android debe autorizar el ordenador para usar ADB; no hace falta root.',

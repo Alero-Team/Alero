@@ -13,6 +13,7 @@ import '../remote.dart';
 import 'theme.dart';
 import 'alero_motion.dart';
 import 'icon.dart';
+import '../l10n.dart' show tr, tx;
 
 /// Material 3 Expressive pieces Flutter 3.47 does not ship: spring motion, wavy progress, cookie shape, shape
 /// morphing, and a solid floating surface.
@@ -211,7 +212,7 @@ class _WavyProgressState extends State<WavyProgress>
     final p = context.pal;
     final v = widget.value;
     return Semantics(
-      label: widget.label,
+      label: tx(widget.label),
       value: v == null ? null : '${(v * 100).round()} %',
       child: RepaintBoundary(
         child: SizedBox(
@@ -377,9 +378,9 @@ class _MorphButtonState extends State<MorphButton> {
     final w = widget.size * (widget.on ? 1.3 : 1) * (_down ? 0.94 : 1);
     return Semantics(
       button: true,
-      label: widget.label,
+      label: tx(widget.label),
       child: Tooltip(
-        message: widget.label,
+        message: tx(widget.label),
         child: MouseRegion(
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
@@ -434,9 +435,9 @@ class PhoneCover extends StatelessWidget {
     );
     return Semantics(
       image: true,
-      label: 'Tapa trasera de ${look?.name ?? label}',
+      label: tr('Tapa trasera de {}', [look?.name ?? label]),
       child: Tooltip(
-        message: file == null ? '' : 'Imagen: ${look!.credit}',
+        message: file == null ? '' : tr('Imagen: {}', [look!.credit]),
         child: AnimatedSwitcher(
           duration: motion(context, const Duration(milliseconds: 300)),
           child: file == null

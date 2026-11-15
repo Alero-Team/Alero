@@ -21,15 +21,15 @@ class AppSecurity(private val activity: Activity) {
         else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
     fun authenticate(result: MethodChannel.Result, setEnabled: Boolean? = null) {
-        if (pending != null) return result.error("busy", "Autenticación en curso", null)
+        if (pending != null) return result.error("busy", Tr.t("Autenticación en curso", "Authentication in progress"), null)
         if (!activity.getSystemService(KeyguardManager::class.java).isDeviceSecure)
-            return result.error("no_lock", "Configura primero un PIN o huella en los ajustes de Android.", null)
+            return result.error("no_lock", Tr.t("Configura primero un PIN o huella en los ajustes de Android.", "Set up a PIN or fingerprint in Android settings first."), null)
         pending = result
         change = setEnabled
         if (Build.VERSION.SDK_INT >= 30) {
             val prompt = BiometricPrompt.Builder(activity)
-                .setTitle("Desbloquear Alero")
-                .setSubtitle("Usa tu huella o el PIN del dispositivo")
+                .setTitle(Tr.t("Desbloquear Alero", "Unlock Alero"))
+                .setSubtitle(Tr.t("Usa tu huella o el PIN del dispositivo", "Use your fingerprint or the device PIN"))
                 .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
                 .build()
             prompt.authenticate(CancellationSignal(), activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
@@ -39,7 +39,7 @@ class AppSecurity(private val activity: Activity) {
         } else {
             @Suppress("DEPRECATION")
             val intent = activity.getSystemService(KeyguardManager::class.java)
-                .createConfirmDeviceCredentialIntent("Desbloquear Alero", "Confirma el PIN del dispositivo")
+                .createConfirmDeviceCredentialIntent(Tr.t("Desbloquear Alero", "Unlock Alero"), Tr.t("Confirma el PIN del dispositivo", "Confirm the device PIN"))
             @Suppress("DEPRECATION")
             activity.startActivityForResult(intent, REQUEST)
         }

@@ -43,6 +43,7 @@ object WidgetData {
     private var watchedAt = 0L
 
     fun init(c: Context) {
+        Tr.load(c)
         if (ctx != null) return
         ctx = c.applicationContext
         load()
@@ -190,17 +191,17 @@ object WidgetData {
     private fun status(c: Context) = RemoteViews(c.packageName, R.layout.widget_status).apply {
         setOnClickPendingIntent(R.id.root, open(c, "home"))
         val p = firstOnline() ?: pcs.values.firstOrNull()
-        setTextViewText(R.id.title, p?.name ?: "Sin ordenador")
-        setTextViewText(R.id.state, p?.let(::stateText) ?: "Empareja un ordenador en Alero")
+        setTextViewText(R.id.title, p?.name ?: Tr.t("Sin ordenador", "No computer"))
+        setTextViewText(R.id.state, p?.let(::stateText) ?: Tr.t("Empareja un ordenador en Alero", "Pair a computer in Alero"))
         val (level, charging) = Features.phoneBattery()
-        setTextViewText(R.id.phone, "Este teléfono: " + batteryText(level, charging).ifEmpty { "—" })
+        setTextViewText(R.id.phone, Tr.t("Este teléfono: ", "This phone: ") + batteryText(level, charging).ifEmpty { "—" })
         setProgressBar(R.id.battery, 100, p?.battery?.coerceAtLeast(0) ?: 0, false)
         setViewVisibility(R.id.battery, if (p != null && p.online && p.battery >= 0) View.VISIBLE else View.GONE)
     }
 
     private fun actions(c: Context, layout: Int) = RemoteViews(c.packageName, layout).apply {
         val p = firstOnline() ?: pcs.values.firstOrNull()
-        setTextViewText(R.id.a_status, p?.let { "${it.name} · ${stateText(it)}" } ?: "Sin ordenador emparejado")
+        setTextViewText(R.id.a_status, p?.let { "${it.name} · ${stateText(it)}" } ?: Tr.t("Sin ordenador emparejado", "No computer paired"))
         setOnClickPendingIntent(R.id.a_connect, open(c, "devices"))
         setOnClickPendingIntent(R.id.a_send, open(c, "send"))
         setOnClickPendingIntent(R.id.a_files, open(c, "files"))
@@ -217,18 +218,18 @@ object WidgetData {
         setViewVisibility(R.id.t_recent, if (older.isEmpty()) View.GONE else View.VISIBLE)
         val t = transfer
         if (t == null) {
-            setTextViewText(R.id.t_name, "Sin transferencias")
-            setTextViewText(R.id.t_state, "Los archivos que envíes o recibas aparecerán aquí")
+            setTextViewText(R.id.t_name, Tr.t("Sin transferencias", "No transfers"))
+            setTextViewText(R.id.t_state, Tr.t("Los archivos que envíes o recibas aparecerán aquí", "Files you send or receive will show up here"))
             setViewVisibility(R.id.t_progress, View.GONE)
             return@apply
         }
         setTextViewText(R.id.t_name, t.name)
-        val size = "${human(t.done)} de ${human(t.total)}"
+        val size = Tr.t("${human(t.done)} de ${human(t.total)}", "${human(t.done)} of ${human(t.total)}")
         setTextViewText(R.id.t_state, when (t.status) {
-            "running" -> (if (t.incoming) "Recibiendo · " else "Enviando · ") + size
-            "done" -> (if (t.incoming) "Recibido · " else "Enviado · ") + human(t.total)
-            "cancelled" -> "Cancelado"
-            else -> "Falló · $size"
+            "running" -> (if (t.incoming) Tr.t("Recibiendo · ", "Receiving · ") else Tr.t("Enviando · ", "Sending · ")) + size
+            "done" -> (if (t.incoming) Tr.t("Recibido · ", "Received · ") else Tr.t("Enviado · ", "Sent · ")) + human(t.total)
+            "cancelled" -> Tr.t("Cancelado", "Cancelled")
+            else -> Tr.t("Falló · $size", "Failed · $size")
         })
         setViewVisibility(R.id.t_progress, if (t.status == "running") View.VISIBLE else View.GONE)
         setProgressBar(R.id.t_progress, 1000, if (t.total > 0) (t.done * 1000 / t.total).toInt() else 0, false)
@@ -238,11 +239,11 @@ object WidgetData {
         setOnClickPendingIntent(R.id.m_root, open(c, "home"))
         val m = media
         val pc = firstOnline()
-        setTextViewText(R.id.m_title, m?.title?.ifEmpty { null } ?: if (pc == null) "Sin conexión" else "No suena nada")
+        setTextViewText(R.id.m_title, m?.title?.ifEmpty { null } ?: if (pc == null) Tr.t("Sin conexión", "Offline") else Tr.t("No suena nada", "Nothing playing"))
         setTextViewText(R.id.m_artist, m?.let { listOf(it.artist, appName(it.app)).filter(String::isNotEmpty).joinToString(" · ") }
-            ?: (pc?.let { "En ${it.name}" } ?: "Conecta tu ordenador"))
+            ?: (pc?.let { Tr.t("En ${it.name}", "On ${it.name}") } ?: Tr.t("Conecta tu ordenador", "Connect your computer")))
         setImageViewResource(R.id.m_play, if (m?.playing == true) R.drawable.ic_w_pause else R.drawable.ic_w_play)
-        setContentDescription(R.id.m_play, if (m?.playing == true) "Pausar" else "Reproducir")
+        setContentDescription(R.id.m_play, if (m?.playing == true) Tr.t("Pausar", "Pause") else Tr.t("Reproducir", "Play"))
         // The bits are the computer's own (sys::media_state): 16 previous, 32 next, 2/4/512 pause/play/toggle.
         val a = m?.actions ?: 0
         setViewVisibility(R.id.m_prev, if (a and 16L != 0L) View.VISIBLE else View.INVISIBLE)
@@ -260,11 +261,11 @@ object WidgetData {
         fun build(layout: Int) = RemoteViews(c.packageName, layout).apply {
             setOnClickPendingIntent(R.id.root, open(c, "home"))
             val p = firstOnline() ?: pcs.values.firstOrNull()
-            setTextViewText(R.id.title, p?.name ?: "Sin ordenador")
-            setTextViewText(R.id.state, p?.let(::stateText) ?: "Empareja un ordenador en Alero")
+            setTextViewText(R.id.title, p?.name ?: Tr.t("Sin ordenador", "No computer"))
+            setTextViewText(R.id.state, p?.let(::stateText) ?: Tr.t("Empareja un ordenador en Alero", "Pair a computer in Alero"))
             val t = transfer
-            setTextViewText(R.id.t_name, t?.name ?: "Sin transferencias")
-            setTextViewText(R.id.t_state, t?.let { if (it.status == "running") "${human(it.done)} de ${human(it.total)}" else if (it.status == "done") "Completado" else "Sin terminar" } ?: "")
+            setTextViewText(R.id.t_name, t?.name ?: Tr.t("Sin transferencias", "No transfers"))
+            setTextViewText(R.id.t_state, t?.let { if (it.status == "running") Tr.t("${human(it.done)} de ${human(it.total)}", "${human(it.done)} of ${human(it.total)}") else if (it.status == "done") Tr.t("Completado", "Completed") else Tr.t("Sin terminar", "Unfinished") } ?: "")
             setViewVisibility(R.id.t_progress, if (t?.status == "running") View.VISIBLE else View.GONE)
             setProgressBar(R.id.t_progress, 1000, if (t != null && t.total > 0) (t.done * 1000 / t.total).toInt() else 0, false)
             setOnClickPendingIntent(R.id.a_send, open(c, "send"))
@@ -318,17 +319,17 @@ object WidgetData {
 /** The widgets' wording, kept apart from Android so it can be unit-tested. */
 object WidgetText {
     fun battery(level: Int, charging: Boolean): String =
-        if (level < 0) "" else "$level %" + if (charging) " · cargando" else ""
+        if (level < 0) "" else "$level %" + if (charging) Tr.t(" · cargando", " · charging") else ""
 
     fun state(online: Boolean, level: Int, charging: Boolean): String =
-        if (!online) "Sin conexión" else listOf("Conectado", battery(level, charging)).filter { it.isNotEmpty() }.joinToString(" · ")
+        if (!online) Tr.t("Sin conexión", "Offline") else listOf(Tr.t("Conectado", "Connected"), battery(level, charging)).filter { it.isNotEmpty() }.joinToString(" · ")
 
     /** One line of the transfer widget's history. */
     fun recent(name: String, incoming: Boolean, status: String): String = when (status) {
-        "done" -> if (incoming) "Recibido" else "Enviado"
-        "cancelled" -> "Cancelado"
-        "running" -> if (incoming) "Recibiendo" else "Enviando"
-        else -> "Falló"
+        "done" -> if (incoming) Tr.t("Recibido", "Received") else Tr.t("Enviado", "Sent")
+        "cancelled" -> Tr.t("Cancelado", "Cancelled")
+        "running" -> if (incoming) Tr.t("Recibiendo", "Receiving") else Tr.t("Enviando", "Sending")
+        else -> Tr.t("Falló", "Failed")
     } + " · " + name
 
     fun size(b: Long): String = when {

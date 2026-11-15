@@ -134,7 +134,7 @@ object Features {
                     "pb.x.info.request" -> hello(peer)
                     "pb.x.info" -> WidgetData.info(peer, body)
                     "pb.x.pcmedia.state" -> WidgetData.media(body)
-                    "pb.x.phonecontrol" -> Notifier.controlled(peer, synchronized(online) { online[peer] } ?: "Un ordenador", body.optBoolean("active"))
+                    "pb.x.phonecontrol" -> Notifier.controlled(peer, synchronized(online) { online[peer] } ?: Tr.t("Un ordenador", "A computer"), body.optBoolean("active"))
                     "pb.x.clip" -> setClipboard(body.optString("text"))
                     "pb.x.media.cmd" -> main.post { NotifListener.command(body) }
                     "pb.x.media.request" -> NotifListener.mediaState()?.let { Bridge.sendTo(peer, "pb.x.media.state", it) }

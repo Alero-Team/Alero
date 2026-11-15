@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -15,6 +15,7 @@ import 'shell.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen(this.hub, {super.key});
@@ -129,7 +130,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   QrView(
                     hub.qrPayload,
                     size: 156,
-                    label: 'Código QR para emparejar este equipo',
+                    label: tx('Código QR para emparejar este equipo'),
                   ),
                 const SizedBox(width: Gap.xl),
                 Expanded(
@@ -163,10 +164,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: const InputDecoration(
-                labelText: 'Dirección IP del otro dispositivo',
+              decoration: InputDecoration(
+                labelText: tx('Dirección IP del otro dispositivo'),
                 hintText: '192.168.1.20',
-                helperText: 'Está en Ajustes del otro dispositivo.',
+                helperText: tx('Está en Ajustes del otro dispositivo.'),
               ),
               onSubmitted: hub.pairAddr,
             ),
@@ -271,7 +272,7 @@ class _Paired extends StatelessWidget {
     final actions = <Widget>[
       if (connected)
         IconButton.filledTonal(
-          tooltip: 'Enviar archivos a ${p.name}',
+          tooltip: tr('Enviar archivos a {}', [p.name]),
           onPressed: () => hub.send(p.id),
           icon: const Icon(Symbols.upload_rounded),
         ),
@@ -293,12 +294,12 @@ class _Paired extends StatelessWidget {
           label: const Text('Conectar'),
         ),
       IconButton(
-        tooltip: 'Olvidar ${p.name}',
+        tooltip: tr('Olvidar {}', [p.name]),
         icon: Icon(Symbols.delete_rounded, color: s.error),
         onPressed: () async {
           final ok = await confirm(
             context,
-            '¿Olvidar ${p.name}?',
+            tr('¿Olvidar {}?', [p.name]),
             'Se borra el emparejamiento. Para volver a usarlo tendréis que emparejaros otra vez con el código QR. '
                 'Si solo quieres dejar de usarlo por ahora, pulsa Desconectar.',
             'Olvidar',

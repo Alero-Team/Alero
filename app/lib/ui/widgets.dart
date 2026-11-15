@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/material.dart' as m show Icon;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -11,6 +11,7 @@ import 'expressive.dart';
 import 'alero_motion.dart';
 import 'theme.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 String size(int b) {
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -359,7 +360,7 @@ class TransferRow extends StatelessWidget {
     final pct = f == null ? '' : '${(f * 100).toStringAsFixed(0)} %';
     final detail = x.note.isNotEmpty
         ? x.note
-        : '${size(x.done)} de ${size(x.size)} · ${size(x.rate)}/s';
+        : tr('{} de {} · {}/s', [size(x.done), size(x.size), size(x.rate)]);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: Column(
@@ -393,7 +394,7 @@ class TransferRow extends StatelessWidget {
               ),
               Text(pct, style: t.labelLarge?.copyWith(fontFeatures: tabular)),
               IconButton(
-                tooltip: 'Cancelar ${x.name}',
+                tooltip: tr('Cancelar {}', [x.name]),
                 icon: const Icon(Symbols.close_rounded),
                 onPressed: () => hub.cancel(x.id),
               ),
@@ -403,7 +404,7 @@ class TransferRow extends StatelessWidget {
             padding: const EdgeInsets.only(left: 52, right: Gap.s),
             child: AleroPulse(
               active: x.note.isEmpty,
-              child: WavyProgress(value: f, label: 'Progreso de ${x.name}'),
+              child: WavyProgress(value: f, label: tr('Progreso de {}', [x.name])),
             ),
           ),
         ],
@@ -494,7 +495,7 @@ class HistoryTile extends StatelessWidget {
               ),
             // Only the list entry goes; the file stays where it is.
             IconButton(
-              tooltip: 'Quitar del historial (no borra el archivo)',
+              tooltip: tx('Quitar del historial (no borra el archivo)'),
               visualDensity: VisualDensity.compact,
               icon: Icon(Symbols.close_rounded, size: 18, color: c.muted),
               onPressed: () => hub.removeHistory(h.id),
@@ -544,7 +545,7 @@ class HistoryTile extends StatelessWidget {
           item(
             'again',
             Symbols.send_rounded,
-            'Enviar de nuevo a ${h.peerName}',
+            tr('Enviar de nuevo a {}', [h.peerName]),
           ),
         ],
         item('name', Symbols.title_rounded, 'Copiar el nombre'),
@@ -578,7 +579,7 @@ class HistoryTile extends StatelessWidget {
           builder: (c) => AlertDialog(
             title: const Text('Eliminar el archivo'),
             content: Text(
-              '«${h.name}» se borrará de este ordenador. No se puede deshacer.',
+              tr('«{}» se borrará de este ordenador. No se puede deshacer.', [h.name]),
             ),
             actions: [
               TextButton(
@@ -598,7 +599,7 @@ class HistoryTile extends StatelessWidget {
           hub.removeHistory(h.id);
         } catch (_) {
           hub.messages.add(
-            'No se pudo eliminar ${h.name}: otro programa lo tiene abierto.',
+            tr('No se pudo eliminar {}: otro programa lo tiene abierto.', [h.name]),
           );
         }
     }
@@ -609,9 +610,11 @@ class HistoryTile extends StatelessWidget {
     String two(int n) => n.toString().padLeft(2, '0');
     final hm = '${two(d.hour)}:${two(d.minute)}';
     if (d.year == now.year && d.month == now.month && d.day == now.day) {
-      return 'hoy $hm';
+      return tr('hoy {}', [hm]);
     }
-    return '${two(d.day)}/${two(d.month)} $hm';
+    return L10n.instance.en
+        ? '${two(d.month)}-${two(d.day)} $hm'
+        : '${two(d.day)}/${two(d.month)} $hm';
   }
 }
 
@@ -820,7 +823,7 @@ class BatteryGlyph extends StatelessWidget {
     final low = level <= 15 && !charging;
     final h = width * 0.5;
     return Semantics(
-      label: 'Batería $level %${charging ? ', cargando' : ''}',
+      label: tr('Batería {} %{}', [level, charging ? ', cargando' : '']),
       child: ExcludeSemantics(
         child: SizedBox(
           width: width + 2,

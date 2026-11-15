@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../native.dart';
 import '../vault.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// A local vault on each device, deliberately separate from normal Alero
 /// transfers. Encryption keys stay in Android Keystore or Windows DPAPI.
@@ -175,15 +176,15 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                     controller: title,
                     maxLength: 180,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Título'),
+                    decoration: InputDecoration(labelText: tx('Título')),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: body,
                     minLines: 5,
                     maxLines: 12,
-                    decoration: const InputDecoration(
-                      labelText: 'Contenido',
+                    decoration: InputDecoration(
+                      labelText: tx('Contenido'),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -390,7 +391,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                   obscureText: true,
                   autofocus: true,
                   enabled: !_busy,
-                  decoration: const InputDecoration(labelText: 'Clave'),
+                  decoration: InputDecoration(labelText: tx('Clave')),
                   onSubmitted: (_) => create ? null : _unlock(),
                 ),
                 if (create) ...[
@@ -399,8 +400,8 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                     controller: _again,
                     obscureText: true,
                     enabled: !_busy,
-                    decoration: const InputDecoration(
-                      labelText: 'Repite la clave',
+                    decoration: InputDecoration(
+                      labelText: tx('Repite la clave'),
                     ),
                     onSubmitted: (_) => _unlock(),
                   ),
@@ -440,7 +441,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar de Alero Vault'),
         content: Text(
-          '¿Eliminar «${entry.name}» de este dispositivo? No se puede deshacer.',
+          tr('¿Eliminar «{}» de este dispositivo? No se puede deshacer.', [entry.name]),
         ),
         actions: [
           TextButton(
@@ -467,7 +468,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
         actions: [
           if (_unlocked)
             IconButton(
-              tooltip: 'Bloquear ahora',
+              tooltip: tx('Bloquear ahora'),
               onPressed: _busy ? null : () => setState(_lock),
               icon: const Icon(Symbols.lock_rounded),
             ),
@@ -566,7 +567,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                             ? () => _view(entry)
                             : () => _export(entry),
                         trailing: IconButton(
-                          tooltip: 'Eliminar',
+                          tooltip: tx('Eliminar'),
                           icon: const Icon(Symbols.delete_outline_rounded),
                           onPressed: _busy ? null : () => _delete(entry),
                         ),

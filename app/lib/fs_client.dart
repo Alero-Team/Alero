@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'hub.dart';
 import 'native.dart';
+import 'l10n.dart' show tr, tx;
 
 class FsRoot {
   FsRoot(Map j)
@@ -39,8 +40,8 @@ class FsEntry {
   String get itemCount => size < 0
       ? '—'
       : size >= 1000
-      ? '999+ elementos'
-      : '$size elementos';
+      ? tx('999+ elementos')
+      : tr('{} elementos', [size]);
 }
 
 /// The computer's side of browsing a phone's files. It only asks (`pb.x.fs.*`): the phone decides what
@@ -297,9 +298,9 @@ class FsClient extends ChangeNotifier {
     final name = b['name'] as String? ?? '';
     final verb = b['op'] == 'rename' ? 'renombrar' : 'eliminar';
     if (b['ok'] == true) {
-      return b['op'] == 'rename' ? 'Renombrado: $name' : 'Eliminado: $name';
+      return b['op'] == 'rename' ? tr('Renombrado: {}', [name]) : tr('Eliminado: {}', [name]);
     }
-    return 'No se pudo $verb $name: ${switch (b['reason']) {
+    return tr('No se pudo {} {}: {}', [verb, name, switch (b['reason']) {
       'bad_name' => 'el nombre no es válido.',
       'exists' => 'ya existe otro con ese nombre.',
       'missing' => 'ya no existe en el teléfono.',
@@ -308,7 +309,7 @@ class FsClient extends ChangeNotifier {
       'no_permission' => 'falta un permiso en el teléfono.',
       'unsupported' => 'esta ubicación no lo permite.',
       _ => 'el teléfono lo rechazó.',
-    }}';
+    }]);
   }
 
   // --- what the phone says ----------------------------------------------------------------------------
@@ -370,8 +371,8 @@ class FsClient extends ChangeNotifier {
         final n = (b['files'] as num?)?.toInt() ?? 0;
         hub.messages.add(
           n == 0
-              ? 'La carpeta ${b['name']} está vacía.'
-              : 'Recibiendo ${b['name']}: $n ${n == 1 ? 'archivo' : 'archivos'}…',
+              ? tr('La carpeta {} está vacía.', [b['name']])
+              : tr('Recibiendo {}: {} {}…', [b['name'], n, n == 1 ? 'archivo' : 'archivos']),
         );
         return;
       case 'pb.x.fs.done':

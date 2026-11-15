@@ -31,7 +31,7 @@ object TransferNotices {
         ctx = c.applicationContext
         Notifier.init(c)
         c.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL, "Transferencias", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) },
+            NotificationChannel(CHANNEL, Tr.t("Transferencias", "Transfers"), NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) },
         )
     }
 
@@ -91,13 +91,13 @@ object TransferNotices {
         val n = Notification.Builder(c, ALERT).setSmallIcon(R.drawable.ic_stat_alero)
             .setLargeIcon(typeIcon(c, e.optString("name")))
             .setSubText(e.optString("peer_name").ifEmpty { null })
-            .setContentTitle("${e.optString("peer_name").ifEmpty { "Un dispositivo" }} quiere enviarte un archivo")
+            .setContentTitle(Tr.t("${e.optString("peer_name").ifEmpty { "Un dispositivo" }} quiere enviarte un archivo", "${e.optString("peer_name").ifEmpty { "A device" }} wants to send you a file"))
             .setContentText("${e.optString("name")} · ${WidgetText.size(e.optLong("size"))}")
             .setContentIntent(openApp(c, "files"))
             .setAutoCancel(true)
             .setTimeoutAfter(120_000) // the engine drops an unanswered offer after two minutes
-            .addAction(act(c, id, TransferAction.DECLINE, "Rechazar"))
-            .addAction(act(c, id, TransferAction.ACCEPT, "Aceptar descarga"))
+            .addAction(act(c, id, TransferAction.DECLINE, Tr.t("Rechazar", "Decline")))
+            .addAction(act(c, id, TransferAction.ACCEPT, Tr.t("Aceptar descarga", "Accept download")))
             .build()
         notify(c, nid(id), n)
     }
@@ -119,11 +119,11 @@ object TransferNotices {
         val b = Notification.Builder(c, CHANNEL).setSmallIcon(R.drawable.ic_stat_alero)
             .setLargeIcon(typeIcon(c, info.name))
             .setSubText(info.peer.ifEmpty { null })
-            .setContentTitle((if (info.incoming) "Recibiendo " else "Enviando ") + info.name)
-            .setContentText(if (total > 0) "${WidgetText.size(done)} de ${WidgetText.size(total)}" else info.peer)
+            .setContentTitle((if (info.incoming) Tr.t("Recibiendo ", "Receiving ") else Tr.t("Enviando ", "Sending ")) + info.name)
+            .setContentText(if (total > 0) Tr.t("${WidgetText.size(done)} de ${WidgetText.size(total)}", "${WidgetText.size(done)} of ${WidgetText.size(total)}") else info.peer)
             .setOngoing(true).setOnlyAlertOnce(true)
             .setContentIntent(openApp(c, "files"))
-            .addAction(act(c, id, TransferAction.CANCEL, "Cancelar"))
+            .addAction(act(c, id, TransferAction.CANCEL, Tr.t("Cancelar", "Cancel")))
         if (Build.VERSION.SDK_INT >= 36) {
             // Live update card (like Quick Share): the system promotes it to the status bar chip and lock screen.
             b.setStyle(
@@ -155,9 +155,9 @@ object TransferNotices {
         if (ok && info.incoming) {
             b.setLargeIcon(thumb(e.optString("path")) ?: typeIcon(c, info.name))
                 .setSubText(info.peer.ifEmpty { null })
-                .setContentTitle("Archivo recibido").setContentText(info.name)
-                .addAction(Notification.Action.Builder(null, "Abrir en Alero", openApp(c, "files")).build())
-                .addAction(Notification.Action.Builder(null, "Descargas", PendingIntent.getActivity(
+                .setContentTitle(Tr.t("Archivo recibido", "File received")).setContentText(info.name)
+                .addAction(Notification.Action.Builder(null, Tr.t("Abrir en Alero", "Open in Alero"), openApp(c, "files")).build())
+                .addAction(Notification.Action.Builder(null, Tr.t("Descargas", "Downloads"), PendingIntent.getActivity(
                     c, "downloads".hashCode(),
                     Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     PendingIntent.FLAG_IMMUTABLE,
@@ -165,7 +165,7 @@ object TransferNotices {
         } else if (ok) {
             return // a sent file needs no second notice: the progress one just closed
         } else {
-            b.setContentTitle("No se completó la transferencia").setContentText(info.name)
+            b.setContentTitle(Tr.t("No se completó la transferencia", "Transfer not completed")).setContentText(info.name)
         }
         notify(c, nid(id), b.build())
     }

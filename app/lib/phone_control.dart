@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'scrcpy.dart';
+import 'l10n.dart' show tx;
 
 /// A phone as adb sees it. `state` is adb's own word: `device` (ready), `unauthorized` (the phone has not
 /// accepted this computer yet), `offline`, …
@@ -271,19 +272,19 @@ String sessionError(List<String> errors, {bool camera = false}) {
   if (camera &&
       ((all.contains('camera') && busy) ||
           all.contains('server connection failed'))) {
-    return 'La cámara está ocupada o el teléfono la bloqueó. Cierra otras apps de cámara, desbloquea el teléfono y vuelve a intentarlo.';
+    return tx('La cámara está ocupada o el teléfono la bloqueó. Cierra otras apps de cámara, desbloquea el teléfono y vuelve a intentarlo.');
   }
   if (camera && all.contains('api')) {
-    return 'La cámara en una ventana necesita Android 12 o posterior.';
+    return tx('La cámara en una ventana necesita Android 12 o posterior.');
   }
   if (all.contains('unauthorized')) {
-    return 'Acepta la depuración USB en el teléfono.';
+    return tx('Acepta la depuración USB en el teléfono.');
   }
   if (all.contains('not found') || all.contains('no devices')) {
-    return 'El teléfono ya no está conectado por ADB.';
+    return tx('El teléfono ya no está conectado por ADB.');
   }
   return errors.isEmpty
-      ? 'La ventana del teléfono se cerró por un error.'
+      ? tx('La ventana del teléfono se cerró por un error.')
       : errors.last;
 }
 

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -14,6 +14,7 @@ import 'qr.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// The ADB controls of Dispositivos.
 /// This does not pair/unpair Alero's TLS engine; it only selects an authorised
@@ -100,7 +101,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
       }
       if (mounted) {
         setState(
-          () => _message = 'Depuración USB autorizada: ${selected!.name}.',
+          () => _message = tr('Depuración USB autorizada: {}.', [selected!.name]),
         );
       }
     } catch (e) {
@@ -131,7 +132,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
     if (!mounted || serial == null) return;
     if (widget.phone != null) PhoneAdb.choose(widget.phone!.id, serial);
     setState(
-      () => _message = 'ADB inalámbrico conectado y autorizado: $serial',
+      () => _message = tr('ADB inalámbrico conectado y autorizado: {}', [serial]),
     );
   }
 
@@ -198,7 +199,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
             _message ??
                 (serial == null
                     ? 'USB requiere autorización del teléfono. Para Wi-Fi, activa Depuración inalámbrica en Android y utiliza su IP, puerto y código de vinculación. Marca «Permitir siempre en esta red» en el teléfono: así Alero se reconecta solo cuando vuelve el Wi-Fi.'
-                    : 'Transporte ADB elegido: $serial'),
+                    : tr('Transporte ADB elegido: {}', [serial])),
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: s.onSurfaceVariant),
           ),
@@ -411,7 +412,7 @@ class _WirelessDialogState extends State<_WirelessDialog> {
               Center(
                 child: QrView(
                   'WIFI:T:ADB;S:$_qrName;P:$_qrPass;;',
-                  label: 'Código QR de vinculación ADB',
+                  label: tx('Código QR de vinculación ADB'),
                 ),
               ),
               const SizedBox(height: Gap.s),
@@ -426,8 +427,8 @@ class _WirelessDialogState extends State<_WirelessDialog> {
               const SizedBox(height: Gap.m),
               TextField(
                 controller: _ip,
-                decoration: const InputDecoration(
-                  labelText: 'Dirección IP del teléfono (p. ej., 192.168.1.10)',
+                decoration: InputDecoration(
+                  labelText: tx('Dirección IP del teléfono (p. ej., 192.168.1.10)'),
                 ),
                 keyboardType: TextInputType.url,
               ),
@@ -445,25 +446,25 @@ class _WirelessDialogState extends State<_WirelessDialog> {
                 TextField(
                   controller: _pairPort,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Puerto de vinculación',
+                  decoration: InputDecoration(
+                    labelText: tx('Puerto de vinculación'),
                   ),
                 ),
                 TextField(
                   controller: _code,
                   keyboardType: TextInputType.number,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Código temporal de 6 dígitos',
+                  decoration: InputDecoration(
+                    labelText: tx('Código temporal de 6 dígitos'),
                   ),
                 ),
               ],
               TextField(
                 controller: _connectPort,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Puerto de conexión ADB (opcional con mDNS)',
-                  helperText: 'No reutilices el puerto de vinculación salvo que Android muestre el mismo.',
+                decoration: InputDecoration(
+                  labelText: tx('Puerto de conexión ADB (opcional con mDNS)'),
+                  helperText: tx('No reutilices el puerto de vinculación salvo que Android muestre el mismo.'),
                 ),
               ),
             ],

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -12,6 +12,7 @@ import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart' show FitLabel;
 import 'icon.dart';
+import '../l10n.dart';
 
 /// The phone as a touchpad for a paired computer. One finger moves the pointer, a tap clicks, a two-finger tap
 /// right-clicks, two fingers scroll (naturally, both axes),
@@ -212,8 +213,8 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     return Semantics(
-      label: 'Panel táctil del ordenador',
-      hint: 'Un dedo mueve el cursor. Toca para clic. Toca con dos dedos para clic derecho. Dos dedos desplazan. Toca dos veces y mueve sin levantar el segundo toque para seleccionar.',
+      label: tx('Panel táctil del ordenador'),
+      hint: tx('Un dedo mueve el cursor. Toca para clic. Toca con dos dedos para clic derecho. Dos dedos desplazan. Toca dos veces y mueve sin levantar el segundo toque para seleccionar.'),
       onTap: () => _r.click(widget.peer),
       child: Listener(
         onPointerDown: _down,
@@ -369,7 +370,7 @@ class _MouseActionBarState extends State<MouseActionBar>
 
   Widget _button(String button, String label) => Expanded(
     child: Semantics(
-      label: 'Clic $label',
+      label: tr('Clic {}', [label]),
       button: true,
       toggled: _held.contains(button),
       onTap: () => _toggle(button),
@@ -393,7 +394,7 @@ class _MouseActionBarState extends State<MouseActionBar>
                 const SizedBox(height: Gap.xs),
                 Text(
                   _held.contains(button)
-                      ? 'Soltar ${button == 'left' ? 'izq.' : 'der.'}'
+                      ? tr('Soltar {}', [button == 'left' ? 'izq.' : 'der.'])
                       : label,
                 ),
               ],
@@ -517,7 +518,7 @@ class PointerSensitivity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<double>(
-    tooltip: 'Sensibilidad del cursor',
+    tooltip: tx('Sensibilidad del cursor'),
     icon: const Icon(Symbols.tune_rounded),
     initialValue: value,
     onSelected: onChanged,
@@ -720,20 +721,20 @@ class _PcMediaControlsState extends State<PcMediaControls> {
               children: [
                 HoldButton(
                   icon: Symbols.volume_down_rounded,
-                  label: 'Bajar volumen',
+                  label: tx('Bajar volumen'),
                   onStep: () => r.media(p, 'volume_down'),
                 ),
                 const SizedBox(width: Gap.s),
                 HoldButton(
                   icon: Symbols.volume_off_rounded,
-                  label: 'Silenciar',
+                  label: tx('Silenciar'),
                   repeat: false,
                   onStep: () => r.media(p, 'mute'),
                 ),
                 const SizedBox(width: Gap.s),
                 HoldButton(
                   icon: Symbols.volume_up_rounded,
-                  label: 'Subir volumen',
+                  label: tx('Subir volumen'),
                   onStep: () => r.media(p, 'volume_up'),
                 ),
               ],
@@ -743,7 +744,7 @@ class _PcMediaControlsState extends State<PcMediaControls> {
               children: [
                 HoldButton(
                   icon: Symbols.skip_previous_rounded,
-                  label: 'Anterior',
+                  label: tx('Anterior'),
                   repeat: false,
                   onStep: () => r.media(p, 'prev'),
                 ),
@@ -752,14 +753,14 @@ class _PcMediaControlsState extends State<PcMediaControls> {
                   icon: playing && m.playing
                       ? Symbols.pause_rounded
                       : Symbols.play_arrow_rounded,
-                  label: 'Reproducir o pausar',
+                  label: tx('Reproducir o pausar'),
                   repeat: false,
                   onStep: () => r.media(p, 'toggle'),
                 ),
                 const SizedBox(width: Gap.s),
                 HoldButton(
                   icon: Symbols.skip_next_rounded,
-                  label: 'Siguiente',
+                  label: tx('Siguiente'),
                   repeat: false,
                   onStep: () => r.media(p, 'next'),
                 ),
@@ -872,7 +873,7 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
             minLines: 1,
             maxLines: 3,
             onChanged: _changed,
-            decoration: const InputDecoration(hintText: 'Escribe aquí'),
+            decoration: InputDecoration(hintText: tx('Escribe aquí')),
           ),
           const SizedBox(height: Gap.m),
           Wrap(
@@ -931,7 +932,7 @@ class PowerActions extends StatelessWidget {
         onPressed: () async {
           if (await confirm(
             context,
-            '¿Bloquear $name?',
+            tr('¿Bloquear {}?', [name]),
             'Se bloquea la sesión de Windows. Para volver hay que iniciar sesión en el ordenador.',
             'Bloquear',
           )) {
@@ -945,7 +946,7 @@ class PowerActions extends StatelessWidget {
         onPressed: () async {
           if (await confirm(
             context,
-            '¿Suspender $name?',
+            tr('¿Suspender {}?', [name]),
             'El ordenador se duerme y la conexión se pierde hasta que lo despiertes.',
             'Suspender',
           )) {

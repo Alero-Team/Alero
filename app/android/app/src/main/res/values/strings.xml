@@ -13,4 +13,18 @@
     <string name="w_media_desc">Lo que suena en tu ordenador, con reproducir, pausa y pistas.</string>
     <string name="w_panel_label">Panel de Alero</string>
     <string name="w_panel_desc">Ordenador, batería, transferencia y accesos rápidos en uno.</string>
+    <string name="l_clipboard">Portapapeles</string>
+    <string name="l_screen">Pantalla</string>
+    <string name="l_send">Enviar</string>
+    <string name="l_control">Control</string>
+    <string name="l_no_transfers">Sin transferencias</string>
+    <string name="l_no_pc_paired">Sin ordenador emparejado</string>
+    <string name="l_no_pcs_yet">Ningún ordenador emparejado todavía. Toca para emparejar.</string>
+    <string name="l_devices">Dispositivos</string>
+    <string name="l_connect">Conectar</string>
+    <string name="l_files">Archivos</string>
+    <string name="l_next">Siguiente</string>
+    <string name="l_play">Reproducir</string>
+    <string name="l_send_file">Enviar archivo</string>
+    <string name="l_previous">Anterior</string>
 </resources>

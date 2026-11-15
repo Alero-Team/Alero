@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -8,6 +8,7 @@ import 'present.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 Future<void> openPcControl(
   BuildContext context,
@@ -60,7 +61,7 @@ class _PcControlPageState extends State<PcControlPage> {
                   ),
                   if (info?.canScreen ?? false)
                     IconButton(
-                      tooltip: 'Ver pantalla',
+                      tooltip: tx('Ver pantalla'),
                       icon: const Icon(Symbols.cast_rounded),
                       onPressed: () =>
                           openPcScreen(context, hub, widget.peer, widget.name),
@@ -76,7 +77,7 @@ class _PcControlPageState extends State<PcControlPage> {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Volumen y reproducción',
+                    tooltip: tx('Volumen y reproducción'),
                     icon: const Icon(Symbols.volume_up_rounded),
                     onPressed: () => showModalBottomSheet<void>(
                       context: context,
@@ -122,7 +123,7 @@ class _PcControlPageState extends State<PcControlPage> {
                           ),
                           const SizedBox(height: Gap.xs),
                           Text(
-                            'Un panel táctil para ${widget.name}.',
+                            tr('Un panel táctil para {}.', [widget.name]),
                             style: t.bodyMedium?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme

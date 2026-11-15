@@ -9,7 +9,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
         <ImageView android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/w_pill" android:padding="9dp" android:src="@drawable/ic_w_laptop" android:importantForAccessibility="no" />
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:layout_weight="1" android:orientation="vertical">
-            <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="Dispositivos" android:textColor="@color/w_on" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
+            <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:text="@string/l_devices" android:textColor="@color/w_on" android:textSize="16sp" android:fontFamily="sans-serif-medium" />
         </LinearLayout>
     </LinearLayout>
     <LinearLayout android:id="@+id/row1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/w_tile" android:orientation="vertical" android:paddingHorizontal="12dp" android:paddingVertical="8dp" android:visibility="gone">
@@ -24,5 +24,5 @@
         <TextView android:id="@+id/name3" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_on" android:textSize="14sp" android:fontFamily="sans-serif-medium" />
         <TextView android:id="@+id/state3" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:maxLines="1" android:textColor="@color/w_muted" android:textSize="12sp" />
     </LinearLayout>
-    <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Ningún ordenador emparejado todavía. Toca para emparejar." android:textColor="@color/w_muted" android:textSize="13sp" />
+    <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/l_no_pcs_yet" android:textColor="@color/w_muted" android:textSize="13sp" />
 </LinearLayout>

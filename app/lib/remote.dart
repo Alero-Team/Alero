@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' show Color;
 
 import 'device_image.dart';
+import 'l10n.dart' show L10n, tr, tx;
 
 /// Plain views of the app messages a paired device sends (`pb.x.*`). Parsing only: unknown or
 /// missing fields fall back to empty values, because the other side may be an older or newer version.
@@ -73,10 +74,10 @@ class PeerInfo {
 
   /// "Buena" from 10 W (a phone charger), "Mala" from 5 W, "Deficiente" below (a weak port or cable).
   String get chargeState => switch (chargeWatts) {
-    null => 'en pausa',
-    final w when w >= 10 => 'Buena',
-    final w when w >= 5 => 'Mala',
-    _ => 'Deficiente',
+    null => tx('en pausa'),
+    final w when w >= 10 => tx('Buena'),
+    final w when w >= 5 => tx('Mala'),
+    _ => tx('Deficiente'),
   };
 
   /// "9,0 W · 4,31 V" for the Home status; null when the phone is not charging or cannot measure it.
@@ -84,8 +85,11 @@ class PeerInfo {
     final mw = (j['battery'] as Map?)?['mw'];
     if (!charging || mw is! num) return null;
     final w = chargeWatts;
-    if (w == null) return 'Batería mantenida';
-    String n(double v, int d) => v.toStringAsFixed(d).replaceAll('.', ',');
+    if (w == null) return tx('Batería mantenida');
+    String n(double v, int d) {
+      final s = v.toStringAsFixed(d);
+      return L10n.instance.en ? s : s.replaceAll('.', ',');
+    }
     return [
       '${n(w, 1)} W',
       if (chargeVolts != null) '${n(chargeVolts!, 2)} V',
@@ -142,7 +146,7 @@ class PeerInfo {
   String get network => switch (j['network']) {
     'wifi' => 'Wi-Fi',
     'ethernet' => 'Ethernet',
-    'cellular' => 'Datos móviles',
+    'cellular' => tx('Datos móviles'),
     _ => '',
   };
 
@@ -155,7 +159,7 @@ class PeerInfo {
     final band = mhz == null
         ? null
         : mhz < 3000
-        ? '2,4 GHz'
+        ? tx('2,4 GHz')
         : mhz < 5925
         ? '5 GHz'
         : '6 GHz';
@@ -169,10 +173,10 @@ class PeerInfo {
     final signal = rssi == null
         ? null
         : rssi >= -60
-        ? 'señal buena'
+        ? tx('señal buena')
         : rssi >= -72
-        ? 'señal media'
-        : 'señal débil';
+        ? tx('señal media')
+        : tx('señal débil');
     return [?gen, ?band, if (mbps != null) '$mbps Mbps', ?signal].join(' · ');
   }
 }
@@ -377,37 +381,38 @@ class ClipItem {
   final DateTime time;
 }
 
-/// The engine speaks English in a few details; the UI is Spanish. Unknown texts pass through unchanged.
+/// The engine speaks English in a few details; this gives them the app's Spanish wording (which `tx` turns into
+/// English when the app is in English). Unknown texts pass through unchanged.
 String es(String m) {
   if (m.isEmpty) return m;
   final retry = RegExp(r'^(.*); retrying in (\d+)s \((\d+)/(\d+)\)$')
       .firstMatch(m);
   if (retry != null) {
-    return 'Sin conexión; reintento en ${retry[2]} s (${retry[3]} de ${retry[4]})';
+    return tr('Sin conexión; reintento en {} s ({} de {})', [retry[2], retry[3], retry[4]]);
   }
   if (m.startsWith('cannot reach ')) {
-    return 'No se puede conectar; comprueba que el otro dispositivo tenga la app abierta';
+    return tx('No se puede conectar; comprueba que el otro dispositivo tenga la app abierta');
   }
-  if (m.startsWith('cannot read file')) return 'No se puede leer el archivo';
-  if (m.startsWith('bad address')) return 'Dirección no válida';
+  if (m.startsWith('cannot read file')) return tx('No se puede leer el archivo');
+  if (m.startsWith('bad address')) return tx('Dirección no válida');
   return switch (m) {
-    'connection lost' => 'Se perdió la conexión',
-    'paused' => 'Pulsa Conectar para volver a usarlo',
-    'paused_remote' => 'Se volverá a conectar cuando lo conecten desde allí',
+    'connection lost' => tx('Se perdió la conexión'),
+    'paused' => tx('Pulsa Conectar para volver a usarlo'),
+    'paused_remote' => tx('Se volverá a conectar cuando lo conecten desde allí'),
     'that device is disconnected: connect it first' =>
-      'Ese dispositivo está desconectado; conéctalo primero',
+      tx('Ese dispositivo está desconectado; conéctalo primero'),
     'the other device no longer trusts this one' ||
     'the other device does not trust this one' =>
-      'El otro dispositivo ya no confía en este',
-    'that device is not paired' => 'Ese dispositivo no está emparejado',
+      tx('El otro dispositivo ya no confía en este'),
+    'that device is not paired' => tx('Ese dispositivo no está emparejado'),
     'that device has not been seen on the network' =>
-      'Ese dispositivo no está en la red ahora',
+      tx('Ese dispositivo no está en la red ahora'),
     'this transfer cannot be retried' =>
-      'Esta transferencia no se puede reintentar',
-    'file name not allowed' => 'Nombre de archivo no permitido',
-    'checksum mismatch' => 'El archivo llegó dañado',
-    'message too large' => 'El contenido es demasiado grande',
-    'peer address unknown' => 'No se conoce la dirección del otro dispositivo',
+      tx('Esta transferencia no se puede reintentar'),
+    'file name not allowed' => tx('Nombre de archivo no permitido'),
+    'checksum mismatch' => tx('El archivo llegó dañado'),
+    'message too large' => tx('El contenido es demasiado grande'),
+    'peer address unknown' => tx('No se conoce la dirección del otro dispositivo'),
     _ => m,
   };
 }

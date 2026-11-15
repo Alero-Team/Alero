@@ -133,12 +133,12 @@ pub fn transfer_done(_: &str, file: &Path) {
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut buttons = Vec::new();
     if !runs_code(file) {
-        buttons.push(Button::Open("Abrir".into(), file.to_path_buf()));
+        buttons.push(Button::Open(crate::lang::t("Abrir", "Open").into(), file.to_path_buf()));
     }
     if let Some(dir) = file.parent() {
-        buttons.push(Button::Open("Abrir carpeta".into(), dir.to_path_buf()));
+        buttons.push(Button::Open(crate::lang::t("Abrir carpeta", "Open folder").into(), dir.to_path_buf()));
     }
-    toast_buttons("Archivo recibido", &name, &buttons, |_| {});
+    toast_buttons(crate::lang::t("Archivo recibido", "File received"), &name, &buttons, |_| {});
 }
 
 struct Notice {

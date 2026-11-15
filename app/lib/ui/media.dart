@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -12,6 +12,7 @@ import 'expressive.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 String _clock(int ms) {
   final s = ms ~/ 1000;
@@ -107,17 +108,17 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
       IconButton(
-        tooltip: 'Bajar volumen',
+        tooltip: tx('Bajar volumen'),
         onPressed: () => _command('volume_down'),
         icon: const Icon(Symbols.volume_down_rounded),
       ),
       IconButton(
-        tooltip: 'Silenciar',
+        tooltip: tx('Silenciar'),
         onPressed: () => _command('mute'),
         icon: const Icon(Symbols.volume_off_rounded),
       ),
       IconButton(
-        tooltip: 'Subir volumen',
+        tooltip: tx('Subir volumen'),
         onPressed: () => _command('volume_up'),
         icon: const Icon(Symbols.volume_up_rounded),
       ),
@@ -251,7 +252,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 IconButton(
-                  tooltip: 'Anterior',
+                  tooltip: tx('Anterior'),
                   onPressed: active && cm.supports(16)
                       ? () => _command('prev')
                       : null,
@@ -263,7 +264,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   ),
                   iconSize: 27,
-                  tooltip: active && cm.playing ? 'Pausar' : 'Reproducir',
+                  tooltip: tx(active && cm.playing ? 'Pausar' : 'Reproducir'),
                   onPressed: active ? () => _command('toggle') : null,
                   icon: Icon(
                     active && cm.playing
@@ -273,7 +274,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  tooltip: 'Siguiente',
+                  tooltip: tx('Siguiente'),
                   onPressed: active && cm.supports(32)
                       ? () => _command('next')
                       : null,
@@ -312,10 +313,10 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       final pos = _seek?.round() ?? m.positionNow;
       final name = hub.peers.where((p) => p.id == id).firstOrNull?.name ?? '';
       final where = widget.computer
-          ? 'En $name'
+          ? tr('En {}', [name])
           : m.cast
-          ? 'Transmitiendo desde $name'
-          : 'En $name';
+          ? tr('Transmitiendo desde {}', [name])
+          : tr('En {}', [name]);
       final swap = motion(context, const Duration(milliseconds: 350));
       final thin = SliderTheme.of(context).copyWith(
         trackHeight: 6,
@@ -400,7 +401,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton.filledTonal(
-            tooltip: 'Anterior',
+            tooltip: tx('Anterior'),
             iconSize: 28,
             style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
             onPressed: m.supports(16) ? () => _command('prev') : null,
@@ -411,7 +412,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             icon: m.playing
                 ? Symbols.pause_rounded
                 : Symbols.play_arrow_rounded,
-            label: m.playing ? 'Pausar' : 'Reproducir',
+            label: tx(m.playing ? 'Pausar' : 'Reproducir'),
             on: m.playing,
             size: 64,
             onPressed: m.supports(512 | (m.playing ? 2 : 4))
@@ -420,7 +421,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           ),
           const SizedBox(width: Gap.m),
           IconButton.filledTonal(
-            tooltip: 'Siguiente',
+            tooltip: tx('Siguiente'),
             iconSize: 28,
             style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
             onPressed: m.supports(32) ? () => _command('next') : null,
@@ -486,7 +487,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                       max: m.volumeMax.toDouble(),
                       divisions: m.volumeMax,
                       semanticFormatterCallback: (v) =>
-                          'Volumen ${v.round()} de ${m.volumeMax}',
+                          tr('Volumen {} de {}', [v.round(), m.volumeMax]),
                       onChanged: (v) => setState(() => _vol = v),
                       onChangeEnd: (v) {
                         _command('volume', value: v.round());
@@ -544,7 +545,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       title: 'Reproduciendo',
       icon: Symbols.music_note_rounded,
       action: IconButton(
-        tooltip: 'Sincronizar reproducción',
+        tooltip: tx('Sincronizar reproducción'),
         onPressed: _watchRefresh,
         icon: const Icon(Symbols.refresh_rounded),
       ),
@@ -676,7 +677,7 @@ class _Art extends StatelessWidget {
                               (size * MediaQuery.devicePixelRatioOf(context))
                                   .round(),
                           gaplessPlayback: true,
-                          semanticLabel: 'Portada',
+                          semanticLabel: tx('Portada'),
                         )
                       : ColoredBox(
                           color: s.tertiaryContainer,

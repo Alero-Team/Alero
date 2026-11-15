@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -14,6 +14,7 @@ import 'phone_windows.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// "Acceso remoto": view and drive a phone from this computer with scrcpy, over USB or wireless
 /// debugging. The user authorises it on the phone (adb), a paired phone shows a notice with "Detener", and every
@@ -139,7 +140,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     try {
       s = await f();
     } catch (e) {
-      s = 'No se pudo: $e';
+      s = tr('No se pudo: {}', [e]);
     }
     if (mounted) {
       setState(() {
@@ -212,7 +213,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     final d = _device;
     final live = d != null && PhoneSessions.instance.running(d.serial);
     return Scaffold(
-      appBar: AppBar(title: Text('Acceso remoto a ${widget.phone.name}')),
+      appBar: AppBar(title: Text(tr('Acceso remoto a {}', [widget.phone.name]))),
       body: Platform.isAndroid || !Scrcpy.available
           ? const EmptyState(
               icon: Symbols.cast_rounded,
@@ -230,7 +231,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                       title: 'Dispositivo',
                       icon: Symbols.devices_rounded,
                       action: IconButton(
-                        tooltip: 'Buscar de nuevo',
+                        tooltip: tx('Buscar de nuevo'),
                         onPressed: _list,
                         icon: const Icon(Symbols.refresh_rounded),
                       ),
@@ -327,7 +328,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _Choice(
-                            label: 'Resolución',
+                            label: tx('Resolución'),
                             value: _maxSize,
                             options: const {
                               1024: '1024',
@@ -337,7 +338,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                             onChanged: (v) => setState(() => _maxSize = v),
                           ),
                           _Choice(
-                            label: 'Calidad',
+                            label: tx('Calidad'),
                             value: _bitRate,
                             options: const {
                               4: 'Ahorro',
@@ -347,13 +348,13 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                             onChanged: (v) => setState(() => _bitRate = v),
                           ),
                           _Choice(
-                            label: 'Fotogramas',
+                            label: tx('Fotogramas'),
                             value: _fps,
                             options: const {30: '30', 60: '60'},
                             onChanged: (v) => setState(() => _fps = v),
                           ),
                           _Choice(
-                            label: 'Orientación',
+                            label: tx('Orientación'),
                             value: _orientation,
                             options: const {
                               0: 'Auto',
@@ -440,11 +441,11 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                         children: [
                                           Text(
                                             live
-                                                ? 'Controlando ${d.name}'
+                                                ? tr('Controlando {}', [d.name])
                                                 : d == null
                                                 ? 'Conecta el teléfono por USB o depuración inalámbrica'
                                                 : d.ready
-                                                ? '${d.name} listo'
+                                                ? tr('{} listo', [d.name])
                                                 : '${d.name}: ${_stateText(d)}',
                                             style: t.titleLarge,
                                           ),
@@ -577,7 +578,7 @@ class _LiveBar extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     Widget key(IconData icon, String label, int code) => MorphButton(
       icon: icon,
-      label: label,
+      label: tx(label),
       size: 48,
       onPressed: () {
         HapticFeedback.selectionClick();
@@ -602,7 +603,7 @@ class _LiveBar extends StatelessWidget {
                   const SizedBox(width: Gap.s),
                   Expanded(
                     child: Text(
-                      'Controlando $name',
+                      tr('Controlando {}', [name]),
                       style: t.titleMedium?.copyWith(
                         color: s.onPrimaryContainer,
                       ),
@@ -752,7 +753,7 @@ class _Setup extends StatelessWidget {
                 child: TextField(
                   controller: port,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Puerto'),
+                  decoration: InputDecoration(labelText: tx('Puerto')),
                 ),
               ),
               const SizedBox(width: Gap.s),
@@ -760,7 +761,7 @@ class _Setup extends StatelessWidget {
                 child: TextField(
                   controller: code,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Código'),
+                  decoration: InputDecoration(labelText: tx('Código')),
                 ),
               ),
               const SizedBox(width: Gap.s),

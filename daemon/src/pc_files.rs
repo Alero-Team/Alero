@@ -173,7 +173,10 @@ pub fn handle(
                 return true;
             }
             #[cfg(any(windows, target_os = "linux"))]
-            crate::platform::toast("Descarga desde Alero", "Un teléfono emparejado está descargando un archivo autorizado");
+            crate::platform::toast(
+                crate::lang::t("Descarga desde Alero", "Download from Alero"),
+                crate::lang::t("Un teléfono emparejado está descargando un archivo autorizado", "A paired phone is downloading an authorized file"),
+            );
             let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             if engine.send_file(peer, &path, Some(&name)).is_err() {
                 denied(engine, peer, "send_failed");
@@ -193,7 +196,10 @@ pub fn handle(
                 return true;
             }
             #[cfg(any(windows, target_os = "linux"))]
-            crate::platform::toast("Archivos de Alero", "Un teléfono emparejado solicitó modificar un archivo compartido");
+            crate::platform::toast(
+                crate::lang::t("Archivos de Alero", "Alero files"),
+                crate::lang::t("Un teléfono emparejado solicitó modificar un archivo compartido", "A paired phone asked to modify a shared file"),
+            );
             let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             let ok = if kind == "pb.x.pcfs.delete" {
                 fs::remove_file(&path).is_ok()

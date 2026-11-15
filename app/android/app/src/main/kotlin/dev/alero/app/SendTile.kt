@@ -13,7 +13,7 @@ class SendTile : TileService() {
     override fun onStartListening() {
         val t = qsTile ?: return
         t.label = "Alero"
-        if (Build.VERSION.SDK_INT >= 29) t.subtitle = "Enviar y recibir"
+        if (Build.VERSION.SDK_INT >= 29) t.subtitle = Tr.t("Enviar y recibir", "Send and receive")
         t.icon = Icon.createWithResource(this, R.drawable.ic_stat_alero)
         t.state = Tile.STATE_ACTIVE
         t.updateTile()

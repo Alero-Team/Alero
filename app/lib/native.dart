@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
+import 'l10n.dart' show tx;
 
 class Shared {
   Shared(this.files, this.text, {this.widget = ''});
@@ -28,16 +29,16 @@ class Native {
   /// Vault contents stay encrypted on disk; Android uses a device-bound AES key.
   static Future<Uint8List> vaultSeal(Uint8List bytes) async =>
       await _ch.invokeMethod<Uint8List>('vaultSeal', bytes) ??
-      (throw StateError('No se pudo cifrar el archivo.'));
+      (throw StateError(tx('No se pudo cifrar el archivo.')));
 
   static Future<Uint8List> vaultOpen(Uint8List bytes) async =>
       await _ch.invokeMethod<Uint8List>('vaultOpen', bytes) ??
-      (throw StateError('No se pudo abrir el archivo cifrado.'));
+      (throw StateError(tx('No se pudo abrir el archivo cifrado.')));
 
   /// Reads a system-picker file, never an arbitrary external Android path.
   static Future<Uint8List> readVaultPicked(int descriptor) async =>
       await _ch.invokeMethod<Uint8List>('readVaultPicked', descriptor) ??
-      (throw StateError('No se pudo leer el archivo seleccionado.'));
+      (throw StateError(tx('No se pudo leer el archivo seleccionado.')));
   static final lock = ValueNotifier(false);
   static Future<void> loadLock() async {
     lock.value =
@@ -128,14 +129,14 @@ class Native {
       await showInFolder(path);
       throw PlatformException(
         code: 'runs_code',
-        message: 'Por seguridad, Alero no ejecuta programas: te lo muestra en su carpeta.',
+        message: tx('Por seguridad, Alero no ejecuta programas: te lo muestra en su carpeta.'),
       );
     } else if (Platform.isWindows) {
       await const MethodChannel('pb/windows').invokeMethod('openFile', path);
     } else {
       final result = await Process.run('xdg-open', [path]);
       if (result.exitCode != 0) {
-        throw FileSystemException('No se pudo abrir', path);
+        throw FileSystemException(tx('No se pudo abrir'), path);
       }
     }
   }
@@ -143,13 +144,23 @@ class Native {
   static const _ch = MethodChannel('pb/android');
   static final _android = Platform.isAndroid;
 
+  /// Tells Android's notifications, widgets and toasts which language the app is set to ('system' | 'es' | 'en').
+  static Future<void> setLanguage(String lang) async {
+    if (!_android) return;
+    try {
+      await _ch.invokeMethod('setLanguage', lang);
+    } catch (_) {
+      // an older native side: the system language applies
+    }
+  }
+
   static Future<String> deviceName() async {
     if (_android) {
       return await _ch.invokeMethod<String>('deviceName') ?? 'Android';
     }
     return Platform.environment['COMPUTERNAME'] ??
         Platform.environment['HOSTNAME'] ??
-        (Platform.isLinux ? Platform.localHostname : 'Ordenador');
+        (Platform.isLinux ? Platform.localHostname : tx('Ordenador'));
   }
 
   static Future<List<Picked>> pickFiles() async {
@@ -165,12 +176,12 @@ class Native {
 
   /// Desktop: a folder chosen with the system dialog, or null.
   static Future<String?> pickFolder() async =>
-      _android ? null : getDirectoryPath(confirmButtonText: 'Enviar');
+      _android ? null : getDirectoryPath(confirmButtonText: tx('Enviar'));
 
   /// Windows: owner explicitly shares this folder with paired phones.
   static Future<String?> pickSharedPcFolder() async => _android
       ? null
-      : getDirectoryPath(confirmButtonText: 'Compartir carpeta');
+      : getDirectoryPath(confirmButtonText: tx('Compartir carpeta'));
 
   static void closeFd(int fd) => _ch.invokeMethod('closeFd', fd);
 

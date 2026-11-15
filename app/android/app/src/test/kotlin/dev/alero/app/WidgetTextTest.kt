@@ -1,9 +1,12 @@
 package dev.alero.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 
 class WidgetTextTest {
+    @Before fun spanish() = Tr.use("es")
+
     @Test fun offlineHidesTheLastBattery() {
         // A computer that disconnected must not keep claiming a battery reading.
         assertEquals("Sin conexión", WidgetText.state(false, 80, true))
@@ -30,5 +33,15 @@ class WidgetTextTest {
         assertEquals("Recibido · foto.jpg", WidgetText.recent("foto.jpg", true, "done"))
         assertEquals("Enviado · a.pdf", WidgetText.recent("a.pdf", false, "done"))
         assertEquals("Falló · a.pdf", WidgetText.recent("a.pdf", false, "failed"))
+    }
+
+    @Test fun english() {
+        Tr.use("en")
+        assertEquals("Offline", WidgetText.state(false, 80, true))
+        assertEquals("Connected · 58 % · charging", WidgetText.state(true, 58, true))
+        assertEquals("Received · foto.jpg", WidgetText.recent("foto.jpg", true, "done"))
+        assertEquals("Failed · a.pdf", WidgetText.recent("a.pdf", false, "failed"))
+        Tr.use("es")
+        assertEquals("Sin conexión", WidgetText.state(false, 80, true))
     }
 }

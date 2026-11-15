@@ -57,7 +57,7 @@ A project by **Alero Team**, developed by:
 2. Open Alero on both devices, join the same Wi-Fi network and pair them in **Dispositivos** (Devices), or scan the computer's QR code.
 3. Allow remote control on Windows and grant the phone only the permissions needed for the features you use.
 
-The app interface is in Spanish.
+The app interface is in Spanish and English (Settings → Appearance → Language; "System" follows the device language).
 
 ### Controlling the computer from the phone
 
