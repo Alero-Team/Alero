@@ -110,6 +110,7 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell>
     with WidgetsBindingObserver, WindowListener {
+  bool _sidebarCollapsed = false;
   Hub get hub => widget.hub;
   // ALERO_SECTION=explorer (etc.) opens that screen first: handy for screenshots and manual checks.
   late Section _section =
@@ -347,31 +348,104 @@ class _ShellState extends State<Shell>
     _ => 0,
   };
 
-  /// The computer's menu is the phone's bottom bar turned on its side: a compact capsule of icons floating against
-  /// the left edge, centred vertically. The page keeps its own room beside it.
   Widget _wide(Widget page) {
     final s = Theme.of(context).colorScheme;
-    const edge = 12.0;
-    final bar = AleroSideBar(
-      top: const AleroMark(size: 24),
-      items: [
-        for (final d in _dests)
-          NavData(
-            d.icon,
-            d.label,
-            badge: _badge(d.section),
-            gapBefore: d.group != null,
-          ),
-      ],
-      selected: _dests.indexWhere((d) => d.section == _section),
-      onSelect: (i) => _go(_dests[i].section),
-    );
+    final t = Theme.of(context).textTheme;
+    final online = hub.peers
+        .where((p) => p.trusted && p.state == pb.PeerState.connected)
+        .toList();
     return Scaffold(
       backgroundColor: s.surface,
-      body: Stack(
+      body: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: AleroSideBar.width + edge * 2),
+          AnimatedContainer(
+            duration: AleroMotion.duration(context, 310),
+            curve: AleroMotion.spatial,
+            width: _sidebarCollapsed ? 76 : 226,
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 13, 10, 12),
+                    child: Row(
+                      children: [
+                        const AleroMark(size: 22),
+                        if (!_sidebarCollapsed) ...[
+                          const SizedBox(width: 9),
+                          Expanded(child: Text('Alero', style: t.titleSmall)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: TextButton.icon(
+                      onPressed: () => setState(
+                        () => _sidebarCollapsed = !_sidebarCollapsed,
+                      ),
+                      icon: Icon(
+                        _sidebarCollapsed
+                            ? Symbols.left_panel_open_rounded
+                            : Symbols.left_panel_close_rounded,
+                      ),
+                      label: _sidebarCollapsed
+                          ? const SizedBox.shrink()
+                          : const Text('Contraer menú'),
+                      style: TextButton.styleFrom(
+                        alignment: Alignment.centerLeft,
+                        foregroundColor: s.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 7),
+                      children: [
+                        for (final d in _dests) ...[
+                          if (d.group != null && !_sidebarCollapsed)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
+                              child: Text(
+                                d.group!,
+                                style: t.labelSmall?.copyWith(
+                                  color: s.onSurfaceVariant,
+                                  letterSpacing: .8,
+                                ),
+                              ),
+                            ),
+                          _NavItem(
+                            icon: d.icon,
+                            label: _sidebarCollapsed ? '' : d.label,
+                            selected: d.section == _section,
+                            badge: _badge(d.section),
+                            onTap: () => _go(d.section),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: _sidebarCollapsed
+                        ? IconButton(
+                            icon: const Icon(Symbols.smartphone_rounded),
+                            onPressed: () => _go(Section.devices),
+                            tooltip: tx('Dispositivos'),
+                          )
+                        : _PhoneChip(
+                            online,
+                            hub,
+                            onTap: () => _go(Section.devices),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
             child: ColoredBox(
               color: s.surface,
               child: Column(
@@ -379,18 +453,6 @@ class _ShellState extends State<Shell>
                   CallBar(hub),
                   Expanded(child: _Drop(hub, child: page)),
                 ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: edge,
-            top: edge,
-            bottom: edge,
-            // Centred; a window shorter than the bar scrolls it instead of overflowing.
-            child: Center(
-              child: SingleChildScrollView(
-                clipBehavior: Clip.none,
-                child: bar,
               ),
             ),
           ),
@@ -418,6 +480,157 @@ class _ShellState extends State<Shell>
       ),
     ),
   );
+}
+
+/// Sidebar destination: a full-width pill with icon and label on one line, so they line up exactly.
+/// The pill and the icon fill change with spring motion.
+class _NavItem extends StatefulWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.badge = 0,
+  });
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final int badge;
+  final VoidCallback onTap;
+
+  @override
+  State<_NavItem> createState() => _NavItemState();
+}
+
+class _NavItemState extends State<_NavItem> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    final sel = widget.selected;
+    final fg = sel ? s.onSurface : s.onSurfaceVariant;
+    final bg = sel
+        ? s.surfaceContainerHighest
+        : (_hover ? s.onSurface.withValues(alpha: 0.06) : Colors.transparent);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Semantics(
+        button: true,
+        selected: sel,
+        label: widget.label,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: AleroPress(
+            radius: 12,
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: motion(context, Spring.spatial.settle),
+              curve: Spring.spatial,
+              height: 40,
+              padding: EdgeInsets.symmetric(horizontal: sel ? Gap.m : Gap.m),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: ExcludeSemantics(
+                child: Row(
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(end: sel ? 1 : 0),
+                      duration: motion(
+                        context,
+                        const Duration(milliseconds: 250),
+                      ),
+                      builder: (_, f, _) =>
+                          Icon(widget.icon, size: 22, color: fg, fill: f),
+                    ),
+                    const SizedBox(width: Gap.m),
+                    Expanded(
+                      child: Text(
+                        widget.label,
+                        style: (sel ? t.labelLarge : weight(t.labelLarge, 500))
+                            ?.copyWith(color: fg),
+                      ),
+                    ),
+                    if (widget.badge > 0) Badge(label: Text('${widget.badge}')),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Mi teléfono" from the concept: who is connected; one tap to Devices.
+class _PhoneChip extends StatelessWidget {
+  const _PhoneChip(this.online, this.hub, {required this.onTap});
+  final List<pb.Peer> online;
+  final Hub hub;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    final look = online.isEmpty ? null : hub.look[online.first.id];
+    return Material(
+      color: s.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(Radii.tile),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Radii.tile),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(Gap.m),
+          child: Row(
+            children: [
+              // The exact back cover when Alero found one; the plain phone icon otherwise.
+              SizedBox(
+                width: 28,
+                height: 40,
+                child: Center(
+                  child: online.isEmpty
+                      ? const Icon(Symbols.mobile_off_rounded, size: 20)
+                      : PhoneCover(look, online.first.name),
+                ),
+              ),
+              const SizedBox(width: Gap.m),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      online.isEmpty
+                          ? 'Sin conexión'
+                          : look?.name ?? online.first.name,
+                      style: t.labelLarge,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      online.isEmpty
+                          ? 'Ningún dispositivo'
+                          : (online.length == 1
+                                ? 'Conectado'
+                                : tr('{} conectados', [online.length])),
+                      style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Symbols.chevron_right_rounded, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Android share menu: pick the paired device that gets the files or text.

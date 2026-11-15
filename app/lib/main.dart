@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -14,8 +16,17 @@ import 'ui/app_lock.dart';
 import 'ui/icon.dart';
 import 'ui/theme.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Windows sign-in start: bring up the tray daemon (the engine) and leave without showing a window.
+  if (Platform.isWindows && args.contains('--background')) {
+    try {
+      await RustLib.init();
+      await Hub().start();
+    } finally {
+      exit(0);
+    }
+  }
   registerAleroLicenses();
   final color = SystemColor();
   final hub = Hub();

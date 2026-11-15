@@ -48,7 +48,7 @@ bool FlutterWindow::OnCreate() {
           const auto length = GetModuleFileNameW(nullptr, path, 32768);
           if (!length || length >= 32768) status = ERROR_INSUFFICIENT_BUFFER;
           else {
-            const auto command = L"\"" + std::wstring(path, length) + L"\"";
+            const auto command = L"\"" + std::wstring(path, length) + L"\" --background";
             status = RegSetValueExW(run, L"Alero", 0, REG_SZ, reinterpret_cast<const BYTE*>(command.c_str()), static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t)));
           }
         } else {
@@ -74,9 +74,12 @@ bool FlutterWindow::OnCreate() {
   });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
+  // --background (sign-in start): the window only starts the tray daemon and closes, so it never appears.
+  if (!wcsstr(GetCommandLineW(), L"--background")) {
+    flutter_controller_->engine()->SetNextFrameCallback([&]() {
+      this->Show();
+    });
+  }
 
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the

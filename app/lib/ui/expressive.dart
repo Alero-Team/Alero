@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
@@ -65,8 +66,9 @@ class Spring extends Curve {
   }
 }
 
-/// How much longer every app animation runs than its base value: 1 felt too quick and mechanical.
-const motionScale = 1.45;
+/// How much longer every app animation runs than its base value. The computer keeps the calmer 1.45; on the phone
+/// that felt sluggish under the finger, so it runs a little under the springs' own timing.
+final motionScale = Platform.isAndroid ? 0.85 : 1.45;
 
 /// Animation length, or zero when the system asks for reduced motion.
 Duration motion(BuildContext c, Duration d) =>

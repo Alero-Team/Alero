@@ -48,6 +48,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; Flags: unchecked
+Name: "startup"; Description: "Iniciar Alero con Windows, en segundo plano (icono en la bandeja)"
 Name: "firewall"; Description: "Permitir Alero en el Firewall de Windows (pide permiso de administrador; sin esto el teléfono puede tardar en encontrar el ordenador en redes Públicas)"
 
 [Files]
@@ -56,6 +57,10 @@ Source: "{#BundleDir}\*"; DestDir: "{app}"; Excludes: "app_icon.ico"; Flags: ign
 [Icons]
 Name: "{group}\Alero"; Filename: "{app}\alero.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\Alero"; Filename: "{app}\alero.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Registry]
+; Same value the app's "Abrir Alero al iniciar sesión" switch writes, so either one can turn it off.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Alero"; ValueData: """{app}\alero.exe"" --background"; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Alero"""; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."

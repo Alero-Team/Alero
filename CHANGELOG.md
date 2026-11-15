@@ -1,5 +1,25 @@
 # Cambios
 
+## Sin publicar
+
+### Windows y Linux
+
+- **Vuelve el menú lateral de la 1.4:** se retira la píldora; el menú muestra otra vez el nombre de cada sección, con sus grupos y la tarjeta del dispositivo.
+
+### Windows
+
+- **Inicio con Windows en segundo plano:** el instalador marca por defecto «Iniciar Alero con Windows». Al iniciar sesión Alero arranca solo en la bandeja y conectado, sin abrir la ventana. El interruptor «Abrir Alero al iniciar sesión» usa la misma entrada.
+
+### Android
+
+- **Animaciones más ágiles:** las animaciones del teléfono duran menos y responden antes al toque.
+
+### English
+
+- **The 1.4 side menu is back** (Windows and Linux): the pill is gone; every section shows its name again.
+- **Start with Windows in the background:** the installer enables it by default; Alero starts in the tray at sign-in without opening its window.
+- **Snappier Android motion:** phone animations are shorter and react sooner to touch.
+
 ## Beta 1.4.2 (1.4.2) — 2026-11-14
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
