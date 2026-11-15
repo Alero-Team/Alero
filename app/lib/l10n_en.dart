@@ -1010,6 +1010,7 @@ const Map<String, String> kEnglish = {
   'COMUNICACIÓN': 'COMMUNICATION',
   'Tu ordenador no está conectado.': 'Your computer is not connected.',
   'Contraer menú': 'Collapse menu',
+  'Fijar menú': 'Pin menu',
   'Ningún dispositivo': 'No device',
   'Conectado': 'Connected',
   '{} conectados': '{} connected',
