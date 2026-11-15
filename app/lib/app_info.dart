@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'l10n.dart' show tx;
 
-const aleroVersion = '1.3.1-beta';
+const aleroVersion = '1.4.0-beta';
 
 /// The release name people see.
-const aleroRelease = 'Beta 1.3';
+const aleroRelease = 'Beta 1.4';
 
 /// Flutter supplies Dart package notices; native components are bundled alongside them.
 void registerAleroLicenses() {
@@ -16,7 +17,7 @@ void registerAleroLicenses() {
       'Google Sans Flex',
     ], await rootBundle.loadString('assets/FONT-LICENSE.txt'));
     yield LicenseEntryWithLineBreaks([
-      'Alero · componentes nativos',
+      tx('Alero · componentes nativos'),
     ], await rootBundle.loadString('assets/NATIVE-LICENSES.txt'));
   });
 }

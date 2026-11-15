@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../phone_control.dart';
@@ -11,6 +11,7 @@ import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// Phone apps in their own computer windows (one virtual display each, so the phone's screen stays free) and
 /// the phone's camera in a window. Both are scrcpy sessions next to the main one; closing a window ends it.
@@ -24,7 +25,7 @@ class PhoneWindowsPanel extends StatelessWidget {
 
   Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
     serial,
-    'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName',
+    tr('Cámara {} · {}', [facing == 'front' ? 'frontal' : 'trasera', deviceName]),
     facing,
   );
 
@@ -46,8 +47,8 @@ class PhoneWindowsPanel extends StatelessWidget {
             TextField(
               controller: controller,
               obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Contraseña de OBS WebSocket',
+              decoration: InputDecoration(
+                labelText: tx('Contraseña de OBS WebSocket'),
               ),
             ),
           ],
@@ -67,7 +68,7 @@ class PhoneWindowsPanel extends StatelessWidget {
     controller.dispose();
     if (password == null || !context.mounted) return;
     final title =
-        'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · $deviceName';
+        tr('Cámara {} · {}', [facing == 'front' ? 'frontal' : 'trasera', deviceName]);
     try {
       await _camera(facing);
       await Future<void>.delayed(const Duration(milliseconds: 800));
@@ -84,7 +85,7 @@ class PhoneWindowsPanel extends StatelessWidget {
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No se pudo iniciar la webcam: $error')),
+          SnackBar(content: Text(tr('No se pudo iniciar la webcam: {}', [error]))),
         );
       }
     }
@@ -254,10 +255,10 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Grabación guardada: ${f.split(Platform.pathSeparator).last}',
+          tr('Grabación guardada: {}', [f.split(Platform.pathSeparator).last]),
         ),
         action: SnackBarAction(
-          label: 'Abrir carpeta',
+          label: tx('Abrir carpeta'),
           onPressed: () => Native.openFolder(widget.folder),
         ),
       ),
@@ -280,7 +281,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
             Text(
               on
                   ? 'Grabando la pantalla del teléfono…'
-                  : 'Graba la pantalla del teléfono (con sonido en Android 11 o posterior) en un vídeo .mkv dentro de ${widget.folder}.',
+                  : tr('Graba la pantalla del teléfono (con sonido en Android 11 o posterior) en un vídeo .mkv dentro de {}.', [widget.folder]),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: Gap.s),

@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/material.dart' hide Icon, Text;
 
 import 'expressive.dart';
 import 'theme.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 class NavData {
   const NavData(this.icon, this.label, {this.badge = 0});
@@ -15,16 +17,24 @@ class NavData {
 /// only, spread evenly. The selected pill is as wide as its content; the rest of the bar is shared by the other
 /// icons. When the selection changes, every width moves from its old value to its new one with the same spring,
 /// and the old and new widths always add up to the bar's width, so nothing jumps and nothing outside the bar moves.
+///
+/// `compact`: while true (the page is scrolled away from its top) the whole bar shrinks towards the bottom edge, and
+/// it springs back to its size when it turns false. Its layout space stays the same, so the page does not move.
 class AleroNavBar extends StatefulWidget {
   const AleroNavBar({
     super.key,
     required this.items,
     required this.selected,
     required this.onSelect,
+    this.compact,
   });
   final List<NavData> items;
   final int selected;
   final ValueChanged<int> onSelect;
+  final ValueListenable<bool>? compact;
+
+  /// How much smaller the bar gets while compact.
+  static const compactScale = 0.78;
 
   static const height = 64.0,
       _icon = 24.0,
@@ -37,16 +47,43 @@ class AleroNavBar extends StatefulWidget {
 }
 
 class _AleroNavBarState extends State<AleroNavBar>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
     value: 1,
   );
   late int _from = widget.selected, _to = widget.selected;
 
+  // 0 = full size, 1 = compact. Unbounded so the spring may overshoot a little, like the rest of the app.
+  late final AnimationController _k = AnimationController.unbounded(
+    vsync: this,
+    value: widget.compact?.value == true ? 1 : 0,
+  );
+
+  void _compactChanged() {
+    final to = widget.compact?.value == true ? 1.0 : 0.0;
+    if (_k.value == to && !_k.isAnimating) return;
+    _k.animateTo(
+      to,
+      duration: motion(context, Spring.spatial.settle),
+      curve: Spring.spatial,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.compact?.addListener(_compactChanged);
+  }
+
   @override
   void didUpdateWidget(AleroNavBar o) {
     super.didUpdateWidget(o);
+    if (o.compact != widget.compact) {
+      o.compact?.removeListener(_compactChanged);
+      widget.compact?.addListener(_compactChanged);
+      _compactChanged();
+    }
     if (widget.selected != _to) {
       // Start from wherever the last move got to, so quick taps never snap.
       _from = _to;
@@ -58,6 +95,8 @@ class _AleroNavBarState extends State<AleroNavBar>
 
   @override
   void dispose() {
+    widget.compact?.removeListener(_compactChanged);
+    _k.dispose();
     _c.dispose();
     super.dispose();
   }
@@ -84,9 +123,9 @@ class _AleroNavBarState extends State<AleroNavBar>
         AleroNavBar._side * 2 +
             AleroNavBar._icon +
             AleroNavBar._gap +
-            _textWidth(d.label, label),
+            _textWidth(tx(d.label), label),
     ];
-    return Container(
+    final bar = Container(
       height: AleroNavBar.height,
       padding: const EdgeInsets.all(AleroNavBar._pad),
       decoration: BoxDecoration(
@@ -139,6 +178,15 @@ class _AleroNavBarState extends State<AleroNavBar>
         },
       ),
     );
+    return AnimatedBuilder(
+      animation: _k,
+      child: bar,
+      builder: (context, child) => Transform.scale(
+        scale: 1 - (1 - AleroNavBar.compactScale) * _k.value,
+        alignment: Alignment.bottomCenter,
+        child: child,
+      ),
+    );
   }
 }
 
@@ -172,7 +220,7 @@ class _Item extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: data.label,
+      label: tx(data.label),
       child: OrionPress(
         onTap: onTap,
         child: SizedBox(

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -20,6 +20,7 @@ import 'theme.dart';
 import 'controls.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// The device Home is about: the one the user picked, else the first paired one online, else the first paired.
 pb.Peer? mainPeer(Hub hub) {
@@ -142,7 +143,7 @@ class HomeScreen extends StatelessWidget {
         maxWidth: 980,
         onRefresh: hub.refresh,
         trailing: IconButton(
-          tooltip: 'Personalizar',
+          tooltip: tx('Personalizar'),
           onPressed: () => _customize(context, hub, go, _phoneTiles),
           icon: const Icon(Symbols.dashboard_customize_rounded),
         ),
@@ -531,7 +532,7 @@ class _Hero extends StatelessWidget {
                         width: phoneSize,
                         child: Semantics(
                           button: true,
-                          label: 'Ver ${p.name} en Dispositivos',
+                          label: tr('Ver {} en Dispositivos', [p.name]),
                           child: InkWell(
                             onTap: () => go(Section.devices),
                             borderRadius: BorderRadius.circular(12),
@@ -772,7 +773,7 @@ class _StatusPanel extends StatelessWidget {
           metric(
             Symbols.hard_drive_rounded,
             'Almacenamiento',
-            '${size(used)} de ${size(total)}',
+            tr('{} de {}', [size(used), size(total)]),
             progress: used / total,
           ),
         if (info.battery >= 0)

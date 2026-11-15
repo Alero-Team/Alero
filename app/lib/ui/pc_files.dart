@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../fs_client.dart';
 import '../hub.dart';
 import '../pc_files.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// Browse folders the Windows owner explicitly selected, over Alero's
 /// authenticated peer channel. ADB and external servers are not involved.
@@ -52,7 +53,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
           controller: controller,
           autofocus: true,
           maxLength: 180,
-          decoration: const InputDecoration(labelText: 'Nuevo nombre'),
+          decoration: InputDecoration(labelText: tx('Nuevo nombre')),
           onSubmitted: (s) => Navigator.pop(ctx, s),
         ),
         actions: [
@@ -78,7 +79,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar archivo del ordenador'),
         content: Text(
-          'Esta acción elimina permanentemente «${entry.name}» del ordenador. No se envía a la papelera. ¿Continuar?',
+          tr('Esta acción elimina permanentemente «{}» del ordenador. No se envía a la papelera. ¿Continuar?', [entry.name]),
         ),
         actions: [
           TextButton(
@@ -108,7 +109,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
         subtitle: Text(
           entry.dir
               ? 'Carpeta'
-              : '${(entry.size / 1024).toStringAsFixed(1)} KB · ${date.day}/${date.month}/${date.year}',
+              : '${(entry.size / 1024).toStringAsFixed(1)} KB · ${L10n.instance.en ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}' : '${date.day}/${date.month}/${date.year}'}',
         ),
         onTap: () {
           if (entry.dir) {
@@ -125,7 +126,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
         trailing: entry.dir
             ? const Icon(Symbols.chevron_right_rounded)
             : PopupMenuButton<String>(
-                tooltip: 'Opciones de archivo',
+                tooltip: tx('Opciones de archivo'),
                 onSelected: (action) {
                   switch (action) {
                     case 'download':
@@ -162,10 +163,10 @@ class _PcFilesPageState extends State<PcFilesPage> {
     listenable: fs,
     builder: (context, _) => Scaffold(
       appBar: AppBar(
-        title: Text('Archivos de ${widget.name}'),
+        title: Text(tr('Archivos de {}', [widget.name])),
         actions: [
           IconButton(
-            tooltip: 'Actualizar',
+            tooltip: tx('Actualizar'),
             onPressed: () => fs.root == null ? fs.open(widget.peer) : fs.list(),
             icon: const Icon(Symbols.refresh_rounded),
           ),
@@ -195,7 +196,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
               Row(
                 children: [
                   IconButton(
-                    tooltip: 'Volver',
+                    tooltip: tx('Volver'),
                     onPressed: fs.up,
                     icon: const Icon(Symbols.arrow_back_rounded),
                   ),
@@ -219,7 +220,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
               if (fs.total > 0)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text('${fs.entries.length} de ${fs.total} elementos'),
+                  child: Text(tr('{} de {} elementos', [fs.entries.length, fs.total])),
                 ),
             ] else ...[
               if (!fs.loading && fs.roots.isEmpty && fs.error == null)

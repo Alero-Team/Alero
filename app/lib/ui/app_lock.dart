@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter/services.dart';
 
 import '../native.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// Above the Navigator so existing dialogs and routes cannot bypass the lock.
 class AppLock extends StatefulWidget {

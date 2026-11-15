@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -11,6 +11,7 @@ import 'phone_page.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// "Llamadas": a dial pad with contact search, and the phone's recent calls. The phone dials; you talk on it
 /// (or its headset). Answering and hanging up are on the call bar at the top of every screen.
@@ -24,7 +25,7 @@ class CallsScreen extends StatelessWidget {
     title: 'Llamadas',
     actions: (p) => [
       IconButton(
-        tooltip: 'Actualizar',
+        tooltip: tx('Actualizar'),
         onPressed: () => hub.phoneCmd(p.id, 'calllog.request'),
         icon: const Icon(Symbols.refresh_rounded),
       ),
@@ -92,7 +93,7 @@ class _CallsState extends State<_Calls> {
     final n = (number ?? _number.text).trim();
     if (n.isEmpty) return;
     await hub.dial(id, n);
-    hub.messages.add('Llamando a $n desde el teléfono…');
+    hub.messages.add(tr('Llamando a {} desde el teléfono…', [n]));
   }
 
   @override
@@ -124,11 +125,11 @@ class _CallsState extends State<_Calls> {
                         style: t.headlineSmall,
                         textAlign: TextAlign.center,
                         decoration: InputDecoration(
-                          hintText: 'Número o nombre',
+                          hintText: tx('Número o nombre'),
                           suffixIcon: _number.text.isEmpty
                               ? null
                               : IconButton(
-                                  tooltip: 'Borrar',
+                                  tooltip: tx('Borrar'),
                                   onPressed: () {
                                     _number.clear();
                                     _changed('');
@@ -251,7 +252,7 @@ class _CallsState extends State<_Calls> {
                                 }} · ${ago(c.date)}${c.duration > 0 ? ' · ${c.duration ~/ 60}:${(c.duration % 60).toString().padLeft(2, '0')}' : ''}',
                               ),
                               trailing: IconButton(
-                                tooltip: 'Llamar a ${c.who}',
+                                tooltip: tr('Llamar a {}', [c.who]),
                                 onPressed: c.number.isEmpty
                                     ? null
                                     : () => _call(c.number),

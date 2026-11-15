@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart' as m;
 import 'package:flutter/material.dart' hide Icon;
 
+import '../l10n.dart' show tx;
 import 'expressive.dart' show motion;
 
 /// Alero's `Icon`: Flutter's, plus a short spring when the control it sits in is tapped (it swells, tilts and
@@ -91,7 +92,7 @@ class _IconState extends State<Icon> {
     size: widget.size,
     fill: fill ?? widget.fill,
     color: widget.color,
-    semanticLabel: widget.semanticLabel,
+    semanticLabel: widget.semanticLabel == null ? null : tx(widget.semanticLabel!),
   );
 
   @override

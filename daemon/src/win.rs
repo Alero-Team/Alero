@@ -161,7 +161,7 @@ fn mb(b: u64) -> String {
 /// Values bound to the card's `<progress>`: (value 0..1 or "indeterminate", "x MB de y MB", speed).
 fn progress_text(done: u64, total: u64, rate: u64) -> (String, String, String) {
     let value = if total > 0 { format!("{:.3}", (done as f64 / total as f64).min(1.0)) } else { "indeterminate".into() };
-    let amount = if total > 0 { format!("{} de {}", mb(done), mb(total)) } else { mb(done) };
+    let amount = if total > 0 { format!("{} {} {}", mb(done), crate::lang::t("de", "of"), mb(total)) } else { mb(done) };
     (value, amount, if rate > 0 { format!("{}/s", mb(rate)) } else { String::new() })
 }
 
@@ -247,10 +247,11 @@ fn show_card(
 
 /// The card of a transfer in progress: peer, file name, "x MB de y MB" and Cancelar.
 pub fn transfer_start(id: &str, incoming: bool, peer: &str, name: &str, total: u64, on_click: impl Fn(&str) + Send + 'static) {
-    let title = format!("{} {}", if incoming { "Recibiendo de" } else { "Enviando a" }, if peer.is_empty() { "un dispositivo" } else { peer });
+    let who = if peer.is_empty() { crate::lang::t("un dispositivo", "a device") } else { peer };
+    let title = format!("{} {}", if incoming { crate::lang::t("Recibiendo de", "Receiving from") } else { crate::lang::t("Enviando a", "Sending to") }, who);
     *DRAWN.lock().unwrap_or_else(|e| e.into_inner()) = Some((id.to_string(), Instant::now()));
     let data = progress_data(name, 0, total, 0).ok();
-    show_card(&tag_of(id), &title, "", None, &[Button::Call("Cancelar".into(), format!("cancel:{id}"))], data, on_click);
+    show_card(&tag_of(id), &title, "", None, &[Button::Call(crate::lang::t("Cancelar", "Cancel").into(), format!("cancel:{id}"))], data, on_click);
 }
 
 /// Moves the bar of the card started by [`transfer_start`], at most once a second.
@@ -288,13 +289,13 @@ pub fn transfer_done(id: &str, file: &std::path::Path) {
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut buttons = Vec::new();
     if !runs_code(file) {
-        buttons.push(Button::Open("Abrir".into(), file.to_path_buf()));
+        buttons.push(Button::Open(crate::lang::t("Abrir", "Open").into(), file.to_path_buf()));
     }
     if let Some(dir) = file.parent() {
-        buttons.push(Button::Open("Abrir carpeta".into(), dir.to_path_buf()));
+        buttons.push(Button::Open(crate::lang::t("Abrir carpeta", "Open folder").into(), dir.to_path_buf()));
     }
     let image = if is_image(file) { Some(file) } else { None };
-    show_card(&tag_of(id), "Archivo recibido", &name, image, &buttons, None, |_| {});
+    show_card(&tag_of(id), crate::lang::t("Archivo recibido", "File received"), &name, image, &buttons, None, |_| {});
 }
 
 pub fn set_clipboard(text: &str) {

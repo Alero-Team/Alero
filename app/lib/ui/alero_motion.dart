@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
 import 'expressive.dart';
+import '../l10n.dart';
 
 /// Orion-inspired motion and the Material MotionScheme.
 /// Applied on Windows and Android; respects reduced-motion accessibility.

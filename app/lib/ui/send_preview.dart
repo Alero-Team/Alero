@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -11,6 +11,7 @@ import 'expressive.dart' show Spring, motion;
 import 'icon.dart';
 import 'theme.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 /// Before a send: which files are going and to whom, with a thumbnail for pictures. True means send.
 Future<bool> showSendPreview(
@@ -21,7 +22,7 @@ Future<bool> showSendPreview(
     await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text('Enviar a $to'),
+        title: Text(tr('Enviar a {}', [to])),
         content: SizedBox(
           width: 380,
           child: files.length == 1
@@ -35,7 +36,7 @@ Future<bool> showSendPreview(
                       Padding(
                         padding: const EdgeInsets.only(top: Gap.s),
                         child: Text(
-                          'y ${files.length - 4} más (${files.length} archivos)',
+                          tr('y {} más ({} archivos)', [files.length - 4, files.length]),
                           style: Theme.of(c).textTheme.bodySmall,
                         ),
                       ),
@@ -255,11 +256,11 @@ class _TransferState extends State<_Transfer> {
       return AlertDialog(
         title: Text(
           finished && ok.isNotEmpty
-              ? (widget.incoming ? 'Recibido de $peer' : 'Enviado a $peer')
+              ? (widget.incoming ? tr('Recibido de {}', [peer]) : tr('Enviado a {}', [peer]))
               : widget.incoming
-              ? 'Recibiendo de $peer'
+              ? tr('Recibiendo de {}', [peer])
               : many
-              ? 'Enviando ${widget.count} archivos'
+              ? tr('Enviando {} archivos', [widget.count])
               : 'Enviando archivo',
         ),
         content: SizedBox(
@@ -276,7 +277,7 @@ class _TransferState extends State<_Transfer> {
                         ? 'Finalizado'
                         : ok.isEmpty
                         ? done.last.error
-                        : '${ok.length} de ${done.length} finalizados',
+                        : tr('{} de {} finalizados', [ok.length, done.length]),
                     style: t.titleMedium,
                   ),
                 ),
@@ -284,7 +285,7 @@ class _TransferState extends State<_Transfer> {
                   const SizedBox(height: Gap.m),
                   _Arrived(last, onDisk ? h.path : null),
                   if (ok.length > 1)
-                    Text('y ${ok.length - 1} más', style: t.bodySmall),
+                    Text(tr('y {} más', [ok.length - 1]), style: t.bodySmall),
                 ],
               ] else if (mine.isEmpty) ...[
                 const SizedBox(height: Gap.s),
@@ -293,7 +294,7 @@ class _TransferState extends State<_Transfer> {
                 for (final x in mine.take(3))
                   TransferRow(x, hub, key: ValueKey(x.id)),
                 if (mine.length > 3)
-                  Text('y ${mine.length - 3} más en curso', style: t.bodySmall),
+                  Text(tr('y {} más en curso', [mine.length - 3]), style: t.bodySmall),
               ],
             ],
           ),

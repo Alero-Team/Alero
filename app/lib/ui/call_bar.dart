@@ -1,10 +1,11 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import 'expressive.dart';
 import 'theme.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// The phone's call, floating over every screen of the computer: answer or decline while it rings, hang up
 /// while talking. The voice stays on the phone (or its headset).
@@ -43,7 +44,7 @@ class _Card extends StatelessWidget {
     final who = c.name.isEmpty ? 'Número desconocido' : c.name;
     return Semantics(
       liveRegion: true,
-      label: c.ringing ? 'Llamada entrante de $who' : 'En llamada con $who',
+      label: c.ringing ? tr('Llamada entrante de {}', [who]) : tr('En llamada con {}', [who]),
       child: Container(
         margin: const EdgeInsets.fromLTRB(Gap.xl, Gap.m, Gap.xl, 0),
         padding: const EdgeInsets.symmetric(horizontal: Gap.l, vertical: Gap.m),
@@ -149,7 +150,7 @@ Future<void> dialDialog(
             controller: c,
             autofocus: true,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Número'),
+            decoration: InputDecoration(labelText: tx('Número')),
             onSubmitted: (v) => Navigator.pop(d, v),
           ),
           const SizedBox(height: Gap.s),

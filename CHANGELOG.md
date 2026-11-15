@@ -1,5 +1,31 @@
 # Cambios
 
+## Beta 1.4 (1.4.0) — 2026-11-14
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Todas
+
+- **Inglés:** Alero ya se puede usar en inglés. En Ajustes → Apariencia → «Idioma / Language» eliges Sistema, Español o English; «Sistema» usa el idioma del dispositivo (cualquier idioma distinto del español se muestra en inglés). El cambio es inmediato y alcanza también las notificaciones, los widgets y los avisos de Android, y las notificaciones y el menú de la bandeja de Windows y Linux.
+
+### Android
+
+- **Barra inferior que se encoge:** al desplazarte por una pantalla la barra se hace más pequeña, y al volver arriba recupera su tamaño con el mismo muelle de las demás animaciones.
+- Los nombres de los widgets y el idioma de la app siguen el idioma del dispositivo; el selector de idioma por aplicación de Android también está disponible.
+
+### English
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+#### All
+
+- **English:** Alero can now be used in English. In Settings → Appearance → "Idioma / Language" pick System, Español or English; "System" follows the device language (any language other than Spanish shows English). The change is immediate and also covers Android's notifications, widgets and notices, and the Windows and Linux notifications and tray menu.
+
+#### Android
+
+- **Shrinking bottom bar:** while you scroll a screen the bar gets smaller, and back at the top it returns to its size with the same spring as the rest of the animations.
+- Widget names follow the device language, and Android's per-app language picker is available too.
+
 ## Beta 1.3.1 (1.3.1) — 2026-11-12
 
 ### Windows y Linux

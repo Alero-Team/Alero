@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -11,6 +11,7 @@ import 'remote_ui.dart';
 import 'theme.dart';
 import 'icon.dart';
 import 'widgets.dart';
+import '../l10n.dart';
 
 Future<void> openPcScreen(
   BuildContext context,
@@ -102,7 +103,7 @@ class _PcScreenPageState extends State<PcScreenPage>
                 _feed.frame!,
                 fit: BoxFit.contain,
                 gaplessPlayback: true,
-                semanticLabel: 'Pantalla del ordenador ${widget.name}',
+                semanticLabel: tr('Pantalla del ordenador {}', [widget.name]),
                 filterQuality: FilterQuality.medium,
                 cacheWidth: _feed.w > 0
                     ? (box.maxWidth * MediaQuery.devicePixelRatioOf(context))
@@ -226,7 +227,7 @@ class _PcScreenPageState extends State<PcScreenPage>
                 onChanged: (gain) => setState(() => _gain = gain),
               ),
             PopupMenuButton<(int, int)>(
-              tooltip: 'Calidad de la pantalla',
+              tooltip: tx('Calidad de la pantalla'),
               enabled: blocker == null,
               icon: const Icon(Symbols.display_settings_rounded),
               onSelected: (q) => _feed.setQuality(width: q.$1, fps: q.$2),
@@ -244,7 +245,7 @@ class _PcScreenPageState extends State<PcScreenPage>
               ],
             ),
             IconButton(
-              tooltip: 'Girar la pantalla',
+              tooltip: tx('Girar la pantalla'),
               icon: const Icon(Symbols.screen_rotation_rounded),
               onPressed: () {
                 _landscape = !_landscape;
@@ -399,7 +400,7 @@ Future<void> showShot(BuildContext context, Hub hub) {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Captura de ${shot.peerName}',
+              tr('Captura de {}', [shot.peerName]),
               style: Theme.of(ctx).textTheme.titleLarge,
             ),
             const SizedBox(height: Gap.m),
@@ -411,14 +412,14 @@ Future<void> showShot(BuildContext context, Hub hub) {
                   child: Image.memory(
                     shot.bytes,
                     fit: BoxFit.contain,
-                    semanticLabel: 'Captura de pantalla de ${shot.peerName}',
+                    semanticLabel: tr('Captura de pantalla de {}', [shot.peerName]),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: Gap.m),
             Text(
-              'Guardada en ${hub.downloads} como ${shot.name}.',
+              tr('Guardada en {} como {}.', [hub.downloads, shot.name]),
               style: Theme.of(ctx).textTheme.bodySmall
                   ?.copyWith(color: Theme.of(ctx).colorScheme.onSurfaceVariant),
             ),

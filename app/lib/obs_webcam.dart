@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'l10n.dart' show tr, tx;
 
 /// Starts Windows' OBS virtual-camera device from the phone-camera window.
 /// OBS Studio 28+ must be installed and its local WebSocket server enabled.
@@ -21,13 +22,13 @@ class ObsWebcam {
     try {
       final hello = await connection.next();
       if (hello['op'] != 0) {
-        throw const FormatException('OBS WebSocket 5 no está disponible.');
+        throw FormatException(tx('OBS WebSocket 5 no está disponible.'));
       }
       final auth = (hello['d'] as Map?)?['authentication'];
       final identify = <String, Object>{'rpcVersion': 1};
       if (auth is Map) {
         if (password.isEmpty) {
-          throw const FormatException('Introduce la contraseña de OBS WebSocket.');
+          throw FormatException(tx('Introduce la contraseña de OBS WebSocket.'));
         }
         final salt = auth['salt'] as String? ?? '';
         final challenge = auth['challenge'] as String? ?? '';
@@ -36,7 +37,7 @@ class ObsWebcam {
       socket.add(jsonEncode({'op': 1, 'd': identify}));
       final reply = await connection.next();
       if (reply['op'] != 2) {
-        throw const FormatException('OBS rechazó la conexión o su contraseña.');
+        throw FormatException(tx('OBS rechazó la conexión o su contraseña.'));
       }
       return connection;
     } catch (_) {
@@ -62,7 +63,7 @@ class ObsWebcam {
       final status = data['requestStatus'];
       if (status is! Map || status['result'] != true) {
         throw FormatException(
-          'OBS rechazó $type: ${status is Map ? (status['comment'] ?? status['code']).toString() : 'desconocido'}',
+          tr('OBS rechazó {}: {}', [type, status is Map ? (status['comment'] ?? status['code']).toString() : 'desconocido']),
         );
       }
       return Map<String, dynamic>.from(data['responseData'] as Map? ?? {});
@@ -76,7 +77,7 @@ class ObsWebcam {
     required String password,
   }) async {
     // The window-capture source below exists only in OBS for Windows (Linux uses xcomposite_input).
-    if (!Platform.isWindows) throw StateError('La webcam con OBS solo está disponible en Windows por ahora.');
+    if (!Platform.isWindows) throw StateError(tx('La webcam con OBS solo está disponible en Windows por ahora.'));
     await stop(silent: true);
     final connection = await _connect(password);
     try {
@@ -154,7 +155,7 @@ class _ObsConnection {
 
   Future<Map<String, dynamic>> next() async {
     final ready = await messages.moveNext().timeout(const Duration(seconds: 8));
-    if (!ready) throw const FormatException('OBS cerró la conexión.');
+    if (!ready) throw FormatException(tx('OBS cerró la conexión.'));
     return jsonDecode(messages.current as String) as Map<String, dynamic>;
   }
 

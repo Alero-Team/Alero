@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app_info.dart';
 import 'hub.dart';
+import 'l10n.dart';
 import 'native.dart';
 import 'src/rust/frb_generated.dart';
 import 'ui/shell.dart';
@@ -39,7 +40,7 @@ Future<void> main() async {
       await hold;
       boot.value = null;
     } catch (e) {
-      boot.value = 'No se pudo iniciar Alero: $e';
+      boot.value = tr(tx('No se pudo iniciar Alero: {}'), [e]);
     }
   });
 }
@@ -53,13 +54,19 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     // Only theme inputs rebuild the app; engine events rebuild the screens below.
-    listenable: Listenable.merge([color, hub.themeMode, hub.amoled, boot]),
+    listenable: Listenable.merge([
+      color,
+      hub.themeMode,
+      hub.amoled,
+      boot,
+      L10n.instance,
+    ]),
     builder: (_, _) {
       final (seed, variant) = color.value;
       return MaterialApp(
         title: 'Alero',
-        locale: const Locale('es'),
-        supportedLocales: const [Locale('es')],
+        locale: L10n.instance.locale,
+        supportedLocales: const [Locale('es'), Locale('en')],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,

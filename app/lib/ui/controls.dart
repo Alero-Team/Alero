@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -17,6 +17,7 @@ import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// "Controles del teléfono", a panel on the computer's Inicio: quick toggles and shortcuts, like the phone's own
 /// quick settings. Do Not Disturb, flashlight, sound, volume and "find my phone" go through Alero on the phone;
@@ -34,12 +35,12 @@ class PhoneControlsPanel extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          tooltip: 'Elegir y ordenar los controles',
+          tooltip: tx('Elegir y ordenar los controles'),
           onPressed: () => _customize(context, hub),
           icon: const Icon(Symbols.dashboard_customize_rounded),
         ),
         IconButton(
-          tooltip: 'Actualizar',
+          tooltip: tx('Actualizar'),
           onPressed: () => hub.phoneCmd(phone.id, 'state.request'),
           icon: const Icon(Symbols.refresh_rounded),
         ),
@@ -84,8 +85,7 @@ Future<void> _customize(BuildContext context, Hub hub) => showDialog<void>(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Arrastra para ordenar y apaga los que no uses. Los $_mainCount primeros quedan '
-                'siempre a la vista; el resto, en «Controles avanzados».',
+                tr('Arrastra para ordenar y apaga los que no uses. Los {} primeros quedan siempre a la vista; el resto, en «Controles avanzados».', [_mainCount]),
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
               const SizedBox(height: Gap.s),
@@ -195,7 +195,7 @@ class _ControlsState extends State<_Controls> {
 
   Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
     _adb!.serial,
-    'Cámara ${facing == 'front' ? 'frontal' : 'trasera'} · ${widget.phone.name}',
+    tr('Cámara {} · {}', [facing == 'front' ? 'frontal' : 'trasera', widget.phone.name]),
     facing,
   );
 
@@ -215,7 +215,7 @@ class _ControlsState extends State<_Controls> {
         _adb!.serial,
         '${hub.downloads}${Platform.pathSeparator}$name',
       );
-      hub.messages.add('Captura guardada en la carpeta de descargas: $name');
+      hub.messages.add(tr('Captura guardada en la carpeta de descargas: {}', [name]));
     } catch (_) {
       hub.messages.add(
         'No se pudo capturar la pantalla del teléfono. Desbloquéalo e inténtalo de nuevo.',
@@ -310,7 +310,7 @@ class _ControlsState extends State<_Controls> {
         'screen': tile(
           'screen',
           Symbols.cast_rounded,
-          hint: 'Abre Acceso remoto',
+          hint: tx('Abre Acceso remoto'),
           onTap: () => openScreen(context, hub, widget.phone),
         ),
         'shot': tile(
@@ -342,13 +342,13 @@ class _ControlsState extends State<_Controls> {
           'find',
           Symbols.mobile_sound_rounded,
           on: st?.finding,
-          hint: 'Lo hace sonar un minuto, aunque esté en silencio',
+          hint: tx('Lo hace sonar un minuto, aunque esté en silencio'),
           onTap: st == null ? null : () => cmd('find', {'on': !st.finding}),
         ),
         'clip': tile(
           'clip',
           Symbols.content_paste_go_rounded,
-          hint: 'Envía al teléfono lo que copiaste aquí',
+          hint: tx('Envía al teléfono lo que copiaste aquí'),
           onTap: () => hub.sendClipboard(id),
         ),
       };
@@ -468,7 +468,7 @@ class _ControlsState extends State<_Controls> {
                                 horizontal: Gap.xs,
                               ),
                               child: IconButton.filledTonal(
-                                tooltip: tip,
+                                tooltip: tx(tip),
                                 onPressed: () => hub.mediaCmd(id, action),
                                 icon: Icon(icon),
                               ),
@@ -554,7 +554,7 @@ class _GridState extends State<_Grid> {
                             child: Semantics(
                               button: true,
                               label:
-                                  'Arrastra para cambiar el tamaño de ${c.label}; toca para terminar',
+                                  tr('Arrastra para cambiar el tamaño de {}; toca para terminar', [c.label]),
                               child: GestureDetector(
                                 onTap: () => setState(() => _editing = null),
                                 onHorizontalDragStart: (_) {
@@ -624,7 +624,7 @@ class _Tile extends StatelessWidget {
       ?state,
       ?hint,
       'Mantén presionado para cambiar su tamaño',
-    ].join(' · ');
+    ].map(tx).join(' · ');
     return Tooltip(
       message: tip,
       child: Semantics(
@@ -720,7 +720,7 @@ class _VolumeState extends State<_Volume> {
   Widget build(BuildContext context) => Row(
     children: [
       Tooltip(
-        message: widget.label,
+        message: tx(widget.label),
         child: Icon(widget.icon, size: 20, semanticLabel: widget.label),
       ),
       Expanded(

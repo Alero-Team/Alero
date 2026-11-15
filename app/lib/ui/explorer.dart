@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../fs_client.dart';
@@ -9,9 +9,15 @@ import 'shell.dart' show confirm;
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
-String _date(DateTime d) =>
-    '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+String _date(DateTime d) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  // Day first in Spanish; year first in English, which every reader can tell apart.
+  return L10n.instance.en
+      ? '${d.year}-${two(d.month)}-${two(d.day)}'
+      : '${two(d.day)}/${two(d.month)}/${d.year}';
+}
 
 String _ext(String name) =>
     name.contains('.') ? name.split('.').last.toUpperCase() : '';
@@ -27,9 +33,9 @@ Future<void> _delete(
   final ok = await confirm(
     context,
     one == null
-        ? '¿Eliminar ${items.length} elementos?'
-        : '¿Eliminar «${one.name}»?',
-    '${one?.dir == true ? 'La carpeta y todo su contenido se borrarán' : 'Se borrará'} del teléfono. No se puede deshacer.',
+        ? tr('¿Eliminar {} elementos?', [items.length])
+        : tr('¿Eliminar «{}»?', [one.name]),
+    tr('{} del teléfono. No se puede deshacer.', [one?.dir == true ? 'La carpeta y todo su contenido se borrarán' : 'Se borrará']),
     'Eliminar',
   );
   if (ok) fs.delete(items);
@@ -49,7 +55,7 @@ Future<void> _rename(BuildContext context, FsClient fs, FsEntry e) async {
       content: TextField(
         controller: c,
         autofocus: true,
-        decoration: const InputDecoration(labelText: 'Nombre nuevo'),
+        decoration: InputDecoration(labelText: tx('Nombre nuevo')),
         onSubmitted: (v) => Navigator.pop(d, v),
       ),
       actions: [
@@ -217,7 +223,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                       child: Text(
                         phone == null
                             ? 'Explorador'
-                            : 'Archivos de ${phone.name}',
+                            : tr('Archivos de {}', [phone.name]),
                         style: t.headlineMedium,
                       ),
                     ),
@@ -272,19 +278,19 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             onPressed: () {
               fs.download(chosen);
               hub.messages.add(
-                'Pidiendo ${chosen.length == 1 ? chosen.first.name : '${chosen.length} archivos'} al teléfono…',
+                tr('Pidiendo {} al teléfono…', [chosen.length == 1 ? chosen.first.name : tr('{} archivos', [chosen.length])]),
               );
               fs.clearSelection();
             },
             icon: const Icon(Symbols.download_rounded, size: 18),
-            label: Text('Descargar (${chosen.length})'),
+            label: Text(tr('Descargar ({})', [chosen.length])),
           ),
         ),
       if (chosen.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(right: Gap.s),
           child: IconButton.filledTonal(
-            tooltip: 'Eliminar (${chosen.length})',
+            tooltip: tr('Eliminar ({})', [chosen.length]),
             onPressed: () => _delete(context, fs, chosen),
             icon: const Icon(Symbols.delete_rounded),
           ),
@@ -302,7 +308,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
       ),
       const SizedBox(width: Gap.xs),
       PopupMenuButton<String>(
-        tooltip: 'Ordenar',
+        tooltip: tx('Ordenar'),
         icon: const Icon(Symbols.sort_rounded),
         initialValue: fs.sort,
         onSelected: fs.setSort,
@@ -313,14 +319,14 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
         ],
       ),
       IconButton(
-        tooltip: fs.grid ? 'Ver como lista' : 'Ver como cuadrícula',
+        tooltip: tx(fs.grid ? 'Ver como lista' : 'Ver como cuadrícula'),
         onPressed: fs.toggleView,
         icon: Icon(
           fs.grid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
         ),
       ),
       IconButton(
-        tooltip: 'Actualizar',
+        tooltip: tx('Actualizar'),
         onPressed: fs.refresh,
         icon: const Icon(Symbols.refresh_rounded),
       ),
@@ -417,7 +423,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             children: [
               if (fs.crumbs.isNotEmpty)
                 IconButton(
-                  tooltip: 'Subir un nivel',
+                  tooltip: tx('Subir un nivel'),
                   onPressed: fs.up,
                   icon: const Icon(Symbols.arrow_upward_rounded, size: 20),
                 ),
@@ -491,7 +497,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               vertical: Gap.s,
             ),
             child: Text(
-              '${fs.total} elementos${fs.selected.isEmpty ? '' : ' · ${fs.selected.length} seleccionados'}',
+              tr('{} elementos{}', [fs.total, fs.selected.isEmpty ? '' : tr(' · {} seleccionados', [fs.selected.length])]),
               style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
             ),
           ),
@@ -518,10 +524,10 @@ class _RootItem extends StatelessWidget {
     };
     return Tooltip(
       message: r.ok
-          ? r.name
+          ? tx(r.name)
           : r.id == 'storage'
-          ? 'En el teléfono: Ajustes › Archivos para el ordenador › Todas las carpetas › Permitir'
-          : 'Falta el permiso de Android para ver ${r.name.toLowerCase()}',
+          ? tx('En el teléfono: Ajustes › Archivos para el ordenador › Todas las carpetas › Permitir')
+          : tr('Falta el permiso de Android para ver {}', [r.name.toLowerCase()]),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 2),
         child: Material(
@@ -597,7 +603,7 @@ class _Preview extends StatelessWidget {
         fit: BoxFit.cover,
         gaplessPlayback: true,
         cacheWidth: (size * 2).round(),
-        semanticLabel: 'Miniatura de ${e.name}',
+        semanticLabel: tr('Miniatura de {}', [e.name]),
       );
     }
     final s = Theme.of(context).colorScheme;
@@ -784,7 +790,7 @@ class _Row extends StatelessWidget {
               ),
               Builder(
                 builder: (b) => IconButton(
-                  tooltip: 'Más opciones',
+                  tooltip: tx('Más opciones'),
                   iconSize: 20,
                   onPressed: () {
                     final box = b.findRenderObject()! as RenderBox;
@@ -875,11 +881,11 @@ class _PhotosScreenState extends State<PhotosScreen> {
                     fs.clearSelection();
                   },
                   icon: const Icon(Symbols.download_rounded, size: 18),
-                  label: Text('Descargar (${chosen.length})'),
+                  label: Text(tr('Descargar ({})', [chosen.length])),
                 ),
                 const SizedBox(width: Gap.s),
                 IconButton.filledTonal(
-                  tooltip: 'Eliminar (${chosen.length})',
+                  tooltip: tr('Eliminar ({})', [chosen.length]),
                   onPressed: () => _delete(context, fs, chosen),
                   icon: const Icon(Symbols.delete_rounded),
                 ),
@@ -905,7 +911,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                 },
               ),
               IconButton(
-                tooltip: 'Actualizar',
+                tooltip: tx('Actualizar'),
                 onPressed: fs.refresh,
                 icon: const Icon(Symbols.refresh_rounded),
               ),
@@ -961,7 +967,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
             Padding(
               padding: const EdgeInsets.only(top: Gap.s),
               child: Text(
-                '${fs.total} elementos${fs.selected.isEmpty ? '' : ' · ${fs.selected.length} seleccionados'}',
+                tr('{} elementos{}', [fs.total, fs.selected.isEmpty ? '' : tr(' · {} seleccionados', [fs.selected.length])]),
                 style: Theme.of(context).textTheme.bodySmall
                     ?.copyWith(color: s.onSurfaceVariant),
               ),

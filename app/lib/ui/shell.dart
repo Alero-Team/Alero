@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:animations/animations.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -30,6 +30,7 @@ import 'settings.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// Four top-level places. Clipboard, notifications, media and screen are things you do with a device, so they
 /// live on Home as panels and actions, not as destinations (fewer places, each with one purpose).
@@ -121,6 +122,26 @@ class _ShellState extends State<Shell>
   bool _shareOpen = false, _shotOpen = false, _receiveOpen = false;
   final _received = <String>{};
 
+  /// Phone layout: true while the page is scrolled away from its top; the bottom bar shrinks meanwhile.
+  final _compactBar = ValueNotifier<bool>(false);
+
+  bool _onScroll(ScrollNotification n) {
+    final m = n.metrics;
+    if (m.axis != Axis.vertical || n is! ScrollUpdateNotification && n is! ScrollEndNotification) {
+      return false;
+    }
+    // A screen that fits without scrolling leaves the bar alone. Between 4 and 24 px it keeps its state, so a
+    // finger resting near the top does not make it flicker.
+    if (m.maxScrollExtent <= m.minScrollExtent) return false;
+    final off = m.pixels - m.minScrollExtent;
+    if (off > 24) {
+      _compactBar.value = true;
+    } else if (off < 4) {
+      _compactBar.value = false;
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -147,6 +168,7 @@ class _ShellState extends State<Shell>
     if (Native.pc) windowManager.removeListener(this);
     _msgs.cancel();
     hub.removeListener(_questions);
+    _compactBar.dispose();
     super.dispose();
   }
 
@@ -173,7 +195,10 @@ class _ShellState extends State<Shell>
     hub.remote.mediaForeground(true);
   }
 
-  void _go(Section s) => setState(() => _section = s);
+  void _go(Section s) {
+    _compactBar.value = false; // a new screen starts at its top
+    setState(() => _section = s);
+  }
 
   /// Pairing code, incoming-file and share questions appear once each, and close by themselves when the
   /// engine no longer waits for an answer (the other side answered, it timed out, or it was answered by code).
@@ -408,7 +433,7 @@ class _ShellState extends State<Shell>
                         ? IconButton(
                             icon: const Icon(Symbols.smartphone_rounded),
                             onPressed: () => _go(Section.devices),
-                            tooltip: 'Dispositivos',
+                            tooltip: tx('Dispositivos'),
                           )
                         : _PhoneChip(
                             online,
@@ -438,7 +463,10 @@ class _ShellState extends State<Shell>
 
   Widget _narrow(Widget page) => Scaffold(
     extendBody: true,
-    body: page,
+    body: NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: page,
+    ),
     bottomNavigationBar: SafeArea(
       minimum: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.m),
       child: AleroNavBar(
@@ -448,6 +476,7 @@ class _ShellState extends State<Shell>
         ],
         selected: _dests.indexWhere((d) => d.section == _section),
         onSelect: (i) => _go(_dests[i].section),
+        compact: _compactBar,
       ),
     ),
   );
@@ -589,7 +618,7 @@ class _PhoneChip extends StatelessWidget {
                           ? 'Ningún dispositivo'
                           : (online.length == 1
                                 ? 'Conectado'
-                                : '${online.length} conectados'),
+                                : tr('{} conectados', [online.length])),
                       style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
                     ),
                   ],
@@ -621,8 +650,8 @@ class _ShareSheet extends StatelessWidget {
         : s.files.isNotEmpty
         ? (s.files.length == 1
               ? s.files.first.name ?? 'Un archivo'
-              : '${s.files.length} archivos')
-        : 'Texto: «${s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text}»';
+              : tr('{} archivos', [s.files.length]))
+        : tr('Texto: «{}»', [s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text]);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(Gap.m),
@@ -685,12 +714,12 @@ class _PairDialog extends StatelessWidget {
         : p.code;
     return AlertDialog(
       icon: const Icon(Symbols.link_rounded),
-      title: Text('Emparejar con ${p.name}'),
+      title: Text(tr('Emparejar con {}', [p.name])),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Comprueba que ${p.name} muestra este mismo código.',
+            tr('Comprueba que {} muestra este mismo código.', [p.name]),
             style: t.bodyMedium,
             textAlign: TextAlign.center,
           ),
@@ -703,7 +732,7 @@ class _PairDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(Radii.tile),
             ),
             child: Semantics(
-              label: 'Código ${p.code.split('').join(' ')}',
+              label: tr('Código {}', [p.code.split('').join(' ')]),
               child: ExcludeSemantics(
                 child: Text(
                   code,
@@ -754,7 +783,7 @@ class _OfferDialog extends StatelessWidget {
               children: [
                 Text(o.name, style: t.titleSmall),
                 Text(
-                  '${size(o.size.toInt())} · de ${o.peerName}',
+                  tr('{} · de {}', [size(o.size.toInt()), o.peerName]),
                   style: t.bodySmall?.copyWith(color: context.pal.muted),
                 ),
               ],
@@ -972,7 +1001,7 @@ class _DropState extends State<_Drop> {
                             Text(
                               online.isEmpty
                                   ? 'Conecta un dispositivo para enviar'
-                                  : 'Suelta para enviar a ${online.length == 1 ? online.first.name : '…'}',
+                                  : tr('Suelta para enviar a {}', [online.length == 1 ? online.first.name : '…']),
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ],

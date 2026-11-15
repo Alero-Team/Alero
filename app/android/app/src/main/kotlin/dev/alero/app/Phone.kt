@@ -105,8 +105,8 @@ object Phone {
     private fun askDndAccess() {
         val i = PendingIntent.getActivity(ctx, 7, Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(ctx, "alerts").setSmallIcon(R.drawable.ic_stat_alero)
-            .setContentTitle("No molestar desde el ordenador")
-            .setContentText("Toca y permite a Alero el acceso a «No molestar».")
+            .setContentTitle(Tr.t("No molestar desde el ordenador", "Do Not Disturb from the computer"))
+            .setContentText(Tr.t("Toca y permite a Alero el acceso a «No molestar».", "Tap and allow Alero access to “Do Not Disturb”."))
             .setContentIntent(i).setAutoCancel(true).build()
         try { nm().notify(8, n) } catch (_: SecurityException) {}
     }
@@ -155,9 +155,9 @@ object Phone {
         ctx.getSystemService(Vibrator::class.java)?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 800, 400), 0))
         val stop = PendingIntent.getBroadcast(ctx, 9, Intent(ctx, StopFind::class.java), PendingIntent.FLAG_IMMUTABLE)
         val n = Notification.Builder(ctx, "alerts").setSmallIcon(R.drawable.ic_stat_alero)
-            .setContentTitle("¡Aquí estoy!").setContentText("Tu ordenador está buscando este teléfono.")
+            .setContentTitle(Tr.t("¡Aquí estoy!", "I'm here!")).setContentText(Tr.t("Tu ordenador está buscando este teléfono.", "Your computer is looking for this phone."))
             .setOngoing(true).setContentIntent(stop).setDeleteIntent(stop)
-            .addAction(Notification.Action.Builder(null, "Detener", stop).build()).build()
+            .addAction(Notification.Action.Builder(null, Tr.t("Detener", "Stop"), stop).build()).build()
         try { nm().notify(FIND_NOTICE, n) } catch (_: SecurityException) {}
         main.postDelayed(autoStop, 60_000)
         tell()

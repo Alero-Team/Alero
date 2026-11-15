@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -13,6 +13,7 @@ import 'theme.dart';
 import 'vault.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
 String _mediaStatus(Hub hub) {
@@ -25,7 +26,7 @@ String _mediaStatus(Hub hub) {
   final partial = hub.filesLimited
       ? 'Solo compartes las fotos que elegiste. '
       : '';
-  return '$partial${missing.isEmpty ? '' : 'Sin acceso a: ${missing.join(', ')}. '}Sin el permiso esas secciones salen vacías.';
+  return tr('{}{}Sin el permiso esas secciones salen vacías.', [partial, missing.isEmpty ? '' : tr('Sin acceso a: {}. ', [missing.map(tx).join(', ')])]);
 }
 
 final _appearanceKey = GlobalKey();
@@ -55,9 +56,9 @@ class SettingsScreen extends StatelessWidget {
           controller: c,
           autofocus: true,
           maxLength: 64,
-          decoration: const InputDecoration(
-            labelText: 'Nombre',
-            helperText: 'Así te verán los otros dispositivos.',
+          decoration: InputDecoration(
+            labelText: tx('Nombre'),
+            helperText: tx('Así te verán los otros dispositivos.'),
           ),
           onSubmitted: (v) => Navigator.pop(ctx, v),
         ),
@@ -170,7 +171,7 @@ class SettingsScreen extends StatelessWidget {
             trailing: AleroSwitch(
               value: hub.autoAccept,
               onChanged: hub.setAutoAccept,
-              label: 'Aceptar archivos sin preguntar',
+              label: tx('Aceptar archivos sin preguntar'),
             ),
             onTap: () => hub.setAutoAccept(!hub.autoAccept),
           ),
@@ -213,7 +214,7 @@ class SettingsScreen extends StatelessWidget {
                     subtitle: 'Pide el desbloqueo del sistema al abrir o volver a la app. Las conexiones emparejadas continúan en segundo plano.',
                     trailing: AleroSwitch(
                       value: enabled,
-                      label: 'Bloquear Alero',
+                      label: tx('Bloquear Alero'),
                       onChanged: (on) async {
                         try {
                           await Native.setLock(on);
@@ -246,7 +247,7 @@ class SettingsScreen extends StatelessWidget {
                   trailing: AleroSwitch(
                     value: hub.remoteAllow,
                     onChanged: Native.pc ? hub.setRemoteAllow : (_) {},
-                    label: 'Control remoto',
+                    label: tx('Control remoto'),
                   ),
                   onTap: Native.pc
                       ? () => hub.setRemoteAllow(!hub.remoteAllow)
@@ -267,7 +268,7 @@ class SettingsScreen extends StatelessWidget {
                       title: folder,
                       subtitle: 'Carpeta compartida con teléfonos emparejados',
                       trailing: IconButton(
-                        tooltip: 'Dejar de compartir',
+                        tooltip: tx('Dejar de compartir'),
                         icon: const Icon(Symbols.close_rounded),
                         onPressed: () => hub.removePcFolder(folder),
                       ),
@@ -279,7 +280,7 @@ class SettingsScreen extends StatelessWidget {
                       trailing: AleroSwitch(
                         value: hub.pcFilesWrite,
                         onChanged: hub.setPcFileEdits,
-                        label: 'Editar archivos compartidos',
+                        label: tx('Editar archivos compartidos'),
                       ),
                       onTap: () => hub.setPcFileEdits(!hub.pcFilesWrite),
                     ),
@@ -300,7 +301,7 @@ class SettingsScreen extends StatelessWidget {
                   trailing: AleroSwitch(
                     value: hub.filesAllowed,
                     onChanged: hub.setFilesAllowed,
-                    label: 'Explorar archivos desde el ordenador',
+                    label: tx('Explorar archivos desde el ordenador'),
                   ),
                   onTap: () => hub.setFilesAllowed(!hub.filesAllowed),
                 ),
@@ -324,7 +325,7 @@ class SettingsScreen extends StatelessWidget {
                     title: name,
                     subtitle: 'Carpeta añadida',
                     trailing: IconButton(
-                      tooltip: 'Quitar $name',
+                      tooltip: tr('Quitar {}', [name]),
                       icon: Icon(
                         Symbols.close_rounded,
                         size: 20,
@@ -368,7 +369,7 @@ class SettingsScreen extends StatelessWidget {
               trailing: AleroSwitch(
                 value: hub.smsAllowed,
                 onChanged: (enabled) => _setSmsAllowed(context, enabled),
-                label: 'Mensajes en el ordenador',
+                label: tx('Mensajes en el ordenador'),
               ),
               onTap: () => _setSmsAllowed(
                 context,
@@ -390,7 +391,7 @@ class SettingsScreen extends StatelessWidget {
               trailing: AleroSwitch(
                 value: hub.callsAllowed,
                 onChanged: hub.setCallsAllowed,
-                label: 'Llamadas en el ordenador',
+                label: tx('Llamadas en el ordenador'),
               ),
               onTap: () => hub.setCallsAllowed(
                 !hub.callsAllowed || !hub.callsPermission,
@@ -432,6 +433,24 @@ class SettingsScreen extends StatelessWidget {
                 onSelectionChanged: (v) => hub.setTheme(v.first),
               ),
             ),
+            // Named in both languages on purpose: it has to be findable whichever one the app is in now.
+            Padding(
+              padding: const EdgeInsets.only(top: Gap.xs, bottom: Gap.xs),
+              child: Text('Idioma / Language', style: t.titleSmall),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: Gap.s),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'system', label: Text('Sistema')),
+                  ButtonSegment(value: 'es', label: Text('Español')),
+                  ButtonSegment(value: 'en', label: Text('English')),
+                ],
+                selected: {L10n.instance.pref},
+                showSelectedIcon: false,
+                onSelectionChanged: (v) => hub.setLanguage(v.first),
+              ),
+            ),
             SettingTile(
               title: 'Modo AMOLED',
               subtitle: 'Negro puro como fondo del tema oscuro. Ahorra batería en pantallas OLED. Solo se nota cuando el tema oscuro está en uso.',
@@ -440,7 +459,7 @@ class SettingsScreen extends StatelessWidget {
                 builder: (_, on, _) => AleroSwitch(
                   value: on,
                   onChanged: hub.setAmoled,
-                  label: 'Modo AMOLED',
+                  label: tx('Modo AMOLED'),
                 ),
               ),
               onTap: () => hub.setAmoled(!hub.amoled.value),
@@ -517,7 +536,7 @@ class SettingsScreen extends StatelessWidget {
           const AleroLogo(size: 28),
           const SizedBox(height: Gap.m),
           Text(
-            'Alero $aleroRelease · Conexión directa entre tus dispositivos.',
+            tr('Alero {} · Conexión directa entre tus dispositivos.', [aleroRelease]),
             style: t.bodyMedium,
           ),
           const SizedBox(height: Gap.s),
@@ -667,7 +686,7 @@ class _Perm extends StatelessWidget {
               Symbols.check_circle_rounded,
               color: s.primary,
               fill: 1,
-              semanticLabel: 'Activado',
+              semanticLabel: tx('Activado'),
             )
           : TextButton(
               onPressed: onFix,

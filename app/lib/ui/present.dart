@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -8,6 +8,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'remote_ui.dart';
 import 'theme.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// Alero Present uses the existing, authenticated PC input channel.
 /// No ADB, browser automation, or privileged device access is required.
@@ -161,7 +162,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
           child: ListView(
             padding: const EdgeInsets.all(Gap.xl),
             children: [
-              Text('Presentación en ${widget.name}', style: t.titleLarge),
+              Text(tr('Presentación en {}', [widget.name]), style: t.titleLarge),
               const SizedBox(height: Gap.s),
               Text(
                 'Utiliza el teclado remoto de Alero a través de la red local. '

@@ -16,6 +16,7 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
+mod lang;
 mod pc_files;
 mod remote;
 mod sys;
@@ -113,7 +114,7 @@ impl Ui {
                     "pb.x.clip" if !s("text").is_empty() => {
                         platform::set_clipboard(&s("text"));
                         let from = engine.peers().into_iter().find(|p| p.id == peer_id).map(|p| p.name).unwrap_or_default();
-                        platform::toast("Portapapeles copiado", &format!("Recibido de {from}"));
+                        platform::toast(lang::t("Portapapeles copiado", "Clipboard copied"), &format!("{} {from}", lang::t("Recibido de", "Received from")));
                     }
                     _ => {}
                 }
@@ -124,9 +125,9 @@ impl Ui {
                 let engine = engine.clone();
                 let mb = size as f64 / (1024.0 * 1024.0);
                 platform::toast_buttons(
-                    &format!("{peer_name} quiere enviarte un archivo"),
+                    &if lang::spanish() { format!("{peer_name} quiere enviarte un archivo") } else { format!("{peer_name} wants to send you a file") },
                     &format!("{name} · {mb:.1} MB"),
-                    &[platform::Button::Call("Rechazar".into(), format!("decline:{id}")), platform::Button::Call("Aceptar".into(), format!("accept:{id}"))],
+                    &[platform::Button::Call(lang::t("Rechazar", "Decline").into(), format!("decline:{id}")), platform::Button::Call(lang::t("Aceptar", "Accept").into(), format!("accept:{id}"))],
                     // The engine ignores a second answer, so repeated clicks cannot start two downloads.
                     move |arg| match arg.split_once(':') {
                         Some(("accept", id)) => engine.respond_transfer(id, true),
@@ -181,6 +182,7 @@ fn main() {
         }
     };
     let data = launch.config.data_dir.clone();
+    lang::init(&data);
     let fail = |msg: String| -> ! {
         // The window reads this to explain why it could not connect.
         let _ = std::fs::create_dir_all(&data);
@@ -220,8 +222,8 @@ fn main() {
         let _ = proxy.send_event(UserEvent::Tray(e));
     }));
 
-    let open = MenuItem::new("Abrir Alero", true, None);
-    let quit = MenuItem::new("Salir", true, None);
+    let open = MenuItem::new(lang::t("Abrir Alero", "Open Alero"), true, None);
+    let quit = MenuItem::new(lang::t("Salir", "Quit"), true, None);
     let menu = Menu::new();
     menu.append_items(&[&open, &quit]).expect("tray menu");
     let (open_id, quit_id) = (open.id().clone(), quit.id().clone());

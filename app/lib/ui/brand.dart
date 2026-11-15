@@ -1,10 +1,11 @@
 import 'dart:io' show Platform;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
 import 'expressive.dart';
 import 'theme.dart';
+import '../l10n.dart';
 
 /// Approved identity: congruent paths rotated 180 degrees around (59, 48).
 /// Source: branding/alero_symbol.svg; Android and desktop icons use the same geometry.

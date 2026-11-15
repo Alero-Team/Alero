@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -6,6 +6,7 @@ import 'notifications.dart' show ago;
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 Future<void> openClipboard(BuildContext context, Hub hub, String peerId) =>
     showModalBottomSheet<void>(
@@ -69,7 +70,7 @@ class _Sheet extends StatelessWidget {
                     subtitle:
                         '${c.incoming ? 'De' : 'A'} ${c.peerName} · ${ago(c.time)}',
                     trailing: IconButton(
-                      tooltip: 'Copiar',
+                      tooltip: tx('Copiar'),
                       icon: const Icon(Symbols.content_copy_rounded, size: 18),
                       onPressed: () => hub.copy(c.text),
                     ),

@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -14,6 +14,7 @@ import 'remote_ui.dart';
 import 'theme.dart';
 import 'widgets.dart' show FitLabel;
 import 'icon.dart';
+import '../l10n.dart';
 
 /// The four things you do all day with the computer, as small equal buttons in one row of the device card.
 class QuickActions extends StatelessWidget {
@@ -65,7 +66,7 @@ class QuickActions extends StatelessWidget {
 
   void _shot() {
     hub.remote.shot(peer.id);
-    hub.messages.add('Pidiendo la captura a ${peer.name}…');
+    hub.messages.add(tr('Pidiendo la captura a {}…', [peer.name]));
   }
 }
 
@@ -89,11 +90,11 @@ class _Small extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final fg = primary ? s.onPrimary : s.onSurface;
     return Tooltip(
-      message: hint ?? label,
+      message: tx(hint ?? label),
       child: Semantics(
         button: true,
         enabled: onTap != null,
-        label: hint == null ? label : '$label. $hint',
+        label: hint == null ? tx(label) : '${tx(label)}. ${tx(hint!)}',
         child: Material(
           color: primary ? s.primary : s.surfaceContainer,
           shape: RoundedRectangleBorder(
@@ -254,7 +255,7 @@ class _RemotePreviewState extends State<_RemotePreview>
     return Semantics(
       button: true,
       enabled: on,
-      label: 'Control remoto de ${widget.name}: ratón y teclado',
+      label: tr('Control remoto de {}: ratón y teclado', [widget.name]),
       child: Opacity(
         opacity: on ? 1 : .55,
         child: ClipRRect(
@@ -333,7 +334,7 @@ class _RemotePreviewState extends State<_RemotePreview>
                               ),
                             ),
                             Text(
-                              'Ratón y teclado de ${widget.name}',
+                              tr('Ratón y teclado de {}', [widget.name]),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: t.bodySmall?.copyWith(

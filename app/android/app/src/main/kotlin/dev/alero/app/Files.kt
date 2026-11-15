@@ -173,7 +173,7 @@ object Files {
         val now = System.currentTimeMillis()
         if (now - asked < 300_000) return
         asked = now
-        Notifier.alert("Archivos del teléfono", "Un ordenador quiere ver tus archivos. Toca para decidirlo en Ajustes.")
+        Notifier.alert(Tr.t("Archivos del teléfono", "Phone files"), Tr.t("Un ordenador quiere ver tus archivos. Toca para decidirlo en Ajustes.", "A computer wants to see your files. Tap to decide in Settings."))
     }
 
     private fun roots(): JSONObject {

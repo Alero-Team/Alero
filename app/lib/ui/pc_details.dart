@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' hide Icon;
+import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -9,6 +9,7 @@ import 'media.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import '../l10n.dart';
 
 /// What a connected computer reports and what the phone may do with it: the advanced side of "controlling the
 /// PC" (the everyday controls are on Home). Only facts the computer actually sent are shown; a laptop's battery
@@ -59,7 +60,7 @@ class PcDetails extends StatelessWidget {
               color: s.onSurfaceVariant,
             ),
             'Conexión',
-            online ? 'Conectado · ${hub.routeOf(peer)}' : 'Sin conexión',
+            online ? tr('Conectado · {}', [hub.routeOf(peer)]) : 'Sin conexión',
           ),
           if (info != null) ...[
             fact(
@@ -123,7 +124,7 @@ class PcDetails extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: () {
                     hub.remote.shot(peer.id);
-                    hub.messages.add('Pidiendo la captura a ${peer.name}…');
+                    hub.messages.add(tr('Pidiendo la captura a {}…', [peer.name]));
                   },
                   icon: const Icon(
                     Symbols.screenshot_monitor_rounded,

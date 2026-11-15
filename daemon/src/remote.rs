@@ -143,7 +143,7 @@ impl Remote {
     }
 
     fn peer_name(engine: &Engine, id: &str) -> String {
-        engine.peers().into_iter().find(|p| p.id == id).map(|p| p.name).filter(|n| !n.is_empty()).unwrap_or_else(|| "Un dispositivo".into())
+        engine.peers().into_iter().find(|p| p.id == id).map(|p| p.name).filter(|n| !n.is_empty()).unwrap_or_else(|| crate::lang::t("Un dispositivo", "A device").into())
     }
 
     /// Tells the user, at most once every ten minutes per phone, that it is driving this computer.
@@ -154,7 +154,7 @@ impl Remote {
         }
         n.insert(peer.to_string(), Instant::now());
         #[cfg(any(windows, target_os = "linux"))]
-        crate::platform::toast("Control remoto", &format!("{} {what}", Self::peer_name(engine, peer)));
+        crate::platform::toast(crate::lang::t("Control remoto", "Remote control"), &format!("{} {what}", Self::peer_name(engine, peer)));
         #[cfg(not(any(windows, target_os = "linux")))]
         let _ = (engine, what);
     }
@@ -249,7 +249,7 @@ impl Remote {
         let s = |k: &str| b[k].as_str().unwrap_or("");
         match kind {
             "pb.x.remote.move" => {
-                self.notice(engine, peer, "controla este equipo");
+                self.notice(engine, peer, crate::lang::t("controla este equipo", "is controlling this computer"));
                 sys::move_by(f("dx").round().clamp(-3000.0, 3000.0) as i32, f("dy").round().clamp(-3000.0, 3000.0) as i32)
             }
             "pb.x.remote.keepalive" => {
@@ -268,7 +268,7 @@ impl Remote {
                 }
             },
             "pb.x.remote.click" => {
-                self.notice(engine, peer, "controla este equipo");
+                self.notice(engine, peer, crate::lang::t("controla este equipo", "is controlling this computer"));
                 for _ in 0..b["count"].as_u64().unwrap_or(1).clamp(1, 2) {
                     sys::button(s("button"), true);
                     sys::button(s("button"), false);
@@ -276,12 +276,12 @@ impl Remote {
             }
             "pb.x.remote.scroll" => sys::scroll(f("dy").clamp(-50.0, 50.0), f("dx").clamp(-50.0, 50.0)),
             "pb.x.remote.key" => {
-                self.notice(engine, peer, "usa el teclado de este equipo");
+                self.notice(engine, peer, crate::lang::t("usa el teclado de este equipo", "is using this computer's keyboard"));
                 let mods: Vec<String> = b["mods"].as_array().map(|a| a.iter().filter_map(|m| m.as_str().map(String::from)).collect()).unwrap_or_default();
                 sys::key(s("key"), &mods);
             }
             "pb.x.remote.text" => {
-                self.notice(engine, peer, "usa el teclado de este equipo");
+                self.notice(engine, peer, crate::lang::t("usa el teclado de este equipo", "is using this computer's keyboard"));
                 sys::text(s("text"));
             }
             "pb.x.remote.media" => {
@@ -345,7 +345,10 @@ impl Remote {
             gen,
         });
         #[cfg(any(windows, target_os = "linux"))]
-        crate::platform::toast("Pantalla compartida", &format!("{} está viendo la pantalla de este equipo", Self::peer_name(engine, peer)));
+        crate::platform::toast(
+            crate::lang::t("Pantalla compartida", "Screen shared"),
+            &format!("{} {}", Self::peer_name(engine, peer), crate::lang::t("está viendo la pantalla de este equipo", "is viewing this computer's screen")),
+        );
         let (me, engine) = (self.clone(), engine.clone());
         thread::spawn(move || me.screen_loop(&engine, gen));
     }
@@ -445,7 +448,7 @@ impl Remote {
     /// A full-resolution screenshot, sent as an ordinary file transfer (so it is resumable, listed in the
     /// history and saved by the phone like any other received file).
     fn shot(&self, engine: &Engine, peer: &str) {
-        self.notice(engine, peer, "pidió una captura de pantalla");
+        self.notice(engine, peer, crate::lang::t("pidió una captura de pantalla", "asked for a screenshot"));
         let Some((w, h, pixels)) = sys::capture(u32::MAX) else {
             let _ = engine.send_message(peer, "pb.x.remote.denied", json!({"reason": "unsupported"}));
             return;

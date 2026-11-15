@@ -43,6 +43,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Tr.load(this)
         security.secureWindow()
         Notifier.init(this)
         Features.start(this)
@@ -65,12 +66,12 @@ class MainActivity : FlutterActivity() {
         val open = pendingInstall ?: return
         pendingInstall = null
         if (!packageManager.canRequestPackageInstalls()) {
-            Toast.makeText(this, "No se concedió permiso para instalar apps desde Alero.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, Tr.t("No se concedió permiso para instalar apps desde Alero.", "Permission to install apps from Alero was not granted."), Toast.LENGTH_LONG).show()
             return
         }
         try { startActivity(open) }
-        catch (_: ActivityNotFoundException) { Toast.makeText(this, "No hay un instalador de paquetes disponible.", Toast.LENGTH_LONG).show() }
-        catch (_: Exception) { Toast.makeText(this, "El archivo ya no está disponible para el instalador.", Toast.LENGTH_LONG).show() }
+        catch (_: ActivityNotFoundException) { Toast.makeText(this, Tr.t("No hay un instalador de paquetes disponible.", "No package installer is available."), Toast.LENGTH_LONG).show() }
+        catch (_: Exception) { Toast.makeText(this, Tr.t("El archivo ya no está disponible para el instalador.", "The file is no longer available to the installer."), Toast.LENGTH_LONG).show() }
     }
 
     override fun onTrimMemory(level: Int) {
@@ -104,14 +105,14 @@ class MainActivity : FlutterActivity() {
                 "vaultSeal", "vaultOpen" -> {
                     val bytes = call.arguments as? ByteArray
                     if (bytes == null) {
-                        result.error("invalid_vault_data", "Archivo inválido", null)
+                        result.error("invalid_vault_data", Tr.t("Archivo inválido", "Invalid file"), null)
                     } else {
                         Thread {
                             try {
                                 val encrypted = if (call.method == "vaultSeal") VaultCrypto.seal(bytes) else VaultCrypto.open(bytes)
                                 runOnUiThread { result.success(encrypted) }
                             } catch (_: Exception) {
-                                runOnUiThread { result.error("vault_crypto", "No se pudo abrir o guardar el archivo cifrado.", null) }
+                                runOnUiThread { result.error("vault_crypto", Tr.t("No se pudo abrir o guardar el archivo cifrado.", "Couldn't open or save the encrypted file."), null) }
                             }
                         }.start()
                     }
@@ -120,7 +121,7 @@ class MainActivity : FlutterActivity() {
                     val descriptor = call.arguments as? Int
                     val uri = if (descriptor != null) sourceUris[descriptor] else null
                     if (uri == null) {
-                        result.error("missing_vault_file", "Selecciona un archivo primero.", null)
+                        result.error("missing_vault_file", Tr.t("Selecciona un archivo primero.", "Select a file first."), null)
                     } else {
                         Thread {
                             try {
@@ -138,7 +139,7 @@ class MainActivity : FlutterActivity() {
                                 }
                                 runOnUiThread { result.success(data.toByteArray()) }
                             } catch (_: Exception) {
-                                runOnUiThread { result.error("vault_file", "El archivo no se pudo leer (máximo 8 MB).", null) }
+                                runOnUiThread { result.error("vault_file", Tr.t("El archivo no se pudo leer (máximo 8 MB).", "The file couldn't be read (8 MB maximum)."), null) }
                             }
                         }.start()
                     }
@@ -179,24 +180,28 @@ class MainActivity : FlutterActivity() {
                                 try {
                                     if (intent.type == FileOpening.APK && !packageManager.canRequestPackageInstalls()) {
                                         pendingInstall = intent
-                                        Toast.makeText(this, "Permite instalar apps desde Alero. Al volver se abrirá el instalador.", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(this, Tr.t("Permite instalar apps desde Alero. Al volver se abrirá el instalador.", "Allow installing apps from Alero. The installer will open when you come back."), Toast.LENGTH_LONG).show()
                                         startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
                                     } else startActivity(intent)
                                     result.success(null)
                                 } catch (_: ActivityNotFoundException) {
                                     pendingInstall = null
-                                    result.error("no_handler", if (intent.type == FileOpening.APK) "No hay un instalador de paquetes disponible." else "No hay una app compatible para este tipo de archivo.", null)
+                                    result.error("no_handler", if (intent.type == FileOpening.APK) Tr.t("No hay un instalador de paquetes disponible.", "No package installer is available.") else Tr.t("No hay una app compatible para este tipo de archivo.", "No compatible app for this type of file."), null)
                                 } catch (_: SecurityException) {
                                     pendingInstall = null
-                                    result.error("open_permission", "Android no permite abrir este archivo. Revisa los permisos de Alero.", null)
+                                    result.error("open_permission", Tr.t("Android no permite abrir este archivo. Revisa los permisos de Alero.", "Android doesn't allow opening this file. Check Alero's permissions."), null)
                                 } catch (_: Exception) {
-                                    result.error("file_unavailable", "El archivo ya no está disponible.", null)
+                                    result.error("file_unavailable", Tr.t("El archivo ya no está disponible.", "The file is no longer available."), null)
                                 }
                             }
                         } catch (_: Exception) {
-                            runOnUiThread { result.error("file_unavailable", "El archivo no está disponible o no se puede leer.", null) }
+                            runOnUiThread { result.error("file_unavailable", Tr.t("El archivo no está disponible o no se puede leer.", "The file isn't available or can't be read."), null) }
                         }
                     }.start()
+                }
+                "setLanguage" -> {
+                    Tr.save(this, call.arguments as? String)
+                    result.success(null)
                 }
                 "deviceName" -> result.success(Build.MODEL ?: "Android")
                 "pickFiles" -> pick(result)
@@ -335,7 +340,7 @@ class MainActivity : FlutterActivity() {
                     scanResult?.success(null)
                     scanResult = result
                     com.google.zxing.integration.android.IntentIntegrator(this)
-                        .setPrompt("Escanea el código del ordenador")
+                        .setPrompt(Tr.t("Escanea el código del ordenador", "Scan the computer's code"))
                         .setBeepEnabled(false)
                         .setCaptureActivity(PortraitCaptureActivity::class.java)
                         .setOrientationLocked(true)
