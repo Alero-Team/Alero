@@ -4,13 +4,13 @@
     <string name="w_devices_label">Devices</string>
     <string name="w_devices_desc">Your paired computers, their connection and battery.</string>
     <string name="w_status_label">Status</string>
-    <string name="w_status_desc">The connected computer, its battery and this phone's.</string>
+    <string name="w_status_desc">The connected computer, its battery and this phone\'s.</string>
     <string name="w_actions_label">Remote control</string>
     <string name="w_actions_desc">Connection status and shortcuts to control, screen, files and clipboard.</string>
     <string name="w_transfer_label">Transfers</string>
-    <string name="w_transfer_desc">Send a file, the active transfer's progress and recent ones.</string>
+    <string name="w_transfer_desc">Send a file, the active transfer\'s progress and recent ones.</string>
     <string name="w_media_label">Computer media</string>
-    <string name="w_media_desc">What's playing on your computer, with play, pause and track controls.</string>
+    <string name="w_media_desc">What\'s playing on your computer, with play, pause and track controls.</string>
     <string name="w_panel_label">Alero panel</string>
     <string name="w_panel_desc">Computer, battery, transfer and quick actions in one.</string>
     <string name="l_no_transfers">No transfers</string>
