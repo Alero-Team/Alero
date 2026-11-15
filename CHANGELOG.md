@@ -1,5 +1,21 @@
 # Cambios
 
+## Beta 1.4.2 (1.4.2) — 2026-11-14
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Windows y Linux
+
+- **Píldora compacta al costado:** el menú lateral es ahora la barra inferior del teléfono girada hacia un lado: una cápsula compacta de iconos, centrada en el borde izquierdo. Usa el mismo aspecto y el mismo muelle que la versión de Android (icono relleno y píldora en el destino elegido); los nombres aparecen al pasar el puntero.
+
+### English
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+#### Windows and Linux
+
+- **Compact pill on the side:** the side menu is now the phone's bottom bar turned on its side: a compact capsule of icons, centred on the left edge. It has the same look and the same spring as the Android version (filled icon and pill on the chosen destination); names show on hover.
+
 ## Beta 1.4.1 (1.4.1) — 2026-11-14
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
