@@ -1,61 +1,9 @@
-//! Spring motion tuned after the iPhone's Dynamic Island.
+//! Time-based motion, with the curves and durations of the QNotch notch it is modelled on.
 //!
-//! Every spring is described the way SwiftUI describes it: a `response` (the period of the undamped oscillation, in
-//! seconds) and a `damping` fraction (1 = critically damped, below 1 overshoots). All the numbers that decide how the
-//! island feels are in [`Motion`], so they can be tuned in one place.
+//! The panel opens in 240 ms with a gentle overshoot (ease-out-back, 0.7), closes in 180 ms (ease-out cubic), the tab
+//! indicator slides in 220 ms and a tab's content fades in over 180 ms. Everything is a plain tween: a start, an end,
+//! a duration and an easing, so what the eye sees is exactly what is written here.
 
-use std::f32::consts::PI;
-
-#[derive(Clone, Copy, Debug)]
-pub struct Spring {
-    pub value: f32,
-    pub vel: f32,
-    pub target: f32,
-    omega: f32,
-    zeta: f32,
-}
-
-impl Spring {
-    pub fn new(value: f32, response: f32, damping: f32) -> Self {
-        let mut s = Self { value, vel: 0.0, target: value, omega: 1.0, zeta: 1.0 };
-        s.tune(response, damping);
-        s
-    }
-
-    pub fn tune(&mut self, response: f32, damping: f32) {
-        self.omega = 2.0 * PI / response.max(0.02);
-        self.zeta = damping.max(0.05);
-    }
-
-    pub fn to(&mut self, target: f32) {
-        self.target = target;
-    }
-
-    pub fn snap(&mut self, value: f32) {
-        self.value = value;
-        self.target = value;
-        self.vel = 0.0;
-    }
-
-    /// Advances by `dt` seconds. Fixed sub-steps keep it stable whatever the frame time is.
-    pub fn step(&mut self, dt: f32) {
-        let mut left = dt.clamp(0.0, 0.1);
-        while left > 0.0 {
-            let h = left.min(1.0 / 480.0);
-            let a = -self.omega * self.omega * (self.value - self.target) - 2.0 * self.zeta * self.omega * self.vel;
-            self.vel += a * h;
-            self.value += self.vel * h;
-            left -= h;
-        }
-    }
-
-    /// At rest on its target, within `eps` (in the spring's own unit).
-    pub fn settled(&self, eps: f32) -> bool {
-        (self.value - self.target).abs() < eps && self.vel.abs() < eps * 6.0
-    }
-}
-
-/// Style of the movement, from the settings.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Style {
     Normal,
@@ -73,45 +21,118 @@ impl Style {
     }
 }
 
-/// All the timing of the island.
-#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Ease {
+    /// Overshoots by a little and settles; the number is the strength (QNotch uses 0.7 on opening).
+    Back(f32),
+    Cubic,
+}
+
+pub fn ease(e: Ease, p: f32) -> f32 {
+    let p = p.clamp(0.0, 1.0);
+    match e {
+        Ease::Back(c1) => {
+            let c3 = c1 + 1.0;
+            let q = p - 1.0;
+            1.0 + c3 * q * q * q + c1 * q * q
+        }
+        Ease::Cubic => {
+            let q = 1.0 - p;
+            1.0 - q * q * q
+        }
+    }
+}
+
+/// One animated number.
+#[derive(Clone, Copy, Debug)]
+pub struct Anim {
+    pub v: f32,
+    from: f32,
+    to: f32,
+    t: f32,
+    dur: f32,
+    e: Ease,
+}
+
+impl Anim {
+    pub fn new(v: f32) -> Self {
+        Self { v, from: v, to: v, t: 0.0, dur: 0.0, e: Ease::Cubic }
+    }
+
+    /// Goes to `to` in `ms` milliseconds. Zero (or less) jumps there.
+    pub fn go(&mut self, to: f32, ms: f32, e: Ease) {
+        if ms <= 0.5 {
+            self.snap(to);
+            return;
+        }
+        self.from = self.v;
+        self.to = to;
+        self.t = 0.0;
+        self.dur = ms / 1000.0;
+        self.e = e;
+    }
+
+    pub fn snap(&mut self, v: f32) {
+        self.v = v;
+        self.from = v;
+        self.to = v;
+        self.t = 0.0;
+        self.dur = 0.0;
+    }
+
+    pub fn target(&self) -> f32 {
+        self.to
+    }
+
+    pub fn running(&self) -> bool {
+        self.t < self.dur
+    }
+
+    pub fn step(&mut self, dt: f32) {
+        if !self.running() {
+            return;
+        }
+        self.t += dt.max(0.0);
+        if self.t >= self.dur {
+            self.v = self.to;
+            self.t = self.dur;
+        } else {
+            self.v = self.from + (self.to - self.from) * ease(self.e, self.t / self.dur);
+        }
+    }
+}
+
+/// How the settings change the motion: "normal" is QNotch's own timing, "soft" is slower with less bounce.
 #[derive(Clone, Copy, Debug)]
 pub struct Motion {
     pub style: Style,
-    /// Size spring when the island grows (response s, damping): a little bounce, like the iPhone's.
-    pub expand: (f32, f32),
-    /// Size spring when it shrinks: firmer, almost no bounce.
-    pub collapse: (f32, f32),
-    /// Size spring when one page replaces another.
-    pub page: (f32, f32),
-    /// Content spring (always critically damped: text must never wobble).
-    pub content: (f32, f32),
-    /// Seconds the content waits for the container to start growing before it appears.
-    pub content_delay: f32,
-    /// Blur radius (logical px) of the content that is entering or leaving.
-    pub blur: f32,
-    /// Scale the content has when it is not shown.
-    pub content_scale: f32,
 }
 
 impl Motion {
     pub fn new(style: Style) -> Self {
-        let base = Self {
-            style,
-            expand: (0.46, 0.72),
-            collapse: (0.38, 0.88),
-            page: (0.42, 0.80),
-            content: (0.26, 1.0),
-            content_delay: 0.07,
-            blur: 14.0,
-            content_scale: 0.90,
-        };
-        match style {
+        Self { style }
+    }
+
+    /// A base duration in milliseconds, as this style wants it.
+    pub fn ms(&self, base: f32) -> f32 {
+        match self.style {
             Style::Normal => base,
-            Style::Soft => Self { expand: (0.52, 0.90), collapse: (0.42, 0.95), page: (0.46, 0.92), blur: 8.0, content_scale: 0.95, ..base },
-            // The springs are still there but so stiff that they settle at once.
-            Style::Off => Self { expand: (0.04, 1.0), collapse: (0.04, 1.0), page: (0.04, 1.0), content: (0.04, 1.0), content_delay: 0.0, blur: 0.0, content_scale: 1.0, ..base },
+            Style::Soft => base * 1.4,
+            Style::Off => 0.0,
         }
+    }
+
+    /// Strength of the overshoot on opening.
+    pub fn bounce(&self) -> f32 {
+        match self.style {
+            Style::Normal => 0.7,
+            Style::Soft => 0.25,
+            Style::Off => 0.0,
+        }
+    }
+
+    pub fn off(&self) -> bool {
+        self.style == Style::Off
     }
 }
 
@@ -119,56 +140,54 @@ impl Motion {
 mod tests {
     use super::*;
 
-    fn run(mut s: Spring, secs: f32) -> (f32, f32) {
-        let mut peak = s.value;
+    fn run(mut a: Anim, secs: f32) -> (f32, f32) {
+        let mut peak = a.v;
         let mut t = 0.0;
         while t < secs {
-            s.step(1.0 / 120.0);
-            peak = peak.max(s.value);
-            t += 1.0 / 120.0;
+            a.step(1.0 / 240.0);
+            peak = peak.max(a.v);
+            t += 1.0 / 240.0;
         }
-        (s.value, peak)
+        (a.v, peak)
     }
 
     #[test]
-    fn a_spring_reaches_its_target() {
-        let mut s = Spring::new(0.0, 0.46, 0.72);
-        s.to(100.0);
-        let (end, _) = run(s, 2.0);
-        assert!((end - 100.0).abs() < 0.01, "{end}");
+    fn the_opening_overshoots_about_three_percent_and_lands() {
+        let mut a = Anim::new(0.0);
+        a.go(1.0, 240.0, Ease::Back(0.7));
+        let (end, peak) = run(a, 0.5);
+        assert!((end - 1.0).abs() < 1e-5);
+        assert!(peak > 1.01 && peak < 1.06, "{peak}");
     }
 
     #[test]
-    fn the_bounce_is_small_and_the_critical_spring_has_none() {
-        let mut bouncy = Spring::new(0.0, 0.46, 0.72);
-        bouncy.to(100.0);
-        let (_, peak) = run(bouncy, 2.0);
-        // ~3 % overshoot: visible, never silly.
-        assert!(peak > 100.5 && peak < 108.0, "{peak}");
-        let mut flat = Spring::new(0.0, 0.26, 1.0);
-        flat.to(100.0);
-        let (_, peak) = run(flat, 2.0);
-        assert!(peak <= 100.001, "{peak}");
+    fn the_closing_has_no_bounce() {
+        let mut a = Anim::new(1.0);
+        a.go(0.0, 180.0, Ease::Cubic);
+        let mut min = 1.0f32;
+        let mut t = 0.0;
+        while t < 0.3 {
+            a.step(1.0 / 240.0);
+            min = min.min(a.v);
+            t += 1.0 / 240.0;
+        }
+        assert!(min >= 0.0 && a.v == 0.0);
     }
 
     #[test]
     fn it_is_stable_with_huge_frame_times() {
-        let mut s = Spring::new(0.0, 0.3, 0.7);
-        s.to(10.0);
-        for _ in 0..200 {
-            s.step(5.0);
-        }
-        assert!(s.value.is_finite() && (s.value - 10.0).abs() < 0.01);
+        let mut a = Anim::new(0.0);
+        a.go(10.0, 200.0, Ease::Back(0.7));
+        a.step(5.0);
+        assert_eq!(a.v, 10.0);
+        assert!(!a.running());
     }
 
     #[test]
-    fn off_settles_in_a_blink() {
+    fn off_jumps() {
         let m = Motion::new(Style::Off);
-        let mut s = Spring::new(0.0, m.expand.0, m.expand.1);
-        s.to(50.0);
-        for _ in 0..12 {
-            s.step(1.0 / 120.0);
-        }
-        assert!(s.settled(0.5), "{:?}", s);
+        let mut a = Anim::new(0.0);
+        a.go(5.0, m.ms(240.0), Ease::Cubic);
+        assert_eq!(a.v, 5.0);
     }
 }

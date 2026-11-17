@@ -9,6 +9,7 @@ pub mod model;
 pub mod motion;
 pub mod run;
 pub mod ui;
+pub mod view;
 
 #[cfg(windows)]
 mod win;

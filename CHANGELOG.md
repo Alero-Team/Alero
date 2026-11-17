@@ -1,5 +1,33 @@
 # Cambios
 
+## Beta 1.4.5 (1.4.5) — 2026-11-17
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Windows y Linux
+
+- **Alero Island rediseñada al estilo QNotch:** una píldora de 38 px que cuelga del borde superior (negra OLED por defecto) con la hora, la música que suena, la batería del teléfono y las notificaciones sin leer; al pasar el ratón se despliega en un panel de 720 × 380 con perfil del teléfono, pestañas con indicador deslizante, y tarjetas de Reproductor, Teléfono, Notificaciones, Portapapeles y Controles.
+- **Animaciones de QNotch:** apertura de 240 ms con ligero rebote, cierre de 180 ms, indicador de pestañas de 220 ms, contenido que aparece subiendo 6 px, y la píldora que cambia de ancho con curvas suaves. Reemplazan a los resortes anteriores.
+- **Pestañas:** Inicio, Reproductor, Archivos (arrastra a la isla para enviar; progreso de envíos y recepciones), Notificaciones (con descartar), Portapapeles y Controles (No molestar, linterna, buscar, timbre y volumen).
+- **Avisos compactos:** llamada, archivo entrante, transferencia y soltar archivos usan una tarjeta pequeña con el mismo estilo; las notificaciones y el portapapeles recibido aparecen un momento dentro de la propia píldora.
+- **Nuevo:** botón para fijar el panel abierto, botón para abrir Alero y ajuste «Mostrar siempre la píldora» (por defecto sigue oculta hasta que pasas el ratón por el centro superior). El margen superior pasa a 0 (pegada al borde); súbelo para que flote.
+- Se oculta con juegos y apps a pantalla completa, y respeta «reducir animaciones» del sistema.
+- Basada en el diseño de QNotch (licencia MIT); ver créditos en Licencias.
+
+### English
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+#### Windows and Linux
+
+- **Alero Island redesigned after QNotch:** a 38 px pill hanging from the top edge (OLED black by default) showing the time, what is playing, the phone's battery and unread notifications; hover and it unfolds into a 720 × 380 panel with the phone's profile, tabs with a sliding indicator, and Player, Phone, Notifications, Clipboard and Controls cards.
+- **QNotch's animations:** a 240 ms open with a slight overshoot, a 180 ms close, a 220 ms tab indicator, content that fades in rising 6 px, and a pill that changes width on smooth curves. They replace the previous springs.
+- **Tabs:** Home, Player, Files (drag onto the island to send; progress of sent and received files), Notifications (with dismiss), Clipboard and Controls (Do not disturb, flashlight, find, ringer and volume).
+- **Compact alerts:** a call, an incoming file, a transfer and dropping files use a small card in the same style; notifications and a received clipboard briefly appear inside the pill itself.
+- **New:** a pin button to keep the panel open, a button to open Alero, and an "Always show the pill" setting (still hidden until you move the pointer to the top centre by default). The top margin now defaults to 0 (flush with the edge); raise it to make it float.
+- Hides during games and full-screen apps, and follows the system's "reduce animations".
+- Based on the QNotch design (MIT licence); see credits under Licenses.
+
 ## Beta 1.4.4 (1.4.4) — 2026-11-17
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
