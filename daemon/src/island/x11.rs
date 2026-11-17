@@ -306,7 +306,16 @@ impl Host for X11Host {
             if (self.x.XGetWindowProperty)(self.dpy, active, a.wm_state, 0, 32, 0, xlib::XA_ATOM, &mut ty, &mut fmt, &mut n, &mut after, &mut p) != 0 || p.is_null() {
                 return false;
             }
-            let found = fmt == 32 && std::slice::from_raw_parts(p as *const c_long, n as usize).contains(&(a.fullscreen as c_long));
+            let mut found = false;
+            if ty == xlib::XA_ATOM && fmt == 32 {
+                // Xlib hands back format-32 items as C longs; read them one by one instead of building a slice.
+                for i in 0..(n as usize).min(32) {
+                    if ptr::read_unaligned((p as *const c_long).add(i)) == a.fullscreen as c_long {
+                        found = true;
+                        break;
+                    }
+                }
+            }
             (self.x.XFree)(p as *mut _);
             found
         }
