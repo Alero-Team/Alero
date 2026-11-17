@@ -1,5 +1,29 @@
 # Cambios
 
+## Beta 1.4.4 (1.4.4) — 2026-11-17
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Windows y Linux
+
+- **Nuevo: Alero Island.** Una isla negra (OLED) que baja desde el borde superior de la pantalla cuando pasas el ratón por el centro y se esconde sola al irte. Se abre y se cierra con animaciones de resorte inspiradas en la Dynamic Island de iOS (desenfoque, escala y morfología de tamaño entre pantallas) y no consume nada mientras está cerrada.
+- **Solo funciones de Alero:** reproductor (de este equipo o del teléfono), enviar archivos arrastrándolos a la isla (el teléfono recibe la petición de aceptar), archivos entrantes con Aceptar y Rechazar, notificaciones del teléfono, llamada entrante con Contestar y Rechazar, portapapeles, controles rápidos (No molestar, linterna, buscar mi teléfono, sonido y volumen) y estado y batería del teléfono.
+- **Se avisa sola:** una llamada, un archivo entrante o una notificación abren la isla un momento aunque la ventana de Alero esté cerrada.
+- **Totalmente configurable** en Ajustes › Alero Island: activar o desactivar, color de fondo (negro OLED por defecto) y de acento, tamaño, animaciones normales, suaves o ninguna (respeta «reducir animaciones» de Windows), pantalla, ancho de la zona de activación, esperas de apertura y cierre, desplazamiento, margen superior, qué módulos muestra, segundos visible, sonido y ocultarse con juegos y apps a pantalla completa. En Windows, atajo de teclado opcional.
+- **Linux:** funciona en X11 (y XWayland). En sesiones Wayland puras no hay forma de saber dónde está el puntero, así que no aparece. El atajo de teclado global es solo de Windows por ahora.
+
+### English
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+#### Windows and Linux
+
+- **New: Alero Island.** A black (OLED) island that drops from the top edge of the screen when you move the pointer to the centre and tucks itself away when you leave. It opens and closes with spring animations inspired by the iOS Dynamic Island (blur, scale and size morphing between screens) and costs nothing while closed.
+- **Only Alero's features:** player (this computer's or the phone's), send files by dragging them onto the island (the phone gets the accept request), incoming files with Accept and Decline, phone notifications, incoming call with Answer and Decline, clipboard, quick controls (Do not disturb, flashlight, find my phone, sound and volume) and phone status and battery.
+- **It alerts by itself:** a call, an incoming file or a notification opens the island for a moment even when Alero's window is closed.
+- **Fully configurable** in Settings › Alero Island: on or off, background colour (OLED black by default) and accent, size, normal, soft or no animations (follows Windows' "reduce animations"), screen, trigger-zone width, open and close delays, offset, top margin, which modules it shows, seconds visible, sound and hiding during games and full-screen apps. On Windows, an optional keyboard shortcut.
+- **Linux:** works on X11 (and XWayland). On pure Wayland sessions there is no way to know where the pointer is, so it does not appear. The global keyboard shortcut is Windows-only for now.
+
 ## Beta 1.4.3 (1.4.3) — 2026-11-15
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.

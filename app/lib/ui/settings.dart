@@ -11,6 +11,7 @@ import 'theme.dart';
 import 'vault.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import 'island_panel.dart';
 import '../l10n.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
@@ -525,6 +526,9 @@ class SettingsScreen extends StatelessWidget {
           )
         : null;
 
+    // Alero Island: the overlay of the desktop app (the phone has no such thing).
+    final island = Native.pc ? IslandPanel(hub) : null;
+
     final about = Panel(
       title: 'Acerca de Alero',
       icon: Symbols.info_rounded,
@@ -624,6 +628,8 @@ class SettingsScreen extends StatelessWidget {
                         gap,
                         ?remote,
                         if (remote != null) gap,
+                        ?island,
+                        if (island != null) gap,
                         diag,
                         gap,
                         about,
@@ -645,6 +651,7 @@ class SettingsScreen extends StatelessWidget {
               look,
               gap,
               if (remote != null) ...[remote, gap],
+              if (island != null) ...[island, gap],
               if (perms != null) ...[perms, gap],
               diag,
               gap,

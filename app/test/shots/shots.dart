@@ -449,7 +449,7 @@ Future<void> until(WidgetTester t, Finder f) async {
 
 String lang = 'es';
 
-/// Renders [home] at [size] logical pixels, [dpr] times sharper, into out/<lang>/[file].png.
+/// Renders [home] at [size] logical pixels, [dpr] times sharper, into `out/<lang>/[file].png`.
 Future<void> shot(
   WidgetTester t,
   String file,
