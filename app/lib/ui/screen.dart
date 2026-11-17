@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -214,7 +212,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     final live = d != null && PhoneSessions.instance.running(d.serial);
     return Scaffold(
       appBar: AppBar(title: Text(tr('Acceso remoto a {}', [widget.phone.name]))),
-      body: Platform.isAndroid || !Scrcpy.available
+      body: isPhone || !Scrcpy.available
           ? const EmptyState(
               icon: Symbols.cast_rounded,
               title: 'Falta el componente de pantalla',

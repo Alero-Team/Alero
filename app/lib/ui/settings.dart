@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -189,7 +187,7 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
 
-    final phone = Platform.isAndroid
+    final phone = isPhone
         ? Panel(
             title: 'Seguridad',
             icon: Symbols.lock_rounded,
@@ -232,7 +230,7 @@ class SettingsScreen extends StatelessWidget {
           )
         : null;
 
-    final remote = Platform.isAndroid
+    final remote = isPhone
         ? null
         : Panel(
             title: 'Control remoto',
@@ -289,7 +287,7 @@ class SettingsScreen extends StatelessWidget {
             ),
           );
 
-    final files = Platform.isAndroid
+    final files = isPhone
         ? Panel(
             title: 'Archivos para el ordenador',
             icon: Symbols.folder_shared_rounded,
@@ -357,7 +355,7 @@ class SettingsScreen extends StatelessWidget {
           )
         : null;
 
-    final sms = Platform.isAndroid
+    final sms = isPhone
         ? Panel(
             title: 'Mensajes en el ordenador',
             icon: Symbols.sms_rounded,
@@ -379,7 +377,7 @@ class SettingsScreen extends StatelessWidget {
           )
         : null;
 
-    final calls = Platform.isAndroid
+    final calls = isPhone
         ? Panel(
             title: 'Llamadas en el ordenador',
             icon: Symbols.call_rounded,
@@ -474,7 +472,7 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
 
-    final perms = Platform.isAndroid
+    final perms = isPhone
         ? Panel(
             title: 'Permisos',
             icon: Symbols.shield_rounded,

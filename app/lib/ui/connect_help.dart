@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -19,7 +17,7 @@ class ConnectionPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
-    final android = Platform.isAndroid;
+    final android = isPhone;
     Widget row(IconData icon, String title, String body, Widget action) =>
         Padding(
           padding: const EdgeInsets.symmetric(vertical: Gap.s),

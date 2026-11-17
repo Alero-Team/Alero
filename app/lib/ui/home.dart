@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -120,10 +118,10 @@ class HomeScreen extends StatelessWidget {
 
     final recent = _Recent(hub, go: go);
     final media = online && phone
-        ? MediaPanel(hub, main.id, compact: !Platform.isAndroid)
+        ? MediaPanel(hub, main.id, compact: !isPhone)
         : null;
     final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
-    final controls = online && phone && !Platform.isAndroid
+    final controls = online && phone && !isPhone
         ? PhoneControlsPanel(hub, main)
         : null;
     final status = phone && info != null
@@ -137,7 +135,7 @@ class HomeScreen extends StatelessWidget {
     final fit = ScaledTiles.fit(context, scale);
     final gap = SizedBox(height: Gap.l * fit, width: Gap.l * fit);
 
-    if (Platform.isAndroid && !phone) {
+    if (isPhone && !phone) {
       return ScreenFrame(
         title: 'Inicio',
         maxWidth: 980,
@@ -210,7 +208,7 @@ class HomeScreen extends StatelessWidget {
     };
     // Two columns on a wide window: the first tiles of the user's order on the left (three fifths of
     // them), the rest on the right. One column otherwise. A tile with nothing to show takes no room.
-    final two = wide && !Platform.isAndroid && shown.length > 1;
+    final two = wide && !isPhone && shown.length > 1;
     final cut = two ? homeLeftCount(shown.length) : shown.length;
     final columns = [
       shown.take(cut).map((t) => tile(t, placeholder: two)).nonNulls.toList(),
@@ -224,7 +222,7 @@ class HomeScreen extends StatelessWidget {
     final dashboard = <Widget>[
       if (hub.startError.isNotEmpty) ...[ErrorBanner(hub.startError), gap],
       _DevicePicker(hub, main),
-      if (Platform.isAndroid && !hub.notifAccess) ...[_AccessHint(hub), gap],
+      if (isPhone && !hub.notifAccess) ...[_AccessHint(hub), gap],
       // Changing between one and two columns fades instead of jumping while the window is resized.
       AnimatedSwitcher(
         duration: motion(context, const Duration(milliseconds: 220)),
@@ -261,7 +259,7 @@ class HomeScreen extends StatelessWidget {
     return ScreenFrame(
       title: 'Inicio',
       maxWidth: 1920,
-      trailing: !Platform.isAndroid
+      trailing: !isPhone
           ? OutlinedButton.icon(
               onPressed: () => _customize(context, hub, go, _pcTiles),
               icon: const Icon(Symbols.dashboard_customize_rounded),
@@ -431,7 +429,7 @@ class _Hero extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final type = Theme.of(context).textTheme;
     final online = p.state == pb.PeerState.connected;
-    final phone = info?.phone ?? !Platform.isAndroid;
+    final phone = info?.phone ?? !isPhone;
     final picture = phone
         ? PhoneMockup(
             info: info,
@@ -459,7 +457,7 @@ class _Hero extends StatelessWidget {
     );
 
     // Every shortcut lives in this card, as the prototype's buttons, on the computer and on the phone.
-    final buttons = Platform.isAndroid
+    final buttons = isPhone
         ? const <Widget>[]
         : [
             FilledButton.icon(
@@ -578,7 +576,7 @@ class _Hero extends StatelessWidget {
                                 if ((info?.network ?? '').isNotEmpty)
                                   property(Symbols.wifi_rounded, info!.network),
                                 // The phone keeps this card short: four buttons, no extra row of chips.
-                                if (online && !Platform.isAndroid)
+                                if (online && !isPhone)
                                   property(
                                     Symbols.verified_user_rounded,
                                     'Conexión cifrada',
@@ -632,7 +630,7 @@ class _Hero extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (Platform.isAndroid) ...[
+                if (isPhone) ...[
                   const SizedBox(height: 18),
                   QuickActions(hub, p),
                 ],

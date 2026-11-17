@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../native.dart';
 import '../vault.dart';
 import 'icon.dart';
+import 'theme.dart';
 import '../l10n.dart';
 
 /// A local vault on each device, deliberately separate from normal Alero
@@ -37,7 +38,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (Platform.isAndroid) {
+    if (isPhone) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _unlock());
     } else {
       _vault.hasKey().then((v) {
@@ -84,7 +85,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     String? error;
     var ok = false;
     try {
-      if (Platform.isAndroid) {
+      if (isPhone) {
         ok = await Native.authenticate();
         if (!ok) error = 'No se confirmó tu identidad.';
       } else if (_hasKey == true) {
@@ -275,7 +276,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     if (confirmed != true) return;
     await _act(() async {
       final filename = entry.name.replaceAll(RegExp(r'[\\/]'), '_');
-      if (Platform.isAndroid) {
+      if (isPhone) {
         final root = await getApplicationSupportDirectory();
         final dir = await Directory('${root.path}/incoming')
             .create(recursive: true);
@@ -352,7 +353,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
 
   /// What stands between anyone holding this device and the vault's contents.
   Widget _gate(ThemeData theme) {
-    final android = Platform.isAndroid;
+    final android = isPhone;
     final create = !android && _hasKey == false;
     return Center(
       child: SingleChildScrollView(

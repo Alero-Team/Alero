@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -240,7 +238,7 @@ class _SetupScreenState extends State<SetupScreen> {
                                 ),
                           ),
                         ],
-                        if (_step == 1 && Platform.isAndroid) ...[
+                        if (_step == 1 && isPhone) ...[
                           const Text(
                             'Todo es opcional. Android te pedirá confirmar cada permiso; puedes cambiarlo después en Ajustes.',
                           ),
@@ -294,7 +292,7 @@ class _SetupScreenState extends State<SetupScreen> {
                             ok: hub.callsAllowed && hub.callsPermission,
                           ),
                         ],
-                        if (_step == 1 && !Platform.isAndroid) ...[
+                        if (_step == 1 && !isPhone) ...[
                           const Text(
                             'Solo los dispositivos emparejados pueden usar estas funciones. Puedes cambiarlas después en Ajustes.',
                           ),

@@ -235,7 +235,7 @@ class _TransferState extends State<_Transfer> {
           ? null
           : hub.history.where((h) => h.id == last.x.id).firstOrNull;
       final onDisk =
-          !Platform.isAndroid &&
+          !isPhone &&
           h != null &&
           h.path.isNotEmpty &&
           File(h.path).existsSync();
@@ -315,7 +315,7 @@ class _TransferState extends State<_Transfer> {
                 onPressed: () => Native.showInFolder(h.path),
                 child: const Text('Ver en carpeta'),
               )
-            else if (Platform.isAndroid && widget.incoming)
+            else if (isPhone && widget.incoming)
               TextButton(
                 onPressed: hub.openDownloads,
                 child: const Text('Ver en Descargas'),
@@ -448,10 +448,10 @@ class _SendFlightState extends State<SendFlight>
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final here = Platform.isAndroid
+    final here = isPhone
         ? Symbols.smartphone_rounded
         : Symbols.computer_rounded;
-    final there = Platform.isAndroid
+    final there = isPhone
         ? Symbols.computer_rounded
         : Symbols.smartphone_rounded;
     final (from, to) = widget.incoming ? (there, here) : (here, there);

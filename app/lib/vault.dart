@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import 'native.dart';
@@ -112,13 +113,19 @@ class VaultStore {
   static bool _validId(String id) =>
       RegExp(r'^[A-Za-z0-9_-]{24}$').hasMatch(id);
 
+  /// Screenshots: stands in for DPAPI / the Android keystore so no real secret store is touched.
+  @visibleForTesting
+  static Future<Uint8List> Function(Uint8List data, bool seal)? fakeCrypt;
+
   Future<Uint8List> _seal(Uint8List data) async {
+    if (fakeCrypt != null) return fakeCrypt!(data, true);
     if (Platform.isAndroid) return Native.vaultSeal(data);
     if (Platform.isWindows) return _windowsCrypt(data, true, _key);
     throw UnsupportedError(tx('Alero Vault solo admite Android y Windows.'));
   }
 
   Future<Uint8List> _open(Uint8List data) async {
+    if (fakeCrypt != null) return fakeCrypt!(data, false);
     if (Platform.isAndroid) return Native.vaultOpen(data);
     if (Platform.isWindows) return _windowsCrypt(data, false, _key);
     throw UnsupportedError(tx('Alero Vault solo admite Android y Windows.'));

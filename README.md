@@ -51,6 +51,48 @@ Un proyecto de **Alero Team**, desarrollado por:
 | Controles rápidos: No molestar, linterna, volumen, buscar mi teléfono | El teléfono como segundo monitor de Windows |
 | Portapapeles compartido | Portapapeles compartido |
 
+## Capturas
+
+Datos de ejemplo, ninguno real. [English version](docs/screenshots/en/).
+
+**Windows**
+
+<p>
+<img src="docs/screenshots/es/desktop_01_home.png" width="49%" alt="desktop_01_home">
+<img src="docs/screenshots/es/desktop_02_home_light.png" width="49%" alt="desktop_02_home_light">
+<img src="docs/screenshots/es/desktop_03_messages.png" width="49%" alt="desktop_03_messages">
+<img src="docs/screenshots/es/desktop_04_sms.png" width="49%" alt="desktop_04_sms">
+<img src="docs/screenshots/es/desktop_05_calls.png" width="49%" alt="desktop_05_calls">
+<img src="docs/screenshots/es/desktop_06_incoming_call.png" width="49%" alt="desktop_06_incoming_call">
+<img src="docs/screenshots/es/desktop_07_notifications.png" width="49%" alt="desktop_07_notifications">
+<img src="docs/screenshots/es/desktop_08_photos.png" width="49%" alt="desktop_08_photos">
+<img src="docs/screenshots/es/desktop_09_explorer.png" width="49%" alt="desktop_09_explorer">
+<img src="docs/screenshots/es/desktop_10_vault.png" width="49%" alt="desktop_10_vault">
+</p>
+
+<details><summary>Dispositivos y Ajustes (página completa)</summary>
+
+<img src="docs/screenshots/es/desktop_11_devices.png" width="49%" alt="desktop_11_devices">
+<img src="docs/screenshots/es/desktop_12_settings.png" width="49%" alt="desktop_12_settings">
+
+</details>
+
+**Android**
+
+<p>
+<img src="docs/screenshots/es/phone_01_home.png" width="24%" alt="phone_01_home">
+<img src="docs/screenshots/es/phone_02_home_light.png" width="24%" alt="phone_02_home_light">
+<img src="docs/screenshots/es/phone_03_pc_files.png" width="24%" alt="phone_03_pc_files">
+<img src="docs/screenshots/es/phone_06_vault.png" width="24%" alt="phone_06_vault">
+</p>
+
+<details><summary>Dispositivos y Ajustes (página completa)</summary>
+
+<img src="docs/screenshots/es/phone_04_devices.png" width="24%" alt="phone_04_devices">
+<img src="docs/screenshots/es/phone_05_settings.png" width="24%" alt="phone_05_settings">
+
+</details>
+
 ## Cómo funciona
 
 1. Instala el APK de Android y el instalador de Windows o el paquete de Linux (.deb, .rpm, AppImage o .tar.gz) de la misma versión.

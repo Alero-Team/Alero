@@ -648,17 +648,17 @@ class Hub extends ChangeNotifier {
 
   // --- app messages (pb.x.*) ---------------------------------------------------------------------------
 
+  // Every send goes through sendMessage, so a test Hub that overrides it sees them all.
   Future<void> _send(String peerId, String kind, Map<String, Object?> body) =>
-      _run(
-        () =>
-            pb.sendMessage(peerId: peerId, kind: kind, body: jsonEncode(body)),
-      );
+      sendMessage(peerId, kind, body);
 
   Future<void> sendMessage(
     String peerId,
     String kind,
     Map<String, Object?> body,
-  ) => _send(peerId, kind, body);
+  ) => _run(
+    () => pb.sendMessage(peerId: peerId, kind: kind, body: jsonEncode(body)),
+  );
 
   /// adb serial -> paired phone it belongs to, for the sessions that phone was told about.
   final _controlled = <String, String>{};

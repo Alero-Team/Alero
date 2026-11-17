@@ -510,7 +510,7 @@ class HistoryTile extends StatelessWidget {
   Future<void> _menu(BuildContext context, Offset at, bool ok) async {
     // A real file on this computer; the phone's received files live behind Android's own storage.
     final onDisk =
-        !Platform.isAndroid && h.path.isNotEmpty && File(h.path).existsSync();
+        !isPhone && h.path.isNotEmpty && File(h.path).existsSync();
     PopupMenuItem<String> item(String v, IconData icon, String label) =>
         PopupMenuItem(
           value: v,

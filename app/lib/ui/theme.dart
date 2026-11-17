@@ -1,6 +1,11 @@
+import 'dart:io' show Platform;
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+/// Phone layout switch; tests set it to render the Android UI on a computer.
+bool isPhone = Platform.isAndroid;
 
 /// Neutral graphite surfaces with the user's system accent on actions and status.
 /// Text/background pairs are verified in light, dark and AMOLED modes.

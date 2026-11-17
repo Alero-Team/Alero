@@ -57,9 +57,9 @@ class _Dest {
 }
 
 /// The phone's own file browser is a computer feature: it reads another device's files, so it has no place on a phone.
-final _dests = [
+List<_Dest> get _dests => [
   const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
-  if (!Platform.isAndroid) ...const [
+  if (!isPhone) ...const [
     _Dest(
       Section.messages,
       'Mensajes',
@@ -80,7 +80,7 @@ final _dests = [
     ),
     _Dest(Section.explorer, 'Explorador', Symbols.folder_rounded),
   ],
-  if (!Platform.isAndroid)
+  if (!isPhone)
     const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
   const _Dest(
     Section.devices,
@@ -335,7 +335,7 @@ class _ShellState extends State<Shell>
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         // The computer always has the side menu: its phone sections do not fit a bottom bar.
-        return Platform.isAndroid ? _narrow(page) : _wide(page);
+        return isPhone ? _narrow(page) : _wide(page);
       },
     ),
   );
@@ -896,7 +896,7 @@ class ScreenFrame extends StatelessWidget {
     );
     return SafeArea(
       bottom: false,
-      child: onRefresh == null || !Platform.isAndroid
+      child: onRefresh == null || !isPhone
           ? list
           : RefreshIndicator(onRefresh: onRefresh!, child: list),
     );

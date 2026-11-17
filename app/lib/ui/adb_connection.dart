@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide Icon, Text;
@@ -161,7 +160,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isAndroid) return const SizedBox.shrink();
+    if (isPhone) return const SizedBox.shrink();
     final s = Theme.of(context).colorScheme;
     final serial = widget.phone == null
         ? null

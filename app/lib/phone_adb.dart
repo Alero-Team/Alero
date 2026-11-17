@@ -41,7 +41,12 @@ abstract final class PhoneAdb {
     selectedChanged.value++;
   }
 
+  /// Screenshots: a phone that answers as if USB debugging were on, without running adb.
+  @visibleForTesting
+  static AdbDevice? fake;
+
   static Future<AdbDevice?> find(pb.Peer phone, String model) async {
+    if (fake != null) return fake;
     if (!Scrcpy.hasAdb) return null;
     final list = await Scrcpy.list();
     final serial = _chosen[phone.id];
@@ -96,6 +101,7 @@ abstract final class PhoneAdb {
 
   /// (Wi-Fi on, Bluetooth on, auto-rotate on), read from the phone's settings.
   static Future<(bool, bool, bool)> toggles(String serial) async {
+    if (fake != null) return (true, true, false);
     final out = await Scrcpy.shell(
       serial,
       'settings get global wifi_on; settings get global bluetooth_on; settings get system accelerometer_rotation',

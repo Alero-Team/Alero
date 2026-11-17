@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide Text;
@@ -148,7 +147,7 @@ class AleroSplash extends StatelessWidget {
           children: [
             AleroMark(
               size: _size,
-              draw: Platform.isAndroid ? 1 : const Interval(0, .7).transform(v),
+              draw: isPhone ? 1 : const Interval(0, .7).transform(v),
               color: Color.lerp(s.onSurface, s.primary, v),
             ),
             Transform.translate(

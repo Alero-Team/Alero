@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -104,7 +102,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final qrPanel = Panel(
       title: 'Código QR',
       icon: Symbols.qr_code_rounded,
-      child: Platform.isAndroid
+      child: isPhone
           ? Row(
               children: [
                 Expanded(
@@ -185,7 +183,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     );
 
     final cablePanel = ConnectionPanel(hub);
-    final adbPanel = Platform.isAndroid
+    final adbPanel = isPhone
         ? null
         : AdbConnectionPanel(
             hub: hub,
@@ -199,7 +197,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     const gap = SizedBox(height: Gap.l, width: Gap.l);
     // A phone sees what each connected computer reports and can do with it (advanced controls).
-    final details = Platform.isAndroid
+    final details = isPhone
         ? [
             for (final p in paired.where(
               (p) =>
