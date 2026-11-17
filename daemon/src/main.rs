@@ -16,6 +16,7 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
+mod island;
 mod lang;
 mod pc_files;
 mod remote;
@@ -38,6 +39,8 @@ struct Ui {
     last_launch: Mutex<Option<Instant>>,
     engine: OnceLock<Arc<Engine>>,
     remote: Arc<Remote>,
+    /// Feeds the island (Windows and Linux); events sent before it starts wait in the channel.
+    island: island::Handle,
     /// Transfers whose progress card is on screen (id -> file name, which the card's updates repeat).
     cards: Mutex<std::collections::HashMap<String, String>>,
 }
@@ -65,6 +68,7 @@ struct Sink(Arc<Ui>);
 
 impl EventSink for Sink {
     fn on_event(&self, e: Event) {
+        self.0.island.feed(e.clone());
         // Remote control, screen sharing and this computer's own info are answered here, window or not.
         if let Some(engine) = self.0.engine.get() {
             match &e {
@@ -190,7 +194,9 @@ fn main() {
         std::process::exit(1);
     };
     let subs = Arc::new(Subscribers::default());
+    let (island_handle, island_rx, island_tx) = island::channel();
     let ui = Arc::new(Ui {
+        island: island_handle,
         exe: launch.ui,
         subs: subs.clone(),
         last_launch: Mutex::new(None),
@@ -207,6 +213,10 @@ fn main() {
     };
     let _ = ui.engine.set(engine.clone());
     ui.remote.spawn_status(engine.clone());
+    {
+        let ui2 = ui.clone();
+        island::spawn(island_rx, island_tx, data.clone(), engine.clone(), Box::new(move || ui2.show()));
+    }
     if let Err(e) = ipc::listen(&data, engine.clone(), subs.clone()) {
         fail(format!("canal local: {e}"));
     }
