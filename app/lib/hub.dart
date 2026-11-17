@@ -327,6 +327,9 @@ class Hub extends ChangeNotifier {
     }
   }
 
+  /// Alero Island's settings file (the daemon reads it).
+  File get islandFile => File('${_settings.parent.path}/island.json');
+
   File get _remoteFile => File('${_settings.parent.path}/remote.json');
 
   Map<String, dynamic> _readRemoteConfig() {

@@ -9,9 +9,9 @@ use windows::Data::Xml::Dom::XmlDocument;
 use windows::core::{IInspectable, Interface, Ref};
 use windows::Foundation::TypedEventHandler;
 use windows::UI::Notifications::{NotificationData, ToastActivatedEventArgs, ToastNotification, ToastNotificationManager};
-use windows::Win32::Foundation::HANDLE;
-use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows::Win32::Foundation::{HANDLE, HGLOBAL};
+use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData};
+use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::Registry::{RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ};
 
 const AUMID: &str = "Alero.Desktop";
@@ -315,6 +315,31 @@ pub fn set_clipboard(text: &str) {
             }
         }
         let _ = CloseClipboard();
+    }
+}
+
+/// The clipboard's text, empty when it holds none.
+pub fn get_clipboard() -> String {
+    unsafe {
+        if OpenClipboard(None).is_err() {
+            return String::new();
+        }
+        let mut out = String::new();
+        if let Ok(h) = GetClipboardData(CF_UNICODETEXT) {
+            let g = HGLOBAL(h.0);
+            let p = GlobalLock(g) as *const u16;
+            if !p.is_null() {
+                let max = GlobalSize(g) / 2;
+                let mut n = 0;
+                while n < max && *p.add(n) != 0 {
+                    n += 1;
+                }
+                out = String::from_utf16_lossy(std::slice::from_raw_parts(p, n));
+                let _ = GlobalUnlock(g);
+            }
+        }
+        let _ = CloseClipboard();
+        out
     }
 }
 

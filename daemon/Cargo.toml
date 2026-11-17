@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 pb-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Same versions Tauri already pulled in (Cargo.lock): nothing new to download or review.
 tao = "0.37"
@@ -21,6 +22,11 @@ png = "0.18"
 jpeg-encoder = "0.6.1"
 # Already in Cargo.lock (0.21.7).
 base64 = "0.21.7"
+# Alero Island (desktop overlay): CPU 2D drawing, text and the cover's JPEG. All pure Rust, no system libraries.
+# tiny-skia: BSD-3-Clause. ab_glyph: Apache-2.0. jpeg-decoder: MIT OR Apache-2.0.
+tiny-skia = { version = "0.11", default-features = false, features = ["std"] }
+ab_glyph = { version = "0.2", default-features = false, features = ["std"] }
+jpeg-decoder = { version = "0.3", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # All three are already in Cargo.lock (pulled by tao / tray-icon): no new download or review.
@@ -43,6 +49,14 @@ windows = { version = "0.62", features = [
     "Win32_System_Shutdown",
     "Win32_System_StationsAndDesktops",
     "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Ole",
+    "Win32_System_SystemServices",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_UI_Shell",
+    "Win32_UI_HiDpi",
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
@@ -52,4 +66,5 @@ windows = { version = "0.62", features = [
     "Media_Control",
     "Storage_Streams",
 ] }
+windows-core = "0.62"
 windows-version = "0.1"

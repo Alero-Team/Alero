@@ -242,6 +242,22 @@ fn notify(conn: &Connection, n: &Notice) -> Result<u32, dbus::Error> {
     Ok(id)
 }
 
+/// The clipboard's text through wl-paste, xclip or xsel; empty when there is none or no tool.
+pub fn get_clipboard() -> String {
+    let wl: &[(&str, &[&str])] = &[("wl-paste", &["--no-newline"])];
+    let x: &[(&str, &[&str])] = &[("xclip", &["-selection", "clipboard", "-out"]), ("xsel", &["--clipboard", "--output"])];
+    let order: Vec<_> = if is_wayland() { wl.iter().chain(x).collect() } else { x.iter().chain(wl).collect() };
+    for (tool, args) in order {
+        let Some(path) = which(tool) else { continue };
+        if let Ok(out) = Command::new(path).args(*args).stdin(Stdio::null()).stderr(Stdio::null()).output() {
+            if out.status.success() {
+                return String::from_utf8_lossy(&out.stdout).into_owned();
+            }
+        }
+    }
+    String::new()
+}
+
 /// Copies text to the clipboard with the first tool that works: wl-copy on Wayland, then xclip, then xsel.
 pub fn set_clipboard(text: &str) {
     use std::io::Write;
