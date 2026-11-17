@@ -1,8 +1,9 @@
 //! The island itself: what it shows, how it opens and closes, and how it moves.
 //!
-//! Nothing here touches the operating system. A host (Windows or X11) feeds it the pointer, the engine's events and
-//! the passing of time, asks for a frame, and executes the commands it returns. That keeps the whole behaviour
-//! testable and the platform code small.
+//! The look is QNotch's: a pill hanging from the top edge that grows into a 720 × 380 panel (see `view`), with its
+//! timing (see `motion`). Nothing here touches the operating system. A host (Windows or X11) feeds it the pointer,
+//! the engine's events and the passing of time, asks for a frame, and executes the commands it returns. That keeps
+//! the whole behaviour testable and the platform code small.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -10,21 +11,18 @@ use std::time::Instant;
 use serde_json::{json, Value};
 use tiny_skia::Pixmap;
 
-use super::config::{luma, IslandConfig};
-use super::gfx::{color, icon, mix, Canvas, Fonts, Icon, Rgb, Weight, R};
-use super::model::{Model, Notice, XState};
-use super::motion::{Motion, Spring, Style};
+use super::config::IslandConfig;
+use super::gfx::{color, Canvas, Fonts, Icon, R};
+use super::model::{Model, Notice};
+use super::motion::{Anim, Ease, Motion, Style};
+use super::view::{self, Draw, Ui, PILL_H, PILL_R};
 use crate::lang::t;
 
-/// Logical size of the drawing surface (the window is this big times the scale). The largest screen plus the
-/// room the spring overshoots into and the shadow.
-pub const CANVAS_W: f32 = 480.0;
-pub const CANVAS_H: f32 = 344.0;
-const PAD: f32 = 18.0;
-const PEEK: (f32, f32) = (118.0, 30.0);
-const MAX_RADIUS: f32 = 34.0;
-const DANGER: Rgb = [255, 69, 58];
-const SUCCESS: Rgb = [48, 209, 88];
+/// Logical size of the drawing surface (the window is this big times the scale): QNotch's window, 760 × 430.
+pub const CANVAS_W: f32 = 760.0;
+pub const CANVAS_H: f32 = 430.0;
+const OPEN_MS: f32 = 240.0;
+const CLOSE_MS: f32 = 180.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Page {
@@ -63,6 +61,7 @@ impl View {
 pub enum Act {
     Go(Page),
     OpenApp,
+    Pin,
     PcMedia(&'static str),
     PhoneMedia(&'static str),
     Source,
@@ -96,13 +95,6 @@ pub enum Cmd {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Phase {
-    Closed,
-    Open,
-    Closing,
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
 enum Reason {
     Hover,
     /// Opened by an event: closes after this many seconds unless the pointer is on it. None: stays until resolved.
@@ -120,9 +112,28 @@ pub struct Note {
     pub good: bool,
 }
 
+/// What the pill says in place of its usual segments for a few seconds (QNotch's "peek").
+#[derive(Clone, Debug)]
+pub struct Peek {
+    pub icon: Icon,
+    pub text: String,
+    pub good: bool,
+    left: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LocalTime {
+    pub hour: u32,
+    pub min: u32,
+    /// 0 = Sunday.
+    pub wday: u32,
+    pub month: u32,
+    pub day: u32,
+}
+
 pub struct Hit {
-    r: R,
-    act: Act,
+    pub r: R,
+    pub act: Act,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -142,16 +153,27 @@ pub struct Island {
     pub model: Model,
     motion: Motion,
     fonts: Fonts,
-    phase: Phase,
+    open: bool,
     reason: Reason,
-    shown: View,
-    want: View,
-    swap: bool,
+    view: View,
+    /// The tab the panel opens on (the last one used).
+    page: Page,
+    /// 0 = the pill, 1 = the panel (overshoots a little while opening).
+    o: Anim,
+    /// Size morph between two views of different sizes.
+    vs: Anim,
+    size_from: (f32, f32, f32),
+    size_to: (f32, f32, f32),
+    /// Hidden mode: 0 = above the screen's edge, 1 = in place.
+    reveal: Anim,
+    hide_wait: f32,
+    pill_w: Anim,
+    pill_check: f32,
+    tab_x: Anim,
+    fade: Anim,
+    peek: Option<Peek>,
+    peek_fade: Anim,
     note: Note,
-    w: Spring,
-    h: Spring,
-    content: Spring,
-    content_wait: f32,
     pointer: Option<(f32, f32)>,
     pressed: Option<usize>,
     hits: Vec<Hit>,
@@ -169,44 +191,41 @@ pub struct Island {
     cmds: Vec<Cmd>,
     dirty: bool,
     layer: Option<Canvas>,
+    body_layer: Option<Canvas>,
     clock: f32,
     reduce_motion: bool,
-}
-
-fn fmt_size(b: u64) -> String {
-    let f = b as f64;
-    if f >= 1073741824.0 {
-        format!("{:.1} GB", f / 1073741824.0)
-    } else if f >= 1048576.0 {
-        format!("{:.1} MB", f / 1048576.0)
-    } else {
-        format!("{:.0} KB", (f / 1024.0).max(1.0))
-    }
-}
-
-fn fmt_time(ms: i64) -> String {
-    let s = (ms.max(0) / 1000) as u64;
-    format!("{}:{:02}", s / 60, s % 60)
+    suppressed: bool,
+    pinned: bool,
+    time: LocalTime,
 }
 
 impl Island {
     pub fn new(cfg: IslandConfig) -> Self {
         let motion = Motion::new(Style::parse(&cfg.animation));
+        let size = view::view_size(&View::Page(Page::Home));
+        let always = cfg.always_visible;
         let mut me = Self {
             cfg,
             model: Model::default(),
             motion,
             fonts: Fonts::new(),
-            phase: Phase::Closed,
+            open: false,
             reason: Reason::Hover,
-            shown: View::Page(Page::Home),
-            want: View::Page(Page::Home),
-            swap: false,
+            view: View::Page(Page::Home),
+            page: Page::Home,
+            o: Anim::new(0.0),
+            vs: Anim::new(1.0),
+            size_from: size,
+            size_to: size,
+            reveal: Anim::new(if always { 1.0 } else { 0.0 }),
+            hide_wait: 0.0,
+            pill_w: Anim::new(96.0),
+            pill_check: 0.0,
+            tab_x: Anim::new(0.0),
+            fade: Anim::new(1.0),
+            peek: None,
+            peek_fade: Anim::new(1.0),
             note: Note::default(),
-            w: Spring::new(PEEK.0, motion.expand.0, motion.expand.1),
-            h: Spring::new(PEEK.1, motion.expand.0, motion.expand.1),
-            content: Spring::new(0.0, motion.content.0, motion.content.1),
-            content_wait: 0.0,
             pointer: None,
             pressed: None,
             hits: Vec::new(),
@@ -224,10 +243,16 @@ impl Island {
             cmds: Vec::new(),
             dirty: true,
             layer: None,
+            body_layer: None,
             clock: 0.0,
             reduce_motion: false,
+            suppressed: false,
+            pinned: false,
+            time: LocalTime::default(),
         };
         me.retune_motion();
+        me.remeasure(true);
+        me.pill_w.snap(me.pill_target());
         me
     }
 
@@ -237,10 +262,22 @@ impl Island {
         if !self.cfg.enabled {
             self.snap_closed();
         }
+        if self.cfg.always_visible {
+            self.reveal.snap(1.0);
+        }
+        if !self.page_allowed(self.page) {
+            self.page = Page::Home;
+        }
+        if let View::Page(p) = self.view {
+            if !self.page_allowed(p) {
+                self.view = View::Page(Page::Home);
+            }
+        }
+        self.remeasure(true);
         self.dirty = true;
     }
 
-    /// The system asks for less motion (Windows: animations off): the springs become instantaneous.
+    /// The system asks for less motion (Windows: animations off): everything jumps.
     pub fn set_reduce_motion(&mut self, on: bool) {
         if self.reduce_motion != on {
             self.reduce_motion = on;
@@ -251,20 +288,71 @@ impl Island {
     fn retune_motion(&mut self) {
         let style = if self.reduce_motion && self.cfg.respect_reduce_motion { Style::Off } else { Style::parse(&self.cfg.animation) };
         self.motion = Motion::new(style);
-        self.content.tune(self.motion.content.0, self.motion.content.1);
+    }
+
+    /// An application covers the screen (a game, a video): the island steps aside.
+    pub fn set_suppressed(&mut self, on: bool) {
+        if self.suppressed != on {
+            self.suppressed = on;
+            if on {
+                self.reveal.snap(0.0);
+            } else if self.cfg.always_visible {
+                self.reveal.snap(1.0);
+            }
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_time(&mut self, t: LocalTime) {
+        if self.time != t {
+            self.time = t;
+            self.pill_check = 0.0;
+            self.dirty = true;
+        }
     }
 
     pub fn is_open(&self) -> bool {
-        self.phase != Phase::Closed
+        self.open || self.o.v > 0.002
+    }
+
+    /// Is anything of the island on screen (the pill included)?
+    pub fn visible(&self) -> bool {
+        self.cfg.enabled && !self.suppressed && (self.cfg.always_visible || self.reveal.v > 0.002 || self.is_open() || self.peek.is_some())
     }
 
     pub fn take_cmds(&mut self) -> Vec<Cmd> {
         std::mem::take(&mut self.cmds)
     }
 
-    /// Wants the media polled (the player screens are on or about to be).
+    /// Wants the media polled (the player is on screen, or the pill shows what plays).
     pub fn wants_media(&self) -> bool {
-        self.cfg.enabled && self.cfg.modules.player && self.phase == Phase::Open
+        self.cfg.enabled && self.cfg.modules.player && self.visible()
+    }
+
+    fn page_allowed(&self, p: Page) -> bool {
+        let m = &self.cfg.modules;
+        match p {
+            Page::Home => true,
+            Page::Player => m.player,
+            Page::Files => m.send || m.incoming,
+            Page::Notifs => m.notifications,
+            Page::Clipboard => m.clipboard,
+            Page::Controls => m.controls,
+        }
+    }
+
+    pub fn tabs(&self) -> Vec<(Icon, Page)> {
+        let mut v = vec![(Icon::Home, Page::Home)];
+        for (ic, p) in [(Icon::Music, Page::Player), (Icon::Send, Page::Files), (Icon::Bell, Page::Notifs), (Icon::Clipboard, Page::Clipboard), (Icon::Sliders, Page::Controls)] {
+            if self.page_allowed(p) {
+                v.push((ic, p));
+            }
+        }
+        v
+    }
+
+    fn tab_index(&self, p: Page) -> usize {
+        self.tabs().iter().position(|(_, q)| *q == p).unwrap_or(0)
     }
 
     // ------------------------------------------------------------------------------------------------ input
@@ -280,17 +368,8 @@ impl Island {
     /// `hot`: the pointer is in the trigger zone. `button`: the left button is held (a file may be on its way).
     pub fn set_zone(&mut self, hot: bool, button: bool, dt: f32) {
         self.hot = hot && self.cfg.enabled;
-        if self.hot && !button && self.phase != Phase::Open {
-            self.hot_for += dt;
-            if self.hot_for * 1000.0 >= self.cfg.open_delay_ms as f32 {
-                self.hot_for = 0.0;
-                self.open(View::Page(Page::Home), Reason::Hover);
-            }
-        } else if !self.hot {
-            self.hot_for = 0.0;
-        }
         // A button held in the zone may be a file being carried: show the drop target after a moment.
-        if self.hot && button && self.phase != Phase::Open && self.cfg.modules.send {
+        if self.hot && button && !self.open && self.cfg.modules.send {
             self.armed_for += dt;
             if self.armed_for >= 0.22 {
                 self.armed_for = 0.0;
@@ -311,7 +390,7 @@ impl Island {
                 self.drag_active = true;
                 self.drag_over = true;
                 self.life = 1.6;
-                if self.phase != Phase::Open || self.shown != View::Drop {
+                if !self.open || self.view != View::Drop {
                     self.open(View::Drop, Reason::Drag);
                 }
             }
@@ -338,10 +417,10 @@ impl Island {
     }
 
     pub fn hotkey(&mut self) {
-        if self.phase == Phase::Open {
+        if self.open {
             self.close();
         } else if self.cfg.enabled {
-            self.open(View::Page(Page::Home), Reason::Key);
+            self.open(View::Page(self.page), Reason::Key);
             self.life = 6.0;
         }
     }
@@ -398,8 +477,7 @@ impl Island {
     pub fn wheel(&mut self, notches: f32) {
         // Over the volume slider the wheel changes the phone's media volume.
         let Some((x, y)) = self.pointer else { return };
-        if let Some(h) = self.hits.iter().find(|h| h.act == Act::Volume && h.r.inflate(8.0).contains(x, y)) {
-            let _ = h;
+        if self.hits.iter().any(|h| h.act == Act::Volume && h.r.inflate(8.0).contains(x, y)) {
             if let Some(id) = self.model.target_id() {
                 let (cur, max) = self.model.phone.get(&id).map_or((0, 15), |p| (p.media, p.media_max));
                 let value = (cur + notches.signum() as i32).clamp(0, max);
@@ -418,15 +496,19 @@ impl Island {
                 if p == Page::Notifs {
                     self.seen_notifs = Instant::now();
                 }
-                self.go(View::Page(p));
+                self.page = p;
+                if self.open {
+                    self.go(View::Page(p));
+                }
             }
             Act::OpenApp => {
                 self.cmds.push(Cmd::OpenApp);
                 self.close();
             }
+            Act::Pin => self.pinned = !self.pinned,
             Act::PcMedia(k) => self.cmds.push(Cmd::PcMedia(k)),
             Act::PhoneMedia(k) => self.cmds.push(Cmd::PhoneMedia(k)),
-            Act::Source => self.player_pc = Some(!self.use_pc()),
+            Act::Source => self.player_pc = Some(!view::pick_pc(&self.model, self.player_pc)),
             Act::Accept(id) => self.cmds.push(Cmd::Respond { id, accept: true }),
             Act::Decline(id) => {
                 self.cmds.push(Cmd::Respond { id, accept: false });
@@ -497,7 +579,7 @@ impl Island {
                         if self.cfg.sound && self.model.call().is_some_and(|c| c.1.ringing) {
                             self.cmds.push(Cmd::Beep);
                         }
-                    } else if self.shown == View::Call {
+                    } else if self.view == View::Call {
                         // The call is over: let it go in a moment.
                         self.life = 1.2;
                         self.reason = Reason::Event(Some(1.2));
@@ -511,24 +593,40 @@ impl Island {
                 }
                 Notice::XferStarted(id) if m.send || m.incoming => self.open_event(View::Transfer(id), None),
                 Notice::XferDone(id, ok) => {
-                    if self.shown == View::Transfer(id) {
+                    if self.view == View::Transfer(id) {
                         self.life = if ok { 2.4 } else { 4.0 };
                         self.reason = Reason::Event(Some(self.life));
                     }
                 }
                 Notice::Notif(key) if m.notifications => {
                     if let Some(n) = self.model.notifs.iter().find(|n| n.key == key) {
-                        let note = Note { icon: Some(Icon::Bell), title: if n.title.is_empty() { n.app.clone() } else { format!("{} · {}", n.app, n.title) }, text: n.text.clone(), good: false };
-                        self.show_note_for(note, self.cfg.event_secs as f32);
+                        let text = if n.title.is_empty() { n.app.clone() } else { format!("{}: {}", n.app, n.title) };
+                        self.peek(Icon::Bell, text, false, self.cfg.event_secs as f32);
                     }
                 }
                 Notice::Clip if m.clipboard => {
                     let from = self.model.clips.front().map(|c| c.from.clone()).unwrap_or_default();
-                    self.show_note(Note { icon: Some(Icon::Clipboard), title: t("Portapapeles recibido", "Clipboard received").into(), text: from, good: true });
+                    let text = if from.is_empty() { t("Portapapeles recibido", "Clipboard received").to_string() } else { format!("{} · {}", t("Portapapeles recibido", "Clipboard received"), from) };
+                    self.peek(Icon::Clipboard, text, true, 3.0);
                 }
                 _ => {}
             }
         }
+        self.dirty = true;
+    }
+
+    /// One line in place of the pill's segments for a few seconds. Only while the panel is closed.
+    pub fn peek(&mut self, icon: Icon, text: String, good: bool, secs: f32) {
+        if !self.cfg.enabled || !self.cfg.auto_expand || self.suppressed || self.is_open() {
+            return;
+        }
+        let first = self.peek.is_none();
+        self.peek = Some(Peek { icon, text, good, left: secs.clamp(1.0, 10.0) });
+        if first {
+            self.peek_fade.snap(0.0);
+            self.peek_fade.go(1.0, self.motion.ms(180.0), Ease::Cubic);
+        }
+        self.remeasure(true);
         self.dirty = true;
     }
 
@@ -537,25 +635,22 @@ impl Island {
     }
 
     fn show_note_for(&mut self, note: Note, secs: f32) {
-        if !self.cfg.auto_expand {
-            return;
-        }
         self.note = note;
         // A note never replaces something that asks for an answer.
-        if self.phase == Phase::Open && self.shown.rank() > View::Note.rank() && self.want.rank() > View::Note.rank() {
+        if self.open && self.view.rank() > View::Note.rank() {
             return;
         }
         self.open_event(View::Note, Some(secs));
     }
 
     fn open_event(&mut self, v: View, secs: Option<f32>) {
-        if !self.cfg.enabled || !self.cfg.auto_expand {
+        if !self.cfg.enabled || !self.cfg.auto_expand && v != View::Note {
             return;
         }
-        if self.phase == Phase::Open && self.want.rank() > v.rank() {
+        if self.open && self.view.rank() > v.rank() {
             return;
         }
-        if self.phase == Phase::Open {
+        if self.open {
             self.go(v.clone());
             self.reason = Reason::Event(secs);
         } else {
@@ -567,110 +662,143 @@ impl Island {
     // ------------------------------------------------------------------------------------------------ state
 
     fn snap_closed(&mut self) {
-        self.phase = Phase::Closed;
-        self.w.snap(PEEK.0);
-        self.h.snap(PEEK.1);
-        self.content.snap(0.0);
-        self.swap = false;
+        self.open = false;
+        self.o.snap(0.0);
+        self.vs.snap(1.0);
+        self.fade.snap(1.0);
+        self.peek = None;
+        if !self.cfg.always_visible {
+            self.reveal.snap(0.0);
+        }
+    }
+
+    fn cur_size(&self) -> (f32, f32, f32) {
+        let k = self.vs.v;
+        let (a, b) = (self.size_from, self.size_to);
+        (a.0 + (b.0 - a.0) * k, a.1 + (b.1 - a.1) * k, a.2 + (b.2 - a.2) * k)
     }
 
     fn open(&mut self, v: View, why: Reason) {
-        if !self.cfg.enabled {
+        if !self.cfg.enabled || self.suppressed {
             return;
         }
-        if self.phase == Phase::Open {
+        if self.open {
             self.go(v);
             self.reason = why;
             return;
         }
-        if self.phase == Phase::Closed {
-            self.w.snap(PEEK.0);
-            self.h.snap(PEEK.1);
-            self.content.snap(0.0);
-        }
-        self.phase = Phase::Open;
+        // Never reopen on a tab that is off now.
+        let v = match v {
+            View::Page(p) if !self.page_allowed(p) => View::Page(Page::Home),
+            other => other,
+        };
+        self.peek = None;
+        self.remeasure(true);
+        self.open = true;
         self.reason = why;
-        self.content.tune(self.motion.content.0, self.motion.content.1);
-        self.shown = v.clone();
-        self.want = v;
-        self.swap = false;
+        if let View::Page(p) = v {
+            self.page = p;
+        }
+        self.view = v;
+        self.size_from = view::view_size(&self.view);
+        self.size_to = self.size_from;
+        self.vs.snap(1.0);
+        self.fade.snap(1.0);
+        let idx = self.tab_index(self.page) as f32;
+        self.tab_x.snap(view::tab_x(idx as usize));
+        // QNotch: 240 ms times the distance still to go (at least 35 %), with a gentle overshoot.
+        let ms = self.motion.ms(OPEN_MS) * (1.0 - self.o.v).abs().max(0.35);
+        self.o.go(1.0, ms, Ease::Back(self.motion.bounce()));
         self.away_for = 0.0;
-        self.content_wait = self.motion.content_delay;
-        let (tw, th) = self.size_of(&self.shown);
-        self.w.tune(self.motion.expand.0, self.motion.expand.1);
-        self.h.tune(self.motion.expand.0, self.motion.expand.1);
-        self.w.to(tw);
-        self.h.to(th);
-        self.seen_notifs = if self.shown == View::Page(Page::Notifs) { Instant::now() } else { self.seen_notifs };
+        self.hot_for = 0.0;
         self.dirty = true;
     }
 
-    /// Replaces what is shown: the old content fades, the island morphs, the new content appears.
+    /// Replaces what is shown: the surface morphs to the new size and the new content fades in.
     fn go(&mut self, v: View) {
-        if self.want == v && !self.swap_needed() {
+        if self.view == v {
             return;
         }
-        let (tw, th) = self.size_of(&v);
-        let grows = tw * th > self.w.target * self.h.target;
-        let (r, d) = if grows { self.motion.page } else { (self.motion.page.0 * 0.92, self.motion.page.1 + 0.04) };
-        self.w.tune(r, d);
-        self.h.tune(r, d);
-        self.w.to(tw);
-        self.h.to(th);
-        self.want = v;
-        self.swap = self.want != self.shown;
-        if self.swap {
-            // A page change is quicker than the first opening: the old page leaves while the size is already moving.
-            self.content.tune(self.motion.content.0 * 0.62, 1.0);
-            self.content.to(0.0);
+        let from = self.cur_size();
+        let to = view::view_size(&v);
+        self.size_from = from;
+        self.size_to = to;
+        self.vs.snap(0.0);
+        self.vs.go(1.0, self.motion.ms(220.0), Ease::Cubic);
+        if let View::Page(p) = v {
+            let idx = self.tab_index(p);
+            self.tab_x.go(view::tab_x(idx), self.motion.ms(220.0), Ease::Cubic);
+            if p == Page::Notifs {
+                self.seen_notifs = Instant::now();
+            }
         }
+        // QNotch: a tab's content fades in over 180 ms, rising 6 px.
+        self.fade.snap(0.0);
+        self.fade.go(1.0, self.motion.ms(180.0), Ease::Cubic);
+        self.view = v;
         self.dirty = true;
-    }
-
-    fn swap_needed(&self) -> bool {
-        self.swap
     }
 
     pub fn close(&mut self) {
-        if self.phase != Phase::Open {
+        if !self.open {
             return;
         }
-        self.phase = Phase::Closing;
-        self.w.tune(self.motion.collapse.0, self.motion.collapse.1);
-        self.h.tune(self.motion.collapse.0, self.motion.collapse.1);
-        self.w.to(PEEK.0);
-        self.h.to(PEEK.1);
-        self.content.to(0.0);
-        self.swap = false;
+        self.open = false;
+        let ms = self.motion.ms(CLOSE_MS) * self.o.v.abs().max(0.35);
+        self.o.go(0.0, ms, Ease::Cubic);
         self.drag_active = false;
+        self.drag_over = false;
+        self.hide_wait = 0.0;
         self.dirty = true;
     }
 
-    /// Size the given view wants, in logical units.
-    pub fn size_of(&self, v: &View) -> (f32, f32) {
-        let m = &self.model;
-        match v {
-            View::Page(Page::Home) => {
-                let mut h = 112.0;
-                if self.cfg.modules.player && self.media_line().is_some() {
-                    h += 46.0;
-                }
-                if !self.cfg.modules.status {
-                    h -= 38.0;
-                }
-                (372.0, h)
+    /// Where the pill's width is heading.
+    fn pill_target(&self) -> f32 {
+        self.pill_w.target()
+    }
+
+    /// Measures the pill again; it grows at once and shrinks only when it would be a lot narrower (so a changing
+    /// title does not make it twitch), unless `exact`.
+    fn remeasure(&mut self, exact: bool) {
+        let tabs = self.tabs();
+        let u = Ui {
+            model: &self.model,
+            cfg: &self.cfg,
+            view: &self.view,
+            page: self.page,
+            note: &self.note,
+            tabs: &tabs,
+            tab_x: 0.0,
+            player_pc: self.player_pc,
+            seen: self.seen_notifs,
+            copied: None,
+            drag_over: false,
+            pinned: self.pinned,
+            time: self.time,
+            peek: self.peek.as_ref(),
+            peek_fade: 1.0,
+        };
+        let w = view::pill_width(&mut self.fonts, &u, self.pill_w.target());
+        let cur = self.pill_w.target();
+        if exact && w != cur || w > cur || w < cur - 24.0 {
+            if self.open || self.o.v > 0.002 {
+                self.pill_w.snap(w);
+            } else {
+                self.pill_w.go(w, self.motion.ms(200.0), Ease::Cubic);
             }
-            View::Page(Page::Player) => (420.0, 164.0),
-            View::Page(Page::Files) => (404.0, 140.0 + 40.0 * m.xfers.len().min(3) as f32),
-            View::Page(Page::Notifs) => (424.0, 62.0 + 54.0 * m.notifs.len().clamp(1, 4) as f32),
-            View::Page(Page::Clipboard) => (404.0, 116.0 + 38.0 * m.clips.len().min(3) as f32),
-            View::Page(Page::Controls) => (404.0, 176.0),
-            View::Call => (384.0, 92.0),
-            View::Offer => (384.0, 136.0),
-            View::Transfer(_) => (384.0, 92.0),
-            View::Note => (372.0, 76.0),
-            View::Drop => (364.0, 128.0),
         }
+    }
+
+    /// Where the surface is, in canvas units.
+    fn surface(&self) -> (R, f32) {
+        let o = self.o.v;
+        let (sw, sh, sr) = self.cur_size();
+        let w = (self.pill_w.v + (sw - self.pill_w.v) * o).clamp(8.0, CANVAS_W - 2.0);
+        let h = (PILL_H + (sh - PILL_H) * o).clamp(8.0, CANVAS_H - 4.0);
+        let r = (PILL_R + (sr - PILL_R) * o.clamp(0.0, 1.0)).max(0.0);
+        let top = self.cfg.top_margin as f32;
+        let y = top + (self.reveal.v - 1.0) * (PILL_H + top + 2.0);
+        (R::new((CANVAS_W - w) / 2.0, y, w, h), r)
     }
 
     /// Is the pointer on the island (or in the trigger zone, which is where it came from)?
@@ -679,22 +807,9 @@ impl Island {
             return true;
         }
         let Some((x, y)) = self.pointer else { return false };
-        let r = self.pill().inflate(10.0);
-        r.contains(x, y) || R::new(r.x, 0.0, r.w, r.y + 1.0).contains(x, y)
-    }
-
-    fn pill(&self) -> R {
-        let (w, h) = (self.w.value.max(8.0), self.h.value.max(8.0));
-        R::new((CANVAS_W - w) / 2.0, self.cfg.top_margin as f32 + 2.0, w, h)
-    }
-
-    fn use_pc(&self) -> bool {
-        pick_pc(&self.model, self.player_pc)
-    }
-
-    /// The media shown by the player screen and by the home screen's mini player.
-    fn media_line(&self) -> Option<(&super::model::Media, bool)> {
-        pick_media(&self.model, self.player_pc)
+        let (s, _) = self.surface();
+        let r = s.inflate(if self.open { 10.0 } else { 4.0 });
+        r.contains(x, y) || (x >= r.x && x < r.right() && y < r.y)
     }
 
     // ------------------------------------------------------------------------------------------------ time
@@ -703,29 +818,36 @@ impl Island {
         self.clock += dt;
         let dt = dt.min(0.1);
         if let Some((i, left)) = self.copied {
-            if left - dt <= 0.0 {
-                self.copied = None;
-            } else {
-                self.copied = Some((i, left - dt));
-            }
+            self.copied = if left - dt <= 0.0 { None } else { Some((i, left - dt)) };
             self.dirty = true;
-        }
-        if self.phase == Phase::Closed {
-            return Status { visible: false, animating: false };
         }
         if !self.cfg.enabled {
             self.snap_closed();
             return Status { visible: false, animating: false };
         }
         self.model.tidy(Instant::now());
-        // The screen that was showing something that no longer exists gives way.
         self.validate();
+        let near = self.pointer_near();
+
+        // Hover: a pill that is there (or has just come out) opens the panel after the dwell.
+        if !self.open {
+            let ready = self.cfg.always_visible || self.reveal.v > 0.6;
+            if near && ready && !self.suppressed && !self.drag_active {
+                self.hot_for += dt;
+                if self.hot_for * 1000.0 >= self.cfg.open_delay_ms as f32 {
+                    self.hot_for = 0.0;
+                    self.open(View::Page(self.page), Reason::Hover);
+                }
+            } else if !near {
+                self.hot_for = 0.0;
+            }
+        }
+
         // Closing rules.
-        if self.phase == Phase::Open {
-            let near = self.pointer_near();
+        if self.open {
             match self.reason {
                 Reason::Hover | Reason::Key => {
-                    if near {
+                    if near || self.pinned {
                         self.away_for = 0.0;
                     } else {
                         self.away_for += dt;
@@ -739,7 +861,7 @@ impl Island {
                     if near {
                         // Looking at it: it stays, and from now on it behaves like a hover.
                         self.away_for = 0.0;
-                        if matches!(self.shown, View::Page(_) | View::Note) {
+                        if matches!(self.view, View::Page(_) | View::Note) {
                             self.reason = Reason::Hover;
                         }
                     } else if secs.is_some() {
@@ -752,7 +874,7 @@ impl Island {
                 Reason::Drag => {
                     if self.pressed.is_none() && !self.drag_over && !self.hot {
                         self.life -= dt;
-                        if self.life <= 0.0 && self.shown == View::Drop && self.want == View::Drop {
+                        if self.life <= 0.0 && self.view == View::Drop {
                             self.close();
                         }
                     }
@@ -762,62 +884,73 @@ impl Island {
                 }
             }
         }
-        // Content swap.
-        if self.swap && self.content.value < 0.12 {
-            self.shown = self.want.clone();
-            self.swap = false;
-            self.content_wait = self.motion.content_delay * 0.4;
-            if self.shown == View::Page(Page::Notifs) {
-                self.seen_notifs = Instant::now();
+
+        // The pill's coming and going (hidden mode).
+        let wants = !self.suppressed && (self.cfg.always_visible || self.hot || near || self.open || self.o.v > 0.002 || self.peek.is_some() || self.drag_active);
+        if self.suppressed {
+            self.reveal.snap(0.0);
+        } else if self.cfg.always_visible {
+            if self.reveal.target() != 1.0 {
+                self.reveal.snap(1.0);
+            }
+        } else if wants {
+            self.hide_wait = 0.0;
+            if self.reveal.target() != 1.0 {
+                self.reveal.go(1.0, self.motion.ms(200.0), Ease::Cubic);
+            }
+        } else {
+            self.hide_wait += dt;
+            if self.hide_wait >= 0.7 && self.reveal.target() != 0.0 {
+                self.reveal.go(0.0, self.motion.ms(180.0), Ease::Cubic);
             }
         }
-        if self.phase == Phase::Open && !self.swap {
-            if self.content_wait > 0.0 {
-                self.content_wait -= dt;
-            } else {
-                self.content.to(1.0);
+
+        // A peek runs out.
+        if let Some(p) = self.peek.as_mut() {
+            p.left -= dt;
+            if p.left <= 0.0 {
+                self.peek = None;
+                self.remeasure(true);
+            }
+            self.dirty = true;
+        }
+        // The pill follows its content (the clock, the title that is playing).
+        self.pill_check -= dt;
+        if self.pill_check <= 0.0 {
+            self.pill_check = 0.5;
+            if !self.is_open() {
+                self.remeasure(false);
             }
         }
-        // The size follows what is shown (lists grow and shrink while the island is open).
-        if self.phase == Phase::Open && !self.swap {
-            let (tw, th) = self.size_of(&self.shown);
-            if (tw - self.w.target).abs() > 0.5 || (th - self.h.target).abs() > 0.5 {
-                self.w.to(tw);
-                self.h.to(th);
-            }
-        }
-        self.w.step(dt);
-        self.h.step(dt);
-        self.content.step(dt);
-        let moving = !self.w.settled(0.05) || !self.h.settled(0.05) || !self.content.settled(0.002);
+
+        let (a, b, c, d, e, f, g) = (self.o.running(), self.vs.running(), self.reveal.running(), self.pill_w.running(), self.tab_x.running(), self.fade.running(), self.peek_fade.running());
+        let moving = a || b || c || d || e || f || g;
+        self.o.step(dt);
+        self.vs.step(dt);
+        self.reveal.step(dt);
+        self.pill_w.step(dt);
+        self.tab_x.step(dt);
+        self.fade.step(dt);
+        self.peek_fade.step(dt);
         if moving {
             self.dirty = true;
         }
-        if self.phase == Phase::Closing && !moving {
-            self.snap_closed();
-            return Status { visible: false, animating: false };
+        if !self.open && self.o.v <= 0.002 && self.o.v != 0.0 {
+            self.o.snap(0.0);
         }
         // The clock of the player and the progress bars.
-        if self.phase == Phase::Open && matches!(self.shown, View::Page(Page::Player) | View::Page(Page::Home) | View::Transfer(_)) && self.clock.fract() < dt {
+        if self.open && matches!(self.view, View::Page(Page::Player) | View::Page(Page::Home) | View::Page(Page::Files) | View::Transfer(_)) && self.clock.fract() < dt {
             self.dirty = true;
         }
-        Status { visible: true, animating: moving || self.dirty }
+        Status { visible: self.visible(), animating: moving || self.dirty }
     }
 
     fn validate(&mut self) {
-        let gone = match self.shown {
-            View::Call => self.model.call().is_none() && self.life <= 0.0 && self.reason == Reason::Event(None),
-            View::Offer => self.model.offers.is_empty() && self.phase == Phase::Open && self.reason == Reason::Event(None),
-            _ => false,
-        };
-        if gone && self.phase == Phase::Open {
-            self.close();
-        }
         // An offer that was answered elsewhere, or a call that ended, must not leave a dead card.
-        if self.phase == Phase::Open && self.shown == View::Offer && self.model.offers.is_empty() && !self.swap {
+        if self.open && self.view == View::Offer && self.model.offers.is_empty() {
             self.close();
         }
-        if self.phase == Phase::Open && self.shown == View::Call && self.model.call().is_none() && !matches!(self.reason, Reason::Event(Some(_))) {
+        if self.open && self.view == View::Call && self.model.call().is_none() && !matches!(self.reason, Reason::Event(Some(_))) {
             self.reason = Reason::Event(Some(0.8));
             self.life = 0.8;
         }
@@ -827,19 +960,17 @@ impl Island {
         self.dirty = true;
     }
 
-    /// Gives back the memory of the drawing layer (the island has been closed for a while).
+    /// Gives back the memory of the drawing layers (the island has been hidden for a while).
     pub fn release_buffers(&mut self) {
         self.layer = None;
+        self.body_layer = None;
     }
 
     /// A short message from the executor (a file that could not be sent, say).
     pub fn flash(&mut self, good: bool, title: String, text: String) {
         let note = Note { icon: Some(if good { Icon::Check } else { Icon::Close }), title, text, good };
         // Even with automatic opening off, the answer to something the user just did is shown.
-        let keep = self.cfg.auto_expand;
-        self.cfg.auto_expand = true;
         self.show_note_for(note, if good { 2.5 } else { 4.5 });
-        self.cfg.auto_expand = keep;
     }
 
     /// True once after something changed, so the host draws only when needed.
@@ -848,16 +979,6 @@ impl Island {
     }
 
     // ------------------------------------------------------------------------------------------------ drawing
-
-    fn palette(&self) -> Pal {
-        let bg = self.cfg.background();
-        let light = luma(bg) > 0.55;
-        let fg: Rgb = if light { [24, 24, 28] } else { [255, 255, 255] };
-        let accent = self.cfg.accent_rgb();
-        // Text on the accent colour: dark on light accents, white on dark ones.
-        let on_accent: Rgb = if luma(accent) > 0.6 { [10, 10, 12] } else { [255, 255, 255] };
-        Pal { bg, fg, accent, on_accent, chip: mix(bg, fg, 0.11), chip_hi: mix(bg, fg, 0.20), light }
-    }
 
     #[cfg(test)]
     pub fn new_canvas(&self, k: f32) -> Canvas {
@@ -868,587 +989,123 @@ impl Island {
     pub fn render(&mut self, cv: &mut Canvas) {
         cv.clear();
         self.hits.clear();
-        if self.phase == Phase::Closed {
+        if !self.visible() {
             return;
         }
-        let pal = self.palette();
-        let pill = self.pill();
-        let radius = (pill.h / 2.0).min(MAX_RADIUS);
-        let mut layer = match self.layer.take() {
-            Some(l) if l.width_px() == cv.width_px() && l.height_px() == cv.height_px() => l,
-            _ => Canvas { pm: Pixmap::new(cv.width_px(), cv.height_px()).expect("layer"), k: cv.k },
+        let pal = view::palette(&self.cfg);
+        let (s, r) = self.surface();
+        let flat = self.cfg.top_margin == 0;
+        let Some(path) = view::surf_path(s, r, flat) else { return };
+        // While a file is being carried, the pixels around the island are made (all but) invisible but solid for hit
+        // testing, so the system's drag-and-drop reaches the window even at the very edge of the screen.
+        if self.open && self.view == View::Drop {
+            cv.squircle(R::new(s.x - 40.0, 0.0, s.w + 80.0, s.bottom() + 18.0), 20.0, color([0, 0, 0], 0.012), None);
+        }
+        cv.fill_path(&path, color(pal.bg, 1.0), None);
+        if let Some(rim) = view::surf_rim(s, r, flat) {
+            cv.stroke_path(&rim, color(pal.fg, if pal.light { 0.10 } else { 0.15 }), 1.0, None);
+        }
+        let o = self.o.v;
+        let pill_op = 1.0 - (o / 0.3).clamp(0.0, 1.0);
+        let panel_op = ((o - 0.3) / 0.55).clamp(0.0, 1.0);
+        let moving = self.o.running() || self.vs.running() || self.reveal.running() || self.pill_w.running();
+        let mask = if moving { cv.mask_path(&path) } else { None };
+        let tabs = self.tabs();
+        let ui = Ui {
+            model: &self.model,
+            cfg: &self.cfg,
+            view: &self.view,
+            page: self.page,
+            note: &self.note,
+            tabs: &tabs,
+            tab_x: self.tab_x.v,
+            player_pc: self.player_pc,
+            seen: self.seen_notifs,
+            copied: self.copied,
+            drag_over: self.drag_over,
+            pinned: self.pinned,
+            time: self.time,
+            peek: self.peek.as_ref(),
+            peek_fade: self.peek_fade.v,
         };
-        // Shadow: a blurred copy of the shape, a little lower than the island.
-        layer.clear();
-        layer.squircle(R::new(pill.x + 2.0, pill.y + 7.0, pill.w - 4.0, pill.h - 2.0), radius, color([0, 0, 0], if pal.light { 0.30 } else { 0.55 }), None);
-        layer.blur(pill.inflate(26.0), 16.0);
-        cv.blit(&layer.pm, 1.0, 1.0, 0.0, 0.0, None);
-        // While a file is being carried, the pixels above and around the island are made (all but) invisible but
-        // solid for hit testing, so the system's drag-and-drop reaches the window even at the very edge of the screen.
-        if matches!(self.want, View::Drop) {
-            cv.squircle(R::new(pill.x - 40.0, 0.0, pill.w + 80.0, pill.bottom() + 18.0), 20.0, color([0, 0, 0], 0.012), None);
-        }
-        // Body and a hairline rim so the black does not melt into a dark window.
-        cv.squircle(pill, radius, color(pal.bg, 1.0), None);
-        if let Some(p) = super::gfx::squircle(pill, radius, super::gfx::squircle_n(radius, pill.h)) {
-            cv.stroke_path(&p, color(pal.fg, 0.10), 0.9, None);
-        }
-        // Content, laid out at the final size and revealed by the clip.
-        let p = self.content.value.clamp(0.0, 1.0);
-        if p > 0.004 {
-            layer.clear();
-            let view = self.shown.clone();
-            let (vw, vh) = self.size_of(&view);
-            let origin = ((CANVAS_W - vw) / 2.0, self.cfg.top_margin as f32 + 2.0);
-            self.draw_view(&mut layer, &pal, &view, origin);
-            let blur = (1.0 - p) * self.motion.blur;
-            if blur > 0.6 {
-                layer.blur(pill.inflate(2.0), blur);
+        let (ptr, prs) = (self.pointer, self.pressed);
+        let fonts = &mut self.fonts;
+        let hits = &mut self.hits;
+        let layer = &mut self.layer;
+        let body_layer = &mut self.body_layer;
+        let fresh = |slot: &mut Option<Canvas>, cv: &Canvas| {
+            let mut l = match slot.take() {
+                Some(l) if l.width_px() == cv.width_px() && l.height_px() == cv.height_px() => l,
+                _ => Canvas { pm: Pixmap::new(cv.width_px(), cv.height_px()).expect("layer"), k: cv.k },
+            };
+            l.clear();
+            l
+        };
+
+        // The collapsed pill.
+        if pill_op > 0.004 {
+            if pill_op >= 0.999 && mask.is_none() {
+                let mut d = Draw { cv, fonts, hits, pal: &pal, pointer: ptr, pressed: prs };
+                view::draw_pill(&mut d, &ui, s);
+            } else {
+                let mut l = fresh(layer, cv);
+                {
+                    let mut d = Draw { cv: &mut l, fonts, hits, pal: &pal, pointer: ptr, pressed: prs };
+                    view::draw_pill(&mut d, &ui, s);
+                }
+                cv.blit(&l.pm, pill_op, 1.0, 0.0, 0.0, mask.as_ref());
+                *layer = Some(l);
             }
-            let scale = self.motion.content_scale + (1.0 - self.motion.content_scale) * p;
-            let mask = cv.mask_of(pill, radius);
-            // The content reaches full opacity before the island finishes growing.
-            let alpha = (p * 1.35 - 0.1).clamp(0.0, 1.0);
-            cv.blit(&layer.pm, alpha, scale, pill.cx(), origin.1 + vh / 2.0, mask.as_ref());
         }
-        self.layer = Some(layer);
-    }
-
-    fn draw_view(&mut self, cv: &mut Canvas, pal: &Pal, view: &View, o: (f32, f32)) {
-        let (vw, vh) = self.size_of(view);
-        let body = R::new(o.0, o.1, vw, vh);
-        let media = pick_media(&self.model, self.player_pc);
-        let use_pc = pick_pc(&self.model, self.player_pc);
-        let both = self.model.pc_media.is_some() && self.model.phone_media.is_some();
-        let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal, pointer: self.pointer, pressed: self.pressed };
-        match view {
-            View::Page(Page::Home) => draw_home(&mut d, &self.model, &self.cfg, body, media, self.seen_notifs),
-            View::Page(Page::Player) => draw_player(&mut d, &self.model, body, media, use_pc, both),
-            View::Page(Page::Files) => draw_files(&mut d, &self.model, body),
-            View::Page(Page::Notifs) => draw_notifs(&mut d, &self.model, body),
-            View::Page(Page::Clipboard) => draw_clipboard(&mut d, &self.model, body, self.copied),
-            View::Page(Page::Controls) => draw_controls(&mut d, &self.model, body),
-            View::Call => draw_call(&mut d, &self.model, body),
-            View::Offer => draw_offer(&mut d, &self.model, body),
-            View::Transfer(id) => draw_transfer(&mut d, &self.model, body, id),
-            View::Note => draw_note(&mut d, &self.note, body),
-            View::Drop => draw_drop(&mut d, &self.model, body, self.drag_over),
-        }
-    }
-}
-
-/// Whether the computer's player (rather than the phone's) is the one to show.
-fn pick_pc(m: &Model, pref: Option<bool>) -> bool {
-    if let Some(v) = pref {
-        return v;
-    }
-    let pc = m.pc_media.as_ref().filter(|x| !x.is_empty());
-    let ph = m.phone_media.as_ref().filter(|x| !x.is_empty());
-    match (pc, ph) {
-        (Some(p), Some(f)) => p.playing || !f.playing,
-        (Some(_), None) => true,
-        _ => false,
-    }
-}
-
-fn pick_media(m: &Model, pref: Option<bool>) -> Option<(&super::model::Media, bool)> {
-    let pc = m.pc_media.as_ref().filter(|x| !x.is_empty());
-    let ph = m.phone_media.as_ref().filter(|x| !x.is_empty());
-    if pick_pc(m, pref) {
-        pc.map(|x| (x, true)).or(ph.map(|x| (x, false)))
-    } else {
-        ph.map(|x| (x, false)).or(pc.map(|x| (x, true)))
-    }
-}
-
-// ---------------------------------------------------------------------------------------------------------
-// Drawing helpers
-
-struct Pal {
-    bg: Rgb,
-    fg: Rgb,
-    accent: Rgb,
-    on_accent: Rgb,
-    chip: Rgb,
-    chip_hi: Rgb,
-    light: bool,
-}
-
-struct Draw<'a> {
-    cv: &'a mut Canvas,
-    fonts: &'a mut Fonts,
-    hits: &'a mut Vec<Hit>,
-    pal: &'a Pal,
-    pointer: Option<(f32, f32)>,
-    pressed: Option<usize>,
-}
-
-impl Draw<'_> {
-    fn text(&mut self, s: &str, x: f32, y: f32, size: f32, w: Weight, alpha: f32) -> f32 {
-        let fg = self.pal.fg;
-        self.cv.text(self.fonts, s, x, y, size, w, fg, alpha)
-    }
-
-    fn text_in(&mut self, s: &str, x: f32, y: f32, max: f32, size: f32, w: Weight, alpha: f32) {
-        let fit = self.fonts.fit(s, size, w, max);
-        self.text(&fit, x, y, size, w, alpha);
-    }
-
-    fn hot(&self, r: R) -> bool {
-        self.pointer.is_some_and(|(x, y)| r.contains(x, y))
-    }
-
-    fn is_down(&self, r: R) -> bool {
-        self.pressed.and_then(|i| self.hits.get(i)).is_some_and(|h| h.r == r)
-    }
-
-    fn add(&mut self, r: R, act: Act) {
-        self.hits.push(Hit { r, act });
-    }
-
-    /// A round icon button.
-    fn round(&mut self, c: (f32, f32), size: f32, ic: Icon, act: Act, bg: Option<Rgb>, fg: Rgb) {
-        let r = R::new(c.0 - size / 2.0, c.1 - size / 2.0, size, size);
-        let down = self.is_down(r);
-        let base = bg.unwrap_or(self.pal.chip);
-        let fill = if down { mix(base, self.pal.fg, 0.30) } else if self.hot(r) { mix(base, self.pal.fg, if bg.is_some() { 0.18 } else { 0.10 }) } else { base };
-        if bg.is_some() || self.hot(r) || down {
-            self.cv.circle(c.0, c.1, size / 2.0 - if down { 1.0 } else { 0.0 }, color(fill, 1.0), None);
-        } else {
-            self.cv.circle(c.0, c.1, size / 2.0, color(fill, 1.0), None);
-        }
-        icon(self.cv, ic, c.0, c.1, size * 0.5, color(fg, 1.0), None);
-        self.add(r, act);
-    }
-
-    /// A text button (pill).
-    fn pill(&mut self, r: R, label: &str, act: Act, bg: Rgb, fg: Rgb) {
-        let down = self.is_down(r);
-        let fill = if down { mix(bg, self.pal.fg, 0.28) } else if self.hot(r) { mix(bg, self.pal.fg, 0.16) } else { bg };
-        self.cv.squircle(r, r.h / 2.0, color(fill, 1.0), None);
-        let label = self.fonts.fit(label, 13.0, Weight::Medium, r.w - 14.0);
-        let w = self.fonts.measure(&label, 13.0, Weight::Medium);
-        self.cv.text(self.fonts, &label, r.cx() - w / 2.0, r.cy() + 4.6, 13.0, Weight::Medium, fg, 1.0);
-        self.add(r, act);
-    }
-
-    fn bar(&mut self, r: R, f: f32, c: Rgb) {
-        self.cv.squircle(r, r.h / 2.0, color(self.pal.fg, 0.16), None);
-        let w = (r.w * f.clamp(0.0, 1.0)).max(if f > 0.0 { r.h } else { 0.0 });
-        if w > 0.0 {
-            self.cv.squircle(R::new(r.x, r.y, w, r.h), r.h / 2.0, color(c, 1.0), None);
-        }
-    }
-
-    fn avatar(&mut self, c: (f32, f32), size: f32, label: &str) {
-        self.cv.circle(c.0, c.1, size / 2.0, color(self.pal.chip_hi, 1.0), None);
-        let ch = label.chars().next().map(|c| c.to_uppercase().to_string()).unwrap_or_else(|| "?".into());
-        let w = self.fonts.measure(&ch, size * 0.42, Weight::Bold);
-        self.text(&ch, c.0 - w / 2.0, c.1 + size * 0.15, size * 0.42, Weight::Bold, 1.0);
-    }
-}
-
-fn header(d: &mut Draw, body: R, title: &str) {
-    d.text(title, body.x + PAD, body.y + 31.0, 15.5, Weight::Bold, 1.0);
-}
-
-fn back(d: &mut Draw, body: R) {
-    d.round((body.right() - PAD - 15.0, body.y + 27.0), 30.0, Icon::Back, Act::Go(Page::Home), None, d.pal.fg);
-}
-
-fn draw_home(d: &mut Draw, m: &Model, cfg: &IslandConfig, body: R, media: Option<(&super::model::Media, bool)>, seen: Instant) {
-    let mut y = body.y;
-    if cfg.modules.status {
-        let c = (body.x + PAD + 19.0, y + 38.0);
-        d.cv.circle(c.0, c.1, 19.0, color(d.pal.chip, 1.0), None);
-        icon(d.cv, Icon::Phone, c.0, c.1, 21.0, color(d.pal.fg, 1.0), None);
-        let hit = R::new(body.x + PAD, y + 14.0, body.w - 2.0 * PAD - 80.0, 48.0);
-        d.add(hit, Act::Device);
-        match m.target() {
-            Some(p) => {
-                d.text_in(&p.name, body.x + PAD + 48.0, y + 34.0, body.w - 2.0 * PAD - 150.0, 15.0, Weight::Bold, 1.0);
-                let multi = m.phones().len() > 1;
-                let sub = if multi { t("Conectado · toca para cambiar", "Connected · tap to switch") } else { t("Conectado", "Connected") };
-                d.text(sub, body.x + PAD + 48.0, y + 51.0, 12.0, Weight::Regular, 0.6);
-                let info = m.info.get(&p.id);
-                if let Some(i) = info.filter(|i| i.battery >= 0) {
-                    let bx = body.right() - PAD - 70.0;
-                    let level = i.battery.clamp(0, 100) as f32 / 100.0;
-                    icon(d.cv, Icon::Battery, bx + 12.0, y + 38.0, 24.0, color(d.pal.fg, 0.9), None);
-                    let col = if i.charging { SUCCESS } else if level < 0.2 { DANGER } else { d.pal.fg };
-                    let fill_w = 10.8 * level.max(0.04);
-                    d.cv.squircle(R::new(bx + 4.1, y + 34.9, fill_w, 6.4), 1.6, color(col, 1.0), None);
-                    if i.charging {
-                        icon(d.cv, Icon::Bolt, bx + 10.7, y + 38.0, 10.0, color(d.pal.bg, 1.0), None);
-                    }
-                    d.text(&format!("{}%", i.battery), bx + 29.0, y + 43.0, 13.0, Weight::Medium, 1.0);
+        // The open panel (or one of the compact screens).
+        if panel_op > 0.004 {
+            let (vw, vh, _) = view::view_size(&self.view);
+            let origin = ((CANVAS_W - vw) / 2.0, s.y.max(self.cfg.top_margin as f32 * 0.0));
+            let shift = (1.0 - panel_op) * -8.0;
+            let origin = (origin.0, if self.reveal.v < 1.0 { s.y } else { origin.1.min(s.y) } + shift);
+            let is_page = matches!(self.view, View::Page(_));
+            let direct = panel_op >= 0.999 && mask.is_none();
+            let mut l = if direct { None } else { Some(fresh(layer, cv)) };
+            {
+                let target: &mut Canvas = match l.as_mut() {
+                    Some(l) => l,
+                    None => cv,
+                };
+                // The header and the compact screens are drawn straight; the body of a tab fades in on its own.
+                if is_page {
+                    let mut d = Draw { cv: target, fonts, hits, pal: &pal, pointer: ptr, pressed: prs };
+                    view::draw_header(&mut d, &ui, origin);
+                } else {
+                    let rect = R::new(origin.0, origin.1, vw, vh);
+                    let mut d = Draw { cv: target, fonts, hits, pal: &pal, pointer: ptr, pressed: prs };
+                    view::draw_event(&mut d, &ui, rect);
                 }
             }
-            None => {
-                d.text(t("Sin teléfono conectado", "No phone connected"), body.x + PAD + 48.0, y + 34.0, 15.0, Weight::Bold, 1.0);
-                d.text(t("Abre Alero para vincular uno", "Open Alero to pair one"), body.x + PAD + 48.0, y + 51.0, 12.0, Weight::Regular, 0.6);
+            if is_page {
+                let f = self.fade.v;
+                let target: &mut Canvas = match l.as_mut() {
+                    Some(l) => l,
+                    None => cv,
+                };
+                if f >= 0.999 {
+                    let mut d = Draw { cv: target, fonts, hits, pal: &pal, pointer: ptr, pressed: prs };
+                    view::draw_body(&mut d, &ui, origin);
+                } else {
+                    let mut b = fresh(body_layer, target);
+                    {
+                        let mut d = Draw { cv: &mut b, fonts, hits, pal: &pal, pointer: ptr, pressed: prs };
+                        view::draw_body(&mut d, &ui, origin);
+                    }
+                    target.blit_shift(&b.pm, f, (1.0 - f) * 6.0, None);
+                    *body_layer = Some(b);
+                }
+            }
+            if let Some(l) = l {
+                cv.blit(&l.pm, panel_op, 1.0, 0.0, 0.0, mask.as_ref());
+                *layer = Some(l);
             }
         }
-        y += 62.0;
-    } else {
-        y += 6.0;
     }
-    if let (true, Some((md, pc))) = (cfg.modules.player, media) {
-        let r = R::new(body.x + PAD, y, body.w - 2.0 * PAD, 38.0);
-        d.cv.squircle(r, 19.0, color(d.pal.chip, 1.0), None);
-        d.add(r.inset(0.0, 0.0, 44.0, 0.0), Act::Go(Page::Player));
-        icon(d.cv, Icon::Music, r.x + 20.0, r.cy(), 18.0, color(d.pal.accent, 1.0), None);
-        let label = if md.artist.is_empty() { md.title.clone() } else { format!("{} — {}", md.title, md.artist) };
-        d.text_in(&label, r.x + 38.0, r.cy() + 4.6, r.w - 38.0 - 50.0, 13.0, Weight::Medium, 1.0);
-        let toggle = if pc { Act::PcMedia("toggle") } else { Act::PhoneMedia("toggle") };
-        d.round((r.right() - 20.0, r.cy()), 30.0, if md.playing { Icon::Pause } else { Icon::Play }, toggle, None, d.pal.fg);
-    }
-    // Navigation.
-    let mut items: Vec<(Icon, Page, usize)> = Vec::new();
-    if cfg.modules.player {
-        items.push((Icon::Music, Page::Player, 0));
-    }
-    if cfg.modules.send || cfg.modules.incoming {
-        items.push((Icon::Send, Page::Files, 0));
-    }
-    if cfg.modules.notifications {
-        items.push((Icon::Bell, Page::Notifs, m.unread(seen)));
-    }
-    if cfg.modules.clipboard {
-        items.push((Icon::Clipboard, Page::Clipboard, 0));
-    }
-    if cfg.modules.controls {
-        items.push((Icon::Sliders, Page::Controls, 0));
-    }
-    let n = items.len() + 1;
-    let slot = (body.w - 2.0 * PAD) / n as f32;
-    let cy = body.bottom() - 32.0;
-    for (i, (ic, page, badge)) in items.into_iter().enumerate() {
-        let cx = body.x + PAD + slot * (i as f32 + 0.5);
-        d.round((cx, cy), 42.0, ic, Act::Go(page), None, d.pal.fg);
-        if badge > 0 {
-            d.cv.circle(cx + 14.0, cy - 14.0, 8.0, color(d.pal.accent, 1.0), None);
-            let s = badge.min(9).to_string();
-            let w = d.fonts.measure(&s, 10.5, Weight::Bold);
-            let oa = d.pal.on_accent;
-            d.cv.text(d.fonts, &s, cx + 14.0 - w / 2.0, cy - 10.4, 10.5, Weight::Bold, oa, 1.0);
-        }
-    }
-    let cx = body.x + PAD + slot * (n as f32 - 0.5);
-    let accent = d.pal.accent;
-    let on = d.pal.on_accent;
-    d.round((cx, cy), 42.0, Icon::Phone, Act::OpenApp, Some(accent), on);
-}
-
-fn draw_player(d: &mut Draw, m: &Model, body: R, media: Option<(&super::model::Media, bool)>, pc: bool, both: bool) {
-    let _ = m;
-    back(d, body);
-    let Some((md, is_pc)) = media else {
-        d.text(t("Reproductor", "Player"), body.x + PAD, body.y + 31.0, 15.5, Weight::Bold, 1.0);
-        icon(d.cv, Icon::Music, body.cx(), body.y + 78.0, 34.0, color(d.pal.fg, 0.35), None);
-        d.cv.text_centered(d.fonts, t("Nada se está reproduciendo", "Nothing is playing"), body.cx(), body.y + 122.0, 13.5, Weight::Medium, d.pal.fg, 0.7);
-        return;
-    };
-    let art = R::new(body.x + PAD, body.y + 18.0, 76.0, 76.0);
-    match &md.art {
-        Some(img) => d.cv.image(img, art, 16.0, 1.0, None),
-        None => {
-            d.cv.squircle(art, 16.0, color(d.pal.chip_hi, 1.0), None);
-            icon(d.cv, Icon::Music, art.cx(), art.cy(), 30.0, color(d.pal.fg, 0.6), None);
-        }
-    }
-    let tx = art.right() + 14.0;
-    let tw = body.right() - PAD - 40.0 - tx;
-    d.text_in(&md.title, tx, body.y + 40.0, tw, 15.5, Weight::Bold, 1.0);
-    if !md.artist.is_empty() {
-        d.text_in(&md.artist, tx, body.y + 59.0, tw, 13.0, Weight::Regular, 0.62);
-    }
-    let src = if is_pc { t("Este equipo", "This computer") } else { t("Teléfono", "Phone") };
-    if both {
-        let r = R::new(tx, body.y + 66.0, d.fonts.measure(src, 11.5, Weight::Medium) + 18.0, 20.0);
-        d.cv.squircle(r, 10.0, color(if d.hot(r) { d.pal.chip_hi } else { d.pal.chip }, 1.0), None);
-        d.text(src, r.x + 9.0, r.y + 14.2, 11.5, Weight::Medium, 0.85);
-        d.add(r, Act::Source);
-    } else {
-        d.text(src, tx, body.y + 80.0, 11.5, Weight::Medium, 0.5);
-    }
-    let _ = pc;
-    // Progress.
-    let bar = R::new(body.x + PAD, body.y + 106.0, body.w - 2.0 * PAD, 4.0);
-    let pos = md.position_now();
-    let f = if md.duration_ms > 0 { pos as f32 / md.duration_ms as f32 } else { 0.0 };
-    let accent = d.pal.accent;
-    d.bar(bar, f, accent);
-    if md.duration_ms > 0 {
-        d.text(&fmt_time(pos), bar.x, bar.y + 20.0, 11.0, Weight::Regular, 0.55);
-        let end = fmt_time(md.duration_ms);
-        let w = d.fonts.measure(&end, 11.0, Weight::Regular);
-        d.text(&end, bar.right() - w, bar.y + 20.0, 11.0, Weight::Regular, 0.55);
-    }
-    // Controls, centred.
-    let cy = body.y + 136.0;
-    let (prev, toggle, next) = if is_pc { (Act::PcMedia("prev"), Act::PcMedia("toggle"), Act::PcMedia("next")) } else { (Act::PhoneMedia("prev"), Act::PhoneMedia("toggle"), Act::PhoneMedia("next")) };
-    let fg = d.pal.fg;
-    let bg = d.pal.bg;
-    d.round((body.cx() - 62.0, cy), 30.0, Icon::Prev, prev, Some(bg), fg);
-    d.round((body.cx(), cy), 36.0, if md.playing { Icon::Pause } else { Icon::Play }, toggle, Some(fg), bg);
-    d.round((body.cx() + 62.0, cy), 30.0, Icon::Next, next, Some(bg), fg);
-}
-
-fn draw_files(d: &mut Draw, m: &Model, body: R) {
-    back(d, body);
-    header(d, body, t("Enviar archivos", "Send files"));
-    let zone = R::new(body.x + PAD, body.y + 48.0, body.w - 2.0 * PAD, 70.0);
-    dashed(d, zone, d.pal.fg, 0.28);
-    icon(d.cv, Icon::Send, zone.x + 34.0, zone.cy(), 26.0, color(d.pal.accent, 1.0), None);
-    match m.target() {
-        Some(p) => {
-            d.text(t("Arrastra archivos hasta aquí", "Drag files here"), zone.x + 62.0, zone.cy() - 2.0, 13.5, Weight::Medium, 1.0);
-            let sub = format!("{} {}", t("Se envían a", "Sent to"), p.name);
-            d.text_in(&sub, zone.x + 62.0, zone.cy() + 16.0, zone.w - 76.0, 12.0, Weight::Regular, 0.6);
-        }
-        None => {
-            d.text(t("Conecta un teléfono para enviar", "Connect a phone to send"), zone.x + 62.0, zone.cy() + 4.6, 13.5, Weight::Medium, 0.8);
-        }
-    }
-    let mut y = zone.bottom() + 12.0;
-    for x in m.xfers.iter().take(3) {
-        draw_xfer_row(d, x, R::new(body.x + PAD, y, body.w - 2.0 * PAD, 34.0));
-        y += 40.0;
-    }
-}
-
-fn draw_xfer_row(d: &mut Draw, x: &super::model::Xfer, r: R) {
-    let ic = match (&x.state, x.incoming) {
-        (XState::Done, _) => Icon::Check,
-        (XState::Failed(_), _) => Icon::Close,
-        (_, true) => Icon::Download,
-        _ => Icon::Send,
-    };
-    let col = match &x.state {
-        XState::Done => SUCCESS,
-        XState::Failed(_) => DANGER,
-        _ => d.pal.fg,
-    };
-    icon(d.cv, ic, r.x + 11.0, r.cy(), 18.0, color(col, 1.0), None);
-    d.text_in(&x.name, r.x + 30.0, r.y + 13.0, r.w - 30.0 - 74.0, 13.0, Weight::Medium, 1.0);
-    let right = match &x.state {
-        XState::Running => format!("{}%", (x.fraction() * 100.0) as u32),
-        XState::Done => t("Listo", "Done").to_string(),
-        XState::Failed(_) => t("Falló", "Failed").to_string(),
-    };
-    let w = d.fonts.measure(&right, 12.0, Weight::Medium);
-    d.text(&right, r.right() - w, r.y + 13.0, 12.0, Weight::Medium, 0.7);
-    let accent = d.pal.accent;
-    d.bar(R::new(r.x + 30.0, r.y + 22.0, r.w - 30.0, 4.0), x.fraction(), accent);
-}
-
-fn dashed(d: &mut Draw, r: R, c: Rgb, alpha: f32) {
-    if let Some(p) = super::gfx::squircle(r, 18.0, 3.6) {
-        let mut stroke = tiny_skia::Stroke { width: 1.4, line_cap: tiny_skia::LineCap::Round, ..tiny_skia::Stroke::default() };
-        stroke.dash = tiny_skia::StrokeDash::new(vec![5.0, 5.0], 0.0);
-        let tf = tiny_skia::Transform::from_scale(d.cv.k, d.cv.k);
-        let mut paint = tiny_skia::Paint::default();
-        paint.set_color(color(c, alpha));
-        paint.anti_alias = true;
-        d.cv.pm.stroke_path(&p, &paint, &stroke, tf, None);
-    }
-}
-
-fn draw_notifs(d: &mut Draw, m: &Model, body: R) {
-    back(d, body);
-    header(d, body, t("Notificaciones", "Notifications"));
-    if m.notifs.is_empty() {
-        icon(d.cv, Icon::Bell, body.cx(), body.y + 78.0, 28.0, color(d.pal.fg, 0.3), None);
-        d.cv.text_centered(d.fonts, t("Sin notificaciones", "No notifications"), body.cx(), body.y + 112.0, 13.5, Weight::Medium, d.pal.fg, 0.6);
-        return;
-    }
-    for (i, n) in m.notifs.iter().take(4).enumerate() {
-        let r = R::new(body.x + 10.0, body.y + 52.0 + i as f32 * 54.0, body.w - 20.0, 50.0);
-        let hot = d.hot(r);
-        if hot {
-            d.cv.squircle(r, 16.0, color(d.pal.chip, 1.0), None);
-        }
-        d.add(r.inset(0.0, 0.0, 40.0, 0.0), Act::OpenApp);
-        let c = (r.x + 25.0, r.cy());
-        match m.icon(&n.pkg) {
-            Some(img) => d.cv.image(img, R::new(c.0 - 16.0, c.1 - 16.0, 32.0, 32.0), 9.0, 1.0, None),
-            None => d.avatar(c, 32.0, &n.app),
-        }
-        let title = if n.title.is_empty() { n.app.clone() } else { n.title.clone() };
-        d.text_in(&title, r.x + 50.0, r.y + 21.0, r.w - 50.0 - 44.0, 13.5, Weight::Bold, 1.0);
-        d.text_in(&n.text, r.x + 50.0, r.y + 38.0, r.w - 50.0 - 44.0, 12.5, Weight::Regular, 0.65);
-        if hot {
-            let dismiss = R::new(r.right() - 36.0, r.cy() - 14.0, 28.0, 28.0);
-            d.cv.circle(dismiss.cx(), dismiss.cy(), 14.0, color(d.pal.chip_hi, 1.0), None);
-            icon(d.cv, Icon::Close, dismiss.cx(), dismiss.cy(), 12.0, color(d.pal.fg, 0.9), None);
-            d.add(dismiss, Act::Dismiss(n.key.clone()));
-        }
-    }
-}
-
-fn draw_clipboard(d: &mut Draw, m: &Model, body: R, copied: Option<(usize, f32)>) {
-    back(d, body);
-    header(d, body, t("Portapapeles", "Clipboard"));
-    let r = R::new(body.x + PAD, body.y + 48.0, body.w - 2.0 * PAD, 36.0);
-    let sent = copied.is_some_and(|(i, _)| i == usize::MAX);
-    let label = if sent { t("Enviado al teléfono", "Sent to the phone") } else { t("Enviar mi portapapeles al teléfono", "Send my clipboard to the phone") };
-    let (accent, on) = (d.pal.accent, d.pal.on_accent);
-    if m.target().is_some() {
-        d.pill(r, label, Act::SendClip, accent, on);
-    } else {
-        d.pill(r, t("Sin teléfono conectado", "No phone connected"), Act::OpenApp, d.pal.chip, d.pal.fg);
-    }
-    for (i, c) in m.clips.iter().take(3).enumerate() {
-        let row = R::new(body.x + PAD, body.y + 96.0 + i as f32 * 38.0, body.w - 2.0 * PAD, 34.0);
-        let hot = d.hot(row);
-        d.cv.squircle(row, 17.0, color(if hot { d.pal.chip_hi } else { d.pal.chip }, 1.0), None);
-        let done = copied.is_some_and(|(k, _)| k == i);
-        icon(d.cv, if done { Icon::Check } else { Icon::Copy }, row.x + 20.0, row.cy(), 16.0, color(if done { SUCCESS } else { d.pal.fg }, 1.0), None);
-        d.text_in(&c.text.replace('\n', " "), row.x + 38.0, row.cy() + 4.6, row.w - 52.0, 13.0, Weight::Regular, 0.95);
-        d.add(row, Act::CopyClip(i));
-    }
-    if m.clips.is_empty() {
-        d.cv.text_centered(d.fonts, t("Lo que copies en el teléfono aparece aquí", "What you copy on the phone shows up here"), body.cx(), body.bottom() - 22.0, 12.0, Weight::Regular, d.pal.fg, 0.5);
-    }
-}
-
-fn draw_controls(d: &mut Draw, m: &Model, body: R) {
-    back(d, body);
-    header(d, body, t("Controles del teléfono", "Phone controls"));
-    let Some(id) = m.target_id() else {
-        d.cv.text_centered(d.fonts, t("Sin teléfono conectado", "No phone connected"), body.cx(), body.cy() + 14.0, 13.5, Weight::Medium, d.pal.fg, 0.6);
-        return;
-    };
-    let st = m.phone.get(&id).cloned().unwrap_or_default();
-    let tile_w = (body.w - 2.0 * PAD - 3.0 * 8.0) / 4.0;
-    let ringer = match st.ringer.as_str() {
-        "silent" => t("Silencio", "Silent"),
-        "vibrate" => t("Vibrar", "Vibrate"),
-        _ => t("Sonido", "Sound"),
-    };
-    let tiles: [(Icon, &str, bool, Act); 4] = [
-        (Icon::Moon, t("No molestar", "Do not disturb"), st.dnd, Act::Toggle("dnd")),
-        (Icon::Torch, t("Linterna", "Flashlight"), st.torch, Act::Toggle("torch")),
-        (Icon::Find, t("Buscar", "Find"), st.finding, Act::Toggle("find")),
-        (Icon::Volume, ringer, st.ringer == "silent" || st.ringer == "vibrate", Act::Ringer),
-    ];
-    for (i, (ic, label, on, act)) in tiles.into_iter().enumerate() {
-        let r = R::new(body.x + PAD + i as f32 * (tile_w + 8.0), body.y + 48.0, tile_w, 62.0);
-        let (bg, fg) = if on { (d.pal.accent, d.pal.on_accent) } else { (d.pal.chip, d.pal.fg) };
-        let down = d.is_down(r);
-        let fill = if down { mix(bg, d.pal.fg, 0.25) } else if d.hot(r) { mix(bg, d.pal.fg, 0.14) } else { bg };
-        d.cv.squircle(r, 20.0, color(fill, 1.0), None);
-        icon(d.cv, ic, r.cx(), r.y + 22.0, 22.0, color(fg, 1.0), None);
-        let label = d.fonts.fit(label, 11.0, Weight::Medium, r.w - 8.0);
-        let w = d.fonts.measure(&label, 11.0, Weight::Medium);
-        d.cv.text(d.fonts, &label, r.cx() - w / 2.0, r.y + 49.0, 11.0, Weight::Medium, fg, 1.0);
-        d.add(r, act);
-    }
-    // Media volume.
-    let track = R::new(body.x + PAD + 30.0, body.y + 132.0, body.w - 2.0 * PAD - 30.0, 10.0);
-    icon(d.cv, Icon::Volume, body.x + PAD + 10.0, track.cy(), 20.0, color(d.pal.fg, 0.85), None);
-    let f = st.media as f32 / st.media_max.max(1) as f32;
-    let accent = d.pal.accent;
-    d.bar(track, f, accent);
-    d.cv.circle(track.x + (track.w * f.clamp(0.0, 1.0)).clamp(5.0, track.w - 5.0), track.cy(), 7.0, color(d.pal.fg, 1.0), None);
-    d.add(track.inflate(8.0), Act::Volume);
-    d.text(t("Volumen multimedia", "Media volume"), body.x + PAD + 30.0, track.bottom() + 17.0, 11.0, Weight::Regular, 0.5);
-}
-
-fn draw_call(d: &mut Draw, m: &Model, body: R) {
-    let Some((_, c)) = m.call() else { return };
-    let name = if c.name.is_empty() { t("Número desconocido", "Unknown number").to_string() } else { c.name.clone() };
-    d.avatar((body.x + PAD + 24.0, body.cy()), 48.0, &name);
-    let status = if c.ringing { t("Llamada entrante…", "Incoming call…") } else { t("En llamada", "On a call") };
-    d.text_in(&name, body.x + PAD + 62.0, body.cy() - 2.0, body.w - 2.0 * PAD - 62.0 - 118.0, 15.5, Weight::Bold, 1.0);
-    d.text(status, body.x + PAD + 62.0, body.cy() + 16.0, 12.5, Weight::Regular, 0.65);
-    let y = body.cy();
-    if c.ringing {
-        d.round((body.right() - PAD - 76.0, y), 46.0, Icon::CallEnd, Act::Call("decline"), Some(DANGER), [255, 255, 255]);
-        if c.can_answer {
-            d.round((body.right() - PAD - 22.0, y), 46.0, Icon::Call, Act::Call("answer"), Some(SUCCESS), [255, 255, 255]);
-        }
-    } else {
-        d.round((body.right() - PAD - 22.0, y), 46.0, Icon::CallEnd, Act::Call("hangup"), Some(DANGER), [255, 255, 255]);
-    }
-}
-
-fn draw_offer(d: &mut Draw, m: &Model, body: R) {
-    let Some(o) = m.offers.last() else { return };
-    icon(d.cv, Icon::File, body.x + PAD + 14.0, body.y + 38.0, 28.0, color(d.pal.accent, 1.0), None);
-    let sub = format!("{} {}", o.peer_name, t("quiere enviarte un archivo", "wants to send you a file"));
-    d.text_in(&sub, body.x + PAD + 40.0, body.y + 31.0, body.w - 2.0 * PAD - 40.0, 12.0, Weight::Regular, 0.62);
-    d.text_in(&o.name, body.x + PAD + 40.0, body.y + 50.0, body.w - 2.0 * PAD - 40.0, 15.0, Weight::Bold, 1.0);
-    d.text(&fmt_size(o.size), body.x + PAD + 40.0, body.y + 66.0, 12.0, Weight::Regular, 0.6);
-    let y = body.bottom() - 16.0 - 34.0;
-    let half = (body.w - 2.0 * PAD - 10.0) / 2.0;
-    let (chip, fg, accent, on) = (d.pal.chip, d.pal.fg, d.pal.accent, d.pal.on_accent);
-    d.pill(R::new(body.x + PAD, y, half, 34.0), t("Rechazar", "Decline"), Act::Decline(o.id.clone()), chip, fg);
-    d.pill(R::new(body.x + PAD + half + 10.0, y, half, 34.0), t("Aceptar", "Accept"), Act::Accept(o.id.clone()), accent, on);
-}
-
-fn draw_transfer(d: &mut Draw, m: &Model, body: R, id: &str) {
-    let Some(x) = m.xfers.iter().find(|x| x.id == id) else { return };
-    let ic = match (&x.state, x.incoming) {
-        (XState::Done, _) => Icon::Check,
-        (XState::Failed(_), _) => Icon::Close,
-        (_, true) => Icon::Download,
-        _ => Icon::Send,
-    };
-    let col = match &x.state {
-        XState::Done => SUCCESS,
-        XState::Failed(_) => DANGER,
-        _ => d.pal.accent,
-    };
-    d.cv.circle(body.x + PAD + 20.0, body.cy(), 20.0, color(d.pal.chip, 1.0), None);
-    icon(d.cv, ic, body.x + PAD + 20.0, body.cy(), 20.0, color(col, 1.0), None);
-    let tx = body.x + PAD + 52.0;
-    let tw = body.w - 2.0 * PAD - 52.0 - 38.0;
-    d.text_in(&x.name, tx, body.y + 32.0, tw, 14.5, Weight::Bold, 1.0);
-    let line = match &x.state {
-        XState::Running => {
-            let verb = if x.incoming { t("Recibiendo", "Receiving") } else { t("Enviando", "Sending") };
-            if x.rate > 0 { format!("{verb} · {}/s", fmt_size(x.rate)) } else { verb.to_string() }
-        }
-        XState::Done => if x.incoming { t("Archivo recibido", "File received").into() } else { t("Enviado al teléfono", "Sent to the phone").into() },
-        XState::Failed(msg) => if msg.is_empty() { t("No se pudo completar", "Could not finish").to_string() } else { msg.clone() },
-    };
-    d.text_in(&line, tx, body.y + 50.0, tw, 12.0, Weight::Regular, 0.62);
-    let accent = col;
-    d.bar(R::new(tx, body.y + 62.0, tw, 5.0), x.fraction(), accent);
-    if x.state == XState::Running {
-        d.round((body.right() - PAD - 15.0, body.cy()), 30.0, Icon::Close, Act::Cancel(x.id.clone()), None, d.pal.fg);
-    }
-}
-
-fn draw_note(d: &mut Draw, n: &Note, body: R) {
-    d.cv.circle(body.x + PAD + 20.0, body.cy(), 20.0, color(d.pal.chip, 1.0), None);
-    if let Some(ic) = n.icon {
-        icon(d.cv, ic, body.x + PAD + 20.0, body.cy(), 20.0, color(if n.good { SUCCESS } else { d.pal.fg }, 1.0), None);
-    }
-    let tx = body.x + PAD + 52.0;
-    let tw = body.w - PAD - tx + body.x;
-    d.text_in(&n.title, tx, body.cy() - 3.0, tw, 14.0, Weight::Bold, 1.0);
-    d.text_in(&n.text, tx, body.cy() + 15.0, tw, 12.5, Weight::Regular, 0.65);
-}
-
-fn draw_drop(d: &mut Draw, m: &Model, body: R, over: bool) {
-    let zone = body.inset(12.0, 12.0, 12.0, 12.0);
-    let accent = d.pal.accent;
-    if over {
-        d.cv.squircle(zone, 24.0, color(accent, 0.16), None);
-    }
-    dashed(d, zone, if over { accent } else { d.pal.fg }, if over { 1.0 } else { 0.32 });
-    let c = (zone.cx(), zone.y + 40.0);
-    icon(d.cv, Icon::Send, c.0, c.1, if over { 34.0 } else { 30.0 }, color(if over { accent } else { d.pal.fg }, 1.0), None);
-    let msg = match m.target() {
-        Some(p) => format!("{} {}", t("Suelta para enviar a", "Drop to send to"), p.name),
-        None => t("Conecta un teléfono para enviar archivos", "Connect a phone to send files").to_string(),
-    };
-    let fit = d.fonts.fit(&msg, 13.5, Weight::Medium, zone.w - 24.0);
-    let w = d.fonts.measure(&fit, 13.5, Weight::Medium);
-    d.text(&fit, zone.cx() - w / 2.0, zone.bottom() - 26.0, 13.5, Weight::Medium, 1.0);
 }
 
 #[cfg(test)]
@@ -1478,47 +1135,111 @@ mod tests {
         i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.phone.state".into(), body: json!({"dnd":false,"torch":true,"ringer":"normal","media":6,"mediaMax":15}) });
     }
 
+    /// The pointer on the pill, as a host would report it.
+    fn hover(i: &mut Island) {
+        let (s, _) = i.surface();
+        i.set_pointer(Some((s.cx(), s.cy())));
+    }
+
     #[test]
     fn it_opens_after_the_delay_and_not_before() {
         let mut i = island();
-        i.set_zone(true, false, 0.05);
+        i.set_zone(true, false, 0.0);
+        i.update(0.05);
         assert!(!i.is_open());
-        i.set_zone(true, false, 0.10);
+        i.update(0.10);
+        i.update(0.10);
         assert!(i.is_open());
-        assert_eq!(i.shown, View::Page(Page::Home));
+        assert_eq!(i.view, View::Page(Page::Home));
     }
 
     #[test]
     fn passing_by_quickly_does_nothing() {
         let mut i = island();
-        i.set_zone(true, false, 0.06);
-        i.set_zone(false, false, 0.06);
-        i.set_zone(true, false, 0.06);
+        i.set_zone(true, false, 0.0);
+        i.update(0.06);
+        i.set_zone(false, false, 0.0);
+        i.update(0.06);
+        i.set_zone(true, false, 0.0);
+        i.update(0.06);
         assert!(!i.is_open());
+    }
+
+    #[test]
+    fn hidden_mode_shows_the_pill_only_while_the_pointer_is_there() {
+        let mut i = island();
+        assert!(!i.visible());
+        i.set_zone(true, false, 0.0);
+        i.update(0.02);
+        assert!(i.visible());
+        i.set_zone(false, false, 0.0);
+        run(&mut i, 1.0);
+        assert!(!i.visible());
+    }
+
+    #[test]
+    fn always_visible_keeps_the_pill() {
+        let mut cfg = IslandConfig::default();
+        cfg.animation = "off".into();
+        cfg.always_visible = true;
+        let mut i = Island::new(cfg);
+        run(&mut i, 2.0);
+        assert!(i.visible() && !i.is_open());
+        i.set_suppressed(true);
+        assert!(!i.visible());
     }
 
     #[test]
     fn it_closes_when_the_pointer_leaves() {
         let mut i = island();
-        i.set_zone(true, false, 0.2);
-        run(&mut i, 0.4);
+        i.set_zone(true, false, 0.0);
+        run(&mut i, 0.5);
+        assert!(i.is_open());
         i.set_zone(false, false, 0.0);
-        i.set_pointer(Some((10.0, 250.0)));
-        run(&mut i, 1.0);
-        assert!(!i.update(0.01).visible);
+        i.set_pointer(Some((10.0, 400.0)));
+        run(&mut i, 2.0);
         assert!(!i.is_open());
+        assert!(!i.visible());
     }
 
     #[test]
     fn it_stays_while_the_pointer_is_on_it() {
         let mut i = island();
-        i.set_zone(true, false, 0.2);
+        i.set_zone(true, false, 0.0);
         run(&mut i, 0.5);
-        let p = i.pill();
         i.set_zone(false, false, 0.0);
-        i.set_pointer(Some((p.cx(), p.cy())));
+        hover(&mut i);
         run(&mut i, 3.0);
         assert!(i.is_open());
+    }
+
+    #[test]
+    fn pinning_keeps_it_open() {
+        let mut i = island();
+        i.set_zone(true, false, 0.0);
+        run(&mut i, 0.5);
+        i.act(Act::Pin);
+        i.set_zone(false, false, 0.0);
+        i.set_pointer(Some((10.0, 400.0)));
+        run(&mut i, 3.0);
+        assert!(i.is_open());
+        i.act(Act::Pin);
+        run(&mut i, 2.0);
+        assert!(!i.is_open());
+    }
+
+    #[test]
+    fn tabs_change_the_view_and_remember_the_last_one() {
+        let mut i = island();
+        i.set_zone(true, false, 0.0);
+        run(&mut i, 0.5);
+        i.act(Act::Go(Page::Controls));
+        assert_eq!(i.view, View::Page(Page::Controls));
+        i.close();
+        run(&mut i, 1.0);
+        i.set_zone(true, false, 0.0);
+        run(&mut i, 0.5);
+        assert_eq!(i.view, View::Page(Page::Controls));
     }
 
     #[test]
@@ -1528,7 +1249,7 @@ mod tests {
         let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":true,"canAnswer":true,"name":"Mamá"}) });
         i.notices(n);
         assert!(i.is_open());
-        assert_eq!(i.want, View::Call);
+        assert_eq!(i.view, View::Call);
         run(&mut i, 30.0);
         assert!(i.is_open(), "a ringing phone must not time out");
         let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":false}) });
@@ -1545,7 +1266,6 @@ mod tests {
         i.notices(n);
         run(&mut i, 20.0);
         assert!(i.is_open());
-        // Draw once so the buttons exist, then press "Aceptar".
         let mut cv = i.new_canvas(1.0);
         i.render(&mut cv);
         let accept = i.hits.iter().find(|h| matches!(&h.act, Act::Accept(id) if id == "t1")).expect("accept button").r;
@@ -1556,14 +1276,16 @@ mod tests {
     }
 
     #[test]
-    fn a_notification_toast_goes_away_by_itself() {
+    fn a_notification_is_a_peek_on_the_pill_and_goes_away_by_itself() {
         let mut i = island();
         with_phone(&mut i);
         let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key":"k","app":"WhatsApp","title":"Ana","text":"¿Vienes?"}) });
         i.notices(n);
-        assert!(i.is_open());
+        assert!(!i.is_open(), "a notification does not open the panel");
+        assert!(i.peek.is_some() && i.visible());
         run(&mut i, 7.0);
-        assert!(!i.is_open());
+        assert!(i.peek.is_none());
+        assert!(!i.visible());
     }
 
     #[test]
@@ -1576,16 +1298,18 @@ mod tests {
         i.notices(n);
         let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":true}) });
         i.notices(n);
-        assert!(!i.is_open());
+        assert!(!i.is_open() && i.peek.is_none());
+        assert!(!i.tabs().iter().any(|(_, p)| *p == Page::Notifs));
     }
 
     #[test]
     fn disabled_means_it_never_opens() {
         let mut i = island();
         i.cfg.enabled = false;
-        i.set_zone(true, false, 5.0);
+        i.set_zone(true, false, 0.0);
+        i.update(5.0);
         i.hotkey();
-        assert!(!i.is_open());
+        assert!(!i.is_open() && !i.visible());
     }
 
     #[test]
@@ -1594,7 +1318,7 @@ mod tests {
         with_phone(&mut i);
         i.set_zone(true, true, 0.3);
         assert!(i.is_open());
-        assert_eq!(i.want, View::Drop);
+        assert_eq!(i.view, View::Drop);
         i.drag(Drag::Enter);
         i.dropped(vec![PathBuf::from("/tmp/a.txt")]);
         assert_eq!(i.take_cmds(), vec![Cmd::SendFiles(vec![PathBuf::from("/tmp/a.txt")])]);
@@ -1606,9 +1330,8 @@ mod tests {
         with_phone(&mut i);
         i.set_zone(true, true, 0.3);
         assert!(i.is_open());
-        // No file ever arrives and the button is released.
         i.set_zone(false, false, 0.0);
-        i.set_pointer(Some((10.0, 290.0)));
+        i.set_pointer(Some((10.0, 400.0)));
         run(&mut i, 3.0);
         assert!(!i.is_open());
     }
@@ -1630,7 +1353,7 @@ mod tests {
         let mut i = island();
         with_phone(&mut i);
         i.open(View::Page(Page::Controls), Reason::Hover);
-        i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
+        hover(&mut i);
         run(&mut i, 0.5);
         let mut cv = i.new_canvas(1.0);
         i.render(&mut cv);
@@ -1640,30 +1363,48 @@ mod tests {
         i.press();
         let cmds = i.take_cmds();
         match &cmds[0] {
-            Cmd::Phone { what: "volume", body } => assert!((6..=9).contains(&body["value"].as_i64().unwrap()), "{body}"),
+            Cmd::Phone { what: "volume", body } => assert!((5..=10).contains(&body["value"].as_i64().unwrap()), "{body}"),
             c => panic!("{c:?}"),
         }
     }
 
     #[test]
     fn sizes_are_inside_the_canvas_with_room_for_the_bounce() {
-        let mut i = island();
-        with_phone(&mut i);
-        for n in 0..12 {
-            i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key": format!("{n}"), "app":"A","title":"B","text":"C"}) });
-            i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.clip".into(), body: json!({"text": format!("c{n}")}) });
-        }
-        for v in [View::Page(Page::Home), View::Page(Page::Player), View::Page(Page::Files), View::Page(Page::Notifs), View::Page(Page::Clipboard), View::Page(Page::Controls), View::Call, View::Offer, View::Note, View::Drop] {
-            let (w, h) = i.size_of(&v);
-            assert!(w * 1.08 <= CANVAS_W && h * 1.08 + 10.0 + 20.0 <= CANVAS_H, "{v:?} {w}x{h}");
+        for v in [View::Page(Page::Home), View::Call, View::Offer, View::Note, View::Drop, View::Transfer("x".into())] {
+            let (w, h, _) = view::view_size(&v);
+            assert!(w * 1.04 <= CANVAS_W && h * 1.04 + 8.0 <= CANVAS_H, "{v:?} {w}x{h}");
         }
     }
 
-    /// Draws every screen to PNG files for a visual check: `ISLAND_PNG_DIR=/tmp/x cargo test gallery`.
     #[test]
-    fn gallery() {
-        let Ok(dir) = std::env::var("ISLAND_PNG_DIR") else { return };
-        let k = 2.0;
+    fn the_pill_grows_with_what_it_shows() {
+        let mut i = island();
+        let empty = i.pill_w.v;
+        i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), playing: true, speed: 1.0, ..Default::default() });
+        i.remeasure(true);
+        i.pill_w.snap(i.pill_w.target());
+        assert!(i.pill_w.v > empty + 100.0, "{} vs {}", i.pill_w.v, empty);
+    }
+
+    /// Frames of a PNG sheet, for a visual check: `ISLAND_PNG_DIR=/tmp/x cargo test gallery`.
+    fn shoot(i: &mut Island, dir: &str, name: &str, k: f32, bg: [u8; 3]) {
+        let mut cv = i.new_canvas(k);
+        i.render(&mut cv);
+        let mut out = Canvas::new(CANVAS_W, CANVAS_H, k);
+        out.pm.fill(tiny_skia::Color::from_rgba8(bg[0], bg[1], bg[2], 255));
+        out.blit(&cv.pm, 1.0, 1.0, 0.0, 0.0, None);
+        let mut rgba = out.pm.data().to_vec();
+        for px in rgba.chunks_exact_mut(4) {
+            px[3] = 255;
+        }
+        let file = std::fs::File::create(format!("{dir}/{name}.png")).unwrap();
+        let mut enc = png::Encoder::new(file, out.width_px(), out.height_px());
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&rgba).unwrap();
+    }
+
+    fn demo(cfg: IslandConfig) -> Island {
         let art = {
             let (w, h) = (64u32, 64u32);
             let mut data = Vec::new();
@@ -1674,6 +1415,27 @@ mod tests {
             }
             super::super::gfx::Image { w, h, data }
         };
+        let mut i = Island::new(cfg);
+        with_phone(&mut i);
+        i.set_time(LocalTime { hour: 18, min: 42, wday: 2, month: 11, day: 17 });
+        for (n, (app, title, text)) in [("WhatsApp", "Ana", "¿Vienes a cenar hoy? Te guardé un lugar"), ("Gmail", "Banco", "Tu estado de cuenta está listo"), ("Telegram", "Edwin", "ya lo subí al repo 👍")].iter().enumerate() {
+            i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key": format!("k{n}"), "app": app, "title": title, "text": text}) });
+        }
+        for c in ["https://github.com/Alero-Team/Alero", "Reunión mañana 10:00"] {
+            i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.clip".into(), body: json!({"text": c}) });
+        }
+        i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), playing: true, position_ms: 83_000, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), art: Some(art), ..Default::default() });
+        i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":true,"canAnswer":true,"name":"Mamá"}) });
+        i.model.feed(&Event::TransferOffer { id: "o1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "Vacaciones-2026.mp4".into(), size: 482_000_000 });
+        i.model.feed(&Event::TransferStarted { id: "x1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "informe-final.pdf".into(), size: 8_000_000, incoming: false });
+        i.model.feed(&Event::TransferProgress { id: "x1".into(), done: 5_200_000, total: 8_000_000, bytes_per_sec: 3_400_000 });
+        i.note = Note { icon: Some(Icon::Bell), title: "WhatsApp · Ana".into(), text: "¿Vienes a cenar hoy?".into(), good: false };
+        i
+    }
+
+    #[test]
+    fn gallery() {
+        let Ok(dir) = std::env::var("ISLAND_PNG_DIR") else { return };
         let views: Vec<(&str, View)> = vec![
             ("home", View::Page(Page::Home)),
             ("player", View::Page(Page::Player)),
@@ -1688,91 +1450,73 @@ mod tests {
             ("drop", View::Drop),
         ];
         for (colour, tag) in [("#000000", "oled"), ("#f2efe9", "light")] {
-            for (name, view) in &views {
+            for (name, v) in &views {
                 let mut cfg = IslandConfig::default();
                 cfg.animation = "off".into();
                 cfg.color = colour.into();
-                let mut i = Island::new(cfg);
-                with_phone(&mut i);
-                for (n, (app, title, text)) in [("WhatsApp", "Ana", "¿Vienes a cenar hoy? Te guardé un lugar"), ("Gmail", "Banco", "Tu estado de cuenta está listo"), ("Telegram", "Edwin", "ya lo subí al repo 👍")].iter().enumerate() {
-                    i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key": format!("k{n}"), "app": app, "title": title, "text": text}) });
-                }
-                for c in ["https://github.com/Alero-Team/Alero", "Reunión mañana 10:00"] {
-                    i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.clip".into(), body: json!({"text": c}) });
-                }
-                i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), playing: true, position_ms: 83_000, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), art: Some(art.clone()), ..Default::default() });
-                i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":true,"canAnswer":true,"name":"Mamá"}) });
-                i.model.feed(&Event::TransferOffer { id: "o1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "Vacaciones-2026.mp4".into(), size: 482_000_000 });
-                i.model.feed(&Event::TransferStarted { id: "x1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "informe-final.pdf".into(), size: 8_000_000, incoming: false });
-                i.model.feed(&Event::TransferProgress { id: "x1".into(), done: 5_200_000, total: 8_000_000, bytes_per_sec: 3_400_000 });
-                i.note = Note { icon: Some(Icon::Bell), title: "WhatsApp · Ana".into(), text: "¿Vienes a cenar hoy?".into(), good: false };
-                i.open(view.clone(), Reason::Hover);
-                i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
-                run(&mut i, 0.8);
+                let mut i = demo(cfg);
+                i.open(v.clone(), Reason::Hover);
+                let (s, _) = i.surface();
+                i.set_pointer(Some((s.cx(), s.y + 70.0)));
+                run(&mut i, 0.6);
                 if *name == "drop" {
                     i.drag_over = true;
                 }
-                let mut cv = i.new_canvas(k);
-                i.render(&mut cv);
-                // Over a mid-grey "desktop" so the shadow and rim are visible.
-                let mut out = Canvas::new(CANVAS_W, CANVAS_H, k);
-                out.pm.fill(tiny_skia::Color::from_rgba8(70, 78, 92, 255));
-                out.blit(&cv.pm, 1.0, 1.0, 0.0, 0.0, None);
-                let mut rgba = out.pm.data().to_vec();
-                for px in rgba.chunks_exact_mut(4) {
-                    px[3] = 255;
-                }
-                let file = std::fs::File::create(format!("{dir}/{tag}-{name}.png")).unwrap();
-                let mut enc = png::Encoder::new(file, out.width_px(), out.height_px());
-                enc.set_color(png::ColorType::Rgba);
-                enc.set_depth(png::BitDepth::Eight);
-                enc.write_header().unwrap().write_image_data(&rgba).unwrap();
+                shoot(&mut i, &dir, &format!("{tag}-{name}"), 2.0, [70, 78, 92]);
             }
+        }
+        // The collapsed pill, with and without music.
+        for (n, music) in [("pill", true), ("pill-empty", false)] {
+            let mut cfg = IslandConfig::default();
+            cfg.animation = "off".into();
+            cfg.always_visible = true;
+            let mut i = demo(cfg);
+            if !music {
+                i.model.pc_media = None;
+            }
+            i.model.offers.clear();
+            i.remeasure(true);
+            i.pill_w.snap(i.pill_w.target());
+            run(&mut i, 0.3);
+            shoot(&mut i, &dir, n, 2.0, [70, 78, 92]);
         }
     }
 
-    /// Frames of the opening and of a page change: `ISLAND_PNG_DIR=/tmp/x cargo test frames`.
+    /// Frames of the opening and of a tab change: `ISLAND_PNG_DIR=/tmp/x cargo test frames`.
     #[test]
     fn frames() {
         let Ok(dir) = std::env::var("ISLAND_PNG_DIR") else { return };
-        let k = 1.0;
         let mut cfg = IslandConfig::default();
         cfg.animation = "normal".into();
-        let mut i = Island::new(cfg);
-        with_phone(&mut i);
-        i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), playing: true, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), ..Default::default() });
-        i.set_zone(true, false, 0.2);
-        i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
-        let mut shots: Vec<(String, f32)> = [0, 30, 60, 90, 120, 160, 220, 320, 450].iter().map(|ms| (format!("open-{ms:03}"), *ms as f32 / 1000.0)).collect();
+        cfg.always_visible = true;
+        let mut i = demo(cfg);
+        i.model.calls.clear();
+        i.model.offers.clear();
+        i.remeasure(true);
+        i.pill_w.snap(i.pill_w.target());
+        run(&mut i, 0.2);
+        let (s, _) = i.surface();
+        i.set_pointer(Some((s.cx(), s.cy())));
+        let mut shots: Vec<(String, f32)> = [0, 40, 80, 120, 160, 200, 260, 360, 520].iter().map(|ms| (format!("open-{ms:03}"), *ms as f32 / 1000.0)).collect();
         let mut t = 0.0f32;
         let dt = 1.0 / 240.0;
+        i.set_zone(true, false, 0.0);
+        i.update(0.2);
+        i.open(View::Page(Page::Home), Reason::Hover);
         let mut phase2 = false;
         while !shots.is_empty() {
             i.update(dt);
             t += dt;
             if shots[0].1 <= t {
                 let (name, _) = shots.remove(0);
-                let mut cv = i.new_canvas(k);
-                i.render(&mut cv);
-                let mut out = Canvas::new(CANVAS_W, CANVAS_H, k);
-                out.pm.fill(tiny_skia::Color::from_rgba8(70, 78, 92, 255));
-                out.blit(&cv.pm, 1.0, 1.0, 0.0, 0.0, None);
-                let mut rgba = out.pm.data().to_vec();
-                for px in rgba.chunks_exact_mut(4) {
-                    px[3] = 255;
-                }
-                let file = std::fs::File::create(format!("{dir}/{name}.png")).unwrap();
-                let mut enc = png::Encoder::new(file, out.width_px(), out.height_px());
-                enc.set_color(png::ColorType::Rgba);
-                enc.set_depth(png::BitDepth::Eight);
-                enc.write_header().unwrap().write_image_data(&rgba).unwrap();
+                shoot(&mut i, &dir, &name, 1.0, [70, 78, 92]);
             }
             if shots.is_empty() && !phase2 {
                 phase2 = true;
                 run(&mut i, 0.6);
-                i.act(Act::Go(Page::Controls));
+                i.act(Act::Go(Page::Player));
                 t = 0.0;
-                shots = [0, 40, 80, 120, 180, 260, 400].iter().map(|ms| (format!("page-{ms:03}"), *ms as f32 / 1000.0)).collect();
+                shots = [0, 40, 80, 120, 180, 260, 400].iter().map(|ms| (format!("tab-{ms:03}"), *ms as f32 / 1000.0)).collect();
             }
         }
     }

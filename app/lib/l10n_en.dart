@@ -1174,6 +1174,7 @@ const Map<String, String> kEnglish = {
   'Espera antes de cerrarse': 'Delay before closing',
   'Desplazamiento horizontal': 'Horizontal offset',
   'Margen superior': 'Top margin',
+  'Mostrar siempre la píldora': 'Always show the pill',
   'Ocultar con juegos y apps a pantalla completa': 'Hide during games and full-screen apps',
   'Atajo para abrirla con el teclado': 'Keyboard shortcut to open it',
   'Usa Ctrl, Alt, Mayús o Win y una tecla': 'Use Ctrl, Alt, Shift or Win and a key',

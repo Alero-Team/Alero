@@ -418,6 +418,13 @@ impl Canvas {
         Some(m)
     }
 
+    /// A mask of any outline (logical units), to clip drawing to it.
+    pub fn mask_path(&self, p: &Path) -> Option<Mask> {
+        let mut m = Mask::new(self.pm.width(), self.pm.height())?;
+        m.fill_path(p, FillRule::Winding, true, self.tf());
+        Some(m)
+    }
+
     /// Draws text with its left edge at `x` and its baseline at `y`. Returns the advance.
     pub fn text(&mut self, fonts: &mut Fonts, s: &str, x: f32, y: f32, size: f32, w: Weight, c: Rgb, alpha: f32) -> f32 {
         let px = size * self.k;
@@ -490,6 +497,13 @@ impl Canvas {
         let (px, py) = (cx * self.k, cy * self.k);
         let tf = Transform::from_translate(-px, -py).post_scale(scale, scale).post_translate(px, py);
         let paint = PixmapPaint { opacity: opacity.clamp(0.0, 1.0), blend_mode: BlendMode::SourceOver, quality: if (scale - 1.0).abs() < 0.002 { FilterQuality::Nearest } else { FilterQuality::Bilinear } };
+        self.pm.draw_pixmap(0, 0, layer.as_ref(), &paint, tf, mask);
+    }
+
+    /// Draws another canvas's pixels over this one, moved down by `dy` logical units.
+    pub fn blit_shift(&mut self, layer: &Pixmap, opacity: f32, dy: f32, mask: Option<&Mask>) {
+        let tf = Transform::from_translate(0.0, dy * self.k);
+        let paint = PixmapPaint { opacity: opacity.clamp(0.0, 1.0), blend_mode: BlendMode::SourceOver, quality: FilterQuality::Bilinear };
         self.pm.draw_pixmap(0, 0, layer.as_ref(), &paint, tf, mask);
     }
 
@@ -607,6 +621,9 @@ pub enum Icon {
     File,
     Back,
     Download,
+    Home,
+    Pin,
+    Open,
 }
 
 pub fn icon(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, mask: Option<&Mask>) {
@@ -808,6 +825,20 @@ pub fn icon(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, ma
             line(cv, poly(&[(13.5, 3.5), (13.5, 8.5), (18.5, 8.5)], false), 1.8);
         }
         Icon::Back => line(cv, poly(&[(14.5, 5.5), (8.0, 12.0), (14.5, 18.5)], false), 2.4),
+        Icon::Home => {
+            line(cv, poly(&[(3.8, 11.6), (12.0, 4.4), (20.2, 11.6)], false), 1.9);
+            line(cv, poly(&[(6.4, 10.2), (6.4, 19.6), (17.6, 19.6), (17.6, 10.2)], false), 1.9);
+            line(cv, poly(&[(10.2, 19.6), (10.2, 14.4), (13.8, 14.4), (13.8, 19.6)], false), 1.7);
+        }
+        Icon::Pin => {
+            fill(cv, poly(&[(8.6, 3.6), (15.4, 3.6), (14.4, 10.4), (17.6, 13.8), (6.4, 13.8), (9.6, 10.4)], true));
+            line(cv, poly(&[(12.0, 13.8), (12.0, 20.6)], false), 1.9);
+        }
+        Icon::Open => {
+            line(cv, poly(&[(10.0, 5.2), (5.2, 5.2), (5.2, 18.8), (18.8, 18.8), (18.8, 14.0)], false), 1.9);
+            line(cv, poly(&[(13.6, 4.8), (19.4, 4.8), (19.4, 10.6)], false), 1.9);
+            line(cv, poly(&[(19.4, 4.8), (11.0, 13.2)], false), 1.9);
+        }
     }
 }
 

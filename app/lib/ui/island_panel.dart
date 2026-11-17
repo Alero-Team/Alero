@@ -214,6 +214,11 @@ class _IslandPanelState extends State<IslandPanel> {
                 onChanged: (v) => p.set('top_margin', v),
               ),
               _Toggle(
+                title: 'Mostrar siempre la píldora',
+                value: p.flag('always_visible'),
+                onChanged: (v) => p.set('always_visible', v),
+              ),
+              _Toggle(
                 title: 'Ocultar con juegos y apps a pantalla completa',
                 value: p.flag('hide_fullscreen'),
                 onChanged: (v) => p.set('hide_fullscreen', v),

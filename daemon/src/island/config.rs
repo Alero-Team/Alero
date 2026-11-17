@@ -44,8 +44,11 @@ pub struct IslandConfig {
     pub hotkey: String,
     /// Size of everything, in percent (75..150).
     pub scale: u32,
+    /// 0: the notch hangs from the very top edge (QNotch's look). More: it floats that far below it.
     pub top_margin: u32,
-    /// "normal" (iPhone-like spring with a little bounce), "soft" (less bounce) or "off".
+    /// The collapsed pill stays on screen; otherwise it appears only when the pointer goes to the top edge.
+    pub always_visible: bool,
+    /// "normal" (QNotch's own timing, a little bounce when opening), "soft" (less bounce) or "off".
     pub animation: String,
     pub respect_reduce_motion: bool,
     /// Background, "#RRGGBB". Pure black (OLED) by default.
@@ -70,7 +73,8 @@ impl Default for IslandConfig {
             offset_x: 0,
             hotkey: String::new(),
             scale: 100,
-            top_margin: 8,
+            top_margin: 0,
+            always_visible: false,
             animation: "normal".into(),
             respect_reduce_motion: true,
             color: "#000000".into(),

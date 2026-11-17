@@ -15,7 +15,7 @@ use pb_core::engine::Event;
 use super::config::{IslandConfig, Watcher};
 use super::gfx::{decode_image, Canvas};
 use super::model::Media;
-use super::ui::{Cmd, Drag, Island, CANVAS_H, CANVAS_W};
+use super::ui::{Cmd, Drag, Island, LocalTime, CANVAS_H, CANVAS_W};
 
 pub type Rect = (i32, i32, i32, i32);
 
@@ -155,6 +155,9 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let mut dpi = 1.0f32;
     let mut dpi_at: Option<Instant> = None;
     let mut closed_since: Option<Instant> = Some(Instant::now());
+    let mut full = false;
+    let mut full_at: Option<Instant> = None;
+    let mut time_at: Option<Instant> = None;
     let mut pending: Vec<HostEvent> = Vec::new();
 
     loop {
@@ -240,7 +243,21 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             }
             None => (false, false),
         };
-        let fullscreen = cfg.hide_fullscreen && !island.is_open() && mon.is_some_and(|m| host.fullscreen(m));
+        if cfg.hide_fullscreen && !island.is_open() {
+            if full_at.map_or(true, |t| t.elapsed() > Duration::from_millis(400)) {
+                full = mon.is_some_and(|m| host.fullscreen(m));
+                full_at = Some(Instant::now());
+            }
+        } else {
+            full = false;
+            full_at = None;
+        }
+        let fullscreen = full;
+        island.set_suppressed(fullscreen);
+        if time_at.map_or(true, |t| t.elapsed() > Duration::from_secs(1)) {
+            island.set_time(local_time());
+            time_at = Some(Instant::now());
+        }
         let dragging_window = btn && hot && host.moving_window();
         island.set_reduce_motion(host.reduce_motion());
         island.set_zone(hot && !fullscreen && !dragging_window, btn && !dragging_window, dt);
@@ -253,10 +270,10 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         }
         let pointer = cur.and_then(|(cx, cy, _)| {
             let (lx, ly) = ((cx - geom.x) as f32 / geom.k, (cy - geom.y) as f32 / geom.k);
-            (island.is_open() && lx >= 0.0 && ly >= 0.0 && lx < CANVAS_W && ly < CANVAS_H).then_some((lx, ly))
+            (island.visible() && lx >= 0.0 && ly >= 0.0 && lx < CANVAS_W && ly < CANVAS_H).then_some((lx, ly))
         });
         island.set_pointer(pointer);
-        if island.is_open() {
+        if island.visible() {
             if btn && !prev_btn {
                 island.press();
             } else if btn && prev_btn {
@@ -349,4 +366,31 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             pending.extend(host.pump(40));
         }
     }
+}
+
+/// The computer's clock, for the pill and the header's date.
+#[cfg(target_os = "linux")]
+fn local_time() -> LocalTime {
+    // SAFETY: `localtime_r` fills the `tm` we own; `time` has no preconditions.
+    unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&now, &mut tm).is_null() {
+            return LocalTime::default();
+        }
+        LocalTime { hour: tm.tm_hour as u32, min: tm.tm_min as u32, wday: tm.tm_wday as u32, month: (tm.tm_mon + 1) as u32, day: tm.tm_mday as u32 }
+    }
+}
+
+#[cfg(windows)]
+fn local_time() -> LocalTime {
+    use windows::Win32::System::SystemInformation::GetLocalTime;
+    // SAFETY: no preconditions.
+    let t = unsafe { GetLocalTime() };
+    LocalTime { hour: t.wHour as u32, min: t.wMinute as u32, wday: t.wDayOfWeek as u32, month: t.wMonth as u32, day: t.wDay as u32 }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn local_time() -> LocalTime {
+    LocalTime::default()
 }
