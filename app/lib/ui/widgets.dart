@@ -106,41 +106,52 @@ class Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Card(
-      child: Padding(
-        padding:
-            padding ??
-            const EdgeInsets.fromLTRB(Gap.l + 4, Gap.m, Gap.m, Gap.l) *
-                TileScale.of(context),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 40,
-              child: Row(
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, size: 20, color: context.pal.muted),
-                    const SizedBox(width: Gap.s),
-                  ],
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        style: t.titleMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+    return Entrance(
+      child: Card(
+        child: Padding(
+          padding:
+              padding ??
+              const EdgeInsets.fromLTRB(Gap.l + 4, Gap.m, Gap.m, Gap.l) *
+                  TileScale.of(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 20, color: context.pal.muted),
+                      const SizedBox(width: Gap.s),
+                    ],
+                    Expanded(
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          title,
+                          style: t.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
-                  ),
-                  ?action,
-                ],
+                    ?action,
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: Gap.xs),
-            child,
-          ],
+              const SizedBox(height: Gap.xs),
+              // Content that grows or shrinks (a list, an expanded section) moves instead of jumping.
+              AnimatedSize(
+                // Resizing the window must follow the pointer, not lag behind it.
+                duration: Entrance.quiet
+                    ? Duration.zero
+                    : motion(context, Spring.spatial.settle),
+                curve: Spring.spatial,
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -404,7 +415,10 @@ class TransferRow extends StatelessWidget {
             padding: const EdgeInsets.only(left: 52, right: Gap.s),
             child: AleroPulse(
               active: x.note.isEmpty,
-              child: WavyProgress(value: f, label: tr('Progreso de {}', [x.name])),
+              child: WavyProgress(
+                value: f,
+                label: tr('Progreso de {}', [x.name]),
+              ),
             ),
           ),
         ],
@@ -509,8 +523,7 @@ class HistoryTile extends StatelessWidget {
   /// Right click (long press on a phone): what you can do with this transfer and its file.
   Future<void> _menu(BuildContext context, Offset at, bool ok) async {
     // A real file on this computer; the phone's received files live behind Android's own storage.
-    final onDisk =
-        !isPhone && h.path.isNotEmpty && File(h.path).existsSync();
+    final onDisk = !isPhone && h.path.isNotEmpty && File(h.path).existsSync();
     PopupMenuItem<String> item(String v, IconData icon, String label) =>
         PopupMenuItem(
           value: v,
@@ -574,12 +587,14 @@ class HistoryTile extends StatelessWidget {
       case 'forget':
         hub.removeHistory(h.id);
       case 'delete':
-        final sure = await showDialog<bool>(
+        final sure = await showAleroDialog<bool>(
           context: context,
           builder: (c) => AlertDialog(
             title: const Text('Eliminar el archivo'),
             content: Text(
-              tr('«{}» se borrará de este ordenador. No se puede deshacer.', [h.name]),
+              tr('«{}» se borrará de este ordenador. No se puede deshacer.', [
+                h.name,
+              ]),
             ),
             actions: [
               TextButton(
@@ -599,7 +614,9 @@ class HistoryTile extends StatelessWidget {
           hub.removeHistory(h.id);
         } catch (_) {
           hub.messages.add(
-            tr('No se pudo eliminar {}: otro programa lo tiene abierto.', [h.name]),
+            tr('No se pudo eliminar {}: otro programa lo tiene abierto.', [
+              h.name,
+            ]),
           );
         }
     }
@@ -665,7 +682,7 @@ class EmptyState extends StatelessWidget {
         ],
       ),
     );
-    return card ? Card(child: content) : content;
+    return Entrance(child: card ? Card(child: content) : content);
   }
 }
 
@@ -719,9 +736,8 @@ class SettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return InkWell(
+    return _Pressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(Radii.tile),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
@@ -762,6 +778,35 @@ class SettingTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// An InkWell row that sinks a little while pressed, on the fast spring.
+class _Pressable extends StatefulWidget {
+  const _Pressable({required this.onTap, required this.child});
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: widget.onTap,
+    borderRadius: BorderRadius.circular(Radii.tile),
+    onHighlightChanged: (d) {
+      if (mounted) setState(() => _down = d);
+    },
+    child: AnimatedScale(
+      scale: _down ? .97 : 1,
+      duration: motion(context, Spring.fast.settle),
+      curve: Spring.fast,
+      child: widget.child,
+    ),
+  );
 }
 
 /// A switch whose thumb shows a check when on (M3 Expressive), as a [SettingTile] trailing control.

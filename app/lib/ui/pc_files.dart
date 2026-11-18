@@ -6,6 +6,7 @@ import '../hub.dart';
 import '../pc_files.dart';
 import 'icon.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 /// Browse folders the Windows owner explicitly selected, over Alero's
 /// authenticated peer channel. ADB and external servers are not involved.
@@ -45,7 +46,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
 
   Future<void> _rename(FsEntry entry) async {
     final controller = TextEditingController(text: entry.name);
-    final name = await showDialog<String>(
+    final name = await showAleroDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Renombrar archivo de Windows'),
@@ -74,7 +75,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
   }
 
   Future<void> _delete(FsEntry entry) async {
-    final consent = await showDialog<bool>(
+    final consent = await showAleroDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar archivo del ordenador'),

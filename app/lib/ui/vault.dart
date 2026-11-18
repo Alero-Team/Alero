@@ -11,6 +11,7 @@ import '../vault.dart';
 import 'icon.dart';
 import 'theme.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 /// A local vault on each device, deliberately separate from normal Alero
 /// transfers. Encryption keys stay in Android Keystore or Windows DPAPI.
@@ -161,7 +162,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     final title = TextEditingController(text: existing?.name ?? '');
     final body = TextEditingController(text: existing?.data ?? '');
     try {
-      final save = await showDialog<bool>(
+      final save = await showAleroDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(
@@ -253,7 +254,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
   });
 
   Future<void> _export(VaultEntry entry) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAleroDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Exportar sin cifrado'),
@@ -301,7 +302,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
       ).hasMatch(e.name);
 
   /// A protected picture is looked at here, decrypted in memory only; nothing is written outside the vault.
-  Future<void> _view(VaultEntry entry) => showDialog<void>(
+  Future<void> _view(VaultEntry entry) => showAleroDialog<void>(
     context: context,
     builder: (ctx) => Dialog(
       child: Padding(
@@ -437,7 +438,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _delete(VaultEntry entry) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAleroDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar de Alero Vault'),

@@ -3,13 +3,13 @@
 //! `ui` is the whole behaviour and look, with no operating system in it; `run` is the loop; `win` and `x11` are the
 //! platform windows. Settings come from `island.json` (written by the app's Ajustes), see `config`.
 
+pub mod adb;
 pub mod config;
 pub mod gfx;
 pub mod model;
 pub mod motion;
 pub mod run;
 pub mod ui;
-pub mod view;
 
 #[cfg(windows)]
 mod win;
@@ -81,7 +81,11 @@ impl Exec for EngineExec {
                 }
                 return failed.map(|(name, why)| (false, name, why));
             }
-            Cmd::Beep => {}
+            // A background question: if it fails, the phone's next change brings the state anyway.
+            Cmd::AskMedia => {
+                let _ = self.send(&ctx.target, "pb.x.media.request", json!({}));
+            }
+            Cmd::Beep | Cmd::Adb { .. } => {} // run.rs carries these out itself
         }
         None
     }

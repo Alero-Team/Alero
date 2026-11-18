@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'l10n.dart' show tx;
 
-const aleroVersion = '1.4.5-beta';
+const aleroVersion = '1.4.6-beta';
 
 /// The release name people see.
 const aleroRelease = 'Beta 1.4';

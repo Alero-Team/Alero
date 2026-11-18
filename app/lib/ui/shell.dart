@@ -80,8 +80,7 @@ List<_Dest> get _dests => [
     ),
     _Dest(Section.explorer, 'Explorador', Symbols.folder_rounded),
   ],
-  if (!isPhone)
-    const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
+  if (!isPhone) const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
   const _Dest(
     Section.devices,
     'Dispositivos',
@@ -127,7 +126,8 @@ class _ShellState extends State<Shell>
 
   bool _onScroll(ScrollNotification n) {
     final m = n.metrics;
-    if (m.axis != Axis.vertical || n is! ScrollUpdateNotification && n is! ScrollEndNotification) {
+    if (m.axis != Axis.vertical ||
+        n is! ScrollUpdateNotification && n is! ScrollEndNotification) {
       return false;
     }
     // A screen that fits without scrolling leaves the bar alone. Between 4 and 24 px it keeps its state, so a
@@ -171,6 +171,10 @@ class _ShellState extends State<Shell>
     _compactBar.dispose();
     super.dispose();
   }
+
+  /// The window was resized: what rebuilds now is not new (no entrance animations).
+  @override
+  void didChangeMetrics() => Entrance.hush();
 
   /// Back from system settings or another app: permissions, shares and the system color may have changed.
   @override
@@ -354,105 +358,140 @@ class _ShellState extends State<Shell>
     final online = hub.peers
         .where((p) => p.trusted && p.state == pb.PeerState.connected)
         .toList();
+    Widget menu(bool full) => SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 13, 10, 12),
+            child: Row(
+              children: [
+                const AleroMark(size: 22),
+                if (full) ...[
+                  const SizedBox(width: 9),
+                  Expanded(child: Text('Alero', style: t.titleSmall)),
+                ],
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TextButton.icon(
+              onPressed: () {
+                Entrance.hush();
+                setState(() => _sidebarCollapsed = !_sidebarCollapsed);
+              },
+              icon: Icon(
+                _sidebarCollapsed
+                    ? Symbols.left_panel_open_rounded
+                    : Symbols.left_panel_close_rounded,
+              ),
+              label: !full
+                  ? const SizedBox.shrink()
+                  : const Text('Contraer menú'),
+              style: TextButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                foregroundColor: s.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              children: [
+                for (final d in _dests) ...[
+                  if (d.group != null && full)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
+                      child: Text(
+                        d.group!,
+                        style: t.labelSmall?.copyWith(
+                          color: s.onSurfaceVariant,
+                          letterSpacing: .8,
+                        ),
+                      ),
+                    ),
+                  _NavItem(
+                    icon: d.icon,
+                    label: full ? d.label : '',
+                    selected: d.section == _section,
+                    badge: _badge(d.section),
+                    onTap: () => _go(d.section),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: !full
+                ? IconButton(
+                    icon: const Icon(Symbols.smartphone_rounded),
+                    onPressed: () => _go(Section.devices),
+                    tooltip: tx('Dispositivos'),
+                  )
+                : _PhoneChip(online, hub, onTap: () => _go(Section.devices)),
+          ),
+        ],
+      ),
+    );
     return Scaffold(
       backgroundColor: s.surface,
       body: Row(
         children: [
-          AnimatedContainer(
-            duration: AleroMotion.duration(context, 310),
-            curve: AleroMotion.spatial,
-            width: _sidebarCollapsed ? 76 : 226,
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 13, 10, 12),
-                    child: Row(
-                      children: [
-                        const AleroMark(size: 22),
-                        if (!_sidebarCollapsed) ...[
-                          const SizedBox(width: 9),
-                          Expanded(child: Text('Alero', style: t.titleSmall)),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: TextButton.icon(
-                      onPressed: () => setState(
-                        () => _sidebarCollapsed = !_sidebarCollapsed,
-                      ),
-                      icon: Icon(
-                        _sidebarCollapsed
-                            ? Symbols.left_panel_open_rounded
-                            : Symbols.left_panel_close_rounded,
-                      ),
-                      label: _sidebarCollapsed
-                          ? const SizedBox.shrink()
-                          : const Text('Contraer menú'),
-                      style: TextButton.styleFrom(
-                        alignment: Alignment.centerLeft,
-                        foregroundColor: s.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 7),
-                      children: [
-                        for (final d in _dests) ...[
-                          if (d.group != null && !_sidebarCollapsed)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
-                              child: Text(
-                                d.group!,
-                                style: t.labelSmall?.copyWith(
-                                  color: s.onSurfaceVariant,
-                                  letterSpacing: .8,
-                                ),
-                              ),
-                            ),
-                          _NavItem(
-                            icon: d.icon,
-                            label: _sidebarCollapsed ? '' : d.label,
-                            selected: d.section == _section,
-                            badge: _badge(d.section),
-                            onTap: () => _go(d.section),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: _sidebarCollapsed
-                        ? IconButton(
-                            icon: const Icon(Symbols.smartphone_rounded),
-                            onPressed: () => _go(Section.devices),
-                            tooltip: tx('Dispositivos'),
-                          )
-                        : _PhoneChip(
-                            online,
-                            hub,
-                            onTap: () => _go(Section.devices),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // The menu animates its width; the page is laid out once at its final width and slides along. Laying
+          // the page out again on every frame made it cross its breakpoints half-way and flicker.
           Expanded(
-            child: ColoredBox(
-              color: s.surface,
-              child: Column(
-                children: [
-                  CallBar(hub),
-                  Expanded(child: _Drop(hub, child: page)),
-                ],
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: _sidebarCollapsed ? 76 : 226),
+              duration: AleroMotion.duration(context, 310),
+              curve: AleroMotion.spatial,
+              builder: (context, w, content) {
+                final target = _sidebarCollapsed ? 76.0 : 226.0;
+                // Labels only once there is room for them, so nothing spills while the menu moves.
+                final full = w > 170;
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: target,
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Transform.translate(
+                        offset: Offset(w - target, 0),
+                        child: content,
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: w,
+                      child: ClipRect(
+                        child: ColoredBox(
+                          color: s.surface,
+                          child: OverflowBox(
+                            alignment: Alignment.centerLeft,
+                            minWidth: full ? 226 : w,
+                            maxWidth: full ? 226 : w,
+                            child: menu(full),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+              child: ColoredBox(
+                color: s.surface,
+                child: Column(
+                  children: [
+                    CallBar(hub),
+                    Expanded(child: _Drop(hub, child: page)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -651,7 +690,9 @@ class _ShareSheet extends StatelessWidget {
         ? (s.files.length == 1
               ? s.files.first.name ?? 'Un archivo'
               : tr('{} archivos', [s.files.length]))
-        : tr('Texto: «{}»', [s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text]);
+        : tr('Texto: «{}»', [
+            s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text,
+          ]);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(Gap.m),
@@ -812,7 +853,7 @@ Future<bool> confirm(
   String body,
   String yes,
 ) async =>
-    await showDialog<bool>(
+    await showAleroDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(title),
@@ -938,7 +979,7 @@ class _DropState extends State<_Drop> {
     }
     var target = online.first;
     if (online.length > 1) {
-      final pick = await showDialog<pb.Peer>(
+      final pick = await showAleroDialog<pb.Peer>(
         context: context,
         builder: (c) => SimpleDialog(
           title: const Text('Enviar a…'),
@@ -1001,7 +1042,11 @@ class _DropState extends State<_Drop> {
                             Text(
                               online.isEmpty
                                   ? 'Conecta un dispositivo para enviar'
-                                  : tr('Suelta para enviar a {}', [online.length == 1 ? online.first.name : '…']),
+                                  : tr('Suelta para enviar a {}', [
+                                      online.length == 1
+                                          ? online.first.name
+                                          : '…',
+                                    ]),
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                           ],

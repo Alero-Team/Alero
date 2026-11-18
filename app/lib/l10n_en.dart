@@ -1173,8 +1173,6 @@ const Map<String, String> kEnglish = {
   'Espera antes de abrirse': 'Delay before opening',
   'Espera antes de cerrarse': 'Delay before closing',
   'Desplazamiento horizontal': 'Horizontal offset',
-  'Margen superior': 'Top margin',
-  'Mostrar siempre la píldora': 'Always show the pill',
   'Ocultar con juegos y apps a pantalla completa': 'Hide during games and full-screen apps',
   'Atajo para abrirla con el teclado': 'Keyboard shortcut to open it',
   'Usa Ctrl, Alt, Mayús o Win y una tecla': 'Use Ctrl, Alt, Shift or Win and a key',
@@ -1188,4 +1186,9 @@ const Map<String, String> kEnglish = {
   'Segundos visible': 'Seconds visible',
   'Sonido en llamadas y archivos entrantes': 'Sound for calls and incoming files',
   'Hex': 'Hex',
+  'Adjuntar archivo': 'Attach file',
+  'Buscar': 'Find',
+  'Wi-Fi, Bluetooth, Rotación y Bloquear aparecen cuando el teléfono tiene la depuración inalámbrica activa.': 'Wi-Fi, Bluetooth, Rotation and Lock appear when the phone has wireless debugging on.',
+  'Enviando al teléfono. Toca «Compartir» en su notificación para mandarlo a {}.': 'Sending to the phone. Tap “Share” on its notification to send it to {}.',
+  'Alero': 'Alero',
 };

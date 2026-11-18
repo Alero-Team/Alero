@@ -434,6 +434,18 @@ class _ConversationState extends State<_Conversation> {
     return null;
   }
 
+  /// Chat apps take only text from the computer: the file goes to the phone, and its notification's «Compartir»
+  /// hands it to the chat.
+  Future<void> _attach() async {
+    if (!await widget.hub.send(widget.peerId) || !mounted) return;
+    setState(
+      () => _status = tr(
+        'Enviando al teléfono. Toca «Compartir» en su notificación para mandarlo a {}.',
+        [c.thread != null ? 'SMS' : c.source],
+      ),
+    );
+  }
+
   Future<void> _send() async {
     final text = _text.text;
     if (_sending || text.trim().isEmpty || _blocked != null) return;
@@ -551,6 +563,12 @@ class _ConversationState extends State<_Conversation> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+                        IconButton(
+                          tooltip: tx('Adjuntar archivo'),
+                          onPressed: _sending ? null : _attach,
+                          icon: const Icon(Symbols.attach_file_rounded),
+                        ),
+                        const SizedBox(width: Gap.xs),
                         Expanded(
                           // Enter sends; Shift+Enter is a line break.
                           child: CallbackShortcuts(

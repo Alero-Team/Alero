@@ -12,6 +12,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 /// Phone apps in their own computer windows (one virtual display each, so the phone's screen stays free) and
 /// the phone's camera in a window. Both are scrcpy sessions next to the main one; closing a window ends it.
@@ -31,7 +32,7 @@ class PhoneWindowsPanel extends StatelessWidget {
 
   Future<void> _webcam(BuildContext context, String facing) async {
     final controller = TextEditingController();
-    final password = await showDialog<String>(
+    final password = await showAleroDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Activar webcam de Windows'),

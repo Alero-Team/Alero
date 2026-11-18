@@ -13,27 +13,42 @@ import 'widgets.dart';
 /// Backgrounds offered for the island (the first one, pure black, is the default and the best on OLED screens).
 const _backgrounds = <(String, String)>[
   ('#000000', 'OLED'),
-  ('#1C1C1E', 'Grafito'),
+  ('#1B1B1B', 'Grafito'),
   ('#0B1220', 'Azul noche'),
   ('#1E0B14', 'Vino'),
   ('#0B1A14', 'Bosque'),
-  ('#F2EFE9', 'Claro'),
+  ('#F2F2F2', 'Claro'),
 ];
 
 const _accents = <(String, String)>[
+  ('#FFFFFF', 'Alero'),
   ('#8AB4F8', 'Azul'),
   ('#81C995', 'Verde'),
   ('#F28B82', 'Coral'),
   ('#FDD663', 'Ámbar'),
   ('#C58AF9', 'Violeta'),
-  ('#FFFFFF', 'Blanco'),
 ];
+
+/// The island's phone controls, in the order they are drawn. The last four need wireless debugging (adb).
+const _controlNames = <String, (String, IconData)>{
+  'dnd': ('No molestar', Symbols.do_not_disturb_on_rounded),
+  'torch': ('Linterna', Symbols.flashlight_on_rounded),
+  'find': ('Buscar', Symbols.my_location_rounded),
+  'ringer': ('Sonido', Symbols.volume_up_rounded),
+  'wifi': ('Wi-Fi', Symbols.wifi_rounded),
+  'bt': ('Bluetooth', Symbols.bluetooth_rounded),
+  'rotate': ('Rotación', Symbols.screen_rotation_rounded),
+  'lock': ('Bloquear', Symbols.lock_rounded),
+};
 
 const _moduleNames = <String, (String, IconData)>{
   'player': ('Reproductor', Symbols.music_note_rounded),
   'send': ('Enviar archivos arrastrando', Symbols.upload_rounded),
   'incoming': ('Archivos entrantes', Symbols.download_rounded),
-  'notifications': ('Notificaciones del teléfono', Symbols.notifications_rounded),
+  'notifications': (
+    'Notificaciones del teléfono',
+    Symbols.notifications_rounded,
+  ),
   'call': ('Llamadas entrantes', Symbols.call_rounded),
   'clipboard': ('Portapapeles', Symbols.content_paste_rounded),
   'controls': ('Controles rápidos', Symbols.tune_rounded),
@@ -79,8 +94,7 @@ class _IslandPanelState extends State<IslandPanel> {
           children: [
             SettingTile(
               title: 'Activar Alero Island',
-              subtitle:
-                  'Una isla que baja desde el borde superior de la pantalla cuando pasas el ratón por el centro, con reproductor, archivos, notificaciones y llamadas del teléfono.',
+              subtitle: 'Una isla que baja desde el borde superior de la pantalla cuando pasas el ratón por el centro, con reproductor, archivos, notificaciones y llamadas del teléfono.',
               trailing: AleroSwitch(
                 value: on,
                 onChanged: (v) => p.set('enabled', v),
@@ -149,27 +163,24 @@ class _IslandPanelState extends State<IslandPanel> {
               ),
               const _Title('Cuándo aparece'),
               _Pick(
-                  title: 'Pantalla',
-                  child: DropdownButton<int>(
-                    value: const [-1, 0, 1, 2].contains(p.number('monitor'))
-                        ? p.number('monitor')
-                        : -1,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      DropdownMenuItem(
-                        value: -1,
-                        child: Text(tx('Donde esté el cursor')),
-                      ),
-                      DropdownMenuItem(
-                        value: 0,
-                        child: Text(tx('Principal')),
-                      ),
-                      DropdownMenuItem(value: 1, child: Text(tx('Segunda'))),
-                      DropdownMenuItem(value: 2, child: Text(tx('Tercera'))),
-                    ],
-                    onChanged: (v) => p.set('monitor', v ?? -1),
-                  ),
+                title: 'Pantalla',
+                child: DropdownButton<int>(
+                  value: const [-1, 0, 1, 2].contains(p.number('monitor'))
+                      ? p.number('monitor')
+                      : -1,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    DropdownMenuItem(
+                      value: -1,
+                      child: Text(tx('Donde esté el cursor')),
+                    ),
+                    DropdownMenuItem(value: 0, child: Text(tx('Principal'))),
+                    DropdownMenuItem(value: 1, child: Text(tx('Segunda'))),
+                    DropdownMenuItem(value: 2, child: Text(tx('Tercera'))),
+                  ],
+                  onChanged: (v) => p.set('monitor', v ?? -1),
                 ),
+              ),
               _Slide(
                 title: 'Ancho de la zona de activación',
                 value: p.number('zone_width'),
@@ -205,19 +216,6 @@ class _IslandPanelState extends State<IslandPanel> {
                 suffix: ' px',
                 onChanged: (v) => p.set('offset_x', v),
               ),
-              _Slide(
-                title: 'Margen superior',
-                value: p.number('top_margin'),
-                min: 0,
-                max: 40,
-                suffix: ' px',
-                onChanged: (v) => p.set('top_margin', v),
-              ),
-              _Toggle(
-                title: 'Mostrar siempre la píldora',
-                value: p.flag('always_visible'),
-                onChanged: (v) => p.set('always_visible', v),
-              ),
               _Toggle(
                 title: 'Ocultar con juegos y apps a pantalla completa',
                 value: p.flag('hide_fullscreen'),
@@ -232,6 +230,10 @@ class _IslandPanelState extends State<IslandPanel> {
                   value: p.module(e.key),
                   onChanged: (v) => p.setModule(e.key, v),
                 ),
+              if (p.module('controls')) ...[
+                const _Title('Controles del teléfono'),
+                _Controls(p),
+              ],
               const _Title('Avisos'),
               _Toggle(
                 title: 'Abrirse sola con llamadas, archivos y notificaciones',
@@ -269,9 +271,8 @@ class _Title extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(Gap.xs, Gap.l, 0, Gap.xs),
     child: Text(
       tx(text),
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: context.pal.muted,
-      ),
+      style: Theme.of(context).textTheme.labelLarge
+          ?.copyWith(color: context.pal.muted),
     ),
   );
 }
@@ -292,7 +293,11 @@ class _Toggle extends StatelessWidget {
   Widget build(BuildContext context) => SettingTile(
     leading: icon == null
         ? null
-        : Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        : Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
     title: title,
     trailing: AleroSwitch(value: value, onChanged: onChanged, label: tx(title)),
     onTap: () => onChanged(!value),
@@ -349,7 +354,10 @@ class _Slide extends StatelessWidget {
           Row(
             children: [
               Expanded(child: Text(tx(title), style: weight(t.bodyLarge, 500))),
-              Text('$v$suffix', style: t.bodyMedium?.copyWith(color: context.pal.muted)),
+              Text(
+                '$v$suffix',
+                style: t.bodyMedium?.copyWith(color: context.pal.muted),
+              ),
             ],
           ),
           Slider(
@@ -434,7 +442,9 @@ class _SwatchesState extends State<_Swatches> {
                                 color: _hex(hex),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: cur == hex ? s.primary : s.outlineVariant,
+                                  color: cur == hex
+                                      ? s.primary
+                                      : s.outlineVariant,
                                   width: cur == hex ? 2.5 : 1,
                                 ),
                               ),
@@ -487,8 +497,64 @@ class _Hotkey extends StatefulWidget {
   State<_Hotkey> createState() => _HotkeyState();
 }
 
+/// Which phone controls the island shows: tap to add or remove; they keep the order of [_controlNames].
+class _Controls extends StatelessWidget {
+  const _Controls(this.p);
+  final IslandPrefs p;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = p.text('controls').split(',').toSet();
+    void toggle(String k) {
+      final next = {...on};
+      if (!next.remove(k)) next.add(k);
+      p.set('controls', _controlNames.keys.where(next.contains).join(','));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.s),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: Gap.s,
+            runSpacing: Gap.s,
+            children: [
+              for (final e in _controlNames.entries)
+                FilterChip(
+                  avatar: Icon(e.value.$2, size: 18),
+                  label: Text(e.value.$1),
+                  selected: on.contains(e.key),
+                  onSelected: (_) => toggle(e.key),
+                ),
+            ],
+          ),
+          const SizedBox(height: Gap.s),
+          Text(
+            'Wi-Fi, Bluetooth, Rotación y Bloquear aparecen cuando el teléfono tiene la depuración inalámbrica activa.',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: context.pal.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HotkeyState extends State<_Hotkey> {
   late final c = TextEditingController(text: widget.p.text('hotkey'));
+  late var _seen = widget.p.text('hotkey');
+
+  @override
+  void didUpdateWidget(_Hotkey old) {
+    super.didUpdateWidget(old);
+    // «Restablecer» changes the preference from outside the field.
+    final p = widget.p.text('hotkey');
+    if (p != _seen) {
+      _seen = p;
+      if (c.text.trim() != p) c.text = p;
+    }
+  }
 
   @override
   void dispose() {
@@ -515,7 +581,9 @@ class _HotkeyState extends State<_Hotkey> {
           decoration: InputDecoration(
             isDense: true,
             hintText: 'Ctrl+Alt+I',
-            errorText: bad ? tx('Usa Ctrl, Alt, Mayús o Win y una tecla') : null,
+            errorText: bad
+                ? tx('Usa Ctrl, Alt, Mayús o Win y una tecla')
+                : null,
           ),
           onChanged: (t) {
             setState(() {});

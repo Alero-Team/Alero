@@ -15,7 +15,7 @@ use pb_core::engine::Event;
 use super::config::{IslandConfig, Watcher};
 use super::gfx::{decode_image, Canvas};
 use super::model::Media;
-use super::ui::{Cmd, Drag, Island, LocalTime, CANVAS_H, CANVAS_W};
+use super::ui::{Cmd, Drag, Island, CANVAS_H, CANVAS_W};
 
 pub type Rect = (i32, i32, i32, i32);
 
@@ -33,8 +33,8 @@ pub trait Host {
     fn monitors(&mut self) -> Vec<Rect>;
     /// Pointer in screen pixels and whether the left button is down. None when it cannot be read.
     fn cursor(&mut self) -> Option<(i32, i32, bool)>;
-    /// Display scale, 1.0 = 96 dpi.
-    fn dpi(&mut self) -> f32;
+    /// Scale of this monitor, 1.0 = 96 dpi.
+    fn dpi(&mut self, mon: Rect) -> f32;
     /// Is an application covering the whole of this monitor (a game, a video, a presentation)?
     fn fullscreen(&mut self, mon: Rect) -> bool;
     /// Is the user dragging or resizing a window right now (so a button held at the top edge is not a file)?
@@ -50,12 +50,19 @@ pub trait Host {
     /// Waits for the next display refresh (or a short sleep where there is no way to know it).
     fn vsync(&mut self);
     fn beep(&mut self);
+    /// Puts the shown window back on top of other always-on-top windows (a video player, the taskbar).
+    fn keep_on_top(&mut self) {}
+    /// Whether the window takes the mouse. Off, clicks fall through to the windows below (the island reads the
+    /// pointer by polling, so it only needs the mouse while the pointer is on it: to keep clicks, the wheel and drops).
+    fn set_input(&mut self, _on: bool) {}
 }
 
 pub enum Msg {
     Event(Event),
     /// The computer's player, with its cover as the bytes of an image file. None: nothing is playing.
     Media(Option<(crate::sys::Media, Option<Vec<u8>>)>),
+    /// A phone's state over adb (peer id); None: no adb for it now.
+    Adb(String, Option<super::adb::Radios>),
 }
 
 /// What the executor needs to know to address a command.
@@ -140,7 +147,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     host.hotkey(&cfg.hotkey);
 
     let wants = Arc::new(AtomicBool::new(false));
-    let media = spawn_media(tx, wants.clone());
+    let media = spawn_media(tx.clone(), wants.clone());
 
     let mut canvas: Option<Canvas> = None;
     let mut canvas_key = (0u32, 0u32);
@@ -154,11 +161,18 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let mut last_cfg_check = Instant::now();
     let mut dpi = 1.0f32;
     let mut dpi_at: Option<Instant> = None;
-    let mut closed_since: Option<Instant> = Some(Instant::now());
-    let mut full = false;
+    let mut dpi_mon: Option<Rect> = None;
     let mut full_at: Option<Instant> = None;
-    let mut time_at: Option<Instant> = None;
+    let mut full = false;
+    let mut reduce = false;
+    let mut last_art: Option<Vec<u8>> = None;
+    let mut closed_since: Option<Instant> = Some(Instant::now());
     let mut pending: Vec<HostEvent> = Vec::new();
+    let devices_file = data.join("island-devices.json");
+    let (adb_tx, adb_rx) = std::sync::mpsc::channel::<super::adb::Req>();
+    super::adb::spawn(adb_rx, tx.clone());
+    let mut adb_at: Option<Instant> = None;
+    let mut devices_seen: Option<std::time::SystemTime> = None;
 
     loop {
         // ------------------------------------------------------------------------------ settings
@@ -172,13 +186,35 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 cfg = next;
                 island.set_config(cfg.clone());
             }
+            // The phones' pictures: read again only when the app rewrote the list.
+            let seen = std::fs::metadata(&devices_file).and_then(|m| m.modified()).ok();
+            if seen != devices_seen {
+                devices_seen = seen;
+                island.model.devices = std::fs::read_to_string(&devices_file).map(|j| super::model::load_devices(&j)).unwrap_or_default();
+                island.mark_dirty();
+            }
         }
         // ------------------------------------------------------------------------------ engine and player
         let mut notices = Vec::new();
         while let Ok(m) = rx.try_recv() {
             match m {
                 Msg::Event(e) => notices.extend(island.model.feed(&e)),
+                Msg::Adb(peer, radios) => {
+                    match radios {
+                        Some(r) => island.model.adb.insert(peer, r),
+                        None => island.model.adb.remove(&peer),
+                    };
+                    island.mark_dirty();
+                }
                 Msg::Media(m) => {
+                    // The player thread repeats the same cover every second: decode it only when it changes.
+                    let same_art = m.as_ref().map(|(_, a)| a) == Some(&last_art);
+                    let old_art = island.model.pc_media.as_mut().and_then(|p| p.art.take());
+                    if let Some((_, a)) = &m {
+                        last_art.clone_from(a);
+                    } else {
+                        last_art = None;
+                    }
                     island.model.pc_media = m.map(|(m, art)| Media {
                         title: m.title,
                         artist: m.artist,
@@ -188,7 +224,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         duration_ms: m.duration_ms,
                         speed: if m.speed > 0.0 { m.speed } else { 1.0 },
                         at: Some(Instant::now()),
-                        art: art.and_then(|b| decode_image(&b)),
+                        art: if same_art { old_art } else { art.and_then(|b| decode_image(&b)) },
                     });
                     island.mark_dirty();
                 }
@@ -204,6 +240,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 shown = false;
             }
             canvas = None;
+            wants.store(false, Ordering::Relaxed);
             host.pump(250);
             last_tick = Instant::now();
             continue;
@@ -213,15 +250,10 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         last_tick = now;
 
         // ------------------------------------------------------------------------------ pointer
-        if monitors_at.map_or(true, |t| t.elapsed() > Duration::from_secs(3)) {
+        if monitors_at.is_none_or(|t| t.elapsed() > Duration::from_secs(3)) {
             monitors = host.monitors();
             monitors_at = Some(Instant::now());
-            dpi = host.dpi();
-            dpi_at = Some(Instant::now());
-        }
-        if dpi_at.map_or(true, |t| t.elapsed() > Duration::from_secs(10)) {
-            dpi = host.dpi();
-            dpi_at = Some(Instant::now());
+            reduce = host.reduce_motion();
         }
         let cur = host.cursor();
         let (btn, hot) = match cur {
@@ -233,6 +265,14 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         _ => monitors.iter().find(|r| contains(**r, cx, cy)).copied().or(monitors.first().copied()),
                     };
                 }
+                // Each monitor has its own scale: read it when the island moves to another one, and now and then.
+                if mon != dpi_mon || dpi_at.is_none_or(|t| t.elapsed() > Duration::from_secs(10)) {
+                    if let Some(m) = mon {
+                        dpi = host.dpi(m);
+                    }
+                    dpi_mon = mon;
+                    dpi_at = Some(Instant::now());
+                }
                 let hot = mon.is_some_and(|m| {
                     let edge = (3.0 * dpi).round().max(2.0) as i32;
                     let centre = (m.0 + m.2) / 2 + (cfg.offset_x as f32 * dpi) as i32;
@@ -243,37 +283,42 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             }
             None => (false, false),
         };
-        if cfg.hide_fullscreen && !island.is_open() {
-            if full_at.map_or(true, |t| t.elapsed() > Duration::from_millis(400)) {
-                full = mon.is_some_and(|m| host.fullscreen(m));
-                full_at = Some(Instant::now());
+        // Only asked when the pointer is in the zone: nothing else depends on it.
+        let fullscreen = hot && cfg.hide_fullscreen && !island.is_open() && mon.is_some_and(|m| host.fullscreen(m));
+        // The resting notch steps aside for games and videos; asked once a second, it is not free.
+        if full_at.is_none_or(|t| t.elapsed() > Duration::from_secs(1)) {
+            full = cfg.hide_fullscreen && !island.is_open() && mon.is_some_and(|m| host.fullscreen(m));
+            full_at = Some(Instant::now());
+            if shown && !island.is_open() {
+                host.keep_on_top();
             }
-        } else {
-            full = false;
-            full_at = None;
         }
-        let fullscreen = full;
-        island.set_suppressed(fullscreen);
-        if time_at.map_or(true, |t| t.elapsed() > Duration::from_secs(1)) {
-            island.set_time(local_time());
-            time_at = Some(Instant::now());
-        }
+        island.set_rest(!full);
         let dragging_window = btn && hot && host.moving_window();
-        island.set_reduce_motion(host.reduce_motion());
+        island.set_reduce_motion(reduce);
         island.set_zone(hot && !fullscreen && !dragging_window, btn && !dragging_window, dt);
 
         // ------------------------------------------------------------------------------ geometry and input
         if let Some(m) = mon {
-            let k = dpi * cfg.scale as f32 / 100.0;
+            // Text that reads well on a laptop is tiny on a big desktop screen: grow a little with the screen's
+            // height in logical pixels (950 and under: 1.0, a 1080p screen at 100 %: 1.14), up to 1.2.
+            let fit = ((m.3 - m.1) as f32 / dpi / 950.0).clamp(1.0, 1.2);
+            let k = dpi * fit * cfg.scale as f32 / 100.0;
             let w = (CANVAS_W * k).ceil() as i32;
-            geom = Geometry { x: (m.0 + m.2) / 2 - w / 2 + (cfg.offset_x as f32 * dpi) as i32, y: m.1, k };
+            let g = Geometry { x: (m.0 + m.2) / 2 - w / 2 + (cfg.offset_x as f32 * dpi) as i32, y: m.1, k };
+            // The resting notch follows the pointer to another monitor: draw it there.
+            if (g.x, g.y, g.k) != (geom.x, geom.y, geom.k) {
+                island.mark_dirty();
+            }
+            geom = g;
         }
         let pointer = cur.and_then(|(cx, cy, _)| {
             let (lx, ly) = ((cx - geom.x) as f32 / geom.k, (cy - geom.y) as f32 / geom.k);
-            (island.visible() && lx >= 0.0 && ly >= 0.0 && lx < CANVAS_W && ly < CANVAS_H).then_some((lx, ly))
+            (island.is_open() && lx >= 0.0 && ly >= 0.0 && lx < CANVAS_W && ly < CANVAS_H).then_some((lx, ly))
         });
         island.set_pointer(pointer);
-        if island.visible() {
+        host.set_input(island.wants_input());
+        if island.is_open() {
             if btn && !prev_btn {
                 island.press();
             } else if btn && prev_btn {
@@ -294,6 +339,20 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             }
         }
 
+        // ------------------------------------------------------------------------------ adb
+        // Asked only while the controls are on screen, every 5 s (the app's own rhythm).
+        let adb_peer = island.model.target().map(|p| (p.id.clone(), p.addr.rsplit_once(':').map_or(String::new(), |(ip, _)| ip.to_string())));
+        if island.wants_adb() {
+            if let Some((peer, ip)) = &adb_peer {
+                if adb_at.is_none_or(|t| t.elapsed() > Duration::from_secs(5)) {
+                    adb_at = Some(Instant::now());
+                    let _ = adb_tx.send(super::adb::Req { peer: peer.clone(), ip: ip.clone(), act: None });
+                }
+            }
+        } else {
+            adb_at = None;
+        }
+
         // ------------------------------------------------------------------------------ commands
         let cmds = island.take_cmds();
         if !cmds.is_empty() {
@@ -301,6 +360,11 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             for c in cmds {
                 match c {
                     Cmd::Beep => host.beep(),
+                    Cmd::Adb { what, on } => {
+                        if let Some((peer, ip)) = &adb_peer {
+                            let _ = adb_tx.send(super::adb::Req { peer: peer.clone(), ip: ip.clone(), act: Some((what, on)) });
+                        }
+                    }
                     Cmd::PcMedia(k) => {
                         exec.run(Cmd::PcMedia(k), &ctx);
                         if let Some(m) = island.model.pc_media.as_mut() {
@@ -330,7 +394,13 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             wants.store(false, Ordering::Relaxed);
         }
         if st.visible {
-            closed_since = None;
+            if island.is_open() {
+                closed_since = None;
+            } else if closed_since.get_or_insert_with(Instant::now).elapsed() > Duration::from_secs(5) && !st.animating {
+                // Only the resting notch for a while: the next frame makes a new canvas if it needs one.
+                canvas = None;
+                island.release_buffers();
+            }
             if st.animating {
                 island.take_dirty();
                 let size = ((CANVAS_W * geom.k).ceil() as u32, (CANVAS_H * geom.k).ceil() as u32);
@@ -360,37 +430,10 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         // ------------------------------------------------------------------------------ pacing
         if st.visible && st.animating {
             host.vsync();
-        } else if st.visible {
+        } else if st.visible && island.is_open() {
             pending.extend(host.pump(14));
         } else {
             pending.extend(host.pump(40));
         }
     }
-}
-
-/// The computer's clock, for the pill and the header's date.
-#[cfg(target_os = "linux")]
-fn local_time() -> LocalTime {
-    // SAFETY: `localtime_r` fills the `tm` we own; `time` has no preconditions.
-    unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        if libc::localtime_r(&now, &mut tm).is_null() {
-            return LocalTime::default();
-        }
-        LocalTime { hour: tm.tm_hour as u32, min: tm.tm_min as u32, wday: tm.tm_wday as u32, month: (tm.tm_mon + 1) as u32, day: tm.tm_mday as u32 }
-    }
-}
-
-#[cfg(windows)]
-fn local_time() -> LocalTime {
-    use windows::Win32::System::SystemInformation::GetLocalTime;
-    // SAFETY: no preconditions.
-    let t = unsafe { GetLocalTime() };
-    LocalTime { hour: t.wHour as u32, min: t.wMinute as u32, wday: t.wDayOfWeek as u32, month: t.wMonth as u32, day: t.wDay as u32 }
-}
-
-#[cfg(not(any(target_os = "linux", windows)))]
-fn local_time() -> LocalTime {
-    LocalTime::default()
 }

@@ -10,7 +10,7 @@ import '../phone_control.dart';
 import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'phone_page.dart' show NeedsAdb;
-import 'expressive.dart' show Spring, motion;
+import 'expressive.dart' show Spring, motion, showAleroDialog;
 import 'phone_windows.dart' show CameraFailure;
 import 'screen.dart' show openScreen;
 import 'shell.dart' show confirm;
@@ -71,7 +71,7 @@ const controlNames = {
 };
 const _mainCount = 8;
 
-Future<void> _customize(BuildContext context, Hub hub) => showDialog<void>(
+Future<void> _customize(BuildContext context, Hub hub) => showAleroDialog<void>(
   context: context,
   builder: (ctx) => AlertDialog(
     title: const Text('Controles del teléfono'),

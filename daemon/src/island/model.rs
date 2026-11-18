@@ -39,6 +39,7 @@ pub struct Call {
 #[derive(Clone, Debug)]
 pub struct Offer {
     pub id: String,
+    pub peer_id: String,
     pub peer_name: String,
     pub name: String,
     pub size: u64,
@@ -144,6 +145,12 @@ pub enum Notice {
 #[derive(Default)]
 pub struct Model {
     pub peers: Vec<PeerView>,
+    /// Picture of each phone, by peer id (the app finds them; see `load_devices`).
+    pub devices: HashMap<String, Image>,
+    /// Phones reachable by adb now, with their radios (the island's extra controls).
+    pub adb: HashMap<String, super::adb::Radios>,
+    /// A phone was just plugged in (taken by the island to show the charging activity).
+    pub charging_started: bool,
     pub info: HashMap<String, Info>,
     pub phone: HashMap<String, PhoneSt>,
     pub calls: HashMap<String, Call>,
@@ -157,6 +164,20 @@ pub struct Model {
     pub chosen: Option<String>,
     icons: HashMap<String, Image>,
     media_key: String,
+    /// The peer that reported `phone_media`.
+    media_peer: Option<String>,
+}
+
+/// `island-devices.json` (written by the app): `{"peer id": "path of its picture"}`. Pictures that cannot be read or
+/// are not PNG/JPEG are left out (the island then draws its generic phone).
+pub fn load_devices(json: &str) -> HashMap<String, Image> {
+    let Ok(Value::Object(map)) = serde_json::from_str::<Value>(json) else { return HashMap::new() };
+    map.iter()
+        .filter_map(|(id, p)| {
+            let bytes = std::fs::read(p.as_str()?).ok()?;
+            Some((id.clone(), decode_image(&bytes)?))
+        })
+        .collect()
 }
 
 fn s(v: &Value, k: &str) -> String {
@@ -171,6 +192,17 @@ fn b64(v: &Value) -> Option<Vec<u8>> {
 impl Model {
     pub fn set_peers(&mut self, peers: Vec<PeerView>) {
         self.peers = peers;
+    }
+
+    /// Drops what only made sense while the peer was there.
+    fn forget(&mut self, id: &str) {
+        self.calls.remove(id);
+        self.offers.retain(|o| o.peer_id != id);
+        if self.media_peer.as_deref() == Some(id) {
+            self.phone_media = None;
+            self.media_key.clear();
+            self.media_peer = None;
+        }
     }
 
     /// Paired phones that are connected now.
@@ -221,18 +253,21 @@ impl Model {
                     None => self.peers.push(peer.clone()),
                 }
                 if peer.state != PeerState::Connected {
-                    self.calls.remove(&peer.id);
+                    self.forget(&peer.id);
                 }
                 out.push(Notice::Peers);
             }
             Event::PeerGone { id } => {
                 self.peers.retain(|p| &p.id != id);
-                self.calls.remove(id);
+                self.forget(id);
                 out.push(Notice::Peers);
             }
-            Event::TransferOffer { id, peer_name, name, size, .. } => {
+            Event::TransferOffer { id, peer_id, peer_name, name, size } => {
                 self.offers.retain(|o| &o.id != id);
-                self.offers.push(Offer { id: id.clone(), peer_name: peer_name.clone(), name: name.clone(), size: *size });
+                self.offers.push(Offer { id: id.clone(), peer_id: peer_id.clone(), peer_name: peer_name.clone(), name: name.clone(), size: *size });
+                if self.offers.len() > 16 {
+                    self.offers.remove(0);
+                }
                 out.push(Notice::Offer(id.clone()));
             }
             Event::TransferStarted { id, peer_name, name, size, incoming, .. } => {
@@ -270,7 +305,11 @@ impl Model {
                 let i = self.info.entry(peer.to_string()).or_default();
                 i.phone = b["kind"] == "phone";
                 i.battery = b["battery"]["level"].as_i64().map_or(-1, |v| v as i32);
+                let was = i.charging;
                 i.charging = b["battery"]["charging"].as_bool().unwrap_or(false);
+                if i.phone && i.charging && !was {
+                    self.charging_started = true;
+                }
                 Some(Notice::Peers)
             }
             "pb.x.phone.state" => {
@@ -297,16 +336,24 @@ impl Model {
             }
             "pb.x.notif.posted" => {
                 let key = s(b, "key");
-                if let (pkg, Some(img)) = (s(b, "pkg"), b64(&b["icon"]).and_then(|d| decode_image(&d))) {
-                    if !pkg.is_empty() {
+                let pkg = s(b, "pkg");
+                if !pkg.is_empty() && !self.icons.contains_key(&pkg) {
+                    if let Some(img) = b64(&b["icon"]).and_then(|d| decode_image(&d)) {
+                        if self.icons.len() >= 64 {
+                            self.icons.clear();
+                        }
                         self.icons.insert(pkg, img);
                     }
                 }
                 let n = Notif { key: key.clone(), app: s(b, "app"), pkg: s(b, "pkg"), title: s(b, "title"), text: s(b, "text"), at: Instant::now() };
+                // A reply (from the app or the phone) re-posts the chat with your own message last, and some apps
+                // re-post unchanged: neither is news, so the list updates but the island does not pop.
+                let own = b["messages"].as_array().and_then(|m| m.last()).is_some_and(|m| m["out"].as_bool() == Some(true));
+                let same = self.notifs.iter().any(|o| o.key == key && o.title == n.title && o.text == n.text);
                 self.notifs.retain(|o| o.key != key);
                 self.notifs.push_front(n);
                 self.notifs.truncate(12);
-                Some(Notice::Notif(key))
+                (!own && !same).then_some(Notice::Notif(key))
             }
             "pb.x.notif.removed" => {
                 let key = s(b, "key");
@@ -325,9 +372,15 @@ impl Model {
             }
             "pb.x.media.state" => {
                 if b["active"].as_bool() != Some(true) {
-                    self.phone_media = None;
+                    // Only the peer that owns the media can end it; the cover must not outlive it.
+                    if self.media_peer.as_deref().is_none_or(|p| p == peer) {
+                        self.phone_media = None;
+                        self.media_key.clear();
+                        self.media_peer = None;
+                    }
                     return None;
                 }
+                self.media_peer = Some(peer.to_string());
                 let key = format!("{}|{}|{}", s(b, "title"), s(b, "artist"), b["art"].as_str().map_or(0, str::len));
                 let art = if key == self.media_key { self.phone_media.as_ref().and_then(|m| m.art.clone()) } else { b64(&b["art"]).and_then(|d| decode_image(&d)) };
                 self.media_key = key;
@@ -443,6 +496,34 @@ mod tests {
         assert!(md.position_now() >= 1000 && md.position_now() < 2000);
         m.feed(&msg("a", "pb.x.media.state", json!({"active":false})));
         assert!(m.phone_media.is_none());
+    }
+
+    #[test]
+    fn a_peer_that_goes_takes_its_offers_and_media_with_it() {
+        let mut m = Model::default();
+        m.feed(&Event::PeerChanged { peer: peer("a", true) });
+        m.feed(&Event::TransferOffer { id: "t".into(), peer_id: "a".into(), peer_name: "Phone a".into(), name: "x".into(), size: 1 });
+        m.feed(&msg("a", "pb.x.media.state", json!({"active":true,"title":"T"})));
+        // Another peer cannot end the media of the first one.
+        m.feed(&msg("b", "pb.x.media.state", json!({"active":false})));
+        assert!(m.phone_media.is_some());
+        m.feed(&Event::PeerChanged { peer: peer("a", false) });
+        assert!(m.offers.is_empty() && m.phone_media.is_none());
+        m.feed(&msg("a", "pb.x.media.state", json!({"active":true,"title":"T"})));
+        m.feed(&Event::PeerGone { id: "a".into() });
+        assert!(m.phone_media.is_none());
+    }
+
+    #[test]
+    fn own_replies_and_unchanged_reposts_do_not_pop() {
+        let mut m = Model::default();
+        let n = |out: bool| json!({"key":"k","app":"Chat","title":"Ana","text":"hola","messages":[{"text":"hola","out":out}]});
+        assert!(m.feed(&msg("a", "pb.x.notif.posted", n(false))).iter().any(|x| matches!(x, Notice::Notif(_))));
+        assert!(m.feed(&msg("a", "pb.x.notif.posted", n(false))).is_empty());
+        let mut r = n(true);
+        r["text"] = json!("ok");
+        assert!(m.feed(&msg("a", "pb.x.notif.posted", r)).is_empty());
+        assert_eq!(m.notifs[0].text, "ok");
     }
 
     #[test]

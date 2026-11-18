@@ -8,12 +8,12 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
-/** Quick Settings tile «Alero»: opens the app like its launcher icon (as LocalSend and Quick Share do); the user picks what to do. */
+/** Quick Settings tile «Alero»: straight to picking files for the connected computer (the widgets' «send»). */
 class SendTile : TileService() {
     override fun onStartListening() {
         val t = qsTile ?: return
         t.label = "Alero"
-        if (Build.VERSION.SDK_INT >= 29) t.subtitle = Tr.t("Enviar y recibir", "Send and receive")
+        if (Build.VERSION.SDK_INT >= 29) t.subtitle = Tr.t("Enviar archivos", "Send files")
         t.icon = Icon.createWithResource(this, R.drawable.ic_stat_alero)
         t.state = Tile.STATE_ACTIVE
         t.updateTile()
@@ -21,11 +21,13 @@ class SendTile : TileService() {
 
     @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
-        // The launcher intent brings an open Alero back as it was instead of pushing a new screen.
-        val i = packageManager.getLaunchIntentForPackage(packageName) ?: return
+        // The widgets' «send»: the file picker opens at once and the files go to the connected computer (or Alero
+        // says it is not connected). SINGLE_TOP: an open Alero gets it in onNewIntent instead of a second screen.
+        val i = Intent(this, MainActivity::class.java).putExtra(MainActivity.WIDGET, "send")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         unlockAndRun {
             if (Build.VERSION.SDK_INT >= 34) {
-                startActivityAndCollapse(PendingIntent.getActivity(this, 0, i, PendingIntent.FLAG_IMMUTABLE))
+                startActivityAndCollapse(PendingIntent.getActivity(this, "tile-send".hashCode(), i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
             } else {
                 @Suppress("DEPRECATION") startActivityAndCollapse(i)
             }

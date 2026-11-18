@@ -14,6 +14,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 /// The ADB controls of Dispositivos.
 /// This does not pair/unpair Alero's TLS engine; it only selects an authorised
@@ -70,7 +71,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
       if (choices.length == 1) {
         selected = choices.first;
       } else if (mounted) {
-        selected = await showDialog<AdbDevice>(
+        selected = await showAleroDialog<AdbDevice>(
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Selecciona el teléfono USB'),
@@ -124,7 +125,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
       );
       return;
     }
-    final serial = await showDialog<String>(
+    final serial = await showAleroDialog<String>(
       context: context,
       builder: (_) => const _WirelessDialog(),
     );

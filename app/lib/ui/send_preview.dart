@@ -7,7 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../native.dart';
-import 'expressive.dart' show Spring, motion;
+import 'expressive.dart' show Spring, motion, showAleroDialog;
 import 'icon.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -19,7 +19,7 @@ Future<bool> showSendPreview(
   List<Picked> files,
   String to,
 ) async =>
-    await showDialog<bool>(
+    await showAleroDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: Text(tr('Enviar a {}', [to])),
@@ -148,7 +148,7 @@ Future<void> showTransfer(
         for (final x in hub.active) x.id,
         for (final d in hub.ended) d.x.id,
       };
-  return showDialog<void>(
+  return showAleroDialog<void>(
     context: context,
     builder: (_) => _Transfer(hub, count, incoming, old),
   );

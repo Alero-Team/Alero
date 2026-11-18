@@ -34,15 +34,15 @@ class IslandPrefs extends ChangeNotifier {
     'offset_x': 0,
     'hotkey': '',
     'scale': 100,
-    'top_margin': 0,
-    'always_visible': false,
     'animation': 'normal',
     'respect_reduce_motion': true,
     'color': '#000000',
-    'accent': '#8AB4F8',
+    'accent': '#FFFFFF',
     'auto_expand': true,
     'event_secs': 6,
     'sound': false,
+    // Phone controls of the island, in order (the daemon's `controls`).
+    'controls': 'dnd,torch,find,ringer,wifi,bt,rotate,lock',
   };
 
   final _values = <String, Object>{...defaults};

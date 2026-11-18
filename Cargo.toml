@@ -8,3 +8,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+# The island draws every frame in software: its rasterizer is worth full speed even in a size-optimized build.
+[profile.release.package.tiny-skia]
+opt-level = 3
+[profile.release.package.tiny-skia-path]
+opt-level = 3

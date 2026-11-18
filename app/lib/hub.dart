@@ -147,8 +147,24 @@ class Hub extends ChangeNotifier {
         return; // another phone connected meanwhile
       }
       look[peerId] = l;
+      _writeIslandDevices();
       notifyListeners();
     });
+  }
+
+  /// Alero Island (drawn by the daemon) shows each phone's picture: it reads this list of paths.
+  void _writeIslandDevices() {
+    try {
+      final f = File('${_settings.parent.path}/island-devices.json');
+      final tmp = File('${f.path}.tmp');
+      tmp.writeAsStringSync(jsonEncode({
+        for (final e in look.entries)
+          if (e.value.file != null) e.key: e.value.file!.path,
+      }));
+      tmp.renameSync(f.path);
+    } catch (_) {
+      // Only decoration: the island draws its generic phone.
+    }
   }
 
   /// Phone side: drives a paired computer (mouse, keys, volume, media, screenshots, its screen).
@@ -1429,7 +1445,8 @@ class Hub extends ChangeNotifier {
   Future<bool> Function(List<Picked> files, String to)? confirmSend;
 
   /// Desktop: real paths. Android: picks content URIs and sends their descriptors (no copy).
-  Future<void> send(String peerId) async =>
+  /// True when at least one file started on its way (false: nothing picked, or the send was cancelled).
+  Future<bool> send(String peerId) async =>
       _sendPicked(peerId, await Native.pickFiles());
 
   /// Desktop drag and drop: plain paths.
@@ -1465,22 +1482,23 @@ class Hub extends ChangeNotifier {
     return out;
   }
 
-  Future<void> _sendPicked(String peerId, List<Picked> picked) async {
+  Future<bool> _sendPicked(String peerId, List<Picked> picked) async {
     final files = expandFolders(picked);
     if (files.length > 5000) {
       messages.add(
         tr('La carpeta tiene {} archivos; el máximo por envío es 5000.', [files.length]),
       );
-      return;
+      return false;
     }
-    if (files.isEmpty) return;
+    if (files.isEmpty) return false;
     final to = peers.where((p) => p.id == peerId).firstOrNull?.name ?? '';
     if (confirmSend != null && !await confirmSend!(files, to)) {
       for (final f in files) {
         if (f.fd != null) Native.closeFd(f.fd!);
       }
-      return;
+      return false;
     }
+    var started = false;
     for (final f in files) {
       try {
         final id = await pb.sendFile(
@@ -1488,6 +1506,7 @@ class Hub extends ChangeNotifier {
           path: f.path,
           displayName: f.name,
         );
+        started = true;
         if (f.fd != null) {
           _fds[id] = f.fd!;
           await Native.rememberFile(id, f.fd!);
@@ -1497,6 +1516,7 @@ class Hub extends ChangeNotifier {
         messages.add(tr('No se pudo enviar: {}', [es('$e')]));
       }
     }
+    return started;
   }
 
   Future<void> setName(String n) async {

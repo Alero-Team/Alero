@@ -12,6 +12,7 @@ import 'theme.dart';
 import 'icon.dart';
 import 'widgets.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 Future<void> openPcScreen(
   BuildContext context,
@@ -390,7 +391,7 @@ Future<void> showShot(BuildContext context, Hub hub) {
   final shot = hub.shot;
   if (shot == null) return Future.value();
   hub.shot = null;
-  return showDialog<void>(
+  return showAleroDialog<void>(
     context: context,
     builder: (ctx) => Dialog(
       child: Padding(

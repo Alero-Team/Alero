@@ -13,6 +13,7 @@ import 'widgets.dart';
 import 'icon.dart';
 import 'island_panel.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
 String _mediaStatus(Hub hub) {
@@ -47,7 +48,7 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _rename(BuildContext context) async {
     final c = TextEditingController(text: hub.name);
-    final n = await showDialog<String>(
+    final n = await showAleroDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Nombre de este dispositivo'),
@@ -81,7 +82,7 @@ class SettingsScreen extends StatelessWidget {
   /// The feature remains off until the phone owner explicitly confirms.
   Future<void> _setSmsAllowed(BuildContext context, bool enabled) async {
     if (enabled && !hub.smsAllowed) {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAleroDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Autorizar mensajes en el ordenador'),

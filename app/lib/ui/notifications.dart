@@ -115,7 +115,7 @@ class NotificationsPanel extends StatelessWidget {
         children: [
           if (list.isNotEmpty)
             TextButton.icon(
-              onPressed: () => showDialog<void>(
+              onPressed: () => showAleroDialog<void>(
                 context: context,
                 builder: (_) => _AllDialog(hub, peerId),
               ),

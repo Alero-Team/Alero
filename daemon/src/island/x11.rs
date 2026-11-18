@@ -232,7 +232,8 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() {
-            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+            // Bytes, not &s[..]: a raw UTF-8 name after the "%" would split a character and panic.
+            if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
                 out.push(v);
                 i += 3;
                 continue;
@@ -273,7 +274,8 @@ impl Host for X11Host {
         }
     }
 
-    fn dpi(&mut self) -> f32 {
+    // shortcut: X11 has one Xft.dpi for every monitor; per-monitor scale needs XRandR, upgrade if mixed-DPI X11 setups appear.
+    fn dpi(&mut self, _mon: Rect) -> f32 {
         if self.dpi_at.map_or(true, |t| t.elapsed() > Duration::from_secs(30)) {
             self.dpi_at = Some(Instant::now());
             unsafe {
@@ -437,5 +439,6 @@ mod tests {
         assert_eq!(parse_uri_list(t), vec![PathBuf::from("/home/nico/Mi foto.jpg"), PathBuf::from("/tmp/a#b.txt")]);
         assert_eq!(percent_decode("100%"), "100%");
         assert_eq!(percent_decode("%zz"), "%zz");
+        assert_eq!(percent_decode("/a%aé.txt"), "/a%aé.txt");
     }
 }

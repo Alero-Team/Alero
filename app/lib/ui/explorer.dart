@@ -10,6 +10,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 String _date(DateTime d) {
   String two(int n) => n.toString().padLeft(2, '0');
@@ -48,7 +49,7 @@ Future<void> _rename(BuildContext context, FsClient fs, FsEntry e) async {
     baseOffset: 0,
     extentOffset: dot > 0 ? dot : e.name.length,
   );
-  final to = await showDialog<String>(
+  final to = await showAleroDialog<String>(
     context: context,
     builder: (d) => AlertDialog(
       title: const Text('Renombrar'),

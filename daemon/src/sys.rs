@@ -25,6 +25,7 @@ pub struct Media {
 /// Size and hotspot of the pointer drawn into a shared frame: 82% of the real pointer (which already follows the
 /// system DPI and the accessibility pointer size), never under 12 px. The hotspot shrinks with it, so the drawn tip
 /// stays exactly where the click lands. Only the picture changes; the Windows pointer itself is never touched.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn stream_pointer(native: i32, hot_x: i32, hot_y: i32) -> (i32, i32, i32) {
     let px = ((native.max(1) as f64 * 0.82).round() as i32).max(12);
     let k = px as f64 / native.max(1) as f64;
@@ -97,7 +98,7 @@ mod win {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     use windows::Win32::UI::WindowsAndMessaging::{
         DrawIconEx, GetCursorInfo, GetIconInfo, GetSystemMetrics, SetProcessDPIAware, CURSORINFO, CURSOR_SHOWING, DI_NORMAL,
-        HICON, ICONINFO, SM_CXCURSOR, SM_CXSCREEN, SM_CYSCREEN,
+        HICON, ICONINFO, SM_CXCURSOR,
     };
     use windows::Media::Control::{GlobalSystemMediaTransportControlsSessionManager, GlobalSystemMediaTransportControlsSessionPlaybackStatus};
 
@@ -283,7 +284,7 @@ mod win {
         }
         let mut out: Vec<(bool, i32, i32, i32, i32)> = Vec::new();
         unsafe {
-            EnumDisplayMonitors(
+            let _ = EnumDisplayMonitors(
                 None, None, Some(add),
                 LPARAM((&mut out as *mut Vec<(bool, i32, i32, i32, i32)>) as isize),
             );

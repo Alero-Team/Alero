@@ -290,7 +290,7 @@ Future<void> _customize(
   Hub hub,
   void Function(Section) go,
   List<String> tiles,
-) => showDialog<void>(
+) => showAleroDialog<void>(
   context: context,
   builder: (ctx) => AlertDialog(
     title: const Text('Personalizar inicio'),
@@ -479,11 +479,13 @@ class _Hero extends StatelessWidget {
                 label: const FitLabel('Acceso remoto'),
               ),
           ];
-    // One row when every label fits on one line (150 px each); else the main button gets its own row and the rest share the next.
+    // One row when every label fits (150 px each); else the main button gets its own row and the rest share
+    // rows of as many as fit, so a narrow window stacks them instead of shrinking their text.
     Widget actions(double width) {
       final n = buttons.length;
-      final oneRow = width / n >= 150;
-      final rest = oneRow ? n : n - 1;
+      final fit = (width / 150).floor().clamp(1, n);
+      final oneRow = fit >= n;
+      final rest = oneRow ? n : fit.clamp(1, n - 1);
       final w = (width - Gap.s * (rest - 1)) / rest;
       final tight = w < 200;
       return Theme(

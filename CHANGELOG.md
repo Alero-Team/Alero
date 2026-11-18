@@ -1,32 +1,64 @@
 # Cambios
 
-## Beta 1.4.5 (1.4.5) — 2026-11-17
+## Beta 1.4.6 (1.4.6) — 2026-11-17
 
-Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión. Reemplaza a la Beta 1.4.5, que se retiró: la isla vuelve a su diseño de muesca con resortes, ahora mucho más fluida.
 
 ### Windows y Linux
 
-- **Alero Island rediseñada al estilo QNotch:** una píldora de 38 px que cuelga del borde superior (negra OLED por defecto) con la hora, la música que suena, la batería del teléfono y las notificaciones sin leer; al pasar el ratón se despliega en un panel de 720 × 380 con perfil del teléfono, pestañas con indicador deslizante, y tarjetas de Reproductor, Teléfono, Notificaciones, Portapapeles y Controles.
-- **Animaciones de QNotch:** apertura de 240 ms con ligero rebote, cierre de 180 ms, indicador de pestañas de 220 ms, contenido que aparece subiendo 6 px, y la píldora que cambia de ancho con curvas suaves. Reemplazan a los resortes anteriores.
-- **Pestañas:** Inicio, Reproductor, Archivos (arrastra a la isla para enviar; progreso de envíos y recepciones), Notificaciones (con descartar), Portapapeles y Controles (No molestar, linterna, buscar, timbre y volumen).
-- **Avisos compactos:** llamada, archivo entrante, transferencia y soltar archivos usan una tarjeta pequeña con el mismo estilo; las notificaciones y el portapapeles recibido aparecen un momento dentro de la propia píldora.
-- **Nuevo:** botón para fijar el panel abierto, botón para abrir Alero y ajuste «Mostrar siempre la píldora» (por defecto sigue oculta hasta que pasas el ratón por el centro superior). El margen superior pasa a 0 (pegada al borde); súbelo para que flote.
-- Se oculta con juegos y apps a pantalla completa, y respeta «reducir animaciones» del sistema.
-- Basada en el diseño de QNotch (licencia MIT); ver créditos en Licencias.
+- **Alero Island como una muesca:** cuelga del borde superior con esquinas cóncavas que la funden con la pantalla, y en reposo deja una lengüeta fina visible para saber dónde está; al acercar el ratón se ensancha un poco.
+- **Actividades en vivo, como la Dynamic Island:** cuando empieza a sonar algo (en el PC o en el teléfono) o cambia la canción, la muesca muestra unos segundos la carátula y un ecualizador animado; al enchufar el teléfono, el rayo y el porcentaje de carga. Luego vuelve a su tamaño.
+- **Mucho más fluida:** cada fotograma se dibuja unas 7 veces más rápido (5 ms animando, 2 ms en reposo) y sigue usando unos pocos MB de memoria.
+- **Ya no tapa lo que hay debajo:** los clics pasan a la ventana de abajo salvo cuando el puntero está sobre la isla abierta.
+- **Estilo de Alero:** acento blanco monocromo por defecto y textos más grandes que se ajustan a la pantalla; portada con proporciones más cómodas.
+- **La foto del teléfono** en la isla, la misma que muestra la app.
+- **Notificaciones con el icono de su app**, centradas; tu propia respuesta a un chat ya no abre la isla como si fuera un mensaje nuevo.
+- **Enviar archivos soltándolos en la isla** muestra la tarjeta de progreso.
+- **Reproductor:** selector «Este equipo / Teléfono» siempre visible; la isla pide al teléfono lo que suena si Alero arrancó después de conectarse.
+- **Controles del teléfono a tu elección** (Ajustes › Alero Island): No molestar, linterna, buscar, sonido y, con la depuración inalámbrica activa, Wi-Fi, Bluetooth, rotación y bloquear.
+- Se mantiene encima de las demás ventanas y no desaparece después de cerrarse.
+
+### Toda la app
+
+- **Animaciones en todas partes:** las páginas se abren creciendo con un resorte, los diálogos entran con rebote, las tarjetas aparecen subiendo y se adaptan con suavidad cuando cambia su contenido, y las filas de ajustes responden al pulsarlas.
+- **Redimensionar sin parpadeos:** al contraer o abrir el menú la página se desliza en vez de recalcularse en cada fotograma, y al cambiar el tamaño de la ventana las tarjetas siguen al ratón sin repetir animaciones.
+- Los botones de la tarjeta del teléfono bajan a otra fila cuando no caben, en lugar de encoger su texto.
+- **Mensajes:** botón para adjuntar archivos en un chat.
+
+### Android
+
+- **El mosaico de Ajustes rápidos** abre directamente el selector de archivos y los envía al ordenador conectado.
+- **«Compartir» en la notificación de un archivo recibido:** lo pasa a cualquier app, por ejemplo al chat desde el que lo enviaste con Alero.
 
 ### English
 
-Install the Android APK and the Windows or Linux package from this version together.
+Install the Android APK and the Windows or Linux package from this version together. It replaces Beta 1.4.5, which was withdrawn: the island goes back to its spring-driven notch design, now far smoother.
 
 #### Windows and Linux
 
-- **Alero Island redesigned after QNotch:** a 38 px pill hanging from the top edge (OLED black by default) showing the time, what is playing, the phone's battery and unread notifications; hover and it unfolds into a 720 × 380 panel with the phone's profile, tabs with a sliding indicator, and Player, Phone, Notifications, Clipboard and Controls cards.
-- **QNotch's animations:** a 240 ms open with a slight overshoot, a 180 ms close, a 220 ms tab indicator, content that fades in rising 6 px, and a pill that changes width on smooth curves. They replace the previous springs.
-- **Tabs:** Home, Player, Files (drag onto the island to send; progress of sent and received files), Notifications (with dismiss), Clipboard and Controls (Do not disturb, flashlight, find, ringer and volume).
-- **Compact alerts:** a call, an incoming file, a transfer and dropping files use a small card in the same style; notifications and a received clipboard briefly appear inside the pill itself.
-- **New:** a pin button to keep the panel open, a button to open Alero, and an "Always show the pill" setting (still hidden until you move the pointer to the top centre by default). The top margin now defaults to 0 (flush with the edge); raise it to make it float.
-- Hides during games and full-screen apps, and follows the system's "reduce animations".
-- Based on the QNotch design (MIT licence); see credits under Licenses.
+- **Alero Island as a notch:** it hangs from the top edge with concave corners that blend it into the screen, and at rest a thin tab stays visible so you know where it is; it widens a little as the pointer comes near.
+- **Live activities, like the Dynamic Island:** when something starts playing (on the PC or the phone) or the song changes, the notch shows the cover and an animated equalizer for a few seconds; when you plug the phone in, the bolt and its charge. Then it shrinks back.
+- **Much smoother:** each frame is drawn about 7 times faster (5 ms animating, 2 ms at rest) and it still uses a few MB of memory.
+- **No longer blocks what is below:** clicks go through to the window underneath unless the pointer is on the open island.
+- **Alero's look:** a monochrome white accent by default and larger text that fits the screen; a home view with more comfortable proportions.
+- **The phone's picture** in the island, the same one the app shows.
+- **Notifications with their app's icon**, centred; your own reply in a chat no longer opens the island as if it were a new message.
+- **Dropping files on the island** shows the progress card.
+- **Player:** a "This computer / Phone" switch always on screen; the island asks the phone what is playing if Alero started after it connected.
+- **Phone controls of your choice** (Settings › Alero Island): Do not disturb, flashlight, find, sound and, with wireless debugging on, Wi-Fi, Bluetooth, rotation and lock.
+- It stays above other windows and no longer disappears after closing.
+
+#### The whole app
+
+- **Animations everywhere:** pages open growing on a spring, dialogs come in with a bounce, cards rise into place and adapt smoothly when their content changes, and settings rows respond when pressed.
+- **Resizing without flicker:** folding or opening the menu slides the page instead of recalculating it every frame, and resizing the window keeps the cards with the pointer without replaying animations.
+- The phone card's buttons move to another row when they do not fit, instead of shrinking their text.
+- **Messages:** a button to attach files in a chat.
+
+#### Android
+
+- **The Quick Settings tile** opens the file picker straight away and sends the files to the connected computer.
+- **"Share" on a received file's notification:** hands it to any app, for example the chat you sent it from with Alero.
 
 ## Beta 1.4.4 (1.4.4) — 2026-11-17
 

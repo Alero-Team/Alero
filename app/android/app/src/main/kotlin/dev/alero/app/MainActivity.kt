@@ -49,6 +49,7 @@ class MainActivity : FlutterActivity() {
         Features.start(this)
         if (Prefs.background(this)) PbService.update(this, emptyList()) // no service unless asked or a computer is connected
         shared = intent
+        shareReceived(intent)
         if (Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener { it.remove() }
     }
 
@@ -94,6 +95,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         shared = intent
+        if (shareReceived(intent)) return
         channel?.invokeMethod("shared", null) // Dart asks for it with takeShared
     }
 
@@ -487,6 +489,24 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /** «Compartir» on a received file's notification: the system share sheet with that file. True if it was one. */
+    private fun shareReceived(i: Intent): Boolean {
+        val path = i.getStringExtra(SHARE_PATH) ?: return false
+        val id = i.getStringExtra(SHARE_ID) ?: ""
+        i.removeExtra(SHARE_PATH)
+        Thread {
+            try {
+                val view = fileIntent(path, id)
+                val send = Intent(Intent.ACTION_SEND).setType(view.type).putExtra(Intent.EXTRA_STREAM, view.data)
+                    .apply { clipData = view.clipData }.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                runOnUiThread { startActivity(Intent.createChooser(send, null)) }
+            } catch (_: Exception) {
+                runOnUiThread { Toast.makeText(this, Tr.t("El archivo ya no está disponible.", "The file is no longer available."), Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+        return true
+    }
+
     private fun fileIntent(path: String, id: String): Intent {
         val saved = fileLocations.getString("id:$id", null) ?: fileLocations.getString(path, null)
         var uri = saved?.let(Uri::parse)
@@ -534,6 +554,9 @@ class MainActivity : FlutterActivity() {
     companion object {
         /** Intent extra set by the home-screen widgets: what to open (see Hub.widgetAction). */
         const val WIDGET = "alero.widget"
+        /** Set by the received-file notification's «Compartir». */
+        const val SHARE_PATH = "alero.share.path"
+        const val SHARE_ID = "alero.share.id"
         private var channel: MethodChannel? = null
         private var shared: Intent? = null
         private const val PICK = 41

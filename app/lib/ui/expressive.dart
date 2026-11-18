@@ -73,6 +73,118 @@ final motionScale = isPhone ? 0.85 : 1.45;
 Duration motion(BuildContext c, Duration d) =>
     MediaQuery.of(c).disableAnimations ? Duration.zero : d * motionScale;
 
+/// Alero Island's way in, for the app: the content grows from 96 % on a spring, rises a little and fades in.
+/// Plays once, when the widget first appears, and never while the window is being resized or the menu folds
+/// (widgets rebuilt by a new layout then would all fade in again: a flicker).
+class Entrance extends StatefulWidget {
+  const Entrance({super.key, required this.child});
+  final Widget child;
+
+  static DateTime _quietUntil = DateTime(0);
+
+  /// The layout is changing (window resized, menu folded): what appears now is not new.
+  static void hush() =>
+      _quietUntil = DateTime.now().add(const Duration(milliseconds: 700));
+
+  static bool get quiet => DateTime.now().isBefore(_quietUntil);
+
+  @override
+  State<Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<Entrance> {
+  // The same tree either way (only where it starts): switching structure later would remount the child.
+  late final double _from =
+      Entrance.quiet || MediaQuery.of(context).disableAnimations ? 1 : 0;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: _from, end: 1),
+    duration: motion(context, Spring.spatial.settle),
+    curve: Spring.spatial,
+    // Always the same widgets around the child: changing them at the end would remount it and lose its state.
+    builder: (_, v, c) => Opacity(
+      // The spring overshoots 1; opacity must not.
+      opacity: v.clamp(0.0, 1.0),
+      child: Transform.translate(
+        offset: Offset(0, (1 - v) * 14),
+        child: Transform.scale(scale: .96 + .04 * v, child: c),
+      ),
+    ),
+    // Painted once: the movement shifts a finished layer instead of repainting the content every frame.
+    child: RepaintBoundary(child: widget.child),
+  );
+}
+
+/// Pages on the computer open like the island: the new one grows from 94 % on a spring and fades in, the one
+/// below sinks back to 97 %. Android keeps its predictive back gesture.
+class IslandPageTransitionsBuilder extends PageTransitionsBuilder {
+  const IslandPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => Spring.spatial.settle * motionScale;
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 260);
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // drive(), not CurvedAnimation: this runs on every rebuild and CurvedAnimation leaks a listener each time.
+    final grow = animation.drive(
+      Tween<double>(
+        begin: .94,
+        end: 1,
+      ).chain(CurveTween(curve: Spring.spatial)),
+    );
+    final fade = animation.drive(CurveTween(curve: Curves.easeOutCubic));
+    final sink = secondaryAnimation.drive(
+      Tween<double>(
+        begin: 1,
+        end: .97,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+    );
+    return ScaleTransition(
+      scale: sink,
+      child: FadeTransition(
+        opacity: fade,
+        child: ScaleTransition(scale: grow, child: child),
+      ),
+    );
+  }
+}
+
+/// [showDialog] with the island's spring: the dialog grows from 90 % and fades in over a dimmed screen.
+Future<T?> showAleroDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) => showGeneralDialog<T>(
+  context: context,
+  barrierDismissible: barrierDismissible,
+  barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+  barrierColor: Colors.black54,
+  transitionDuration: motion(context, Spring.spatial.settle),
+  pageBuilder: (c, _, _) => SafeArea(child: Builder(builder: builder)),
+  transitionBuilder: (_, a, _, child) => FadeTransition(
+    opacity: a.drive(CurveTween(curve: Curves.easeOutCubic)),
+    child: ScaleTransition(
+      scale: a.drive(
+        Tween<double>(
+          begin: .9,
+          end: 1,
+        ).chain(CurveTween(curve: Spring.spatial)),
+      ),
+      child: child,
+    ),
+  ),
+);
+
 /// The small springy press used throughout Orion Store's navigation and cards.
 /// It stays a normal InkWell: keyboard, hover, focus and accessibility still work.
 class OrionPress extends StatefulWidget {

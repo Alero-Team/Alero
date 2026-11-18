@@ -44,18 +44,17 @@ pub struct IslandConfig {
     pub hotkey: String,
     /// Size of everything, in percent (75..150).
     pub scale: u32,
-    /// 0: the notch hangs from the very top edge (QNotch's look). More: it floats that far below it.
-    pub top_margin: u32,
-    /// The collapsed pill stays on screen; otherwise it appears only when the pointer goes to the top edge.
-    pub always_visible: bool,
-    /// "normal" (QNotch's own timing, a little bounce when opening), "soft" (less bounce) or "off".
+    /// "normal" (iPhone-like spring with a little bounce), "soft" (less bounce) or "off".
     pub animation: String,
     pub respect_reduce_motion: bool,
     /// Background, "#RRGGBB". Pure black (OLED) by default.
     pub color: String,
-    /// Progress bars, active toggles and badges, "#RRGGBB".
+    /// Progress bars, active toggles and badges, "#RRGGBB". White by default, Alero's monochrome accent.
     pub accent: String,
     pub modules: Modules,
+    /// Phone controls shown, in order, comma separated: dnd, torch, find, ringer, wifi, bt, rotate, lock
+    /// (the last four need adb).
+    pub controls: String,
     pub auto_expand: bool,
     pub event_secs: u32,
     pub sound: bool,
@@ -73,13 +72,12 @@ impl Default for IslandConfig {
             offset_x: 0,
             hotkey: String::new(),
             scale: 100,
-            top_margin: 0,
-            always_visible: false,
             animation: "normal".into(),
             respect_reduce_motion: true,
             color: "#000000".into(),
-            accent: "#8AB4F8".into(),
+            accent: "#FFFFFF".into(),
             modules: Modules::default(),
+            controls: "dnd,torch,find,ringer,wifi,bt,rotate,lock".into(),
             auto_expand: true,
             event_secs: 6,
             sound: false,
@@ -95,7 +93,6 @@ impl IslandConfig {
         self.close_delay_ms = self.close_delay_ms.min(1000);
         self.offset_x = self.offset_x.clamp(-300, 300);
         self.scale = self.scale.clamp(75, 150);
-        self.top_margin = self.top_margin.min(40);
         self.event_secs = self.event_secs.clamp(3, 15);
         if !matches!(self.animation.as_str(), "normal" | "soft" | "off") {
             self.animation = "normal".into();
@@ -104,7 +101,7 @@ impl IslandConfig {
             self.color = "#000000".into();
         }
         if parse_hex(&self.accent).is_none() {
-            self.accent = "#8AB4F8".into();
+            self.accent = "#FFFFFF".into();
         }
         self
     }
@@ -114,7 +111,7 @@ impl IslandConfig {
     }
 
     pub fn accent_rgb(&self) -> [u8; 3] {
-        parse_hex(&self.accent).unwrap_or([0x8A, 0xB4, 0xF8])
+        parse_hex(&self.accent).unwrap_or([255, 255, 255])
     }
 }
 

@@ -7,6 +7,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
+import 'expressive.dart';
 
 /// Supported local connections: Alero's USB tunnel and Android's file-transfer mode.
 class ConnectionPanel extends StatelessWidget {
@@ -92,7 +93,7 @@ class ConnectionPanel extends StatelessWidget {
     );
   }
 
-  void _mtpGuide(BuildContext context) => showDialog<void>(
+  void _mtpGuide(BuildContext context) => showAleroDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Transferir archivos por USB'),

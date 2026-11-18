@@ -91,6 +91,27 @@ pub fn squircle(r: R, radius: f32, n: f32) -> Option<Path> {
     pb.finish()
 }
 
+/// A notch hanging from the top edge: square top, rounded bottom corners of `radius`, and two concave "ears" of
+/// `ear` that melt the top corners into the edge of the screen.
+pub fn notch(r: R, radius: f32, ear: f32) -> Option<Path> {
+    let radius = radius.min(r.w / 2.0).min(r.h).max(0.0);
+    let ear = ear.min(r.h).max(0.0);
+    // Quarter circles as cubics (k = 0.5523).
+    let k = 0.5523;
+    let mut pb = PathBuilder::new();
+    pb.move_to(r.x - ear, r.y);
+    pb.line_to(r.right() + ear, r.y);
+    pb.cubic_to(r.right() + ear * (1.0 - k), r.y, r.right(), r.y + ear * (1.0 - k), r.right(), r.y + ear);
+    pb.line_to(r.right(), r.bottom() - radius);
+    pb.cubic_to(r.right(), r.bottom() - radius * (1.0 - k), r.right() - radius * (1.0 - k), r.bottom(), r.right() - radius, r.bottom());
+    pb.line_to(r.x + radius, r.bottom());
+    pb.cubic_to(r.x + radius * (1.0 - k), r.bottom(), r.x, r.bottom() - radius * (1.0 - k), r.x, r.bottom() - radius);
+    pb.line_to(r.x, r.y + ear);
+    pb.cubic_to(r.x, r.y + ear * (1.0 - k), r.x - ear * (1.0 - k), r.y, r.x - ear, r.y);
+    pb.close();
+    pb.finish()
+}
+
 /// Exponent that looks right for a corner of this radius on a shape of this height: a capsule is rounder than a card.
 pub fn squircle_n(radius: f32, height: f32) -> f32 {
     let t = (radius / (height / 2.0).max(1.0)).clamp(0.0, 1.0);
@@ -108,9 +129,15 @@ pub struct Image {
     pub data: Vec<u8>,
 }
 
+impl std::fmt::Debug for Image {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Image({}x{})", self.w, self.h)
+    }
+}
+
 impl Image {
     fn from_rgba(w: u32, h: u32, rgba: Vec<u8>) -> Option<Image> {
-        if w == 0 || h == 0 || rgba.len() != (w * h * 4) as usize {
+        if w == 0 || h == 0 || rgba.len() != w as usize * h as usize * 4 {
             return None;
         }
         let img = Image { w, h, data: rgba };
@@ -136,19 +163,19 @@ impl Image {
             return self;
         }
         let (nw, nh) = (self.w / f, self.h / f);
-        let mut out = vec![0u8; (nw * nh * 4) as usize];
+        let mut out = vec![0u8; nw as usize * nh as usize * 4];
         for y in 0..nh {
             for x in 0..nw {
                 let mut acc = [0u32; 4];
                 for dy in 0..f {
                     for dx in 0..f {
-                        let i = (((y * f + dy) * self.w + x * f + dx) * 4) as usize;
+                        let i = ((y * f + dy) as usize * self.w as usize + (x * f + dx) as usize) * 4;
                         for c in 0..4 {
                             acc[c] += self.data[i + c] as u32;
                         }
                     }
                 }
-                let o = ((y * nw + x) * 4) as usize;
+                let o = (y as usize * nw as usize + x as usize) * 4;
                 for c in 0..4 {
                     out[o + c] = (acc[c] / (f * f)) as u8;
                 }
@@ -158,12 +185,18 @@ impl Image {
     }
 }
 
+/// Largest picture accepted, in pixels: the header is checked before anything big is allocated.
+const MAX_PIXELS: u64 = 4_000_000;
+
 /// PNG or JPEG bytes (a cover, an app icon) to an image.
 pub fn decode_image(bytes: &[u8]) -> Option<Image> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
         dec.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
         let mut r = dec.read_info().ok()?;
+        if r.info().width as u64 * r.info().height as u64 > MAX_PIXELS {
+            return None;
+        }
         let mut buf = vec![0; r.output_buffer_size()?];
         let info = r.next_frame(&mut buf).ok()?;
         buf.truncate(info.buffer_size());
@@ -178,8 +211,12 @@ pub fn decode_image(bytes: &[u8]) -> Option<Image> {
     }
     if bytes.starts_with(&[0xFF, 0xD8]) {
         let mut dec = jpeg_decoder::Decoder::new(std::io::Cursor::new(bytes));
-        let px = dec.decode().ok()?;
+        dec.read_info().ok()?;
         let info = dec.info()?;
+        if info.width as u64 * info.height as u64 > MAX_PIXELS {
+            return None;
+        }
+        let px = dec.decode().ok()?;
         let rgba: Vec<u8> = match info.pixel_format {
             jpeg_decoder::PixelFormat::RGB24 => px.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
             jpeg_decoder::PixelFormat::L8 => px.iter().flat_map(|&g| [g, g, g, 255]).collect(),
@@ -206,50 +243,43 @@ pub enum Weight {
     Bold,
 }
 
+fn fallback_paths() -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    #[cfg(windows)]
+    {
+        let dir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
+        for f in ["segoeui.ttf", "YuGothM.ttc", "msyh.ttc", "malgun.ttf", "seguisym.ttf", "seguiemj.ttf"] {
+            paths.push(format!("{dir}\\Fonts\\{f}"));
+        }
+    }
+    #[cfg(not(windows))]
+    for f in [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf",
+    ] {
+        paths.push(f.into());
+    }
+    paths
+}
+
 type Glyph = Option<(i32, i32, u32, u32, Vec<u8>)>;
 
 pub struct Fonts {
     faces: Vec<FontRef<'static>>,
     fallback: Vec<FontVec>,
-    fallback_tried: bool,
-    cache: HashMap<(u8, u16, u16, u8), Glyph>,
+    /// System fonts not read yet: each is loaded only when the ones before it lack a glyph.
+    pending: Vec<String>,
+    cache: HashMap<(u8, u16, u16), Glyph>,
 }
 
 impl Fonts {
     pub fn new() -> Self {
         let faces = [SANS_REGULAR, SANS_MEDIUM, SANS_BOLD].iter().filter_map(|b| FontRef::try_from_slice(b).ok()).collect();
-        Self { faces, fallback: Vec::new(), fallback_tried: false, cache: HashMap::new() }
-    }
-
-    fn load_fallbacks(&mut self) {
-        self.fallback_tried = true;
-        let mut paths: Vec<String> = Vec::new();
-        #[cfg(windows)]
-        {
-            let dir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
-            for f in ["segoeui.ttf", "YuGothM.ttc", "msyh.ttc", "malgun.ttf", "seguisym.ttf", "seguiemj.ttf"] {
-                paths.push(format!("{dir}\\Fonts\\{f}"));
-            }
-        }
-        #[cfg(not(windows))]
-        for f in [
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf",
-        ] {
-            paths.push(f.into());
-        }
-        for p in paths {
-            // A big collection is read only when some text needs it.
-            if let Ok(bytes) = std::fs::read(&p) {
-                if let Ok(f) = FontVec::try_from_vec_and_index(bytes, 0) {
-                    self.fallback.push(f);
-                }
-            }
-        }
+        Self { faces, fallback: Vec::new(), pending: fallback_paths(), cache: HashMap::new() }
     }
 
     /// (face index, glyph id) for a char. Faces 0..=2 are the app font; 3.. are the system fallbacks.
@@ -266,13 +296,24 @@ impl Fonts {
                 return (base as u8, g);
             }
         }
-        if !self.fallback_tried {
-            self.load_fallbacks();
-        }
-        for (i, f) in self.fallback.iter().enumerate() {
-            let g = f.glyph_id(ch);
-            if g.0 != 0 {
-                return (3 + i as u8, g);
+        let mut i = 0;
+        loop {
+            match self.fallback.get(i) {
+                Some(f) => {
+                    let g = f.glyph_id(ch);
+                    if g.0 != 0 {
+                        return (3 + i as u8, g);
+                    }
+                    i += 1;
+                }
+                None if self.pending.is_empty() => break,
+                None => {
+                    // A big collection is read only when some text needs it.
+                    let p = self.pending.remove(0);
+                    if let Some(f) = std::fs::read(&p).ok().and_then(|b| FontVec::try_from_vec_and_index(b, 0).ok()) {
+                        self.fallback.push(f);
+                    }
+                }
             }
         }
         (base as u8, GlyphId(0))
@@ -288,7 +329,7 @@ impl Fonts {
     }
 
     fn glyph(&mut self, face: u8, g: GlyphId, px: f32) -> &Glyph {
-        let key = (face, g.0, (px * 4.0) as u16, 0);
+        let key = (face, g.0, (px * 4.0) as u16);
         if !self.cache.contains_key(&key) {
             let scale = PxScale::from(px);
             let glyph = g.with_scale(scale);
@@ -328,7 +369,8 @@ impl Fonts {
 
     /// `text` shortened with "…" so it fits in `max` logical units.
     pub fn fit(&mut self, text: &str, size: f32, w: Weight, max: f32) -> String {
-        let text = text.replace(['\n', '\r', '\t'], " ");
+        // Long clipboard or notification texts are cut before measuring: only the start can be shown.
+        let text: String = text.chars().take(300).collect::<String>().replace(['\n', '\r', '\t'], " ");
         if self.measure(&text, size, w) <= max {
             return text;
         }
@@ -404,25 +446,17 @@ impl Canvas {
         }
     }
 
-    pub fn circle(&mut self, cx: f32, cy: f32, rad: f32, c: Color, mask: Option<&Mask>) {
-        if let Some(p) = PathBuilder::from_circle(cx, cy, rad.max(0.1)) {
-            self.fill_path(&p, c, mask);
-        }
-    }
-
-    /// A mask of this squircle, in pixels, to clip drawing to the island.
-    pub fn mask_of(&self, r: R, radius: f32) -> Option<Mask> {
-        let mut m = Mask::new(self.pm.width(), self.pm.height())?;
-        let p = squircle(r, radius, squircle_n(radius, r.h))?;
-        m.fill_path(&p, FillRule::Winding, true, self.tf());
-        Some(m)
-    }
-
-    /// A mask of any outline (logical units), to clip drawing to it.
+    /// A mask of any outline, in pixels.
     pub fn mask_path(&self, p: &Path) -> Option<Mask> {
         let mut m = Mask::new(self.pm.width(), self.pm.height())?;
         m.fill_path(p, FillRule::Winding, true, self.tf());
         Some(m)
+    }
+
+    pub fn circle(&mut self, cx: f32, cy: f32, rad: f32, c: Color, mask: Option<&Mask>) {
+        if let Some(p) = PathBuilder::from_circle(cx, cy, rad.max(0.1)) {
+            self.fill_path(&p, c, mask);
+        }
     }
 
     /// Draws text with its left edge at `x` and its baseline at `y`. Returns the advance.
@@ -500,11 +534,29 @@ impl Canvas {
         self.pm.draw_pixmap(0, 0, layer.as_ref(), &paint, tf, mask);
     }
 
-    /// Draws another canvas's pixels over this one, moved down by `dy` logical units.
-    pub fn blit_shift(&mut self, layer: &Pixmap, opacity: f32, dy: f32, mask: Option<&Mask>) {
-        let tf = Transform::from_translate(0.0, dy * self.k);
-        let paint = PixmapPaint { opacity: opacity.clamp(0.0, 1.0), blend_mode: BlendMode::SourceOver, quality: FilterQuality::Bilinear };
-        self.pm.draw_pixmap(0, 0, layer.as_ref(), &paint, tf, mask);
+    /// Writes a black shadow whose alpha is `small` (made at 1/`s` of this resolution) stretched back, inside `r`
+    /// (logical). Only for a cleared canvas: the pixels are set, not blended, which is what makes it cheap.
+    pub fn shadow_from(&mut self, small: &Pixmap, s: f32, r: R) {
+        let (w, h) = (self.pm.width() as usize, self.pm.height() as usize);
+        let (sw, sh) = (small.width() as usize, small.height() as usize);
+        let x0 = ((r.x * self.k).floor().max(0.0) as usize).min(w);
+        let y0 = ((r.y * self.k).floor().max(0.0) as usize).min(h);
+        let x1 = ((r.right() * self.k).ceil().max(0.0) as usize).min(w);
+        let y1 = ((r.bottom() * self.k).ceil().max(0.0) as usize).min(h);
+        let src = small.data();
+        let a = |x: usize, y: usize| src[(y.min(sh - 1) * sw + x.min(sw - 1)) * 4 + 3] as f32;
+        let dst = self.pm.data_mut();
+        for y in y0..y1 {
+            let fy = ((y as f32 + 0.5) / s - 0.5).max(0.0);
+            let (iy, ty) = (fy as usize, fy.fract());
+            for x in x0..x1 {
+                let fx = ((x as f32 + 0.5) / s - 0.5).max(0.0);
+                let (ix, tx) = (fx as usize, fx.fract());
+                let top = a(ix, iy) + (a(ix + 1, iy) - a(ix, iy)) * tx;
+                let bot = a(ix, iy + 1) + (a(ix + 1, iy + 1) - a(ix, iy + 1)) * tx;
+                dst[(y * w + x) * 4 + 3] = (top + (bot - top) * ty + 0.5) as u8;
+            }
+        }
     }
 
     /// Gaussian-like blur (three box passes) of the pixels inside `r` (logical), radius in logical units.
@@ -621,9 +673,10 @@ pub enum Icon {
     File,
     Back,
     Download,
-    Home,
-    Pin,
-    Open,
+    Wifi,
+    Bluetooth,
+    Rotate,
+    Lock,
 }
 
 pub fn icon(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, mask: Option<&Mask>) {
@@ -749,8 +802,7 @@ pub fn icon(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, ma
             let mut pts: Vec<(f32, f32)> = (0..n).map(|k| (start + k) % n).filter(|&i| keep_outer[i]).map(|i| on(c1, r1, i)).collect();
             let mut inner: Vec<(f32, f32)> = (0..n).map(|i| on(c2, r2, i)).filter(|&p| dist(p, c1) <= r1).collect();
             // Order the inner arc so that it continues from where the outer one stopped.
-            if let (Some(&last), Some(&first), Some(&end)) = (pts.last(), inner.first(), inner.last()) {
-                let _ = first;
+            if let (Some(&last), Some(&end)) = (pts.last(), inner.last()) {
                 if dist(end, last) < dist(inner[0], last) {
                     inner.reverse();
                 }
@@ -815,29 +867,45 @@ pub fn icon(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, ma
             pb.line_to(8.0, 15.5);
             line(cv, pb.finish(), 1.9);
         }
+        // "Now playing": four rounded equalizer bars.
         Icon::Music => {
-            fill(cv, rrect(10.4, 4.2, 2.2, 13.8, 1.0));
-            fill(cv, PathBuilder::from_circle(8.2, 18.2, 3.3));
-            fill(cv, poly(&[(12.2, 4.2), (19.0, 6.4), (19.0, 10.6), (12.2, 8.4)], true));
+            for (x, h) in [(4.0, 8.0), (8.5, 15.0), (13.0, 11.0), (17.5, 17.0)] {
+                fill(cv, rrect(x, 12.0 - h / 2.0, 2.6, h, 1.3));
+            }
         }
         Icon::File => {
             line(cv, poly(&[(6.5, 3.5), (13.5, 3.5), (18.5, 8.5), (18.5, 20.5), (6.5, 20.5)], true), 1.8);
             line(cv, poly(&[(13.5, 3.5), (13.5, 8.5), (18.5, 8.5)], false), 1.8);
         }
         Icon::Back => line(cv, poly(&[(14.5, 5.5), (8.0, 12.0), (14.5, 18.5)], false), 2.4),
-        Icon::Home => {
-            line(cv, poly(&[(3.8, 11.6), (12.0, 4.4), (20.2, 11.6)], false), 1.9);
-            line(cv, poly(&[(6.4, 10.2), (6.4, 19.6), (17.6, 19.6), (17.6, 10.2)], false), 1.9);
-            line(cv, poly(&[(10.2, 19.6), (10.2, 14.4), (13.8, 14.4), (13.8, 19.6)], false), 1.7);
+        Icon::Wifi => {
+            // Three arcs over a dot, centred on (12, 19).
+            for r in [5.0f32, 9.5, 14.0] {
+                let pts: Vec<(f32, f32)> = (0..=12)
+                    .map(|k| {
+                        let a = (-135.0 + 90.0 * k as f32 / 12.0f32).to_radians();
+                        (12.0 + r * a.cos(), 19.0 + r * a.sin())
+                    })
+                    .collect();
+                line(cv, poly(&pts, false), 2.0);
+            }
+            fill(cv, PathBuilder::from_circle(12.0, 18.6, 1.7));
         }
-        Icon::Pin => {
-            fill(cv, poly(&[(8.6, 3.6), (15.4, 3.6), (14.4, 10.4), (17.6, 13.8), (6.4, 13.8), (9.6, 10.4)], true));
-            line(cv, poly(&[(12.0, 13.8), (12.0, 20.6)], false), 1.9);
+        Icon::Bluetooth => line(cv, poly(&[(6.5, 7.5), (17.0, 16.0), (12.0, 20.5), (12.0, 3.5), (17.0, 8.0), (6.5, 16.5)], false), 1.9),
+        Icon::Rotate => {
+            // An open circle with an arrowhead at its end.
+            let pts: Vec<(f32, f32)> = (0..=24)
+                .map(|k| {
+                    let a = (-60.0 + 290.0 * k as f32 / 24.0f32).to_radians();
+                    (12.0 + 7.5 * a.cos(), 12.0 + 7.5 * a.sin())
+                })
+                .collect();
+            line(cv, poly(&pts, false), 2.0);
+            fill(cv, poly(&[(14.2, 1.6), (19.6, 6.4), (12.6, 8.4)], true));
         }
-        Icon::Open => {
-            line(cv, poly(&[(10.0, 5.2), (5.2, 5.2), (5.2, 18.8), (18.8, 18.8), (18.8, 14.0)], false), 1.9);
-            line(cv, poly(&[(13.6, 4.8), (19.4, 4.8), (19.4, 10.6)], false), 1.9);
-            line(cv, poly(&[(19.4, 4.8), (11.0, 13.2)], false), 1.9);
+        Icon::Lock => {
+            fill(cv, rrect(5.0, 10.5, 14.0, 10.5, 2.4));
+            line(cv, poly(&[(8.2, 10.5), (8.2, 7.6), (9.3, 4.9), (12.0, 3.8), (14.7, 4.9), (15.8, 7.6), (15.8, 10.5)], false), 2.0);
         }
     }
 }
@@ -894,5 +962,17 @@ mod tests {
         assert_eq!((img.w, img.h), (2, 2));
         assert_eq!(&img.data[0..4], &[255, 0, 0, 255]);
         assert!(decode_image(b"nope").is_none());
+    }
+
+    #[test]
+    fn huge_pictures_are_refused_from_the_header() {
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, 60_000, 60_000);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().unwrap();
+        }
+        assert!(decode_image(&out).is_none());
     }
 }

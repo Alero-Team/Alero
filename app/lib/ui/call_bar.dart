@@ -138,7 +138,7 @@ Future<void> dialDialog(
   String initial = '',
 ]) async {
   final c = TextEditingController(text: initial);
-  final number = await showDialog<String>(
+  final number = await showAleroDialog<String>(
     context: context,
     builder: (d) => AlertDialog(
       title: const Text('Llamar desde el teléfono'),

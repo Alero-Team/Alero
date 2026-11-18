@@ -156,6 +156,13 @@ object TransferNotices {
             b.setLargeIcon(thumb(e.optString("path")) ?: typeIcon(c, info.name))
                 .setSubText(info.peer.ifEmpty { null })
                 .setContentTitle(Tr.t("Archivo recibido", "File received")).setContentText(info.name)
+                // Share: the file goes on to a chat or app (the computer cannot attach it to one by itself).
+                .addAction(Notification.Action.Builder(null, Tr.t("Compartir", "Share"), PendingIntent.getActivity(
+                    c, ("share-$id").hashCode(),
+                    Intent(c, MainActivity::class.java).putExtra(MainActivity.SHARE_PATH, e.optString("path")).putExtra(MainActivity.SHARE_ID, id)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )).build())
                 .addAction(Notification.Action.Builder(null, Tr.t("Abrir en Alero", "Open in Alero"), openApp(c, "files")).build())
                 .addAction(Notification.Action.Builder(null, Tr.t("Descargas", "Downloads"), PendingIntent.getActivity(
                     c, "downloads".hashCode(),
