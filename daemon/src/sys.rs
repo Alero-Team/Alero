@@ -75,6 +75,9 @@ mod other {
     pub fn media_art() -> Option<Vec<u8>> {
         None
     }
+    pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
+        None
+    }
     pub fn keep_com_alive() {}
     pub fn secure_desktop() -> bool {
         false
@@ -246,12 +249,15 @@ mod win {
         true
     }
 
-    /// "lock" or "sleep". Never shutdown or sign-out from a phone message: too destructive for one tap.
+    /// "lock", "sleep" or "shutdown" (the phone confirms first). Never sign-out.
     pub fn power(action: &str) -> bool {
+        use std::os::windows::process::CommandExt;
         unsafe {
             match action {
                 "lock" => LockWorkStation().is_ok(),
                 "sleep" => SetSuspendState(false, false, false),
+                // Same as Start > Shut down: apps get the usual close messages. CREATE_NO_WINDOW hides the console.
+                "shutdown" => std::process::Command::new("shutdown.exe").args(["/s", "/t", "0"]).creation_flags(0x08000000).status().is_ok_and(|s| s.success()),
                 _ => false,
             }
         }
@@ -464,6 +470,88 @@ mod win {
         cover(150_000)
     }
 
+    /// Icon of the app behind a media session (its AppUserModelID), 64 px straight RGBA. Start-menu apps (Store
+    /// apps, Chrome, Edge) are found by their ID; players that report a bare "Spotify.exe" by their running process.
+    pub fn app_icon(aumid: &str) -> Option<(u32, u32, Vec<u8>)> {
+        use windows::core::HSTRING;
+        use windows::Win32::Foundation::SIZE;
+        use windows::Win32::UI::Shell::{
+            FOLDERID_AppsFolder, IShellItemImageFactory, SHCreateItemFromParsingName, SHCreateItemInKnownFolder, KF_FLAG_DEFAULT,
+            SIIGBF_BIGGERSIZEOK, SIIGBF_ICONONLY,
+        };
+        if aumid.is_empty() {
+            return None;
+        }
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let item: IShellItemImageFactory = match SHCreateItemInKnownFolder(&FOLDERID_AppsFolder, KF_FLAG_DEFAULT, &HSTRING::from(aumid)) {
+                Ok(i) => i,
+                Err(_) => SHCreateItemFromParsingName(&HSTRING::from(exe_path(aumid)?), None).ok()?,
+            };
+            let bmp = item.GetImage(SIZE { cx: 64, cy: 64 }, SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK).ok()?;
+            let mut bm = BITMAP::default();
+            let ok = GetObjectW(bmp.into(), size_of::<BITMAP>() as i32, Some((&mut bm as *mut BITMAP).cast())) != 0;
+            let (w, h) = (bm.bmWidth, bm.bmHeight.abs());
+            let mut bgra = vec![0u8; w.max(0) as usize * h as usize * 4];
+            let mut bi = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER { biSize: size_of::<BITMAPINFOHEADER>() as u32, biWidth: w, biHeight: -h, biPlanes: 1, biBitCount: 32, biCompression: BI_RGB.0, ..Default::default() },
+                ..Default::default()
+            };
+            let dc = GetDC(None);
+            let read = ok && w > 0 && h > 0 && w <= 512 && h <= 512 && GetDIBits(dc, bmp, 0, h as u32, Some(bgra.as_mut_ptr().cast()), &mut bi, DIB_RGB_COLORS) != 0;
+            ReleaseDC(None, dc);
+            let _ = DeleteObject(bmp.into());
+            if !read {
+                return None;
+            }
+            // The shell hands premultiplied BGRA; the island wants straight RGBA (it premultiplies again).
+            for p in bgra.chunks_exact_mut(4) {
+                let a = p[3] as u32;
+                let un = |c: u8| if a == 0 { 0 } else { ((c as u32 * 255 + a / 2) / a).min(255) as u8 };
+                let (b, g, r) = (un(p[0]), un(p[1]), un(p[2]));
+                p[0] = r;
+                p[1] = g;
+                p[2] = b;
+            }
+            Some((w as u32, h as u32, bgra))
+        }
+    }
+
+    /// Full path of a running process by its file name ("Spotify.exe").
+    fn exe_path(name: &str) -> Option<String> {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+        use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
+        if !name.to_ascii_lowercase().ends_with(".exe") || name.contains(['\\', '/']) {
+            return None;
+        }
+        unsafe {
+            let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?;
+            let mut e = PROCESSENTRY32W { dwSize: size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+            let mut found = None;
+            let mut more = Process32FirstW(snap, &mut e).is_ok();
+            while more {
+                let len = e.szExeFile.iter().position(|&c| c == 0).unwrap_or(e.szExeFile.len());
+                if String::from_utf16_lossy(&e.szExeFile[..len]).eq_ignore_ascii_case(name) {
+                    if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, e.th32ProcessID) {
+                        let mut buf = [0u16; 1024];
+                        let mut n = buf.len() as u32;
+                        if QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, windows::core::PWSTR(buf.as_mut_ptr()), &mut n).is_ok() {
+                            found = Some(String::from_utf16_lossy(&buf[..n as usize]));
+                        }
+                        let _ = CloseHandle(h);
+                    }
+                    if found.is_some() {
+                        break;
+                    }
+                }
+                more = Process32NextW(snap, &mut e).is_ok();
+            }
+            let _ = CloseHandle(snap);
+            found
+        }
+    }
+
     /// The cover as is when it weighs at most `limit` bytes, else shrunk.
     pub(crate) fn cover(limit: u64) -> Option<Vec<u8>> {
         use windows::core::Interface;
@@ -626,6 +714,20 @@ mod tests {
 /// Manual check with something playing: `cargo test -p pb-daemon -- --ignored cover`.
 #[cfg(all(test, windows))]
 mod live {
+    #[test]
+    #[ignore]
+    fn app_icons_resolve() {
+        for id in ["Google.AntigravityIDE", "explorer.exe"] {
+            let (w, h, px) = super::app_icon(id).unwrap_or_else(|| panic!("no icon for {id}"));
+            assert_eq!(px.len(), w as usize * h as usize * 4);
+            assert!(px.chunks_exact(4).any(|p| p[3] > 0), "{id}: blank icon");
+            println!("{id}: {w}x{h}");
+        }
+        if let Some(m) = super::media_state() {
+            println!("playing now: {:?} -> icon {:?}", m.app, super::app_icon(&m.app).map(|(w, h, _)| (w, h)));
+        }
+    }
+
     #[test]
     #[ignore]
     fn cover_is_sent_and_fits() {

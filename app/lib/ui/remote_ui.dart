@@ -25,11 +25,16 @@ class Touchpad extends StatefulWidget {
     this.height = 168,
     this.child,
     this.gain = 2.2,
+    this.onZoom,
   });
   final Hub hub;
   final String peer;
   final double height;
   final double gain;
+
+  /// Pinching with two fingers calls this with the change in scale since the last call (1.1 = 10 % closer);
+  /// without it, two fingers only scroll.
+  final ValueChanged<double>? onZoom;
 
   /// Drawn under the gestures (the computer's screen, when watching it).
   final Widget? child;
@@ -49,6 +54,13 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
       _cancelled = false;
   Offset? _finger;
   double _ax = 0, _ay = 0, _sy = 0, _sx = 0, _travel = 0;
+  // Two fingers that spread or close more than 15 % are a pinch (zoom), not a scroll.
+  bool _pinch = false;
+  double _pinchFrom = 0, _pinchLast = 0;
+
+  double get _spread => _pointers.length == 2
+      ? (_pointers.values.first - _pointers.values.last).distance
+      : 0;
   Timer? _flush, _tap;
   DateTime? _lastTap;
   Offset? _lastTapPosition;
@@ -119,7 +131,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
       _tap?.cancel();
       _tap = Timer(const Duration(milliseconds: 300), () => _tapExpired = true);
       _start = e.position;
-      _moved = _drag = _two = _cancelled = false;
+      _moved = _drag = _two = _cancelled = _pinch = false;
       _ax = _ay = _sy = _sx = _travel = 0;
       _flush ??= Timer.periodic(
         const Duration(milliseconds: 16),
@@ -138,6 +150,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     } else {
       _two = true;
       _lastTap = null;
+      _pinchFrom = _pinchLast = _spread;
       if (_drag) {
         _r.button(widget.peer, 'left', false);
         _drag = false;
@@ -167,6 +180,19 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     } else {
       _moved = true;
       _travel += e.delta.distance;
+      final d = _spread;
+      if (widget.onZoom != null && d > 0 && _pinchFrom > 0) {
+        if (!_pinch && (d / _pinchFrom - 1).abs() > .15) {
+          _pinch = true;
+          _sx = _sy = 0;
+          _pinchLast = d;
+        }
+        if (_pinch) {
+          widget.onZoom!(d / _pinchLast);
+          _pinchLast = d;
+          return;
+        }
+      }
       _sy += e.delta.dy / _pointers.length / 30;
       // Natural like the vertical one: the content follows the fingers (swipe left, the page goes left).
       _sx -= e.delta.dx / _pointers.length / 30;
@@ -188,7 +214,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     _flush = null;
     if (_drag) {
       _r.button(widget.peer, 'left', false);
-    } else if (!_cancelled && _two && !_tapExpired && _travel < 24) {
+    } else if (!_cancelled && _two && !_pinch && !_tapExpired && _travel < 24) {
       // Two-finger tap: right click, like a laptop touchpad.
       _r.click(widget.peer, button: 'right');
       HapticFeedback.selectionClick();
@@ -792,11 +818,44 @@ class _KeyboardSheet extends StatefulWidget {
   State<_KeyboardSheet> createState() => _KeyboardSheetState();
 }
 
+/// What was typed for each computer, kept while the app runs: closing the sheet, switching to the touchpad or
+/// changing the phone's keyboard no longer throws it away.
+final _drafts = <String, String>{};
+
+/// The keys that turn [prev] into [now] on the computer, whose cursor sits after the typed text: go [left] past
+/// the unchanged end, press backspace [back] times, type [add], and go right again. Counted in characters as the
+/// user sees them, so an emoji is one backspace.
+({int left, int back, String add}) typedChange(String prev, String now) {
+  final a = prev.characters.toList(), b = now.characters.toList();
+  var head = 0;
+  while (head < a.length && head < b.length && a[head] == b[head]) {
+    head++;
+  }
+  var tail = 0;
+  while (tail < a.length - head &&
+      tail < b.length - head &&
+      a[a.length - 1 - tail] == b[b.length - 1 - tail]) {
+    tail++;
+  }
+  return (
+    left: tail,
+    back: a.length - head - tail,
+    add: b.sublist(head, b.length - tail).join(),
+  );
+}
+
 class _KeyboardSheetState extends State<_KeyboardSheet> {
-  final _c = TextEditingController();
-  String _prev = '';
+  late final _c = TextEditingController(text: _prev);
+  late String _prev = _drafts[widget.peer] ?? '';
 
   PcRemote get _r => widget.hub.remote;
+
+  @override
+  void initState() {
+    super.initState();
+    // Back where it was left: the cursor after the text, as on the computer.
+    _c.selection = TextSelection.collapsed(offset: _c.text.length);
+  }
 
   @override
   void dispose() {
@@ -805,22 +864,25 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
   }
 
   void _changed(String now) {
-    // Send only what changed since the last event: appended text, or backspaces for removed characters.
-    if (now.startsWith(_prev)) {
-      final add = now.substring(_prev.length);
-      if (add.isNotEmpty) _r.text(widget.peer, add);
-    } else if (_prev.startsWith(now)) {
-      for (var i = 0; i < _prev.length - now.length; i++) {
-        _r.key(widget.peer, 'backspace');
-      }
-    } else {
-      // Rewritten by the keyboard (autocorrect): replace the whole word.
-      for (var i = 0; i < _prev.length; i++) {
-        _r.key(widget.peer, 'backspace');
-      }
-      _r.text(widget.peer, now);
+    // Only what changed: a fix in the middle of a sentence no longer retypes the whole of it on the computer.
+    final d = typedChange(_prev, now);
+    for (var i = 0; i < d.left; i++) {
+      _r.key(widget.peer, 'left');
     }
-    _prev = now;
+    for (var i = 0; i < d.back; i++) {
+      _r.key(widget.peer, 'backspace');
+    }
+    if (d.add.isNotEmpty) _r.text(widget.peer, d.add);
+    for (var i = 0; i < d.left; i++) {
+      _r.key(widget.peer, 'right');
+    }
+    _prev = _drafts[widget.peer] = now;
+  }
+
+  /// Empties the field only: what is already on the computer stays.
+  void _clear() {
+    _c.clear();
+    setState(() => _prev = _drafts[widget.peer] = '');
   }
 
   Widget _key(
@@ -872,8 +934,21 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
             enableIMEPersonalizedLearning: false,
             minLines: 1,
             maxLines: 3,
-            onChanged: _changed,
-            decoration: InputDecoration(hintText: tx('Escribe aquí')),
+            onChanged: (v) {
+              final was = _prev.isEmpty;
+              _changed(v);
+              if (was != v.isEmpty) setState(() {});
+            },
+            decoration: InputDecoration(
+              hintText: tx('Escribe aquí'),
+              suffixIcon: _prev.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: tx('Vaciar el campo (no borra nada en el ordenador)'),
+                      icon: const Icon(Symbols.close_rounded),
+                      onPressed: _clear,
+                    ),
+            ),
           ),
           const SizedBox(height: Gap.m),
           Wrap(
@@ -917,7 +992,7 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
   }
 }
 
-/// Lock and sleep, each behind a confirmation (there is deliberately no shutdown).
+/// Lock, sleep and shut down, each behind a confirmation.
 class PowerActions extends StatelessWidget {
   const PowerActions(this.hub, this.peer, this.name, {super.key});
   final Hub hub;
@@ -955,6 +1030,20 @@ class PowerActions extends StatelessWidget {
         },
         icon: const Icon(Symbols.bedtime_rounded, size: 18),
         label: const FitLabel('Suspender'),
+      ),
+      OutlinedButton.icon(
+        onPressed: () async {
+          if (await confirm(
+            context,
+            tr('¿Apagar {}?', [name]),
+            'El ordenador se apaga. Guarda lo que tengas abierto en él: para volver a usarlo hay que encenderlo a mano.',
+            'Apagar',
+          )) {
+            hub.remote.power(peer, 'shutdown');
+          }
+        },
+        icon: const Icon(Symbols.power_settings_new_rounded, size: 18),
+        label: const FitLabel('Apagar'),
       ),
     ],
   );

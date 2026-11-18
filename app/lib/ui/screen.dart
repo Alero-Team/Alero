@@ -672,7 +672,7 @@ class _Choice extends StatelessWidget {
             showSelectedIcon: false,
             segments: [
               for (final e in options.entries)
-                ButtonSegment(value: e.key, label: Text(e.value)),
+                ButtonSegment(value: e.key, label: FitLabel(e.value)),
             ],
             selected: {value},
             onSelectionChanged: (v) => onChanged(v.first),

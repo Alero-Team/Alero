@@ -39,8 +39,34 @@ class _PcScreenPageState extends State<PcScreenPage>
     with WidgetsBindingObserver {
   late final ScreenFeed _feed;
   bool _landscape = false, _waitingTooLong = false;
+  double _lastScale = 1;
   double _gain = 2.2;
   Timer? _wait;
+
+  /// 1 = the whole screen. Closer, the view follows the computer's pointer.
+  double _zoom = 1;
+  static const _maxZoom = 4.0;
+
+  /// Centre of the zoomed view, as fractions of the screen; it moves only when the pointer nears the edge of the
+  /// view, so the picture does not shake with every small movement.
+  Offset _cam = const Offset(.5, .5);
+
+  void _zoomBy(double f) =>
+      setState(() => _zoom = (_zoom * f).clamp(1.0, _maxZoom));
+
+  /// Follows [at] (the pointer) with a margin of a quarter of the view, and keeps the view inside the screen.
+  Offset _follow(Offset? at) {
+    final half = .5 / _zoom, slack = .25 / _zoom;
+    double axis(double cam, double? p) {
+      if (p != null) {
+        if (p < cam - slack) cam = p + slack;
+        if (p > cam + slack) cam = p - slack;
+      }
+      return cam.clamp(half, 1 - half);
+    }
+
+    return _cam = Offset(axis(_cam.dx, at?.dx), axis(_cam.dy, at?.dy));
+  }
 
   @override
   void initState() {
@@ -107,7 +133,9 @@ class _PcScreenPageState extends State<PcScreenPage>
                 semanticLabel: tr('Pantalla del ordenador {}', [widget.name]),
                 filterQuality: FilterQuality.medium,
                 cacheWidth: _feed.w > 0
-                    ? (box.maxWidth * MediaQuery.devicePixelRatioOf(context))
+                    ? (box.maxWidth *
+                              _zoom *
+                              MediaQuery.devicePixelRatioOf(context))
                           .round()
                           .clamp(1, _feed.w)
                     : null,
@@ -115,29 +143,44 @@ class _PcScreenPageState extends State<PcScreenPage>
               // As big as Windows draws it on that screen (about a 60th of its width), never unreadable.
               final pointer = (box.maxWidth / 50).clamp(12.0, 28.0);
               // The pointer is drawn here, not in the picture: it moves the moment the computer reports it.
-              final view = Stack(
-                fit: StackFit.expand,
-                children: [
-                  image,
-                  IgnorePointer(
-                    child: ValueListenableBuilder<Offset?>(
-                      valueListenable: _feed.cursor,
-                      builder: (_, at, _) => at == null
-                          ? const SizedBox.shrink()
-                          : Align(
-                              alignment: Alignment.topLeft,
-                              // The glyph's tip sits a fifth in and a sixth down inside its box.
-                              child: Transform.translate(
-                                offset: Offset(
-                                  at.dx * box.maxWidth - pointer / 5,
-                                  at.dy * box.maxHeight - pointer / 6,
-                                ),
-                                child: _Pointer(pointer),
+              // Zoomed, the picture is scaled around the view's centre; the pointer keeps its size.
+              final view = ValueListenableBuilder<Offset?>(
+                valueListenable: _feed.cursor,
+                builder: (_, at, _) {
+                  final (w, h) = (box.maxWidth, box.maxHeight);
+                  final cam = _zoom > 1 ? _follow(at) : const Offset(.5, .5);
+                  final shift = Offset(
+                    w / 2 - cam.dx * w * _zoom,
+                    h / 2 - cam.dy * h * _zoom,
+                  );
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Transform(
+                        transform: Matrix4.translationValues(
+                          shift.dx,
+                          shift.dy,
+                          0,
+                        )..scaleByDouble(_zoom, _zoom, 1, 1),
+                        child: image,
+                      ),
+                      if (at != null)
+                        IgnorePointer(
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            // The glyph's tip sits a fifth in and a sixth down inside its box.
+                            child: Transform.translate(
+                              offset: Offset(
+                                shift.dx + at.dx * w * _zoom - pointer / 5,
+                                shift.dy + at.dy * h * _zoom - pointer / 6,
                               ),
+                              child: _Pointer(pointer),
                             ),
-                    ),
-                  ),
-                ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
               );
               return canInput
                   ? Touchpad(
@@ -145,9 +188,18 @@ class _PcScreenPageState extends State<PcScreenPage>
                       widget.peer,
                       height: box.maxHeight,
                       gain: _gain,
+                      onZoom: _zoomBy,
                       child: view,
                     )
-                  : view;
+                  : GestureDetector(
+                      // Watching only: pinch still zooms.
+                      onScaleUpdate: (d) {
+                        if (d.pointerCount == 2) _zoomBy(d.scale / _lastScale);
+                        _lastScale = d.scale;
+                      },
+                      onScaleStart: (_) => _lastScale = 1,
+                      child: view,
+                    );
             },
           ),
         ),
@@ -222,6 +274,18 @@ class _PcScreenPageState extends State<PcScreenPage>
             style: t.titleMedium,
           ),
           actions: [
+            IconButton(
+              tooltip: _zoom > 1
+                  ? tx('Ver toda la pantalla')
+                  : tx('Acercar (o pellizca la imagen)'),
+              isSelected: _zoom > 1,
+              icon: Icon(
+                _zoom > 1 ? Symbols.zoom_out_rounded : Symbols.zoom_in_rounded,
+              ),
+              onPressed: blocker != null || _feed.frame == null
+                  ? null
+                  : () => setState(() => _zoom = _zoom > 1 ? 1 : 2),
+            ),
             if (canInput)
               PointerSensitivity(
                 value: _gain,

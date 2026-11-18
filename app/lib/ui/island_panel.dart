@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon, Text;
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
@@ -121,9 +122,9 @@ class _IslandPanelState extends State<IslandPanel> {
                 child: SegmentedButton<int>(
                   showSelectedIcon: false,
                   segments: const [
-                    ButtonSegment(value: 85, label: Text('Pequeña')),
-                    ButtonSegment(value: 100, label: Text('Mediana')),
-                    ButtonSegment(value: 125, label: Text('Grande')),
+                    ButtonSegment(value: 85, label: FitLabel('Pequeña')),
+                    ButtonSegment(value: 100, label: FitLabel('Mediana')),
+                    ButtonSegment(value: 125, label: FitLabel('Grande')),
                   ],
                   selected: {
                     if (const [85, 100, 125].contains(p.number('scale')))
@@ -148,9 +149,9 @@ class _IslandPanelState extends State<IslandPanel> {
                 child: SegmentedButton<String>(
                   showSelectedIcon: false,
                   segments: const [
-                    ButtonSegment(value: 'normal', label: Text('Normales')),
-                    ButtonSegment(value: 'soft', label: Text('Suaves')),
-                    ButtonSegment(value: 'off', label: Text('Ninguna')),
+                    ButtonSegment(value: 'normal', label: FitLabel('Normales')),
+                    ButtonSegment(value: 'soft', label: FitLabel('Suaves')),
+                    ButtonSegment(value: 'off', label: FitLabel('Ninguna')),
                   ],
                   selected: {p.text('animation')},
                   onSelectionChanged: (s) => p.set('animation', s.first),
@@ -310,21 +311,34 @@ class _Pick extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: Gap.xs, vertical: Gap.s),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            tx(title),
-            style: weight(Theme.of(context).textTheme.bodyLarge, 500),
-          ),
-        ),
-        const SizedBox(width: Gap.m),
-        Flexible(child: child),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final label = Text(
+      tx(title),
+      style: weight(Theme.of(context).textTheme.bodyLarge, 500),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Gap.xs, vertical: Gap.s),
+      // Narrow panel: the control goes under its title at full width instead of being squeezed beside it.
+      child: LayoutBuilder(
+        builder: (context, c) => c.maxWidth < 520
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  label,
+                  const SizedBox(height: Gap.s),
+                  Align(alignment: Alignment.centerLeft, child: child),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: label),
+                  const SizedBox(width: Gap.m),
+                  Flexible(child: child),
+                ],
+              ),
+      ),
+    );
+  }
 }
 
 class _Slide extends StatelessWidget {
@@ -541,55 +555,105 @@ class _Controls extends StatelessWidget {
   }
 }
 
-class _HotkeyState extends State<_Hotkey> {
-  late final c = TextEditingController(text: widget.p.text('hotkey'));
-  late var _seen = widget.p.text('hotkey');
-
-  @override
-  void didUpdateWidget(_Hotkey old) {
-    super.didUpdateWidget(old);
-    // «Restablecer» changes the preference from outside the field.
-    final p = widget.p.text('hotkey');
-    if (p != _seen) {
-      _seen = p;
-      if (c.text.trim() != p) c.text = p;
-    }
+/// The combination as the daemon reads it ("Ctrl+Alt+I"), or null for a key it can't register.
+String? hotkeyCombo(LogicalKeyboardKey k, Set<LogicalKeyboardKey> held) {
+  final l = k.keyLabel;
+  final String key;
+  if (k == LogicalKeyboardKey.space) {
+    key = 'Space';
+  } else if (RegExp(r'^(F([1-9]|1[0-2])|[A-Z0-9])$')
+          .hasMatch(l.toUpperCase()) &&
+      l.length <= 3) {
+    key = l.toUpperCase();
+  } else {
+    return null;
   }
+  bool any(List<LogicalKeyboardKey> ks) => ks.any(held.contains);
+  final mods = [
+    if (any([LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlRight]))
+      'Ctrl',
+    if (any([LogicalKeyboardKey.altLeft, LogicalKeyboardKey.altRight])) 'Alt',
+    if (any([LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftRight]))
+      'Shift',
+    if (any([LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.metaRight])) 'Win',
+  ];
+  // A bare key would be stolen from every program: the daemon refuses it too.
+  return mods.isEmpty ? null : [...mods, key].join('+');
+}
+
+class _HotkeyState extends State<_Hotkey> {
+  final _focus = FocusNode();
+  var _recording = false;
 
   @override
   void dispose() {
-    c.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  /// Modifier(s) and one key: the daemon refuses a bare key, which would be stolen from every program.
-  static final _ok = RegExp(
-    r'^((ctrl|control|alt|shift|win)\+)+([a-z0-9]|f([1-9]|1[0-2])|space)$',
-    caseSensitive: false,
-  );
+  void _record() {
+    setState(() => _recording = true);
+    _focus.requestFocus();
+  }
+
+  void _stop() {
+    setState(() => _recording = false);
+    _focus.unfocus();
+  }
+
+  KeyEventResult _key(FocusNode _, KeyEvent e) {
+    if (!_recording) return KeyEventResult.ignored; // Tab and Enter keep working when not recording
+    if (e is! KeyDownEvent) return KeyEventResult.handled;
+    if (e.logicalKey == LogicalKeyboardKey.escape) {
+      _stop();
+    } else if (e.logicalKey == LogicalKeyboardKey.backspace ||
+        e.logicalKey == LogicalKeyboardKey.delete) {
+      widget.p.set('hotkey', '');
+      _stop();
+    } else {
+      final c = hotkeyCombo(
+        e.logicalKey,
+        HardwareKeyboard.instance.logicalKeysPressed,
+      );
+      if (c != null) {
+        widget.p.set('hotkey', c);
+        _stop();
+      }
+    }
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final v = c.text.trim();
-    final bad = v.isNotEmpty && !_ok.hasMatch(v);
+    final v = widget.p.text('hotkey');
     return _Pick(
       title: 'Atajo para abrirla con el teclado',
-      child: SizedBox(
-        width: 180,
-        child: TextField(
-          controller: c,
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: 'Ctrl+Alt+I',
-            errorText: bad
-                ? tx('Usa Ctrl, Alt, Mayús o Win y una tecla')
-                : null,
-          ),
-          onChanged: (t) {
-            setState(() {});
-            final s = t.trim();
-            if (s.isEmpty || _ok.hasMatch(s)) widget.p.set('hotkey', s);
-          },
+      child: Focus(
+        focusNode: _focus,
+        onKeyEvent: _key,
+        onFocusChange: (f) {
+          if (!f && _recording) setState(() => _recording = false);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OutlinedButton(
+              onPressed: _recording ? _stop : _record,
+              child: Text(
+                _recording
+                    ? tx('Pulsa la combinación…')
+                    : v.isEmpty
+                    ? tx('Grabar atajo')
+                    : v.replaceAll('Shift', tx('Mayús')),
+              ),
+            ),
+            if (v.isNotEmpty && !_recording)
+              IconButton(
+                tooltip: tx('Quitar atajo'),
+                onPressed: () => widget.p.set('hotkey', ''),
+                icon: const Icon(Symbols.close),
+              ),
+          ],
         ),
       ),
     );

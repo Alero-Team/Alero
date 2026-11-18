@@ -387,12 +387,12 @@ class _WirelessDialogState extends State<_WirelessDialog> {
                 ButtonSegment(
                   value: true,
                   icon: Icon(Symbols.qr_code_2_rounded),
-                  label: Text('Código QR'),
+                  label: FitLabel('Código QR'),
                 ),
                 ButtonSegment(
                   value: false,
                   icon: Icon(Symbols.pin_rounded),
-                  label: Text('Código'),
+                  label: FitLabel('Código'),
                 ),
               ],
               selected: {_useQr},

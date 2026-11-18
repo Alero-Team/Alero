@@ -47,10 +47,16 @@ class PcRemote {
   /// Notches: positive scrolls up/right.
   void scroll(String peer, {double dy = 0, double dx = 0}) =>
       _go(peer, 'pb.x.remote.scroll', {'dy': dy, 'dx': dx});
+  // Keys and text go one after another: sent side by side they could overtake each other (a fix in the middle
+  // of a sentence is arrows + text + arrows), and the letter landed in the wrong place.
+  Future<void> _typing = Future.value();
+  void _inOrder(String peer, String kind, Map<String, Object?> body) =>
+      _typing = _typing.then((_) => hub.sendMessage(peer, kind, body)).catchError((_) {});
+
   void key(String peer, String key, {List<String> mods = const []}) =>
-      _go(peer, 'pb.x.remote.key', {'key': key, 'mods': mods});
+      _inOrder(peer, 'pb.x.remote.key', {'key': key, 'mods': mods});
   void text(String peer, String text) =>
-      _go(peer, 'pb.x.remote.text', {'text': text});
+      _inOrder(peer, 'pb.x.remote.text', {'text': text});
 
   /// volume_up, volume_down, mute, toggle, next, prev, stop.
   void media(String peer, String action) =>

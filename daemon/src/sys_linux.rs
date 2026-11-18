@@ -383,11 +383,16 @@ pub fn media_key(action: &str) -> bool {
     }
 }
 
-/// "lock" or "sleep". Never shutdown from a phone message: too destructive for one tap.
+/// "lock", "sleep" or "shutdown" (the phone confirms first).
 pub fn power(action: &str) -> bool {
     match action {
         "lock" => run("loginctl", &["lock-session"]),
         "sleep" => run("systemctl", &["suspend"]),
+        // Plasma's own shutdown closes apps and saves the session; elsewhere logind (polkit allows the active seat user).
+        "shutdown" => {
+            run("dbus-send", &["--session", "--type=method_call", "--dest=org.kde.Shutdown", "/Shutdown", "org.kde.Shutdown.logoutAndShutdown"])
+                || run("systemctl", &["poweroff"])
+        }
         _ => false,
     }
 }
@@ -459,6 +464,11 @@ pub fn media_state() -> Option<Media> {
 /// Cover of the current player: a `file://` image, or an http(s) one fetched with curl. Covers over 150 KB are
 /// dropped. shortcut: no resizing (Windows shrinks big covers); add it with the png/jpeg crates if players that
 /// hand over huge images turn out to be common.
+/// shortcut: no app icon on Linux (MPRIS gives none directly); look it up via the desktop entry if wanted.
+pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
+    None
+}
+
 pub fn media_art() -> Option<Vec<u8>> {
     let conn = Connection::new_session().ok()?;
     let (_, props) = current_player(&conn)?;

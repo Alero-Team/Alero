@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use pb_core::engine::Event;
 
 use super::config::{IslandConfig, Watcher};
-use super::gfx::{decode_image, Canvas};
+use super::gfx::{decode_image, Canvas, Image};
 use super::model::Media;
 use super::ui::{Cmd, Drag, Island, CANVAS_H, CANVAS_W};
 
@@ -60,7 +60,7 @@ pub trait Host {
 pub enum Msg {
     Event(Event),
     /// The computer's player, with its cover as the bytes of an image file. None: nothing is playing.
-    Media(Option<(crate::sys::Media, Option<Vec<u8>>)>),
+    Media(Option<(crate::sys::Media, Option<Vec<u8>>, Option<Image>)>),
     /// A phone's state over adb (peer id); None: no adb for it now.
     Adb(String, Option<super::adb::Radios>),
 }
@@ -80,7 +80,14 @@ pub trait Exec {
 #[derive(Clone)]
 pub struct Handle(Arc<Mutex<Sender<Msg>>>);
 
+/// The island is on screen and opens by itself for a file offer, so it can be answered there without the window.
+static SHOWS_OFFERS: AtomicBool = AtomicBool::new(false);
+
 impl Handle {
+    pub fn shows_offers(&self) -> bool {
+        SHOWS_OFFERS.load(Ordering::Relaxed)
+    }
+
     pub fn feed(&self, e: Event) {
         let _ = self.0.lock().unwrap().send(Msg::Event(e));
     }
@@ -98,6 +105,7 @@ fn spawn_media(tx: Sender<Msg>, wants: Arc<AtomicBool>) -> std::thread::Thread {
         .spawn(move || {
             let mut last = String::new();
             let mut art: Option<Vec<u8>> = None;
+            let mut icon: (String, Option<Image>) = (String::new(), None);
             loop {
                 if !wants.load(Ordering::Relaxed) {
                     std::thread::park_timeout(Duration::from_secs(3));
@@ -111,7 +119,11 @@ fn spawn_media(tx: Sender<Msg>, wants: Arc<AtomicBool>) -> std::thread::Thread {
                             last = key;
                             art = crate::sys::media_art();
                         }
-                        Some((m, art.clone()))
+                        if icon.0 != m.app {
+                            let img = crate::sys::app_icon(&m.app).and_then(|(w, h, px)| Image::from_rgba(w, h, px));
+                            icon = (m.app.clone(), img);
+                        }
+                        Some((m, art.clone(), icon.1.clone()))
                     }
                     _ => {
                         last.clear();
@@ -145,6 +157,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let mut island = Island::new(cfg.clone());
     island.model.set_peers(exec.peers());
     host.hotkey(&cfg.hotkey);
+    SHOWS_OFFERS.store(cfg.enabled && cfg.auto_expand && cfg.modules.incoming, Ordering::Relaxed);
 
     let wants = Arc::new(AtomicBool::new(false));
     let media = spawn_media(tx.clone(), wants.clone());
@@ -184,6 +197,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                     host.hotkey(&next.hotkey);
                 }
                 cfg = next;
+                SHOWS_OFFERS.store(cfg.enabled && cfg.auto_expand && cfg.modules.incoming, Ordering::Relaxed);
                 island.set_config(cfg.clone());
             }
             // The phones' pictures: read again only when the app rewrote the list.
@@ -208,14 +222,15 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 }
                 Msg::Media(m) => {
                     // The player thread repeats the same cover every second: decode it only when it changes.
-                    let same_art = m.as_ref().map(|(_, a)| a) == Some(&last_art);
+                    let same_art = m.as_ref().map(|(_, a, _)| a) == Some(&last_art);
                     let old_art = island.model.pc_media.as_mut().and_then(|p| p.art.take());
-                    if let Some((_, a)) = &m {
+                    if let Some((_, a, _)) = &m {
                         last_art.clone_from(a);
                     } else {
                         last_art = None;
                     }
-                    island.model.pc_media = m.map(|(m, art)| Media {
+                    island.model.pc_media = m.map(|(m, art, icon)| Media {
+                        icon,
                         title: m.title,
                         artist: m.artist,
                         app: m.app,

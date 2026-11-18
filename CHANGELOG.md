@@ -1,5 +1,28 @@
 # Cambios
 
+## Beta 1.4.7 (1.4.7) — 2026-11-18
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Android
+
+- **Zoom al ver la pantalla del ordenador:** pellizca la imagen o usa la lupa de la barra (hasta 4×); al acercar, la vista sigue al puntero.
+- **El teclado del ordenador ya no pierde lo escrito** al cerrarlo, pasar al panel táctil o cambiar de teclado en el teléfono; corregir en medio de una frase cambia solo esa parte en el ordenador, y la X vacía el campo sin borrar nada allí.
+- **Apagar el ordenador desde el teléfono:** en el control remoto, junto a Bloquear y Suspender, hay un botón «Apagar» que pide confirmación. En Windows apaga como Inicio › Apagar; en Linux usa el apagado de Plasma (cierra las apps y guarda la sesión) y, si no hay Plasma, el del sistema.
+
+### Windows y Linux
+
+- **Alero Island muestra el icono de la app que suena** (Spotify, YouTube, el navegador), del PC o del teléfono.
+- **Las ofertas de archivos se responden en la isla** cuando se abre sola para ellas; la ventana de Alero ya no aparece después repitiendo la misma pregunta.
+- **Atajo de la isla grabándolo:** pulsa «Grabar atajo» y la combinación que quieras, en lugar de escribirla.
+- En paneles estrechos cada ajuste baja bajo su título en vez de apretarse a su lado, y los botones con texto largo lo ajustan en lugar de cortarlo.
+
+### Linux
+
+- **La isla ya no parpadea al abrirse:** la ventana no cambia de tamaño en cada fotograma de la animación.
+- **Las apps bajo la isla o junto a ella vuelven a responder:** los clics atraviesan la muesca y su sombra; solo la isla abierta bajo el puntero los toma (como en Windows).
+- En pantallas HiDPI usa la sesión **Plasma (Wayland)**: X11 no escala y todo se ve pequeño. Alero funciona igual en Wayland.
+
 ## Beta 1.4.6 (1.4.6) — 2026-11-17
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión. Reemplaza a la Beta 1.4.5, que se retiró: la isla vuelve a su diseño de muesca con resortes, ahora mucho más fluida.

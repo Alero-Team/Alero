@@ -113,11 +113,20 @@ struct Subs {
 impl Subscribers {
     /// Returns whether at least one window got it.
     pub fn push(&self, p: &Push) -> bool {
+        self.send(p, p.needs_user())
+    }
+
+    /// Like [`push`](Self::push), but a request nobody got is not kept for the next window: something else answers it.
+    pub fn push_live(&self, p: &Push) -> bool {
+        self.send(p, false)
+    }
+
+    fn send(&self, p: &Push, keep: bool) -> bool {
         let line = serde_json::to_string(p).expect("push serializes") + "\n";
         let mut s = self.0.lock().unwrap();
         s.conns.retain_mut(|(_, c)| c.write_all(line.as_bytes()).is_ok());
         let delivered = !s.conns.is_empty();
-        if !delivered && p.needs_user() {
+        if !delivered && keep {
             s.pending.push(line);
         }
         delivered

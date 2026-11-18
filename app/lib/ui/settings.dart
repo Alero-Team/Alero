@@ -26,7 +26,12 @@ String _mediaStatus(Hub hub) {
   final partial = hub.filesLimited
       ? 'Solo compartes las fotos que elegiste. '
       : '';
-  return tr('{}{}Sin el permiso esas secciones salen vacías.', [partial, missing.isEmpty ? '' : tr('Sin acceso a: {}. ', [missing.map(tx).join(', ')])]);
+  return tr('{}{}Sin el permiso esas secciones salen vacías.', [
+    partial,
+    missing.isEmpty
+        ? ''
+        : tr('Sin acceso a: {}. ', [missing.map(tx).join(', ')]),
+  ]);
 }
 
 final _appearanceKey = GlobalKey();
@@ -242,7 +247,7 @@ class SettingsScreen extends StatelessWidget {
                 SettingTile(
                   title: 'Permitir que mis teléfonos controlen este equipo',
                   subtitle: Native.pc
-                      ? 'Mover el ratón, escribir, cambiar el volumen y la música, ver la pantalla y pedir capturas. Solo desde dispositivos emparejados; verás un aviso cuando se use. Bloquear o suspender siempre se confirman en el teléfono. Apagado por defecto.'
+                      ? 'Mover el ratón, escribir, cambiar el volumen y la música, ver la pantalla y pedir capturas. Solo desde dispositivos emparejados; verás un aviso cuando se use. Bloquear, suspender o apagar siempre se confirman en el teléfono. Apagado por defecto.'
                       : 'Todavía no está disponible en este sistema. Solo Windows y Linux por ahora.',
                   trailing: AleroSwitch(
                     value: hub.remoteAllow,
@@ -414,17 +419,17 @@ class SettingsScreen extends StatelessWidget {
                 segments: const [
                   ButtonSegment(
                     value: 'system',
-                    label: Text('Sistema'),
+                    label: FitLabel('Sistema'),
                     icon: Icon(Symbols.brightness_auto_rounded, size: 18),
                   ),
                   ButtonSegment(
                     value: 'light',
-                    label: Text('Claro'),
+                    label: FitLabel('Claro'),
                     icon: Icon(Symbols.light_mode_rounded, size: 18),
                   ),
                   ButtonSegment(
                     value: 'dark',
-                    label: Text('Oscuro'),
+                    label: FitLabel('Oscuro'),
                     icon: Icon(Symbols.dark_mode_rounded, size: 18),
                   ),
                 ],
@@ -442,9 +447,9 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: Gap.s),
               child: SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: 'system', label: Text('Sistema')),
-                  ButtonSegment(value: 'es', label: Text('Español')),
-                  ButtonSegment(value: 'en', label: Text('English')),
+                  ButtonSegment(value: 'system', label: FitLabel('Sistema')),
+                  ButtonSegment(value: 'es', label: FitLabel('Español')),
+                  ButtonSegment(value: 'en', label: FitLabel('English')),
                 ],
                 selected: {L10n.instance.pref},
                 showSelectedIcon: false,
@@ -539,7 +544,9 @@ class SettingsScreen extends StatelessWidget {
           const AleroLogo(size: 28),
           const SizedBox(height: Gap.m),
           Text(
-            tr('Alero {} · Conexión directa entre tus dispositivos.', [aleroRelease]),
+            tr('Alero {} · Conexión directa entre tus dispositivos.', [
+              aleroRelease,
+            ]),
             style: t.bodyMedium,
           ),
           const SizedBox(height: Gap.s),

@@ -26,7 +26,7 @@ const PEEK: (f32, f32) = (132.0, 6.0);
 const MAX_RADIUS: f32 = 32.0;
 const SHADOW_DIV: f32 = 4.0;
 /// The notch while something lives in it (music, charging): the iPhone's compact island.
-const LIVE: (f32, f32) = (236.0, 34.0);
+const LIVE: (f32, f32) = (320.0, 40.0);
 
 /// What the closed island shows, like the iPhone's Dynamic Island.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -1595,10 +1595,26 @@ fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f
     let cy = pill.cy();
     match l {
         Live::Media => {
-            let left = R::new(pill.x + 9.0, cy - 11.0, 22.0, 22.0);
-            match pick_media(m, pref).and_then(|(md, _)| md.art.as_ref()) {
-                Some(img) => d.cv.image(img, left, 6.0, a, None),
-                None => icon(d.cv, Icon::Music, left.cx(), left.cy(), 16.0, color(d.pal.fg, a), None),
+            let left = R::new(pill.x + 10.0, cy - 13.0, 26.0, 26.0);
+            let md = pick_media(m, pref).map(|(md, _)| md);
+            match (md.and_then(|x| x.art.as_ref()), md.and_then(|x| x.icon.as_ref())) {
+                (Some(art), app) => {
+                    d.cv.image(art, left, 7.0, a, None);
+                    // Which app plays it, as a badge on the cover's corner.
+                    if let Some(app) = app {
+                        d.cv.squircle(R::new(left.right() - 11.5, left.bottom() - 11.5, 17.0, 17.0), 4.5, color(d.pal.bg, a), None);
+                        d.cv.image(app, R::new(left.right() - 10.0, left.bottom() - 10.0, 14.0, 14.0), 3.0, a, None);
+                    }
+                }
+                (None, Some(app)) => d.cv.image(app, left, 6.0, a, None),
+                (None, None) => icon(d.cv, Icon::Music, left.cx(), left.cy(), 18.0, color(d.pal.fg, a), None),
+            }
+            if let Some(md) = md {
+                let title = if md.title.is_empty() { &md.artist } else { &md.title };
+                let x = left.right() + 12.0;
+                let max = pill.right() - 14.0 - 4.0 * 5.5 - 12.0 - x;
+                let line = d.fonts.fit(title, 15.0, Weight::Medium, max);
+                d.cv.text(d.fonts, &line, x, cy + 5.2, 15.0, Weight::Medium, d.pal.fg, a);
             }
             // Four bars that dance, each at its own pace.
             for i in 0..4 {
@@ -1609,12 +1625,12 @@ fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f
             }
         }
         Live::Charging(level) => {
-            icon(d.cv, Icon::Bolt, pill.x + 20.0, cy, 18.0, color(SUCCESS, a), None);
-            d.cv.text(d.fonts, t("Cargando", "Charging"), pill.x + 34.0, cy + 4.6, 13.0, Weight::Medium, d.pal.fg, a);
+            icon(d.cv, Icon::Bolt, pill.x + 22.0, cy, 20.0, color(SUCCESS, a), None);
+            d.cv.text(d.fonts, t("Cargando", "Charging"), pill.x + 38.0, cy + 5.2, 15.0, Weight::Medium, d.pal.fg, a);
             if level >= 0 {
                 let s = format!("{level}%");
-                let w = d.fonts.measure(&s, 13.0, Weight::Bold);
-                d.cv.text(d.fonts, &s, pill.right() - 14.0 - w, cy + 4.6, 13.0, Weight::Bold, SUCCESS, a);
+                let w = d.fonts.measure(&s, 15.0, Weight::Bold);
+                d.cv.text(d.fonts, &s, pill.right() - 16.0 - w, cy + 5.2, 15.0, Weight::Bold, SUCCESS, a);
             }
         }
     }

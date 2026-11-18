@@ -56,7 +56,7 @@ class PhoneControlsPanel extends StatelessWidget {
 const controlNames = {
   'wifi': 'Wi-Fi',
   'bt': 'Bluetooth',
-  'hotspot': 'Zona Wi-Fi',
+  'hotspot': 'Compartir internet desde el teléfono',
   'dnd': 'No molestar',
   'torch': 'Linterna',
   'lock': 'Bloquear',
@@ -85,7 +85,10 @@ Future<void> _customize(BuildContext context, Hub hub) => showAleroDialog<void>(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                tr('Arrastra para ordenar y apaga los que no uses. Los {} primeros quedan siempre a la vista; el resto, en «Controles avanzados».', [_mainCount]),
+                tr(
+                  'Arrastra para ordenar y apaga los que no uses. Los {} primeros quedan siempre a la vista; el resto, en «Controles avanzados».',
+                  [_mainCount],
+                ),
                 style: Theme.of(ctx).textTheme.bodySmall,
               ),
               const SizedBox(height: Gap.s),
@@ -195,7 +198,10 @@ class _ControlsState extends State<_Controls> {
 
   Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
     _adb!.serial,
-    tr('Cámara {} · {}', [facing == 'front' ? 'frontal' : 'trasera', widget.phone.name]),
+    tr('Cámara {} · {}', [
+      facing == 'front' ? 'frontal' : 'trasera',
+      widget.phone.name,
+    ]),
     facing,
   );
 
@@ -215,7 +221,9 @@ class _ControlsState extends State<_Controls> {
         _adb!.serial,
         '${hub.downloads}${Platform.pathSeparator}$name',
       );
-      hub.messages.add(tr('Captura guardada en la carpeta de descargas: {}', [name]));
+      hub.messages.add(
+        tr('Captura guardada en la carpeta de descargas: {}', [name]),
+      );
     } catch (_) {
       hub.messages.add(
         'No se pudo capturar la pantalla del teléfono. Desbloquéalo e inténtalo de nuevo.',
@@ -271,7 +279,9 @@ class _ControlsState extends State<_Controls> {
         'hotspot': tile(
           'hotspot',
           Symbols.wifi_tethering_rounded,
-          hint: adb == null ? needAdb : 'Abre sus ajustes en el teléfono',
+          hint: adb == null
+              ? needAdb
+              : 'Por cable USB o Wi-Fi: abre sus ajustes en el teléfono',
           onTap: adb == null ? null : () => PhoneAdb.openHotspot(adb.serial),
         ),
         'dnd': tile(
@@ -553,8 +563,10 @@ class _GridState extends State<_Grid> {
                           child: Center(
                             child: Semantics(
                               button: true,
-                              label:
-                                  tr('Arrastra para cambiar el tamaño de {}; toca para terminar', [c.label]),
+                              label: tr(
+                                'Arrastra para cambiar el tamaño de {}; toca para terminar',
+                                [c.label],
+                              ),
                               child: GestureDetector(
                                 onTap: () => setState(() => _editing = null),
                                 onHorizontalDragStart: (_) {

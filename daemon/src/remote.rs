@@ -244,6 +244,7 @@ impl Remote {
         if kind.starts_with("pb.x.remote.") && kind != "pb.x.remote.keepalive" && sys::secure_desktop() {
             // A UAC prompt: Windows drops our input until the user answers it on the computer. Say so.
             self.deny(engine, peer, "secure_desktop");
+            return true;
         }
         let f = |k: &str| b[k].as_f64().unwrap_or(0.0);
         let s = |k: &str| b[k].as_str().unwrap_or("");
@@ -288,7 +289,7 @@ impl Remote {
                 sys::media_key(s("action"));
             }
             "pb.x.remote.power" => {
-                // The phone asks for confirmation first; the PC only ever locks or sleeps.
+                // The phone asks for confirmation first; the PC locks, sleeps or shuts down.
                 let ok = sys::power(s("action"));
                 let _ = engine.send_message(peer, "pb.x.remote.power.result", json!({"action": s("action"), "ok": ok}));
             }

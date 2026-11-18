@@ -107,6 +107,8 @@ pub struct Media {
     pub speed: f64,
     pub at: Option<Instant>,
     pub art: Option<Image>,
+    /// Icon of the app that plays (Spotify, YouTube, the browser).
+    pub icon: Option<Image>,
 }
 
 impl Media {
@@ -384,7 +386,17 @@ impl Model {
                 let key = format!("{}|{}|{}", s(b, "title"), s(b, "artist"), b["art"].as_str().map_or(0, str::len));
                 let art = if key == self.media_key { self.phone_media.as_ref().and_then(|m| m.art.clone()) } else { b64(&b["art"]).and_then(|d| decode_image(&d)) };
                 self.media_key = key;
+                let pkg = s(b, "pkg");
+                if !pkg.is_empty() && !self.icons.contains_key(&pkg) {
+                    if let Some(img) = b64(&b["icon"]).and_then(|d| decode_image(&d)) {
+                        if self.icons.len() >= 64 {
+                            self.icons.clear();
+                        }
+                        self.icons.insert(pkg.clone(), img);
+                    }
+                }
                 self.phone_media = Some(Media {
+                    icon: self.icons.get(&pkg).cloned(),
                     title: s(b, "title"),
                     artist: s(b, "artist"),
                     app: s(b, "app"),
@@ -472,6 +484,19 @@ mod tests {
         assert_eq!(n, vec![Notice::XferDone("t".into(), true)]);
         assert_eq!(m.xfers[0].fraction(), 1.0);
         assert_eq!(m.running().count(), 0);
+    }
+
+    #[test]
+    fn phone_media_carries_its_app_icon() {
+        const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        let mut m = Model::default();
+        m.feed(&msg("a", "pb.x.media.state", json!({"active":true,"playing":true,"title":"T","pkg":"com.spotify.music","icon":PNG})));
+        assert!(m.phone_media.as_ref().unwrap().icon.is_some());
+        // Later states of the same app keep it without decoding again.
+        m.feed(&msg("a", "pb.x.media.state", json!({"active":true,"playing":false,"title":"T","pkg":"com.spotify.music"})));
+        assert!(m.phone_media.as_ref().unwrap().icon.is_some());
+        m.feed(&msg("a", "pb.x.media.state", json!({"active":true,"playing":true,"title":"U","pkg":"other"})));
+        assert!(m.phone_media.as_ref().unwrap().icon.is_none());
     }
 
     #[test]

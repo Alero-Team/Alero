@@ -118,6 +118,8 @@ class NotifListener : NotificationListenerService() {
             .put("active", true)
             .put("app", appName(c.packageName))
             .put("pkg", c.packageName)
+            // Cached per package on this side; the computer's island decodes it once per app.
+            .put("icon", icon(c.packageName))
             .put("cast", c.playbackInfo?.playbackType == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE)
             .put("title", m?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: m?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: "")
             .put("artist", m?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: "")

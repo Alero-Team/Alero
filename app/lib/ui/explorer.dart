@@ -896,12 +896,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
                 segments: const [
                   ButtonSegment(
                     value: 'images',
-                    label: Text('Fotos'),
+                    label: FitLabel('Fotos'),
                     icon: Icon(Symbols.image_rounded),
                   ),
                   ButtonSegment(
                     value: 'video',
-                    label: Text('Vídeos'),
+                    label: FitLabel('Vídeos'),
                     icon: Icon(Symbols.movie_rounded),
                   ),
                 ],

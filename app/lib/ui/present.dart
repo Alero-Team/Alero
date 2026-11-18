@@ -7,6 +7,7 @@ import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'remote_ui.dart';
 import 'theme.dart';
+import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
 
@@ -162,7 +163,10 @@ class _AleroPresentPageState extends State<AleroPresentPage>
           child: ListView(
             padding: const EdgeInsets.all(Gap.xl),
             children: [
-              Text(tr('Presentación en {}', [widget.name]), style: t.titleLarge),
+              Text(
+                tr('Presentación en {}', [widget.name]),
+                style: t.titleLarge,
+              ),
               const SizedBox(height: Gap.s),
               Text(
                 'Utiliza el teclado remoto de Alero a través de la red local. '
@@ -174,12 +178,12 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                 segments: const [
                   ButtonSegment(
                     value: PresentationMode.powerpoint,
-                    label: Text('PowerPoint'),
+                    label: FitLabel('PowerPoint'),
                     icon: Icon(Symbols.slideshow_rounded),
                   ),
                   ButtonSegment(
                     value: PresentationMode.browser,
-                    label: Text('Navegador'),
+                    label: FitLabel('Navegador'),
                     icon: Icon(Symbols.language_rounded),
                   ),
                 ],

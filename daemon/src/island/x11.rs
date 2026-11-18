@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::ptr;
 use std::time::{Duration, Instant};
 
+use x11_dl::xfixes::{self, XserverRegion};
 use x11_dl::xlib::{self, Atom, Display, Window, Xlib};
 
 use super::run::{Host, HostEvent, Rect};
@@ -21,6 +22,14 @@ pub struct X11Host {
     visual: *mut xlib::Visual,
     mapped: bool,
     geom: (i32, i32, u32, u32),
+    /// Opaque part of the last frame sent, in window pixels: the next frame resends it too, so what turned
+    /// transparent is cleared.
+    drawn: Option<Bounds>,
+    /// XFixes input shapes; None on a server without them (the window then keeps the mouse, as before 1.4.7).
+    fixes: Option<xfixes::Xlib>,
+    input: bool,
+    /// The input region last set: Some(None) = click-through, Some(Some(b)) = only `b` takes the mouse.
+    shape: Option<Option<Bounds>>,
     buf: Vec<u8>,
     raised: Instant,
     dpi: f32,
@@ -46,6 +55,29 @@ struct Atoms {
     active: Atom,
     wm_state: Atom,
     fullscreen: Atom,
+}
+
+/// (x0, y0, x1, y1), end exclusive.
+type Bounds = (u32, u32, u32, u32);
+
+/// The rectangle holding every pixel that is not fully transparent.
+fn opaque_bounds(rgba: &[u8], w: u32, h: u32) -> Option<Bounds> {
+    let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0u32, 0u32);
+    for row in 0..h {
+        let line = &rgba[(row * w * 4) as usize..((row + 1) * w * 4) as usize];
+        if let Some(f) = line.chunks_exact(4).position(|p| p[3] != 0) {
+            let last = line.chunks_exact(4).rposition(|p| p[3] != 0).unwrap_or(f);
+            x0 = x0.min(f as u32);
+            x1 = x1.max(last as u32 + 1);
+            y0 = y0.min(row);
+            y1 = y1.max(row + 1);
+        }
+    }
+    (x1 > x0 && y1 > y0).then_some((x0, y0, x1, y1))
+}
+
+fn union(a: Bounds, b: Bounds) -> Bounds {
+    (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3))
 }
 
 struct Dnd {
@@ -120,8 +152,39 @@ impl X11Host {
             // XdndAware: protocol version 5.
             let version: c_long = 5;
             (x.XChangeProperty)(dpy, win, atoms.aware, xlib::XA_ATOM, 32, xlib::PropModeReplace, &version as *const c_long as *const c_uchar, 1);
-            Some(Self { x, dpy, root, win, gc, visual: vi.visual, mapped: false, geom: (0, 0, 0, 0), buf: Vec::new(), raised: Instant::now(), dpi: 1.0, dpi_at: None, atoms, dnd: None })
+            // Window shapes need XFixes 2; the version query is also the handshake the extension requires.
+            let fixes = xfixes::Xlib::open().ok().filter(|f| {
+                let (mut ev, mut err, mut major, minor) = (0, 0, 5, 0);
+                (f.XFixesQueryExtension)(dpy, &mut ev, &mut err) != 0 && (f.XFixesQueryVersion)(dpy, &mut major, &minor) != 0 && major >= 2
+            });
+            let mut host = Self {
+                x, dpy, root, win, gc, visual: vi.visual, mapped: false, geom: (0, 0, 0, 0), drawn: None, fixes, input: false, shape: None,
+                buf: Vec::new(), raised: Instant::now(), dpi: 1.0, dpi_at: None, atoms, dnd: None,
+            };
+            // Starts click-through: the resting notch and the shadow must never cover the window below.
+            host.apply_input();
+            Some(host)
         }
+    }
+
+    /// Sets the input region: nothing while the island does not want the mouse, otherwise its drawn part.
+    fn apply_input(&mut self) {
+        let want = if self.input { self.drawn } else { None };
+        if self.shape == Some(want) {
+            return;
+        }
+        let Some(f) = &self.fixes else { return };
+        unsafe {
+            let mut r = want.map(|(x0, y0, x1, y1)| xlib::XRectangle { x: x0 as i16, y: y0 as i16, width: (x1 - x0) as u16, height: (y1 - y0) as u16 });
+            let region: XserverRegion = match r.as_mut() {
+                Some(r) => (f.XFixesCreateRegion)(self.dpy, r, 1),
+                None => (f.XFixesCreateRegion)(self.dpy, ptr::null_mut(), 0),
+            };
+            // 2 = ShapeInput: only the mouse is shaped, the picture stays whole.
+            (f.XFixesSetWindowShapeRegion)(self.dpy, self.win, 2, 0, 0, region);
+            (f.XFixesDestroyRegion)(self.dpy, region);
+        }
+        self.shape = Some(want);
     }
 
     fn send_client(&self, to: Window, kind: Atom, data: [c_long; 5]) {
@@ -339,35 +402,29 @@ impl Host for X11Host {
 
     fn present(&mut self, frame: Option<(&[u8], u32, u32, i32, i32)>) {
         unsafe {
-            let Some((rgba, w, h, x, y)) = frame else {
+            let Some(((rgba, w, h, x, y), now)) = frame.and_then(|f| opaque_bounds(f.0, f.1, f.2).map(|b| (f, b))) else {
                 if self.mapped {
                     (self.x.XUnmapWindow)(self.dpy, self.win);
                     (self.x.XFlush)(self.dpy);
                     self.mapped = false;
                 }
+                self.drawn = None;
                 return;
             };
-            // Only the part that is not transparent: the window is as small as the island, so everything around it
-            // stays clickable.
-            let (mut x0, mut y0, mut x1, mut y1) = (w, h, 0u32, 0u32);
-            for row in 0..h {
-                let line = &rgba[(row * w * 4) as usize..((row + 1) * w * 4) as usize];
-                let first = line.chunks_exact(4).position(|p| p[3] != 0);
-                if let Some(f) = first {
-                    let last = line.chunks_exact(4).rposition(|p| p[3] != 0).unwrap_or(f);
-                    x0 = x0.min(f as u32);
-                    x1 = x1.max(last as u32 + 1);
-                    y0 = y0.min(row);
-                    y1 = y1.max(row + 1);
-                }
+            // The window keeps the canvas size: resizing it on every frame of an animation made the server clear it
+            // before the new picture arrived, and the island flickered while opening. Clicks go through the empty
+            // part thanks to the input shape.
+            let geom = (x, y, w, h);
+            if geom != self.geom {
+                (self.x.XMoveResizeWindow)(self.dpy, self.win, x, y, w, h);
+                self.geom = geom;
+                self.drawn = None;
             }
-            if x1 <= x0 || y1 <= y0 {
-                if self.mapped {
-                    (self.x.XUnmapWindow)(self.dpy, self.win);
-                    self.mapped = false;
-                }
-                return;
-            }
+            // Only the part that changed can be non-transparent: this frame's pixels and the last frame's.
+            let (x0, y0, x1, y1) = match self.drawn {
+                Some(prev) if self.mapped => union(prev, now),
+                _ => now,
+            };
             let (cw, ch) = (x1 - x0, y1 - y0);
             self.buf.clear();
             self.buf.reserve((cw * ch * 4) as usize);
@@ -378,11 +435,15 @@ impl Host for X11Host {
                     self.buf.extend_from_slice(&[p[2], p[1], p[0], p[3]]);
                 }
             }
-            let geom = (x + x0 as i32, y + y0 as i32, cw, ch);
-            if geom != self.geom || !self.mapped {
-                (self.x.XMoveResizeWindow)(self.dpy, self.win, geom.0, geom.1, cw, ch);
-                self.geom = geom;
+            let img = (self.x.XCreateImage)(self.dpy, self.visual, 32, xlib::ZPixmap, 0, self.buf.as_mut_ptr() as *mut _, cw, ch, 32, 0);
+            if !img.is_null() {
+                (self.x.XPutImage)(self.dpy, self.win, self.gc, img, 0, 0, x0 as i32, y0 as i32, cw, ch);
+                // The pixels are ours: let the library free only the structure.
+                (*img).data = ptr::null_mut();
+                (self.x.XDestroyImage)(img);
             }
+            self.drawn = Some(now);
+            self.apply_input();
             if !self.mapped {
                 (self.x.XMapWindow)(self.dpy, self.win);
                 self.mapped = true;
@@ -390,13 +451,6 @@ impl Host for X11Host {
             } else if self.raised.elapsed() > Duration::from_millis(500) {
                 (self.x.XRaiseWindow)(self.dpy, self.win);
                 self.raised = Instant::now();
-            }
-            let img = (self.x.XCreateImage)(self.dpy, self.visual, 32, xlib::ZPixmap, 0, self.buf.as_mut_ptr() as *mut _, cw, ch, 32, 0);
-            if !img.is_null() {
-                (self.x.XPutImage)(self.dpy, self.win, self.gc, img, 0, 0, 0, 0, cw, ch);
-                // The pixels are ours: let the library free only the structure.
-                (*img).data = ptr::null_mut();
-                (self.x.XDestroyImage)(img);
             }
             (self.x.XFlush)(self.dpy);
         }
@@ -427,11 +481,36 @@ impl Host for X11Host {
     }
 
     fn beep(&mut self) {}
+
+    fn keep_on_top(&mut self) {
+        if self.mapped {
+            unsafe {
+                (self.x.XRaiseWindow)(self.dpy, self.win);
+                (self.x.XFlush)(self.dpy);
+            }
+        }
+    }
+
+    fn set_input(&mut self, on: bool) {
+        self.input = on;
+        self.apply_input();
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounds_cover_opaque_pixels_and_union_keeps_the_old_ones() {
+        let (w, h) = (4u32, 3u32);
+        let mut px = vec![0u8; (w * h * 4) as usize];
+        assert_eq!(opaque_bounds(&px, w, h), None);
+        px[((w + 2) * 4 + 3) as usize] = 9; // (2, 1)
+        px[((2 * w + 1) * 4 + 3) as usize] = 1; // (1, 2)
+        assert_eq!(opaque_bounds(&px, w, h), Some((1, 1, 3, 3)));
+        assert_eq!(union((1, 1, 3, 3), (0, 0, 2, 2)), (0, 0, 3, 3));
+    }
 
     #[test]
     fn uri_lists_become_paths() {

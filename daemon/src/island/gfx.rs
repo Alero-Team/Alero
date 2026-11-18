@@ -136,7 +136,7 @@ impl std::fmt::Debug for Image {
 }
 
 impl Image {
-    fn from_rgba(w: u32, h: u32, rgba: Vec<u8>) -> Option<Image> {
+    pub fn from_rgba(w: u32, h: u32, rgba: Vec<u8>) -> Option<Image> {
         if w == 0 || h == 0 || rgba.len() != w as usize * h as usize * 4 {
             return None;
         }
@@ -359,6 +359,7 @@ impl Fonts {
 
     /// Width of `text` in logical units at this size.
     pub fn measure(&mut self, text: &str, size: f32, w: Weight) -> f32 {
+        let size = size * TEXT_SCALE;
         let mut x = 0.0;
         for ch in text.chars() {
             let (face, g) = self.pick(ch, w);
@@ -379,7 +380,7 @@ impl Fonts {
         let mut x = 0.0;
         for ch in text.chars() {
             let (face, g) = self.pick(ch, w);
-            let a = self.advance(face, g, size);
+            let a = self.advance(face, g, size * TEXT_SCALE);
             if x + a + ell > max {
                 break;
             }
@@ -392,6 +393,9 @@ impl Fonts {
 
 // ---------------------------------------------------------------------------------------------------------
 // Canvas
+
+/// Every text of the island, larger than the sizes written in the layout (the user found them hard to read).
+pub const TEXT_SCALE: f32 = 1.2;
 
 pub struct Canvas {
     pub pm: Pixmap,
@@ -461,7 +465,7 @@ impl Canvas {
 
     /// Draws text with its left edge at `x` and its baseline at `y`. Returns the advance.
     pub fn text(&mut self, fonts: &mut Fonts, s: &str, x: f32, y: f32, size: f32, w: Weight, c: Rgb, alpha: f32) -> f32 {
-        let px = size * self.k;
+        let px = size * TEXT_SCALE * self.k;
         let mut pen = x * self.k;
         let by = (y * self.k).round();
         let (pw, ph) = (self.pm.width() as i32, self.pm.height() as i32);

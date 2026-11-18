@@ -352,7 +352,8 @@ const Map<String, String> kEnglish = {
   'Abrir ajustes USB': 'Open USB settings',
   'Controles del teléfono': 'Phone controls',
   'Elegir y ordenar los controles': 'Choose and arrange controls',
-  'Zona Wi-Fi': 'Wi-Fi hotspot',
+  'Compartir internet desde el teléfono': 'Share internet from the phone',
+  'Por cable USB o Wi-Fi: abre sus ajustes en el teléfono': 'Over USB cable or Wi-Fi: opens its settings on the phone',
   'No molestar': 'Do Not Disturb',
   'Linterna': 'Flashlight',
   'Bloquear': 'Lock',
@@ -379,7 +380,6 @@ const Map<String, String> kEnglish = {
   'Requiere depuración del teléfono': 'Requires phone debugging',
   'Abre la cámara en una ventana (Android 12+)':
       'Opens the camera in a window (Android 12+)',
-  'Abre sus ajustes en el teléfono': 'Opens its settings on the phone',
   'Pide permiso en el teléfono': 'Asks for permission on the phone',
   'Abre Acceso remoto': 'Opens Remote access',
   'La guarda en la carpeta de descargas': 'Saves it to the downloads folder',
@@ -761,6 +761,13 @@ const Map<String, String> kEnglish = {
   'El ordenador se duerme y la conexión se pierde hasta que lo despiertes.':
       'The computer goes to sleep and the connection is lost until you wake it.',
   'Suspender': 'Sleep',
+  'Vaciar el campo (no borra nada en el ordenador)':
+      'Empty the field (nothing is deleted on the computer)',
+  'Ver toda la pantalla': 'Show the whole screen',
+  'Acercar (o pellizca la imagen)': 'Zoom in (or pinch the picture)',
+  '¿Apagar {}?': 'Shut down {}?',
+  'El ordenador se apaga. Guarda lo que tengas abierto en él: para volver a usarlo hay que encenderlo a mano.':
+      'The computer shuts down. Save what you have open on it: to use it again you have to turn it on by hand.',
   'No se pudo: {}': 'Failed: {}',
   'No aparece por Wi-Fi. Activa «Depuración inalámbrica» en el teléfono y vincúlalo una vez con los pasos de abajo.':
       'It doesn\'t appear over Wi-Fi. Turn on “Wireless debugging” on the phone and pair it once with the steps below.',
@@ -871,8 +878,8 @@ const Map<String, String> kEnglish = {
   'No se pudo configurar el bloqueo.': 'Couldn\'t set up the lock.',
   'Permitir que mis teléfonos controlen este equipo':
       'Let my phones control this computer',
-  'Mover el ratón, escribir, cambiar el volumen y la música, ver la pantalla y pedir capturas. Solo desde dispositivos emparejados; verás un aviso cuando se use. Bloquear o suspender siempre se confirman en el teléfono. Apagado por defecto.':
-      'Move the mouse, type, change the volume and music, view the screen and request screenshots. Only from paired devices; you will see a notice when it is used. Locking or sleeping is always confirmed on the phone. Off by default.',
+  'Mover el ratón, escribir, cambiar el volumen y la música, ver la pantalla y pedir capturas. Solo desde dispositivos emparejados; verás un aviso cuando se use. Bloquear, suspender o apagar siempre se confirman en el teléfono. Apagado por defecto.':
+      'Move the mouse, type, change the volume and music, view the screen and request screenshots. Only from paired devices; you will see a notice when it is used. Locking, sleeping or shutting down is always confirmed on the phone. Off by default.',
   'Todavía no está disponible en este sistema. Solo Windows y Linux por ahora.':
       'Not available on this system yet. Windows and Linux only for now.',
   'Compartir carpeta con el teléfono': 'Share a folder with the phone',
@@ -1175,7 +1182,10 @@ const Map<String, String> kEnglish = {
   'Desplazamiento horizontal': 'Horizontal offset',
   'Ocultar con juegos y apps a pantalla completa': 'Hide during games and full-screen apps',
   'Atajo para abrirla con el teclado': 'Keyboard shortcut to open it',
-  'Usa Ctrl, Alt, Mayús o Win y una tecla': 'Use Ctrl, Alt, Shift or Win and a key',
+  'Pulsa la combinación…': 'Press the combination…',
+  'Grabar atajo': 'Record shortcut',
+  'Mayús': 'Shift',
+  'Quitar atajo': 'Remove shortcut',
   'Qué muestra': 'What it shows',
   'Enviar archivos arrastrando': 'Send files by dragging',
   'Archivos entrantes': 'Incoming files',

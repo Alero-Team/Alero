@@ -79,9 +79,12 @@ impl EventSink for Sink {
                 _ => {}
             }
         }
-        let needs_user = matches!(e, Event::PairRequest { .. } | Event::TransferOffer { .. });
+        // An offer the island shows is answered there: opening the window too would replay it once the island is done.
+        let island_answers = matches!(e, Event::TransferOffer { .. }) && self.0.island.shows_offers();
+        let needs_user = !island_answers && matches!(e, Event::PairRequest { .. } | Event::TransferOffer { .. });
         // Undelivered requests are replayed by `Subscribers` to the window we start here.
-        let delivered = self.0.subs.push(&Push::Event { event: e.clone() });
+        let push = Push::Event { event: e.clone() };
+        let delivered = if island_answers { self.0.subs.push_live(&push) } else { self.0.subs.push(&push) };
         if delivered {
             // The window took over mid-transfer: its own UI shows the result, so the card must not linger.
             #[cfg(any(windows, target_os = "linux"))]
@@ -94,7 +97,7 @@ impl EventSink for Sink {
         }
         if needs_user {
             self.0.launch();
-        } else {
+        } else if !island_answers {
             self.0.alone(e);
         }
     }

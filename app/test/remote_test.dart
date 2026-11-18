@@ -103,6 +103,63 @@ void main() {
     expect(hub.sent.last.$2, {'text': 'hola'});
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('pinching zooms instead of scrolling or right-clicking', (
+    tester,
+  ) async {
+    final hub = RecordingHub();
+    var zoom = 1.0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Touchpad(hub, 'pc', height: 400, onZoom: (f) => zoom *= f),
+        ),
+      ),
+    );
+    final c = tester.getCenter(find.byType(Touchpad));
+    final a = await tester.startGesture(c - const Offset(40, 0));
+    final b = await tester.startGesture(c + const Offset(40, 0));
+    for (var i = 0; i < 10; i++) {
+      await a.moveBy(const Offset(-8, 0));
+      await b.moveBy(const Offset(8, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await a.up();
+    await b.up();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(zoom, greaterThan(1.5));
+    expect(hub.sent.where((m) => m.$1 == 'pb.x.remote.click'), isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+  testWidgets('what was typed survives closing the keyboard and coming back', (
+    tester,
+  ) async {
+    final hub = RecordingHub();
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: MouseActionBar(hub, 'pc-draft'))),
+    );
+    await tester.tap(find.text('Teclado'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'hola mundo');
+    // Closing the sheet (swipe down / back) used to empty the field.
+    Navigator.of(tester.element(find.byType(TextField))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.text('Teclado'));
+    await tester.pumpAndSettle();
+    expect(find.text('hola mundo'), findsOneWidget);
+    // Going on from where it was: only the new letters reach the computer.
+    hub.sent.clear();
+    await tester.enterText(find.byType(TextField), 'hola mundo!');
+    expect(hub.sent.map((m) => m.$1), ['pb.x.remote.text']);
+    expect(hub.sent.last.$2, {'text': '!'});
+    // Emptying the field deletes nothing on the computer.
+    hub.sent.clear();
+    await tester.tap(find.byTooltip('Vaciar el campo (no borra nada en el ordenador)'));
+    await tester.pump();
+    expect(hub.sent, isEmpty);
+    expect(find.text('hola mundo!'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets(
     'mouse selection persists after lifting and releases on next tap',
     (tester) async {
