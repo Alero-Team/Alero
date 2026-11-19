@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/material.dart' as m show Icon;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -167,39 +167,39 @@ class Panel extends StatelessWidget {
   return switch (p.state) {
     pb.PeerState.connected => (
       label: 'Conectado',
-      icon: Symbols.link_rounded,
+      icon: FluentIcons.link_24_regular,
       color: c.signal,
     ),
     pb.PeerState.connecting => (
       label: 'Conectando…',
-      icon: Symbols.sync_rounded,
+      icon: FluentIcons.arrow_sync_24_regular,
       color: c.muted,
     ),
     pb.PeerState.rejected => (
       label: 'Te quitó de sus dispositivos',
-      icon: Symbols.block_rounded,
+      icon: FluentIcons.prohibited_24_regular,
       color: c.danger,
     ),
     pb.PeerState.disconnected when p.trusted && p.detail == 'paused' => (
       label: 'Desconectado por ti',
-      icon: Symbols.pause_circle_rounded,
+      icon: FluentIcons.pause_circle_24_regular,
       color: c.muted,
     ),
     pb.PeerState.disconnected when p.trusted && p.detail == 'paused_remote' => (
       label: 'Desconectado desde el otro dispositivo',
-      icon: Symbols.pause_circle_rounded,
+      icon: FluentIcons.pause_circle_24_regular,
       color: c.muted,
     ),
     pb.PeerState.disconnected =>
       p.trusted
           ? (
               label: 'Sin conexión',
-              icon: Symbols.link_off_rounded,
+              icon: FluentIcons.link_dismiss_24_regular,
               color: c.muted,
             )
           : (
               label: 'Disponible',
-              icon: Symbols.add_link_rounded,
+              icon: FluentIcons.link_add_24_regular,
               color: c.muted,
             ),
   };
@@ -277,14 +277,14 @@ FileKind fileKind(String name) {
 }
 
 IconData fileIcon(String name) => switch (fileKind(name)) {
-  FileKind.image => Symbols.image_rounded,
-  FileKind.video => Symbols.movie_rounded,
-  FileKind.audio => Symbols.music_note_rounded,
-  FileKind.doc => Symbols.description_rounded,
-  FileKind.sheet => Symbols.table_rounded,
-  FileKind.archive => Symbols.folder_zip_rounded,
-  FileKind.app => Symbols.apk_document_rounded,
-  FileKind.other => Symbols.draft_rounded,
+  FileKind.image => FluentIcons.image_24_regular,
+  FileKind.video => FluentIcons.movies_and_tv_24_regular,
+  FileKind.audio => FluentIcons.music_note_2_24_regular,
+  FileKind.doc => FluentIcons.document_text_24_regular,
+  FileKind.sheet => FluentIcons.table_24_regular,
+  FileKind.archive => FluentIcons.folder_zip_24_regular,
+  FileKind.app => FluentIcons.app_generic_24_regular,
+  FileKind.other => FluentIcons.document_24_regular,
 };
 
 ({Color bg, Color fg}) kindColors(BuildContext c, FileKind k) {
@@ -293,16 +293,19 @@ IconData fileIcon(String name) => switch (fileKind(name)) {
     final s = Theme.of(c).colorScheme;
     return (bg: s.surfaceContainerHighest, fg: s.onSurfaceVariant);
   }
-  final (lb, lf, db, df) = switch (k) {
-    FileKind.image => (0xFFE3E8FF, 0xFF3346B8, 0xFF252B4D, 0xFFB4C1FF),
-    FileKind.video => (0xFFFFE6D6, 0xFFA3410A, 0xFF4A2817, 0xFFFFB98F),
-    FileKind.audio => (0xFFFBE1F1, 0xFF9C2873, 0xFF472038, 0xFFF5A8D6),
-    FileKind.doc => (0xFFFFE1DE, 0xFFB3261E, 0xFF4D2220, 0xFFFFB4AB),
-    FileKind.sheet => (0xFFDDF3E4, 0xFF1E6B3A, 0xFF1C3A26, 0xFF9FDDB3),
-    FileKind.archive => (0xFFFFF0C7, 0xFF7A5A00, 0xFF40330F, 0xFFF2CF6B),
-    _ => (0xFFEAF7C6, 0xFF3D6B0B, 0xFF2B3814, 0xFFC8F031),
+  // Dark: a vivid tile with a dark glyph, so the type reads at a glance (like the island's lit tiles).
+  final (lb, lf, db) = switch (k) {
+    FileKind.image => (0xFFE3E8FF, 0xFF3346B8, 0xFF7B95FF),
+    FileKind.video => (0xFFFFE6D6, 0xFFA3410A, 0xFFFF9459),
+    FileKind.audio => (0xFFFBE1F1, 0xFF9C2873, 0xFFF27BC7),
+    FileKind.doc => (0xFFFFE1DE, 0xFFB3261E, 0xFFFF776B),
+    FileKind.sheet => (0xFFDDF3E4, 0xFF1E6B3A, 0xFF4CCF7C),
+    FileKind.archive => (0xFFFFF0C7, 0xFF7A5A00, 0xFFF5C83F),
+    _ => (0xFFEAF7C6, 0xFF3D6B0B, 0xFFB2DE35),
   };
-  return dark ? (bg: Color(db), fg: Color(df)) : (bg: Color(lb), fg: Color(lf));
+  return dark
+      ? (bg: Color(db), fg: const Color(0xFF141414))
+      : (bg: Color(lb), fg: Color(lf));
 }
 
 class FileTile extends StatelessWidget {
@@ -416,7 +419,7 @@ class TransferRow extends StatelessWidget {
               Text(pct, style: t.labelLarge?.copyWith(fontFeatures: tabular)),
               IconButton(
                 tooltip: tr('Cancelar {}', [x.name]),
-                icon: const Icon(Symbols.close_rounded),
+                icon: const Icon(FluentIcons.dismiss_24_regular),
                 onPressed: () => hub.cancel(x.id),
               ),
             ],
@@ -451,18 +454,18 @@ class HistoryTile extends StatelessWidget {
     final (label, icon, color) = ok
         ? (
             h.incoming ? 'Recibido de' : 'Enviado a',
-            Symbols.check_circle_rounded,
+            FluentIcons.checkmark_circle_24_regular,
             c.signal,
           )
         : cancelled
         ? (
             h.incoming ? 'Cancelado, de' : 'Cancelado, a',
-            Symbols.do_not_disturb_on_rounded,
+            FluentIcons.subtract_circle_24_regular,
             c.muted,
           )
         : (
             h.incoming ? 'Falló, de' : 'Falló, a',
-            Symbols.error_rounded,
+            FluentIcons.error_circle_24_regular,
             c.danger,
           );
     final when = DateTime.fromMillisecondsSinceEpoch(h.time.toInt() * 1000);
@@ -524,7 +527,7 @@ class HistoryTile extends StatelessWidget {
             IconButton(
               tooltip: tx('Quitar del historial (no borra el archivo)'),
               visualDensity: VisualDensity.compact,
-              icon: Icon(Symbols.close_rounded, size: 18, color: c.muted),
+              icon: Icon(FluentIcons.dismiss_24_regular, size: 18, color: c.muted),
               onPressed: () => hub.removeHistory(h.id),
             ),
           ],
@@ -564,23 +567,23 @@ class HistoryTile extends StatelessWidget {
         screen.height - at.dy,
       ),
       items: [
-        if (ok) item('open', Symbols.open_in_new_rounded, 'Abrir'),
+        if (ok) item('open', FluentIcons.open_24_regular, 'Abrir'),
         if (onDisk) ...[
-          item('show', Symbols.folder_open_rounded, 'Mostrar en la carpeta'),
-          item('path', Symbols.content_copy_rounded, 'Copiar la ruta'),
+          item('show', FluentIcons.folder_open_24_regular, 'Mostrar en la carpeta'),
+          item('path', FluentIcons.copy_24_regular, 'Copiar la ruta'),
           item(
             'again',
-            Symbols.send_rounded,
+            FluentIcons.send_24_regular,
             tr('Enviar de nuevo a {}', [h.peerName]),
           ),
         ],
-        item('name', Symbols.title_rounded, 'Copiar el nombre'),
+        item('name', FluentIcons.text_t_24_regular, 'Copiar el nombre'),
         if (!ok && !h.incoming)
-          item('retry', Symbols.refresh_rounded, 'Reintentar'),
+          item('retry', FluentIcons.arrow_clockwise_24_regular, 'Reintentar'),
         const PopupMenuDivider(),
-        item('forget', Symbols.close_rounded, 'Quitar del historial'),
+        item('forget', FluentIcons.dismiss_24_regular, 'Quitar del historial'),
         if (onDisk)
-          item('delete', Symbols.delete_rounded, 'Eliminar el archivo'),
+          item('delete', FluentIcons.delete_24_regular, 'Eliminar el archivo'),
       ],
     );
     if (choice == null || !context.mounted) return;
@@ -718,7 +721,7 @@ class ErrorBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Symbols.error_rounded, color: s.onErrorContainer),
+            Icon(FluentIcons.error_circle_24_regular, color: s.onErrorContainer),
             const SizedBox(width: Gap.m),
             Expanded(
               child: Text(text, style: TextStyle(color: s.onErrorContainer)),
@@ -815,7 +818,7 @@ class AleroSwitch extends StatelessWidget {
       thumbIcon: WidgetStateProperty.resolveWith(
         (s) => s.contains(WidgetState.selected)
             ? const m.Icon(
-                Symbols.check_rounded,
+                FluentIcons.checkmark_24_regular,
                 size: 16,
               ) // Switch takes Flutter's own Icon
             : null,
@@ -957,6 +960,7 @@ class OrderList extends StatelessWidget {
     super.key,
     required this.order,
     required this.names,
+    this.icons = const {},
     required this.hidden,
     required this.onChanged,
   });
@@ -964,6 +968,7 @@ class OrderList extends StatelessWidget {
   /// Every item, shown or not, in its current order.
   final List<String> order;
   final Map<String, String> names;
+  final Map<String, IconData> icons;
   final Set<String> hidden;
   final void Function(List<String> order, Set<String> hidden) onChanged;
 
@@ -991,10 +996,14 @@ class OrderList extends StatelessWidget {
                     cursor: SystemMouseCursors.grab,
                     child: Padding(
                       padding: EdgeInsets.all(Gap.s),
-                      child: Icon(Symbols.drag_indicator_rounded, size: 20),
+                      child: Icon(FluentIcons.re_order_dots_vertical_24_regular, size: 20),
                     ),
                   ),
                 ),
+                if (icons[t] case final icon?) ...[
+                  Icon(icon, size: 20),
+                  const SizedBox(width: Gap.m),
+                ],
                 Expanded(child: Text(names[t] ?? t)),
                 AleroSwitch(
                   value: !hidden.contains(t),

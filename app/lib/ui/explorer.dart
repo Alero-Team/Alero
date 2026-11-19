@@ -1,7 +1,7 @@
 import 'alero_motion.dart';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../fs_client.dart';
 import '../hub.dart';
@@ -105,7 +105,7 @@ Future<void> _menu(
         value: 'open',
         child: ListTile(
           leading: Icon(
-            e.dir ? Symbols.folder_open_rounded : Symbols.open_in_new_rounded,
+            e.dir ? FluentIcons.folder_open_24_regular : FluentIcons.open_24_regular,
           ),
           title: Text(e.dir ? 'Abrir' : 'Abrir en el ordenador'),
         ),
@@ -114,7 +114,7 @@ Future<void> _menu(
         const PopupMenuItem(
           value: 'downloadDir',
           child: ListTile(
-            leading: Icon(Symbols.download_rounded),
+            leading: Icon(FluentIcons.arrow_download_24_regular),
             title: Text('Descargar carpeta'),
           ),
         ),
@@ -122,14 +122,14 @@ Future<void> _menu(
         const PopupMenuItem(
           value: 'download',
           child: ListTile(
-            leading: Icon(Symbols.download_rounded),
+            leading: Icon(FluentIcons.arrow_download_24_regular),
             title: Text('Descargar'),
           ),
         ),
       const PopupMenuItem(
         value: 'rename',
         child: ListTile(
-          leading: Icon(Symbols.edit_rounded),
+          leading: Icon(FluentIcons.edit_24_regular),
           title: Text('Renombrar'),
         ),
       ),
@@ -137,7 +137,7 @@ Future<void> _menu(
         value: 'delete',
         child: ListTile(
           leading: Icon(
-            Symbols.delete_rounded,
+            FluentIcons.delete_24_regular,
             color: Theme.of(context).colorScheme.error,
           ),
           title: Text(
@@ -258,7 +258,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                         ? const Align(
                             alignment: Alignment.topCenter,
                             child: EmptyState(
-                              icon: Symbols.smartphone_rounded,
+                              icon: FluentIcons.phone_24_regular,
                               title: 'Conecta un teléfono',
                               body: 'Abre Alero en el teléfono emparejado (por Wi-Fi o con el cable) y aquí aparecerán sus archivos.',
                             ),
@@ -276,7 +276,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                           constraints: const BoxConstraints(maxHeight: 190),
                           child: Panel(
                             title: 'Transferencias en curso',
-                            icon: Symbols.sync_rounded,
+                            icon: FluentIcons.arrow_sync_24_regular,
                             child: SingleChildScrollView(
                               child: Column(
                                 children: [
@@ -320,7 +320,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                         );
                         fs.clearSelection();
                       },
-                      icon: const Icon(Symbols.download_rounded, size: 18),
+                      icon: const Icon(FluentIcons.arrow_download_24_regular, size: 18),
                       label: Text(tr('Descargar ({})', [chosen.length])),
                     ),
                   ),
@@ -329,7 +329,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                     child: IconButton.filledTonal(
                       tooltip: tr('Eliminar ({})', [chosen.length]),
                       onPressed: () => _delete(context, fs, chosen),
-                      icon: const Icon(Symbols.delete_rounded),
+                      icon: const Icon(FluentIcons.delete_24_regular),
                     ),
                   ),
                 ],
@@ -337,20 +337,20 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
       ),
       FilledButton.tonalIcon(
         onPressed: () => hub.send(phone.id),
-        icon: const Icon(Symbols.upload_rounded, size: 18),
+        icon: const Icon(FluentIcons.arrow_upload_24_regular, size: 18),
         label: const Text('Subir'),
       ),
       const SizedBox(width: Gap.xs),
       FilledButton.tonalIcon(
         onPressed: () => hub.sendFolder(phone.id),
-        icon: const Icon(Symbols.drive_folder_upload_rounded, size: 18),
+        icon: const Icon(FluentIcons.folder_arrow_up_24_regular, size: 18),
         label: const Text('Subir carpeta'),
       ),
       const SizedBox(width: Gap.xs),
       PopupMenuButton<String>(
         popUpAnimationStyle: popUpMotion(context),
         tooltip: tx('Ordenar'),
-        icon: const Icon(Symbols.sort_rounded),
+        icon: const Icon(FluentIcons.arrow_sort_24_regular),
         initialValue: fs.sort,
         onSelected: fs.setSort,
         itemBuilder: (_) => const [
@@ -363,13 +363,13 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
         tooltip: tx(fs.grid ? 'Ver como lista' : 'Ver como cuadrícula'),
         onPressed: fs.toggleView,
         icon: Icon(
-          fs.grid ? Symbols.view_list_rounded : Symbols.grid_view_rounded,
+          fs.grid ? FluentIcons.text_bullet_list_ltr_24_regular : FluentIcons.grid_24_regular,
         ),
       ),
       IconButton(
         tooltip: tx('Actualizar'),
         onPressed: fs.refresh,
-        icon: const Icon(Symbols.refresh_rounded),
+        icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
       ),
     ];
   }
@@ -380,17 +380,17 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
     if (fs.error != null && fs.roots.isEmpty) {
       final (icon, title, body) = switch (fs.error) {
         'not_allowed' => (
-          Symbols.lock_rounded,
+          FluentIcons.lock_closed_24_regular,
           'El teléfono no lo permite todavía',
           'Le avisamos con una notificación. En el teléfono: Alero › Ajustes › Archivos para el ordenador, y activa «Dejar que el ordenador explore mis archivos».',
         ),
         'no_permission' => (
-          Symbols.shield_rounded,
+          FluentIcons.shield_24_regular,
           'Falta un permiso en el teléfono',
           'Android pide permiso para ver fotos, vídeos y música. Concédelo en Alero › Ajustes › Permisos.',
         ),
         _ => (
-          Symbols.signal_disconnected_rounded,
+          FluentIcons.plug_disconnected_24_regular,
           'El teléfono no responde',
           'Comprueba que Alero está abierto y conectado, y vuelve a intentarlo.',
         ),
@@ -482,7 +482,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                 IconButton(
                   tooltip: tx('Subir un nivel'),
                   onPressed: fs.up,
-                  icon: const Icon(Symbols.arrow_upward_rounded, size: 20),
+                  icon: const Icon(FluentIcons.arrow_up_24_regular, size: 20),
                 ),
               TextButton(
                 onPressed: fs.crumbs.isEmpty ? null : () => fs.goTo(0),
@@ -490,7 +490,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               ),
               for (final (i, c) in fs.crumbs.indexed) ...[
                 Icon(
-                  Symbols.chevron_right_rounded,
+                  FluentIcons.chevron_right_24_regular,
                   size: 18,
                   color: s.onSurfaceVariant,
                 ),
@@ -610,11 +610,11 @@ class _RootItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final icon = switch (r.kind) {
-      'images' => Symbols.image_rounded,
-      'video' => Symbols.movie_rounded,
-      'audio' => Symbols.music_note_rounded,
-      'alero' => Symbols.download_done_rounded,
-      _ => Symbols.folder_rounded,
+      'images' => FluentIcons.image_24_regular,
+      'video' => FluentIcons.movies_and_tv_24_regular,
+      'audio' => FluentIcons.music_note_2_24_regular,
+      'alero' => FluentIcons.arrow_download_24_regular,
+      _ => FluentIcons.folder_24_regular,
     };
     return Tooltip(
       message: r.ok
@@ -667,7 +667,7 @@ class _RootItem extends StatelessWidget {
                   ),
                   if (!r.ok)
                     Icon(
-                      Symbols.lock_rounded,
+                      FluentIcons.lock_closed_24_regular,
                       size: 16,
                       color: s.onSurfaceVariant,
                     ),
@@ -714,7 +714,7 @@ class _Preview extends StatelessWidget {
       color: e.dir ? s.secondaryContainer : c.bg,
       child: Center(
         child: Icon(
-          e.dir ? Symbols.folder_rounded : fileIcon(e.name),
+          e.dir ? FluentIcons.folder_24_regular : fileIcon(e.name),
           size: size * 0.5,
           fill: e.dir ? 1 : 0,
           color: e.dir ? s.onSecondaryContainer : c.fg,
@@ -785,7 +785,7 @@ class _GridTile extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.all(2),
                                 child: Icon(
-                                  Symbols.check_rounded,
+                                  FluentIcons.checkmark_24_regular,
                                   size: 16,
                                   color: s.onPrimary,
                                 ),
@@ -852,8 +852,8 @@ class _Row extends StatelessWidget {
                       : MotionFade(
                           child: Icon(
                             sel
-                                ? Symbols.check_box_rounded
-                                : Symbols.check_box_outline_blank_rounded,
+                                ? FluentIcons.checkbox_checked_24_regular
+                                : FluentIcons.checkbox_unchecked_24_regular,
                             key: ValueKey(sel),
                             size: 20,
                             color: sel ? s.primary : s.onSurfaceVariant,
@@ -917,7 +917,7 @@ class _Row extends StatelessWidget {
                         box.localToGlobal(box.size.center(Offset.zero)),
                       );
                     },
-                    icon: const Icon(Symbols.more_vert_rounded),
+                    icon: const Icon(FluentIcons.more_vertical_24_regular),
                   ),
                 ),
               ],
@@ -1026,7 +1026,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                               fs.clearSelection();
                             },
                             icon: const Icon(
-                              Symbols.download_rounded,
+                              FluentIcons.arrow_download_24_regular,
                               size: 18,
                             ),
                             label: Text(tr('Descargar ({})', [chosen.length])),
@@ -1035,7 +1035,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                           IconButton.filledTonal(
                             tooltip: tr('Eliminar ({})', [chosen.length]),
                             onPressed: () => _delete(context, fs, chosen),
-                            icon: const Icon(Symbols.delete_rounded),
+                            icon: const Icon(FluentIcons.delete_24_regular),
                           ),
                           const SizedBox(width: Gap.s),
                         ],
@@ -1046,12 +1046,12 @@ class _PhotosScreenState extends State<PhotosScreen> {
                   ButtonSegment(
                     value: 'images',
                     label: FitLabel('Fotos'),
-                    icon: Icon(Symbols.image_rounded),
+                    icon: Icon(FluentIcons.image_24_regular),
                   ),
                   ButtonSegment(
                     value: 'video',
                     label: FitLabel('Vídeos'),
-                    icon: Icon(Symbols.movie_rounded),
+                    icon: Icon(FluentIcons.movies_and_tv_24_regular),
                   ),
                 ],
                 selected: {_kind},
@@ -1063,7 +1063,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
               IconButton(
                 tooltip: tx('Actualizar'),
                 onPressed: fs.refresh,
-                icon: const Icon(Symbols.refresh_rounded),
+                icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
               ),
             ],
           );
@@ -1093,7 +1093,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                 ? const Align(
                     alignment: Alignment.topCenter,
                     child: EmptyState(
-                      icon: Symbols.lock_rounded,
+                      icon: FluentIcons.lock_closed_24_regular,
                       title: 'El teléfono aún no comparte sus fotos',
                       body: 'En el teléfono: Alero › Ajustes › Archivos para el ordenador, y concede «Fotos y vídeos».',
                     ),

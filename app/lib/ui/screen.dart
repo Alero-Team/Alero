@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../phone_control.dart';
@@ -219,7 +219,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
       ),
       body: isPhone || !Scrcpy.available
           ? const EmptyState(
-              icon: Symbols.cast_rounded,
+              icon: FluentIcons.cast_24_regular,
               title: 'Falta el componente de pantalla',
               body: 'Esta instalación no incluye scrcpy. Reinstala Alero, copia la carpeta «scrcpy» junto al programa o, en Linux, instala los paquetes adb y scrcpy.',
             )
@@ -232,11 +232,11 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                     index: 0,
                     child: Panel(
                       title: 'Dispositivo',
-                      icon: Symbols.devices_rounded,
+                      icon: FluentIcons.phone_desktop_24_regular,
                       action: IconButton(
                         tooltip: tx('Buscar de nuevo'),
                         onPressed: _list,
-                        icon: const Icon(Symbols.refresh_rounded),
+                        icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -266,8 +266,8 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                     value: x.serial,
                                     secondary: Icon(
                                       x.wifi
-                                          ? Symbols.wifi_rounded
-                                          : Symbols.usb_rounded,
+                                          ? FluentIcons.wifi_1_24_regular
+                                          : FluentIcons.usb_plug_24_regular,
                                     ),
                                     title: Text(x.name),
                                     subtitle: Text(_stateText(x)),
@@ -285,7 +285,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                     ? null
                                     : () => _run('Buscando por Wi-Fi…', _wifi),
                                 icon: const Icon(
-                                  Symbols.wifi_find_rounded,
+                                  FluentIcons.wifi_warning_24_regular,
                                   size: 18,
                                 ),
                                 label: const Text('Buscar por Wi-Fi'),
@@ -306,7 +306,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                 index: 1,
                                 child: Panel(
                                   title: 'Pantalla',
-                                  icon: Symbols.smartphone_rounded,
+                                  icon: FluentIcons.phone_24_regular,
                                   child: DropdownButton<int>(
                                     isExpanded: true,
                                     value:
@@ -338,7 +338,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                     index: 2,
                     child: Panel(
                       title: 'Imagen y sonido',
-                      icon: Symbols.tune_rounded,
+                      icon: FluentIcons.options_24_regular,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -455,8 +455,8 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                     MotionFade(
                                       child: Icon(
                                         live
-                                            ? Symbols.cast_connected_rounded
-                                            : Symbols.cast_rounded,
+                                            ? FluentIcons.cast_multiple_24_regular
+                                            : FluentIcons.cast_24_regular,
                                         key: ValueKey(live),
                                         size: 32,
                                         fill: live ? 1 : 0,
@@ -553,7 +553,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                                     .instance
                                                     .stop(d.serial),
                                                 icon: const Icon(
-                                                  Symbols.stop_circle_rounded,
+                                                  FluentIcons.record_stop_24_regular,
                                                   size: 18,
                                                 ),
                                                 label: const Text('Detener'),
@@ -570,7 +570,7 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                                         _start,
                                                       ),
                                                 icon: const Icon(
-                                                  Symbols.cast_rounded,
+                                                  FluentIcons.cast_24_regular,
                                                   size: 18,
                                                 ),
                                                 label: const Text(
@@ -659,7 +659,7 @@ class _LiveBar extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    Symbols.screen_share_rounded,
+                    FluentIcons.share_screen_start_24_regular,
                     color: s.onPrimaryContainer,
                   ),
                   const SizedBox(width: Gap.s),
@@ -673,7 +673,7 @@ class _LiveBar extends StatelessWidget {
                   ),
                   FilledButton.icon(
                     onPressed: () => PhoneSessions.instance.stop(serial),
-                    icon: const Icon(Symbols.stop_circle_rounded, size: 18),
+                    icon: const Icon(FluentIcons.record_stop_24_regular, size: 18),
                     label: const Text('Detener'),
                   ),
                 ],
@@ -683,26 +683,26 @@ class _LiveBar extends StatelessWidget {
                 spacing: Gap.s,
                 runSpacing: Gap.s,
                 children: [
-                  key(Symbols.arrow_back_rounded, 'Atrás', Keys.back),
-                  key(Symbols.circle_rounded, 'Inicio', Keys.home),
-                  key(Symbols.crop_square_rounded, 'Recientes', Keys.recents),
+                  key(FluentIcons.arrow_left_24_regular, 'Atrás', Keys.back),
+                  key(FluentIcons.circle_24_regular, 'Inicio', Keys.home),
+                  key(FluentIcons.square_24_regular, 'Recientes', Keys.recents),
                   key(
-                    Symbols.volume_down_rounded,
+                    FluentIcons.speaker_1_24_regular,
                     'Bajar volumen',
                     Keys.volumeDown,
                   ),
                   key(
-                    Symbols.volume_up_rounded,
+                    FluentIcons.speaker_2_24_regular,
                     'Subir volumen',
                     Keys.volumeUp,
                   ),
-                  key(Symbols.skip_previous_rounded, 'Anterior', Keys.previous),
+                  key(FluentIcons.previous_24_filled, 'Anterior', Keys.previous),
                   key(
-                    Symbols.play_pause_rounded,
+                    FluentIcons.video_play_pause_24_filled,
                     'Reproducir o pausar',
                     Keys.playPause,
                   ),
-                  key(Symbols.skip_next_rounded, 'Siguiente', Keys.next),
+                  key(FluentIcons.next_24_filled, 'Siguiente', Keys.next),
                 ],
               ),
             ],
@@ -780,7 +780,7 @@ class _Setup extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     return Panel(
       title: 'Preparar el teléfono (una sola vez)',
-      icon: Symbols.developer_mode_rounded,
+      icon: FluentIcons.developer_board_24_regular,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

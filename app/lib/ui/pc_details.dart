@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
@@ -51,13 +51,13 @@ class PcDetails extends StatelessWidget {
 
     return Panel(
       title: peer.name,
-      icon: Symbols.computer_rounded,
+      icon: FluentIcons.desktop_24_regular,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           fact(
             Icon(
-              online ? Symbols.link_rounded : Symbols.link_off_rounded,
+              online ? FluentIcons.link_24_regular : FluentIcons.link_dismiss_24_regular,
               size: 20,
               color: s.onSurfaceVariant,
             ),
@@ -72,7 +72,7 @@ class PcDetails extends StatelessWidget {
                     children: [
                       fact(
                         Icon(
-                          Symbols.laptop_rounded,
+                          FluentIcons.laptop_24_regular,
                           size: 20,
                           color: s.onSurfaceVariant,
                         ),
@@ -85,7 +85,7 @@ class PcDetails extends StatelessWidget {
                       if (info.screen != null)
                         fact(
                           Icon(
-                            Symbols.aspect_ratio_rounded,
+                            FluentIcons.ratio_one_to_one_24_regular,
                             size: 20,
                             color: s.onSurfaceVariant,
                           ),
@@ -94,7 +94,7 @@ class PcDetails extends StatelessWidget {
                         ),
                       fact(
                         Icon(
-                          Symbols.desktop_windows_rounded,
+                          FluentIcons.desktop_24_regular,
                           size: 20,
                           color: s.onSurfaceVariant,
                         ),
@@ -114,7 +114,7 @@ class PcDetails extends StatelessWidget {
                       else
                         fact(
                           Icon(
-                            Symbols.power_rounded,
+                            FluentIcons.plug_connected_24_regular,
                             size: 20,
                             color: s.onSurfaceVariant,
                           ),
@@ -158,7 +158,7 @@ class PcDetails extends StatelessWidget {
                             );
                           },
                           icon: const Icon(
-                            Symbols.screenshot_monitor_rounded,
+                            FluentIcons.screenshot_24_regular,
                             size: 18,
                           ),
                           label: const Text('Capturar pantalla'),
@@ -166,7 +166,7 @@ class PcDetails extends StatelessWidget {
                         FilledButton.tonalIcon(
                           onPressed: () =>
                               openPcScreen(context, hub, peer.id, peer.name),
-                          icon: const Icon(Symbols.cast_rounded, size: 18),
+                          icon: const Icon(FluentIcons.cast_24_regular, size: 18),
                           label: const Text('Ver pantalla'),
                         ),
                       ],

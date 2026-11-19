@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -44,14 +44,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     final pairedPanel = Panel(
       title: 'Emparejados',
-      icon: Symbols.verified_user_rounded,
+      icon: FluentIcons.shield_checkmark_24_regular,
       child: Column(
         children: [
           ArcExpand(
             expanded: paired.isEmpty,
             child: const EmptyState(
               card: false,
-              icon: Symbols.devices_rounded,
+              icon: FluentIcons.phone_desktop_24_regular,
               title: 'Ninguno todavía',
               body: 'Empareja tu teléfono con el código QR o desde la lista de la red.',
             ),
@@ -67,7 +67,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     final nearbyPanel = Panel(
       title: 'En esta red',
-      icon: Symbols.wifi_rounded,
+      icon: FluentIcons.wifi_1_24_regular,
       child: Column(
         children: [
           ArcExpand(
@@ -88,7 +88,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                   padding: const EdgeInsets.symmetric(vertical: Gap.s),
                   child: Row(
                     children: [
-                      const IconTile(Symbols.devices_rounded),
+                      const IconTile(FluentIcons.phone_desktop_24_regular),
                       const SizedBox(width: Gap.m),
                       Expanded(
                         child: Column(
@@ -119,7 +119,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     final qrPanel = Panel(
       title: 'Código QR',
-      icon: Symbols.qr_code_rounded,
+      icon: FluentIcons.qr_code_24_regular,
       child: isPhone
           ? Row(
               children: [
@@ -135,7 +135,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                     final code = await Native.scanQr();
                     if (code != null && code.isNotEmpty) await hub.pairQr(code);
                   },
-                  icon: const Icon(Symbols.qr_code_scanner_rounded, size: 18),
+                  icon: const Icon(FluentIcons.scan_qr_code_24_regular, size: 18),
                   label: const Text('Escanear'),
                 ),
               ],
@@ -174,7 +174,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     final ipPanel = Panel(
       title: 'Dirección IP',
-      icon: Symbols.lan_rounded,
+      icon: FluentIcons.organization_24_regular,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -294,7 +294,7 @@ class _Paired extends StatelessWidget {
         IconButton.filledTonal(
           tooltip: tr('Enviar archivos a {}', [p.name]),
           onPressed: () => hub.send(p.id),
-          icon: const Icon(Symbols.upload_rounded),
+          icon: const Icon(FluentIcons.arrow_upload_24_regular),
         ),
       if (p.state == pb.PeerState.rejected)
         TextButton(
@@ -304,18 +304,18 @@ class _Paired extends StatelessWidget {
       if (connected || p.state == pb.PeerState.connecting)
         OutlinedButton.icon(
           onPressed: () => hub.disconnect(p.id),
-          icon: const Icon(Symbols.link_off_rounded),
+          icon: const Icon(FluentIcons.link_dismiss_24_regular),
           label: const Text('Desconectar'),
         ),
       if (p.state == pb.PeerState.disconnected)
         FilledButton.tonalIcon(
           onPressed: () => hub.reconnect(p.id),
-          icon: const Icon(Symbols.link_rounded),
+          icon: const Icon(FluentIcons.link_24_regular),
           label: const Text('Conectar'),
         ),
       IconButton(
         tooltip: tr('Olvidar {}', [p.name]),
-        icon: Icon(Symbols.delete_rounded, color: s.error),
+        icon: Icon(FluentIcons.delete_24_regular, color: s.error),
         onPressed: () async {
           final ok = await confirm(
             context,
@@ -341,10 +341,10 @@ class _Paired extends StatelessWidget {
             children: [
               IconTile(
                 info == null
-                    ? Symbols.devices_rounded
+                    ? FluentIcons.phone_desktop_24_regular
                     : (info.phone
-                          ? Symbols.smartphone_rounded
-                          : Symbols.computer_rounded),
+                          ? FluentIcons.phone_24_regular
+                          : FluentIcons.desktop_24_regular),
                 tonal: connected,
               ),
               const SizedBox(width: Gap.m),

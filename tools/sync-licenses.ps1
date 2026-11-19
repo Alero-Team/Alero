@@ -6,6 +6,7 @@ Copy-Item -LiteralPath (Join-Path $assetDir 'fonts\OFL.txt') -Destination (Join-
 $text = [Text.StringBuilder]::new()
 [void]$text.AppendLine('Alero: avisos de los componentes nativos incluidos con la aplicación.')
 [void]$text.AppendLine('This software is based in part on the work of the Independent JPEG Group.')
+[void]$text.AppendLine('Icons: Fluent UI System Icons, MIT License, Copyright (c) Microsoft Corporation (full text in the app''s NOTICES).')
 Push-Location $root
 try {
     $raw = & cargo metadata --locked --offline --format-version 1

@@ -4,7 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../pc_remote.dart';
@@ -232,7 +232,7 @@ class _PcScreenPageState extends State<PcScreenPage>
     child: Column(
       children: [
         EmptyState(
-          icon: Symbols.desktop_access_disabled_rounded,
+          icon: FluentIcons.desktop_off_24_regular,
           title: 'La pantalla del PC no está disponible',
           body: [
             note.isNotEmpty ? note : 'El ordenador no está enviando imágenes.',
@@ -285,8 +285,8 @@ class _PcScreenPageState extends State<PcScreenPage>
               icon: MotionFade(
                 child: Icon(
                   _zoom > 1
-                      ? Symbols.zoom_out_rounded
-                      : Symbols.zoom_in_rounded,
+                      ? FluentIcons.zoom_out_24_regular
+                      : FluentIcons.zoom_in_24_regular,
                   key: ValueKey(_zoom > 1),
                 ),
               ),
@@ -307,7 +307,7 @@ class _PcScreenPageState extends State<PcScreenPage>
               popUpAnimationStyle: popUpMotion(context),
               tooltip: tx('Calidad de la pantalla'),
               enabled: blocker == null,
-              icon: const Icon(Symbols.display_settings_rounded),
+              icon: const Icon(FluentIcons.desktop_edit_24_regular),
               onSelected: (q) => _feed.setQuality(width: q.$1, fps: q.$2),
               itemBuilder: (_) => [
                 for (final q in const [
@@ -324,7 +324,7 @@ class _PcScreenPageState extends State<PcScreenPage>
             ),
             IconButton(
               tooltip: tx('Girar la pantalla'),
-              icon: const Icon(Symbols.screen_rotation_rounded),
+              icon: const Icon(FluentIcons.arrow_rotate_clockwise_24_regular),
               onPressed: () {
                 _landscape = !_landscape;
                 SystemChrome.setPreferredOrientations(
@@ -364,13 +364,13 @@ class _PcScreenPageState extends State<PcScreenPage>
                                 children: [
                                   if (blocker != null)
                                     Icon(
-                                      Symbols.link_off_rounded,
+                                      FluentIcons.link_dismiss_24_regular,
                                       size: 32,
                                       color: s.onSurfaceVariant,
                                     )
                                   else if (_waitingTooLong)
                                     Icon(
-                                      Symbols.desktop_access_disabled_rounded,
+                                      FluentIcons.desktop_off_24_regular,
                                       size: 32,
                                       color: s.onSurfaceVariant,
                                     )
@@ -389,7 +389,7 @@ class _PcScreenPageState extends State<PcScreenPage>
                                     const SizedBox(height: Gap.m),
                                     FilledButton.tonalIcon(
                                       onPressed: () => setState(_start),
-                                      icon: const Icon(Symbols.refresh_rounded),
+                                      icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
                                       label: const Text('Reintentar'),
                                     ),
                                   ],
@@ -461,7 +461,7 @@ class _Pointer extends StatelessWidget {
   Widget build(BuildContext context) => Stack(
     children: [
       Icon(
-        Symbols.arrow_selector_tool_rounded,
+        FluentIcons.cursor_24_regular,
         size: size,
         fill: 1,
         color: Colors.black,
@@ -469,7 +469,7 @@ class _Pointer extends StatelessWidget {
       Padding(
         padding: EdgeInsets.all(size * .06),
         child: Icon(
-          Symbols.arrow_selector_tool_rounded,
+          FluentIcons.cursor_24_regular,
           size: size * .88,
           fill: 1,
           color: Colors.white,

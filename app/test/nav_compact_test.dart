@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:pb_app/ui/nav.dart';
 
 void main() {
@@ -18,9 +18,9 @@ void main() {
               width: 340,
               child: AleroNavBar(
                 items: const [
-                  NavData(Symbols.home_rounded, 'Inicio'),
-                  NavData(Symbols.devices_rounded, 'Dispositivos'),
-                  NavData(Symbols.settings_rounded, 'Ajustes'),
+                  NavData(FluentIcons.home_24_regular, 'Inicio'),
+                  NavData(FluentIcons.phone_desktop_24_regular, 'Dispositivos'),
+                  NavData(FluentIcons.settings_24_regular, 'Ajustes'),
                 ],
                 selected: 0,
                 onSelect: (_) {},

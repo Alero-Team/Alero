@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../fs_client.dart';
 import '../hub.dart';
@@ -124,8 +124,8 @@ class _PcFilesPageState extends State<PcFilesPage> {
         child: ListTile(
           leading: Icon(
             entry.dir
-                ? Symbols.folder_rounded
-                : Symbols.insert_drive_file_rounded,
+                ? FluentIcons.folder_24_regular
+                : FluentIcons.document_24_regular,
           ),
           title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(
@@ -134,7 +134,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
                 : '${(entry.size / 1024).toStringAsFixed(1)} KB · ${L10n.instance.en ? '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}' : '${date.day}/${date.month}/${date.year}'}',
           ),
           trailing: entry.dir
-              ? const Icon(Symbols.chevron_right_rounded)
+              ? const Icon(FluentIcons.chevron_right_24_regular)
               : PopupMenuButton<String>(
                   popUpAnimationStyle: popUpMotion(context),
                   tooltip: tx('Opciones de archivo'),
@@ -179,7 +179,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
             IconButton(
               tooltip: tx('Volver'),
               onPressed: fs.up,
-              icon: const Icon(Symbols.arrow_back_rounded),
+              icon: const Icon(FluentIcons.arrow_left_24_regular),
             ),
             Expanded(
               child: Text(
@@ -222,10 +222,10 @@ class _PcFilesPageState extends State<PcFilesPage> {
               child: AleroPress(
                 onTap: () => fs.selectRoot(root.id),
                 child: ListTile(
-                  leading: const Icon(Symbols.folder_shared_rounded),
+                  leading: const Icon(FluentIcons.folder_people_24_regular),
                   title: Text(root.name),
                   subtitle: const Text('Carpeta aprobada en Windows'),
-                  trailing: const Icon(Symbols.chevron_right_rounded),
+                  trailing: const Icon(FluentIcons.chevron_right_24_regular),
                 ),
               ),
             ),
@@ -254,7 +254,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
         IconButton(
           tooltip: tx('Actualizar'),
           onPressed: () => fs.root == null ? fs.open(widget.peer) : fs.list(),
-          icon: const Icon(Symbols.refresh_rounded),
+          icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
         ),
       ],
     ),

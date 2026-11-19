@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -513,11 +513,11 @@ class _SendFlightState extends State<SendFlight>
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final here = isPhone
-        ? Symbols.smartphone_rounded
-        : Symbols.computer_rounded;
+        ? FluentIcons.phone_24_regular
+        : FluentIcons.desktop_24_regular;
     final there = isPhone
-        ? Symbols.computer_rounded
-        : Symbols.smartphone_rounded;
+        ? FluentIcons.desktop_24_regular
+        : FluentIcons.phone_24_regular;
     final (from, to) = widget.incoming ? (there, here) : (here, there);
     Widget device(IconData icon, {bool lit = false}) => AnimatedContainer(
       duration: motion(context, const Duration(milliseconds: 300)),
@@ -578,8 +578,8 @@ class _SendFlightState extends State<SendFlight>
                       key: const ValueKey('done'),
                       child: device(
                         widget.ok
-                            ? Symbols.check_rounded
-                            : Symbols.close_rounded,
+                            ? FluentIcons.checkmark_24_regular
+                            : FluentIcons.dismiss_24_regular,
                         lit: true,
                       ),
                     )

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../remote.dart';
@@ -54,8 +54,8 @@ class _DevicePicker extends StatelessWidget {
                   onSelected: (_) => hub.selectPeer(p.id),
                   avatar: Icon(
                     hub.info[p.id]?.phone == true
-                        ? Symbols.smartphone_rounded
-                        : Symbols.computer_rounded,
+                        ? FluentIcons.phone_24_regular
+                        : FluentIcons.desktop_24_regular,
                     size: 18,
                   ),
                   label: Text(p.name),
@@ -162,7 +162,7 @@ class HomeScreen extends StatelessWidget {
         trailing: IconButton(
           tooltip: tx('Personalizar'),
           onPressed: () => _customize(context, hub, go, _phoneTiles),
-          icon: const Icon(Symbols.dashboard_customize_rounded),
+          icon: const Icon(FluentIcons.apps_add_in_24_regular),
         ),
         children: [
           _DevicePicker(hub, main),
@@ -212,7 +212,7 @@ class HomeScreen extends StatelessWidget {
         placeholder
             ? const Panel(
                 title: 'Reproductor',
-                icon: Symbols.music_note_rounded,
+                icon: FluentIcons.music_note_2_24_regular,
                 child: Text('No hay música en reproducción.'),
               )
             : null,
@@ -223,7 +223,7 @@ class HomeScreen extends StatelessWidget {
         placeholder
             ? const Panel(
                 title: 'Controles rápidos',
-                icon: Symbols.tune_rounded,
+                icon: FluentIcons.options_24_regular,
                 child: Text('Conecta el teléfono para usar sus controles.'),
               )
             : null,
@@ -234,7 +234,7 @@ class HomeScreen extends StatelessWidget {
         placeholder
             ? const Panel(
                 title: 'Notificaciones',
-                icon: Symbols.notifications_rounded,
+                icon: FluentIcons.alert_24_regular,
                 child: Text('Sin notificaciones.'),
               )
             : null,
@@ -297,7 +297,7 @@ class HomeScreen extends StatelessWidget {
       trailing: !isPhone
           ? OutlinedButton.icon(
               onPressed: () => _customize(context, hub, go, _pcTiles),
-              icon: const Icon(Symbols.dashboard_customize_rounded),
+              icon: const Icon(FluentIcons.apps_add_in_24_regular),
               label: const Text('Personalizar'),
             )
           : null,
@@ -359,7 +359,7 @@ Future<void> _customize(
               const SizedBox(height: Gap.s),
               Row(
                 children: [
-                  const Icon(Symbols.text_decrease_rounded, size: 18),
+                  const Icon(FluentIcons.font_decrease_24_regular, size: 18),
                   Expanded(
                     child: Slider(
                       value: TileScale.forSize(hub.tileSize.value),
@@ -371,7 +371,7 @@ Future<void> _customize(
                       onChanged: (v) => hub.setTileSize(v.toStringAsFixed(2)),
                     ),
                   ),
-                  const Icon(Symbols.text_increase_rounded, size: 22),
+                  const Icon(FluentIcons.font_increase_24_regular, size: 22),
                 ],
               ),
               Text(
@@ -441,7 +441,7 @@ class _Welcome extends StatelessWidget {
             const SizedBox(height: Gap.xl),
             FilledButton.icon(
               onPressed: () => go(Section.devices),
-              icon: const Icon(Symbols.add_link_rounded, size: 18),
+              icon: const Icon(FluentIcons.link_add_24_regular, size: 18),
               label: const Text('Emparejar un dispositivo'),
             ),
           ],
@@ -497,20 +497,20 @@ class _Hero extends StatelessWidget {
         : [
             FilledButton.icon(
               onPressed: online ? () => hub.send(p.id) : null,
-              icon: const Icon(Symbols.upload_rounded, size: 18),
+              icon: const Icon(FluentIcons.arrow_upload_24_regular, size: 18),
               label: const FitLabel('Enviar archivos'),
             ),
             FilledButton.tonalIcon(
               onPressed: online
                   ? () => openClipboard(context, hub, p.id)
                   : null,
-              icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
+              icon: const Icon(FluentIcons.clipboard_arrow_right_24_regular, size: 18),
               label: const FitLabel('Portapapeles'),
             ),
             if (phone)
               OutlinedButton.icon(
                 onPressed: online ? () => openScreen(context, hub, p) : null,
-                icon: const Icon(Symbols.cast_rounded, size: 18),
+                icon: const Icon(FluentIcons.cast_24_regular, size: 18),
                 label: const FitLabel('Acceso remoto'),
               ),
           ];
@@ -602,20 +602,20 @@ class _Hero extends StatelessWidget {
                               children: [
                                 if ((info?.model ?? '').isNotEmpty)
                                   property(
-                                    Symbols.smartphone_rounded,
+                                    FluentIcons.phone_24_regular,
                                     info!.model,
                                   ),
                                 if ((info?.osLabel ?? '').isNotEmpty)
                                   property(
-                                    Symbols.layers_rounded,
+                                    FluentIcons.layer_24_regular,
                                     info!.osLabel,
                                   ),
                                 if ((info?.network ?? '').isNotEmpty)
-                                  property(Symbols.wifi_rounded, info!.network),
+                                  property(FluentIcons.wifi_1_24_regular, info!.network),
                                 // The phone keeps this card short: four buttons, no extra row of chips.
                                 if (online && !isPhone)
                                   property(
-                                    Symbols.verified_user_rounded,
+                                    FluentIcons.shield_checkmark_24_regular,
                                     'Conexión cifrada',
                                   ),
                               ],
@@ -816,7 +816,7 @@ class _StatusPanel extends StatelessWidget {
     return Column(
       children: [
         metric(
-          Symbols.wifi_rounded,
+          FluentIcons.wifi_1_24_regular,
           'Conectividad',
           info.network.isEmpty
               ? 'Sin conexión'
@@ -828,7 +828,7 @@ class _StatusPanel extends StatelessWidget {
           SizeFade(
             key: const ValueKey('storage'),
             child: metric(
-              Symbols.hard_drive_rounded,
+              FluentIcons.hard_drive_24_regular,
               'Almacenamiento',
               tr('{} de {}', [size(used), size(total)]),
               progress: used / total,
@@ -839,8 +839,8 @@ class _StatusPanel extends StatelessWidget {
             key: const ValueKey('battery'),
             child: metric(
               info.charging
-                  ? Symbols.battery_charging_full_rounded
-                  : Symbols.battery_full_rounded,
+                  ? FluentIcons.battery_charge_24_regular
+                  : FluentIcons.battery_10_24_regular,
               'Batería',
               ['${info.battery} %', ?info.chargeLabel].join(' · '),
               progress: info.battery / 100,
@@ -894,7 +894,7 @@ class _RecentState extends State<_Recent> {
     final wide = MediaQuery.sizeOf(context).width >= 1180;
     return Panel(
       title: 'Actividad reciente',
-      icon: Symbols.history_rounded,
+      icon: FluentIcons.history_24_regular,
       action: wide ? filters() : null,
       child: AnimatedSize(
         duration: AleroMotion.duration(context, 320),
@@ -955,7 +955,7 @@ class _AccessHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => EmptyState(
-    icon: Symbols.notifications_active_rounded,
+    icon: FluentIcons.alert_on_24_regular,
     title: 'Ver tus notificaciones y tu música en el ordenador',
     body: 'Android pide «Acceso a notificaciones» para leerlas y controlar lo que suena.',
     action: 'Activar',

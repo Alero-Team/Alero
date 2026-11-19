@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../app_info.dart';
 import '../hub.dart';
@@ -260,14 +260,14 @@ class SettingsScreen extends StatelessWidget {
 
     final device = Panel(
       title: 'Este dispositivo',
-      icon: Symbols.badge_rounded,
+      icon: FluentIcons.contact_card_24_regular,
       child: Column(
         children: [
           SettingTile(
             title: 'Nombre',
             subtitle: hub.name,
             trailing: Icon(
-              Symbols.edit_rounded,
+              FluentIcons.edit_24_regular,
               size: 20,
               color: s.onSurfaceVariant,
             ),
@@ -285,7 +285,7 @@ class SettingsScreen extends StatelessWidget {
 
     final receive = Panel(
       title: 'Recepción',
-      icon: Symbols.download_rounded,
+      icon: FluentIcons.arrow_download_24_regular,
       child: Column(
         children: [
           SettingTile(
@@ -302,7 +302,7 @@ class SettingsScreen extends StatelessWidget {
             title: 'Carpeta de recepción',
             subtitle: hub.downloads,
             trailing: Icon(
-              Symbols.folder_open_rounded,
+              FluentIcons.folder_open_24_regular,
               size: 20,
               color: s.onSurfaceVariant,
             ),
@@ -315,7 +315,7 @@ class SettingsScreen extends StatelessWidget {
     final phone = isPhone
         ? Panel(
             title: 'Seguridad',
-            icon: Symbols.lock_rounded,
+            icon: FluentIcons.lock_closed_24_regular,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -323,7 +323,7 @@ class SettingsScreen extends StatelessWidget {
                 SettingTile(
                   title: 'Alero Vault',
                   subtitle: 'Notas y archivos cifrados en este teléfono.',
-                  trailing: const Icon(Symbols.chevron_right_rounded),
+                  trailing: const Icon(FluentIcons.chevron_right_24_regular),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const VaultScreen(),
@@ -359,7 +359,7 @@ class SettingsScreen extends StatelessWidget {
         ? null
         : Panel(
             title: 'Control remoto',
-            icon: Symbols.settings_remote_rounded,
+            icon: FluentIcons.phone_key_24_regular,
             child: Column(
               children: [
                 SettingTile(
@@ -396,7 +396,7 @@ class SettingsScreen extends StatelessWidget {
                               'Carpeta compartida con teléfonos emparejados',
                           trailing: IconButton(
                             tooltip: tx('Dejar de compartir'),
-                            icon: const Icon(Symbols.close_rounded),
+                            icon: const Icon(FluentIcons.dismiss_24_regular),
                             onPressed: () => hub.removePcFolder(folder),
                           ),
                         ),
@@ -423,7 +423,7 @@ class SettingsScreen extends StatelessWidget {
     final files = isPhone
         ? Panel(
             title: 'Archivos para el ordenador',
-            icon: Symbols.folder_shared_rounded,
+            icon: FluentIcons.folder_people_24_regular,
             child: Column(
               children: [
                 SettingTile(
@@ -458,7 +458,7 @@ class SettingsScreen extends StatelessWidget {
                           '$name#${hub.filesFolders.take(i).where((e) => e == name).length}',
                         ),
                         leading: Icon(
-                          Symbols.folder_rounded,
+                          FluentIcons.folder_24_regular,
                           size: 20,
                           color: s.onSurfaceVariant,
                         ),
@@ -467,7 +467,7 @@ class SettingsScreen extends StatelessWidget {
                         trailing: IconButton(
                           tooltip: tr('Quitar {}', [name]),
                           icon: Icon(
-                            Symbols.close_rounded,
+                            FluentIcons.dismiss_24_regular,
                             size: 20,
                             color: s.onSurfaceVariant,
                           ),
@@ -502,7 +502,7 @@ class SettingsScreen extends StatelessWidget {
     final sms = isPhone
         ? Panel(
             title: 'Mensajes en el ordenador',
-            icon: Symbols.sms_rounded,
+            icon: FluentIcons.chat_24_regular,
             child: SettingTile(
               title: 'Leer y enviar SMS desde el ordenador',
               subtitle: hub.smsAllowed && !hub.smsPermission
@@ -524,7 +524,7 @@ class SettingsScreen extends StatelessWidget {
     final calls = isPhone
         ? Panel(
             title: 'Llamadas en el ordenador',
-            icon: Symbols.call_rounded,
+            icon: FluentIcons.call_24_regular,
             child: SettingTile(
               title: 'Contestar, colgar y llamar desde el ordenador',
               subtitle: hub.callsAllowed && !hub.callsPermission
@@ -546,7 +546,7 @@ class SettingsScreen extends StatelessWidget {
       key: _appearanceKey,
       child: Panel(
         title: 'Apariencia',
-        icon: Symbols.palette_rounded,
+        icon: FluentIcons.color_24_regular,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -557,17 +557,17 @@ class SettingsScreen extends StatelessWidget {
                   ButtonSegment(
                     value: 'system',
                     label: FitLabel('Sistema'),
-                    icon: Icon(Symbols.brightness_auto_rounded, size: 18),
+                    icon: Icon(FluentIcons.brightness_high_24_regular, size: 18),
                   ),
                   ButtonSegment(
                     value: 'light',
                     label: FitLabel('Claro'),
-                    icon: Icon(Symbols.light_mode_rounded, size: 18),
+                    icon: Icon(FluentIcons.weather_sunny_24_regular, size: 18),
                   ),
                   ButtonSegment(
                     value: 'dark',
                     label: FitLabel('Oscuro'),
-                    icon: Icon(Symbols.dark_mode_rounded, size: 18),
+                    icon: Icon(FluentIcons.dark_theme_24_regular, size: 18),
                   ),
                 ],
                 selected: hub.theme,
@@ -617,18 +617,18 @@ class SettingsScreen extends StatelessWidget {
     final perms = isPhone
         ? Panel(
             title: 'Permisos',
-            icon: Symbols.shield_rounded,
+            icon: FluentIcons.shield_24_regular,
             child: Column(
               children: [
                 _Perm(
-                  icon: Symbols.notifications_rounded,
+                  icon: FluentIcons.alert_24_regular,
                   title: 'Avisos de la app',
                   body: 'Para avisarte de archivos recibidos y solicitudes de emparejamiento.',
                   ok: hub.notifPermission,
                   onFix: Native.openAppSettings,
                 ),
                 _Perm(
-                  icon: Symbols.notifications_active_rounded,
+                  icon: FluentIcons.alert_on_24_regular,
                   title: 'Acceso a notificaciones',
                   body: 'Permiso especial: muestra tus notificaciones en el ordenador y deja controlar la música desde él.',
                   ok: hub.notifAccess,
@@ -640,7 +640,7 @@ class SettingsScreen extends StatelessWidget {
                       SettingTile(
                         key: ValueKey(pkg),
                         leading: Icon(
-                          Symbols.notifications_off_rounded,
+                          FluentIcons.alert_off_24_regular,
                           size: 20,
                           color: s.onSurfaceVariant,
                         ),
@@ -654,14 +654,14 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
                 _Perm(
-                  icon: Symbols.install_mobile_rounded,
+                  icon: FluentIcons.phone_arrow_right_24_regular,
                   title: 'Instalar apps recibidas',
                   body: 'Permite abrir el instalador al tocar un APK. Cada instalación requiere confirmación de Android.',
                   ok: hub.installAllowed,
                   onFix: Native.requestInstallPermission,
                 ),
                 _Perm(
-                  icon: Symbols.cast_rounded,
+                  icon: FluentIcons.cast_24_regular,
                   title: 'Ver la pantalla desde el ordenador',
                   body: 'Opcional. Requiere «Depuración USB» o inalámbrica; el ordenador te guía paso a paso.',
                   ok: null,
@@ -677,7 +677,7 @@ class SettingsScreen extends StatelessWidget {
 
     final about = Panel(
       title: 'Acerca de Alero',
-      icon: Symbols.info_rounded,
+      icon: FluentIcons.info_24_regular,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -698,7 +698,7 @@ class SettingsScreen extends StatelessWidget {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              icon: const Icon(Symbols.description_rounded, size: 18),
+              icon: const Icon(FluentIcons.document_text_24_regular, size: 18),
               label: const Text('Licencias de código abierto'),
               onPressed: () => showLicensePage(
                 context: context,
@@ -717,7 +717,7 @@ class SettingsScreen extends StatelessWidget {
 
     final diag = Panel(
       title: 'Diagnóstico',
-      icon: Symbols.troubleshoot_rounded,
+      icon: FluentIcons.stethoscope_24_regular,
       action: TextButton.icon(
         onPressed: () async {
           await Clipboard.setData(
@@ -729,7 +729,7 @@ class SettingsScreen extends StatelessWidget {
             ).showToast(const SnackBar(content: Text('Diagnóstico copiado')));
           }
         },
-        icon: const Icon(Symbols.content_copy_rounded, size: 18),
+        icon: const Icon(FluentIcons.copy_24_regular, size: 18),
         label: const Text('Copiar'),
       ),
       child: SelectableText(
@@ -837,7 +837,7 @@ class _Perm extends StatelessWidget {
       trailing: MotionFade(
         child: ok == true
             ? Icon(
-                Symbols.check_circle_rounded,
+                FluentIcons.checkmark_circle_24_regular,
                 key: const ValueKey('ok'),
                 color: s.primary,
                 fill: 1,

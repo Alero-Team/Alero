@@ -244,6 +244,10 @@ class Hub extends ChangeNotifier {
   final controlSpans = <String, int>{};
 
   /// The phone controls in the order the user chose, and the ones switched off.
+  /// Set by the shell: runs a phone control the island asked for (peer id, control key of `controlNames`).
+  /// Asked before the shell is up (the island started the app for it): it waits in [islandQueue].
+  void Function(String peerId, String what)? onIslandControl;
+  final islandQueue = <(String, String)>[];
   List<String> controlOrder = [];
   Set<String> controlHidden = {};
   String get theme => themeMode.value;
@@ -724,6 +728,12 @@ class Hub extends ChangeNotifier {
       b = jsonDecode(raw) as Map<String, dynamic>;
     } catch (_) {
       return;
+    }
+    if (kind == 'alero.island.control') {
+      final run = onIslandControl;
+      return run == null
+          ? islandQueue.add((peerId, '${b['what']}'))
+          : run(peerId, '${b['what']}');
     }
     if (kind.startsWith('pb.x.fs.')) return fs.onMessage(peerId, kind, b);
     if (kind.startsWith('pb.x.pcfs.')) return pcFs.onMessage(peerId, kind, b);

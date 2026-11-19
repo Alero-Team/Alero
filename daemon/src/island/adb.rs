@@ -76,6 +76,8 @@ fn apply(serial: &str, what: &str, on: bool) {
         ("bt", _) => format!("cmd bluetooth_manager {}", if on { "enable" } else { "disable" }),
         ("rotate", _) => format!("settings put system accelerometer_rotation {}", on as u8),
         ("lock", _) => "input keyevent 223".into(),
+        // Android has no command to start the hotspot: this opens its settings screen, as the app does.
+        ("hotspot", _) => "am start -a android.settings.TETHER_SETTINGS".into(),
         _ => return,
     };
     let _ = run(&["-s", serial, "shell", &cmd]);

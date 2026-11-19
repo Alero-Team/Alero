@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../phone_control.dart';
 import '../scrcpy.dart';
@@ -113,7 +113,7 @@ class PhoneWindowsPanel extends StatelessWidget {
         final cam = PhoneSessions.instance.runningExtra(serial, 'camera');
         return Panel(
           title: 'Cámara y webcam',
-          icon: Symbols.picture_in_picture_rounded,
+          icon: FluentIcons.picture_in_picture_24_regular,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -130,7 +130,7 @@ class PhoneWindowsPanel extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: () => _camera('back'),
                     icon: const Icon(
-                      Symbols.photo_camera_back_rounded,
+                      FluentIcons.camera_24_regular,
                       size: 18,
                     ),
                     label: const Text('Cámara trasera'),
@@ -138,7 +138,7 @@ class PhoneWindowsPanel extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: () => _camera('front'),
                     icon: const Icon(
-                      Symbols.photo_camera_front_rounded,
+                      FluentIcons.camera_switch_24_regular,
                       size: 18,
                     ),
                     label: const Text('Cámara frontal'),
@@ -146,12 +146,12 @@ class PhoneWindowsPanel extends StatelessWidget {
 
                   FilledButton.icon(
                     onPressed: () => _webcam(context, 'back'),
-                    icon: const Icon(Symbols.videocam_rounded),
+                    icon: const Icon(FluentIcons.video_24_regular),
                     label: const Text('Webcam trasera'),
                   ),
                   FilledButton.icon(
                     onPressed: () => _webcam(context, 'front'),
-                    icon: const Icon(Symbols.videocam_rounded),
+                    icon: const Icon(FluentIcons.video_24_regular),
                     label: const Text('Webcam frontal'),
                   ),
                   if (cam)
@@ -160,7 +160,7 @@ class PhoneWindowsPanel extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: () => _stopCamera(),
                         icon: const Icon(
-                          Symbols.videocam_off_rounded,
+                          FluentIcons.video_off_24_regular,
                           size: 18,
                         ),
                         label: const Text('Cerrar cámara'),
@@ -304,7 +304,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
       final why = PhoneSessions.instance.failures[_key];
       return Panel(
         title: 'Grabar pantalla',
-        icon: Symbols.screen_record_rounded,
+        icon: FluentIcons.record_24_regular,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -335,7 +335,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
                         icon: AleroPulse(
                           active: true,
                           child: Icon(
-                            Symbols.stop_circle_rounded,
+                            FluentIcons.record_stop_24_regular,
                             size: 18,
                             color: Theme.of(context).colorScheme.error,
                           ),
@@ -346,7 +346,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
                         key: const ValueKey('start'),
                         onPressed: _start,
                         icon: const Icon(
-                          Symbols.fiber_manual_record_rounded,
+                          FluentIcons.record_24_regular,
                           size: 18,
                         ),
                         label: const Text('Grabar'),

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../phone_adb.dart';
@@ -170,7 +170,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
         : PhoneAdb.selectedSerial(widget.phone!.id);
     return Panel(
       title: 'Depuración del teléfono',
-      icon: Symbols.developer_mode_rounded,
+      icon: FluentIcons.developer_board_24_regular,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -180,18 +180,18 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
             children: [
               FilledButton.tonalIcon(
                 onPressed: _busy ? null : _usb,
-                icon: const Icon(Symbols.usb_rounded, size: 18),
+                icon: const Icon(FluentIcons.usb_plug_24_regular, size: 18),
                 label: const Text('Depuración USB'),
               ),
               FilledButton.tonalIcon(
                 onPressed: _busy ? null : _wireless,
-                icon: const Icon(Symbols.wifi_rounded, size: 18),
+                icon: const Icon(FluentIcons.wifi_1_24_regular, size: 18),
                 label: const Text('Depuración inalámbrica'),
               ),
               if (serial != null && AdbDevice(serial, 'device', '').wifi)
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _disconnectWireless,
-                  icon: const Icon(Symbols.link_off_rounded, size: 18),
+                  icon: const Icon(FluentIcons.link_dismiss_24_regular, size: 18),
                   label: const Text('Desconectar ADB Wi-Fi'),
                 ),
             ],
@@ -403,12 +403,12 @@ class _WirelessDialogState extends State<_WirelessDialog> {
                 segments: const [
                   ButtonSegment(
                     value: true,
-                    icon: Icon(Symbols.qr_code_2_rounded),
+                    icon: Icon(FluentIcons.qr_code_24_regular),
                     label: FitLabel('Código QR'),
                   ),
                   ButtonSegment(
                     value: false,
-                    icon: Icon(Symbols.pin_rounded),
+                    icon: Icon(FluentIcons.password_24_regular),
                     label: FitLabel('Código'),
                   ),
                 ],

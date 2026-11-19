@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
+import '../native.dart';
 import '../phone_adb.dart';
 import '../phone_control.dart';
 import '../scrcpy.dart';
@@ -31,19 +32,19 @@ class PhoneControlsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Panel(
     title: 'Controles del teléfono',
-    icon: Symbols.tune_rounded,
+    icon: FluentIcons.options_24_regular,
     action: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           tooltip: tx('Elegir y ordenar los controles'),
           onPressed: () => _customize(context, hub),
-          icon: const Icon(Symbols.dashboard_customize_rounded),
+          icon: const Icon(FluentIcons.apps_add_in_24_regular),
         ),
         IconButton(
           tooltip: tx('Actualizar'),
           onPressed: () => hub.phoneCmd(phone.id, 'state.request'),
-          icon: const Icon(Symbols.refresh_rounded),
+          icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
         ),
       ],
     ),
@@ -134,6 +135,66 @@ Future<void> _customize(BuildContext context, Hub hub) => showAleroDialog<void>(
   ),
 );
 
+Future<void> phoneCamera(String serial, pb.Peer phone, String facing) =>
+    PhoneSessions.instance.startCamera(
+      serial,
+      tr('Cámara {} · {}', [
+        facing == 'front' ? 'frontal' : 'trasera',
+        phone.name,
+      ]),
+      facing,
+    );
+
+Future<void> phoneShot(Hub hub, String serial) async {
+  final n = DateTime.now();
+  String two(int v) => v.toString().padLeft(2, '0');
+  final name =
+      'Captura-telefono-${n.year}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}.png';
+  try {
+    Directory(hub.downloads).createSync(recursive: true);
+    await Scrcpy.screenshot(
+      serial,
+      '${hub.downloads}${Platform.pathSeparator}$name',
+    );
+    hub.messages.add(
+      tr('Captura guardada en la carpeta de descargas: {}', [name]),
+    );
+  } catch (_) {
+    hub.messages.add(
+      'No se pudo capturar la pantalla del teléfono. Desbloquéalo e inténtalo de nuevo.',
+    );
+  }
+}
+
+/// A control tapped on Alero Island that only the app runs: the same as its button in the phone controls.
+Future<void> runIslandControl(
+  BuildContext context,
+  Hub hub,
+  String peerId,
+  String what,
+) async {
+  final phone = hub.peers.where((p) => p.id == peerId).firstOrNull;
+  if (phone == null) return;
+  if (what == 'screen') {
+    Native.showWindow();
+    await openScreen(context, hub, phone);
+    return;
+  }
+  final adb = await PhoneAdb.find(phone, hub.info[peerId]?.model ?? '');
+  if (adb == null) {
+    hub.messages.add('Requiere depuración del teléfono');
+    return;
+  }
+  switch (what) {
+    case 'camBack':
+      await phoneCamera(adb.serial, phone, 'back');
+    case 'camFront':
+      await phoneCamera(adb.serial, phone, 'front');
+    case 'shot':
+      await phoneShot(hub, adb.serial);
+  }
+}
+
 class _Controls extends StatefulWidget {
   const _Controls(this.hub, this.phone, {super.key});
   final Hub hub;
@@ -210,40 +271,15 @@ class _ControlsState extends State<_Controls> {
     await _find();
   }
 
-  Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
-    _adb!.serial,
-    tr('Cámara {} · {}', [
-      facing == 'front' ? 'frontal' : 'trasera',
-      widget.phone.name,
-    ]),
-    facing,
-  );
+  Future<void> _camera(String facing) =>
+      phoneCamera(_adb!.serial, widget.phone, facing);
 
   Future<void> _rotate(bool on) async {
     await PhoneAdb.setAutoRotate(_adb!.serial, on);
     await _find();
   }
 
-  Future<void> _shot() async {
-    final n = DateTime.now();
-    String two(int v) => v.toString().padLeft(2, '0');
-    final name =
-        'Captura-telefono-${n.year}${two(n.month)}${two(n.day)}-${two(n.hour)}${two(n.minute)}${two(n.second)}.png';
-    try {
-      Directory(hub.downloads).createSync(recursive: true);
-      await Scrcpy.screenshot(
-        _adb!.serial,
-        '${hub.downloads}${Platform.pathSeparator}$name',
-      );
-      hub.messages.add(
-        tr('Captura guardada en la carpeta de descargas: {}', [name]),
-      );
-    } catch (_) {
-      hub.messages.add(
-        'No se pudo capturar la pantalla del teléfono. Desbloquéalo e inténtalo de nuevo.',
-      );
-    }
-  }
+  Future<void> _shot() => phoneShot(hub, _adb!.serial);
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -274,7 +310,7 @@ class _ControlsState extends State<_Controls> {
       final tiles = {
         'wifi': tile(
           'wifi',
-          Symbols.wifi_rounded,
+          FluentIcons.wifi_1_24_regular,
           on: _radios?.$1,
           hint: adb == null ? needAdb : null,
           onTap: adb == null || _radios == null
@@ -283,7 +319,7 @@ class _ControlsState extends State<_Controls> {
         ),
         'bt': tile(
           'bt',
-          Symbols.bluetooth_rounded,
+          FluentIcons.bluetooth_24_regular,
           on: _radios?.$2,
           hint: adb == null ? needAdb : null,
           onTap: adb == null || _radios == null
@@ -292,7 +328,7 @@ class _ControlsState extends State<_Controls> {
         ),
         'hotspot': tile(
           'hotspot',
-          Symbols.wifi_tethering_rounded,
+          FluentIcons.router_24_regular,
           hint: adb == null
               ? needAdb
               : 'Por cable USB o Wi-Fi: abre sus ajustes en el teléfono',
@@ -300,7 +336,7 @@ class _ControlsState extends State<_Controls> {
         ),
         'dnd': tile(
           'dnd',
-          Symbols.do_not_disturb_on_rounded,
+          FluentIcons.weather_moon_24_regular,
           on: st?.dnd,
           hint: st != null && !st.dndAccess
               ? 'Pide permiso en el teléfono'
@@ -309,43 +345,43 @@ class _ControlsState extends State<_Controls> {
         ),
         'torch': tile(
           'torch',
-          Symbols.flashlight_on_rounded,
+          FluentIcons.flashlight_24_regular,
           on: st?.torch,
           onTap: st == null ? null : () => cmd('torch', {'on': !st.torch}),
         ),
         'lock': tile(
           'lock',
-          Symbols.lock_rounded,
+          FluentIcons.lock_closed_24_regular,
           hint: adb == null ? needAdb : null,
           onTap: adb == null ? null : () => PhoneAdb.lock(adb.serial),
         ),
         'camBack': tile(
           'camBack',
-          Symbols.photo_camera_back_rounded,
+          FluentIcons.camera_24_regular,
           hint: adb == null ? needAdb : camHint,
           onTap: adb == null ? null : () => _camera('back'),
         ),
         'camFront': tile(
           'camFront',
-          Symbols.photo_camera_front_rounded,
+          FluentIcons.camera_switch_24_regular,
           hint: adb == null ? needAdb : camHint,
           onTap: adb == null ? null : () => _camera('front'),
         ),
         'screen': tile(
           'screen',
-          Symbols.cast_rounded,
+          FluentIcons.cast_24_regular,
           hint: tx('Abre Acceso remoto'),
           onTap: () => openScreen(context, hub, widget.phone),
         ),
         'shot': tile(
           'shot',
-          Symbols.screenshot_rounded,
+          FluentIcons.screenshot_24_regular,
           hint: adb == null ? needAdb : 'La guarda en la carpeta de descargas',
           onTap: adb == null ? null : _shot,
         ),
         'rotate': tile(
           'rotate',
-          Symbols.screen_rotation_rounded,
+          FluentIcons.arrow_rotate_clockwise_24_regular,
           on: _radios?.$3,
           hint: adb == null ? needAdb : null,
           onTap: adb == null || _radios == null
@@ -354,7 +390,7 @@ class _ControlsState extends State<_Controls> {
         ),
         'mute': tile(
           'mute',
-          Symbols.notifications_off_rounded,
+          FluentIcons.alert_off_24_regular,
           on: st == null ? null : st.ringer == 'silent',
           onTap: st == null
               ? null
@@ -364,14 +400,14 @@ class _ControlsState extends State<_Controls> {
         ),
         'find': tile(
           'find',
-          Symbols.mobile_sound_rounded,
+          FluentIcons.phone_speaker_24_regular,
           on: st?.finding,
           hint: tx('Lo hace sonar un minuto, aunque esté en silencio'),
           onTap: st == null ? null : () => cmd('find', {'on': !st.finding}),
         ),
         'clip': tile(
           'clip',
-          Symbols.content_paste_go_rounded,
+          FluentIcons.clipboard_arrow_right_24_regular,
           hint: tx('Envía al teléfono lo que copiaste aquí'),
           onTap: () => hub.sendClipboard(id),
         ),
@@ -430,20 +466,20 @@ class _ControlsState extends State<_Controls> {
                           ButtonSegment(
                             value: 'normal',
                             icon: Icon(
-                              Symbols.notifications_active_rounded,
+                              FluentIcons.alert_on_24_regular,
                               size: 18,
                             ),
                             label: FitLabel('Sonido'),
                           ),
                           ButtonSegment(
                             value: 'vibrate',
-                            icon: Icon(Symbols.vibration_rounded, size: 18),
+                            icon: Icon(FluentIcons.phone_vibrate_24_regular, size: 18),
                             label: FitLabel('Vibrar'),
                           ),
                           ButtonSegment(
                             value: 'silent',
                             icon: Icon(
-                              Symbols.notifications_off_rounded,
+                              FluentIcons.alert_off_24_regular,
                               size: 18,
                             ),
                             label: FitLabel('Silencio'),
@@ -456,14 +492,14 @@ class _ControlsState extends State<_Controls> {
                       const SizedBox(height: Gap.s),
                       _Volume(
                         'Multimedia',
-                        Symbols.music_note_rounded,
+                        FluentIcons.music_note_2_24_regular,
                         st.media,
                         st.mediaMax,
                         (v) => cmd('volume', {'stream': 'media', 'value': v}),
                       ),
                       _Volume(
                         'Tono de llamada',
-                        Symbols.ring_volume_rounded,
+                        FluentIcons.call_inbound_24_regular,
                         st.ring,
                         st.ringMax,
                         (v) => cmd('volume', {'stream': 'ring', 'value': v}),
@@ -490,7 +526,7 @@ class _ControlsState extends State<_Controls> {
                       const Duration(milliseconds: 220),
                     ),
                     curve: Spring.fast,
-                    child: const Icon(Symbols.expand_more_rounded),
+                    child: const Icon(FluentIcons.chevron_down_24_regular),
                   ),
                 ],
               ),
@@ -505,29 +541,6 @@ class _ControlsState extends State<_Controls> {
                   tilesOf(rest),
                   const SizedBox(height: Gap.l),
                 ],
-                heading('Reproducción en el teléfono'),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final (tip, icon, action) in const [
-                      ('Anterior', Symbols.skip_previous_rounded, 'prev'),
-                      (
-                        'Reproducir o pausar',
-                        Symbols.play_pause_rounded,
-                        'toggle',
-                      ),
-                      ('Siguiente', Symbols.skip_next_rounded, 'next'),
-                    ])
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: Gap.xs),
-                        child: IconButton.filledTonal(
-                          tooltip: tx(tip),
-                          onPressed: () => hub.mediaCmd(id, action),
-                          icon: Icon(icon),
-                        ),
-                      ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -635,7 +648,7 @@ class _GridState extends State<_Grid> {
                                     radius: 13,
                                     backgroundColor: s.primary,
                                     child: Icon(
-                                      Symbols.check_rounded,
+                                      FluentIcons.checkmark_24_regular,
                                       size: 16,
                                       color: s.onPrimary,
                                     ),

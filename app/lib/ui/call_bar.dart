@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import 'expressive.dart';
@@ -65,7 +65,7 @@ class _Card extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              c.ringing ? Symbols.ring_volume_rounded : Symbols.call_rounded,
+              c.ringing ? FluentIcons.call_inbound_24_regular : FluentIcons.call_24_regular,
               fill: 1,
               color: s.onTertiaryContainer,
             ),
@@ -108,14 +108,14 @@ class _Card extends StatelessWidget {
                   foregroundColor: s.onError,
                 ),
                 onPressed: () => hub.callCmd(peerId, 'decline'),
-                icon: const Icon(Symbols.call_end_rounded, size: 18),
+                icon: const Icon(FluentIcons.call_end_24_regular, size: 18),
                 label: const Text('Rechazar'),
               ),
               if (c.canAnswer) ...[
                 const SizedBox(width: Gap.s),
                 FilledButton.icon(
                   onPressed: () => hub.callCmd(peerId, 'answer'),
-                  icon: const Icon(Symbols.call_rounded, size: 18),
+                  icon: const Icon(FluentIcons.call_24_regular, size: 18),
                   label: const Text('Contestar'),
                 ),
               ],
@@ -126,7 +126,7 @@ class _Card extends StatelessWidget {
                   foregroundColor: s.onError,
                 ),
                 onPressed: () => hub.callCmd(peerId, 'hangup'),
-                icon: const Icon(Symbols.call_end_rounded, size: 18),
+                icon: const Icon(FluentIcons.call_end_24_regular, size: 18),
                 label: const Text('Colgar'),
               ),
           ],
@@ -172,7 +172,7 @@ Future<void> dialDialog(
         ),
         FilledButton.icon(
           onPressed: () => Navigator.pop(d, c.text),
-          icon: const Icon(Symbols.call_rounded, size: 18),
+          icon: const Icon(FluentIcons.call_24_regular, size: 18),
           label: const Text('Llamar'),
         ),
       ],

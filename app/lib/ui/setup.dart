@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -88,8 +88,8 @@ class _SetupScreenState extends State<SetupScreen> {
             child: MotionFade(
               child: Icon(
                 ok
-                    ? Symbols.check_circle_rounded
-                    : Symbols.radio_button_unchecked_rounded,
+                    ? FluentIcons.checkmark_circle_24_regular
+                    : FluentIcons.circle_24_regular,
                 key: ValueKey(ok),
                 fill: ok ? 1 : 0,
                 color: ok ? s.primary : s.onSurfaceVariant,

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../remote.dart';
@@ -28,7 +28,7 @@ class CallsScreen extends StatelessWidget {
       IconButton(
         tooltip: tx('Actualizar'),
         onPressed: () => hub.phoneCmd(p.id, 'calllog.request'),
-        icon: const Icon(Symbols.refresh_rounded),
+        icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
       ),
     ],
     body: (context, phone) => phoneSwap(
@@ -39,7 +39,7 @@ class CallsScreen extends StatelessWidget {
               key: ValueKey('off'),
               alignment: Alignment.topCenter,
               child: EmptyState(
-                icon: Symbols.call_rounded,
+                icon: FluentIcons.call_24_regular,
                 title: 'Activa las llamadas en el teléfono',
                 body: 'En el teléfono: Alero › Ajustes › Llamadas en el ordenador.',
               ),
@@ -138,7 +138,7 @@ class _CallsState extends State<_Calls> {
                                     _number.clear();
                                     _changed('');
                                   },
-                                  icon: const Icon(Symbols.backspace_rounded),
+                                  icon: const Icon(FluentIcons.backspace_24_regular),
                                 ),
                         ),
                       ),
@@ -152,7 +152,7 @@ class _CallsState extends State<_Calls> {
                               for (final c in found)
                                 ListTile(
                                   dense: true,
-                                  leading: const Icon(Symbols.person_rounded),
+                                  leading: const Icon(FluentIcons.person_24_regular),
                                   title: Text(c.name),
                                   subtitle: Text(c.number),
                                   onTap: () => _call(c.number),
@@ -202,7 +202,7 @@ class _CallsState extends State<_Calls> {
                         onPressed: _number.text.trim().isEmpty
                             ? null
                             : () => _call(),
-                        icon: const Icon(Symbols.call_rounded),
+                        icon: const Icon(FluentIcons.call_24_regular),
                         label: const Text('Llamar'),
                       ),
                     ],
@@ -216,7 +216,7 @@ class _CallsState extends State<_Calls> {
             child: SingleChildScrollView(
               child: Panel(
                 title: 'Recientes',
-                icon: Symbols.history_rounded,
+                icon: FluentIcons.history_24_regular,
                 child: MotionFade(
                   child: log == null
                       ? const Padding(
@@ -228,7 +228,7 @@ class _CallsState extends State<_Calls> {
                       ? const EmptyState(
                           key: ValueKey('denied'),
                           card: false,
-                          icon: Symbols.lock_rounded,
+                          icon: FluentIcons.lock_closed_24_regular,
                           title: 'Falta el permiso del registro de llamadas',
                           body: 'En el teléfono: Alero › Ajustes › Llamadas en el ordenador. Apágalo y vuelve a encenderlo para concederlo.',
                         )
@@ -247,10 +247,10 @@ class _CallsState extends State<_Calls> {
                                 ListTile(
                                   leading: Icon(
                                     switch (c.type) {
-                                      'in' => Symbols.call_received_rounded,
-                                      'out' => Symbols.call_made_rounded,
-                                      'missed' => Symbols.call_missed_rounded,
-                                      _ => Symbols.call_end_rounded,
+                                      'in' => FluentIcons.call_inbound_24_regular,
+                                      'out' => FluentIcons.call_outbound_24_regular,
+                                      'missed' => FluentIcons.call_missed_24_regular,
+                                      _ => FluentIcons.call_end_24_regular,
                                     },
                                     color:
                                         c.type == 'missed' ||
@@ -273,7 +273,7 @@ class _CallsState extends State<_Calls> {
                                     onPressed: c.number.isEmpty
                                         ? null
                                         : () => _call(c.number),
-                                    icon: const Icon(Symbols.call_rounded),
+                                    icon: const Icon(FluentIcons.call_24_regular),
                                   ),
                                 ),
                               ),

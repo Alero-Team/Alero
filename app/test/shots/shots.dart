@@ -415,10 +415,12 @@ Future<void> loadFonts() async {
     '${Platform.environment['FLUTTER_ROOT'] ?? 'C:/src/flutter'}/bin/cache/artifacts/material_fonts/materialicons-regular.otf',
   );
   final pub = Platform.environment['PUB_CACHE'] ?? '${Platform.environment['LOCALAPPDATA']}/Pub/Cache';
-  await load(
-    'packages/material_symbols_icons/MaterialSymbolsRounded',
-    '$pub/hosted/pub.dev/material_symbols_icons-4.2960.0/lib/fonts/MaterialSymbolsRounded.ttf',
-  );
+  for (final style in ['Regular', 'Filled']) {
+    await load(
+      'packages/fluentui_system_icons/FluentSystemIcons-$style',
+      '$pub/hosted/pub.dev/fluentui_system_icons-1.1.273/lib/fonts/FluentSystemIcons-$style.ttf',
+    );
+  }
 }
 
 /// Lets real I/O (images, the vault's PowerShell) finish, then draws the result; waits while a spinner shows.

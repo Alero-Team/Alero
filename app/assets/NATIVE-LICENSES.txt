@@ -1,5 +1,6 @@
 Alero: avisos de los componentes nativos incluidos con la aplicación.
 This software is based in part on the work of the Independent JPEG Group.
+Icons: Fluent UI System Icons, MIT License, Copyright (c) Microsoft Corporation (full text in the app's NOTICES).
 
 ============================================================
 ab_glyph 0.2.32 — LICENSE

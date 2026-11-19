@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:animations/animations.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../hub.dart';
@@ -12,6 +12,7 @@ import '../native.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'brand.dart';
 import 'clipboard.dart';
+import 'controls.dart' show runIslandControl;
 import 'devices.dart';
 import 'explorer.dart';
 import 'expressive.dart';
@@ -58,36 +59,36 @@ class _Dest {
 
 /// The phone's own file browser is a computer feature: it reads another device's files, so it has no place on a phone.
 List<_Dest> get _dests => [
-  const _Dest(Section.home, 'Inicio', Symbols.home_rounded),
+  const _Dest(Section.home, 'Inicio', FluentIcons.home_24_regular),
   if (!isPhone) ...const [
     _Dest(
       Section.messages,
       'Mensajes',
-      Symbols.chat_rounded,
+      FluentIcons.chat_24_regular,
       group: 'COMUNICACIÓN',
     ),
-    _Dest(Section.calls, 'Llamadas', Symbols.call_rounded),
+    _Dest(Section.calls, 'Llamadas', FluentIcons.call_24_regular),
     _Dest(
       Section.notifications,
       'Notificaciones',
-      Symbols.notifications_rounded,
+      FluentIcons.alert_24_regular,
     ),
     _Dest(
       Section.photos,
       'Fotos',
-      Symbols.photo_library_rounded,
+      FluentIcons.image_multiple_24_regular,
       group: 'CONTENIDO',
     ),
-    _Dest(Section.explorer, 'Explorador', Symbols.folder_rounded),
+    _Dest(Section.explorer, 'Explorador', FluentIcons.folder_24_regular),
   ],
-  if (!isPhone) const _Dest(Section.vault, 'Alero Vault', Symbols.lock_rounded),
+  if (!isPhone) const _Dest(Section.vault, 'Alero Vault', FluentIcons.lock_closed_24_regular),
   const _Dest(
     Section.devices,
     'Dispositivos',
-    Symbols.devices_rounded,
+    FluentIcons.phone_desktop_24_regular,
     group: 'SISTEMA',
   ),
-  const _Dest(Section.settings, 'Ajustes', Symbols.tune_rounded),
+  const _Dest(Section.settings, 'Ajustes', FluentIcons.options_24_regular),
 ];
 
 /// App frame: side navigation on wide windows, floating glass bar on phones. Owns the questions the engine
@@ -159,11 +160,22 @@ class _ShellState extends State<Shell>
       if (ok && mounted) showSendProgress(context, hub, files.length);
       return ok;
     };
+    hub.onIslandControl = (id, what) {
+      if (mounted) runIslandControl(context, hub, id, what);
+    };
+    // Once the phones are known (the island may have started the app for one of these).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final (id, what) in [...hub.islandQueue]) {
+        hub.onIslandControl?.call(id, what);
+      }
+      hub.islandQueue.clear();
+    });
   }
 
   @override
   void dispose() {
     hub.confirmSend = null;
+    hub.onIslandControl = null;
     WidgetsBinding.instance.removeObserver(this);
     if (Native.pc) windowManager.removeListener(this);
     _msgs.cancel();
@@ -384,8 +396,8 @@ class _ShellState extends State<Shell>
               },
               icon: Icon(
                 _sidebarCollapsed
-                    ? Symbols.left_panel_open_rounded
-                    : Symbols.left_panel_close_rounded,
+                    ? FluentIcons.panel_left_expand_24_regular
+                    : FluentIcons.panel_left_contract_24_regular,
               ),
               label: !full
                   ? const SizedBox.shrink()
@@ -442,7 +454,7 @@ class _ShellState extends State<Shell>
             padding: const EdgeInsets.all(8),
             child: !full
                 ? IconButton(
-                    icon: const Icon(Symbols.smartphone_rounded),
+                    icon: const Icon(FluentIcons.phone_24_regular),
                     onPressed: () => _go(Section.devices),
                     tooltip: tx('Dispositivos'),
                   )
@@ -634,7 +646,7 @@ class _PhoneChip extends StatelessWidget {
                 height: 40,
                 child: Center(
                   child: online.isEmpty
-                      ? const Icon(Symbols.mobile_off_rounded, size: 20)
+                      ? const Icon(FluentIcons.phone_dismiss_24_regular, size: 20)
                       : PhoneCover(look, online.first.name),
                 ),
               ),
@@ -662,7 +674,7 @@ class _PhoneChip extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Symbols.chevron_right_rounded, size: 20),
+              const Icon(FluentIcons.chevron_right_24_regular, size: 20),
             ],
           ),
         ),
@@ -724,7 +736,7 @@ class _ShareSheet extends StatelessWidget {
                         hub.sendShare(p.id);
                         Navigator.pop(context);
                       },
-                      icon: const Icon(Symbols.computer_rounded),
+                      icon: const Icon(FluentIcons.desktop_24_regular),
                       label: Text(p.name),
                     ),
                   ),
@@ -753,7 +765,7 @@ class _PairDialog extends StatelessWidget {
         ? '${p.code.substring(0, 3)} ${p.code.substring(3)}'
         : p.code;
     return AlertDialog(
-      icon: const Icon(Symbols.link_rounded),
+      icon: const Icon(FluentIcons.link_24_regular),
       title: Text(tr('Emparejar con {}', [p.name])),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -810,7 +822,7 @@ class _OfferDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return AlertDialog(
-      icon: const Icon(Symbols.download_rounded),
+      icon: const Icon(FluentIcons.arrow_download_24_regular),
       title: const Text('Archivo entrante'),
       content: Row(
         children: [
@@ -1032,7 +1044,7 @@ class _DropState extends State<_Drop> {
                                 shape: const CookieBorder(),
                               ),
                               child: Icon(
-                                Symbols.upload_rounded,
+                                FluentIcons.arrow_upload_24_regular,
                                 size: 36,
                                 color: s.onPrimaryContainer,
                               ),

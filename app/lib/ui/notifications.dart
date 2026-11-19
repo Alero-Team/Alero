@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -50,7 +50,7 @@ class NotificationsScreen extends StatelessWidget {
                 Expanded(child: Text(tr('Notificaciones de {}', [peer.name]))),
                 TextButton.icon(
                   onPressed: () => hub.clearNotifs(peer.id),
-                  icon: const Icon(Symbols.clear_all_rounded),
+                  icon: const Icon(FluentIcons.broom_24_regular),
                   label: const Text('Borrar todas'),
                 ),
               ],
@@ -92,7 +92,7 @@ class NotificationsPanel extends StatelessWidget {
       body = const EmptyState(
         key: ValueKey('no-access'),
         card: false,
-        icon: Symbols.notifications_off_rounded,
+        icon: FluentIcons.alert_off_24_regular,
         title: 'Falta un permiso en el teléfono',
         body: 'Se concede en los ajustes de Android y puedes retirarlo cuando quieras.',
       );
@@ -130,7 +130,7 @@ class NotificationsPanel extends StatelessWidget {
                   context: context,
                   builder: (_) => _AllDialog(hub, peerId),
                 ),
-                icon: const Icon(Symbols.history_rounded, size: 18),
+                icon: const Icon(FluentIcons.history_24_regular, size: 18),
                 label: const Text('Historial'),
               ),
             ),
@@ -146,7 +146,7 @@ class NotificationsPanel extends StatelessWidget {
                     shape: const StadiumBorder(),
                   ),
                   onPressed: () => hub.clearNotifs(peerId),
-                  icon: const Icon(Symbols.close_rounded, size: 18),
+                  icon: const Icon(FluentIcons.dismiss_24_regular, size: 18),
                   label: const Text('Borrar todo'),
                 ),
               ),
@@ -345,7 +345,7 @@ class _NotifRowState extends State<_NotifRow> {
                 height: side,
                 color: s.secondaryContainer,
                 child: Icon(
-                  Symbols.notifications_rounded,
+                  FluentIcons.alert_24_regular,
                   size: side / 2,
                   color: s.onSecondaryContainer,
                 ),
@@ -439,7 +439,7 @@ class _NotifRowState extends State<_NotifRow> {
                           visualDensity: VisualDensity.compact,
                         ),
                         icon: Icon(
-                          Symbols.more_horiz_rounded,
+                          FluentIcons.more_horizontal_24_regular,
                           color: s.onSurfaceVariant,
                         ),
                         onSelected: (a) => hub.notifAction(peerId, n, a),
@@ -456,7 +456,7 @@ class _NotifRowState extends State<_NotifRow> {
                       ),
                       if (n.clearable)
                         small(
-                          Symbols.close_rounded,
+                          FluentIcons.dismiss_24_regular,
                           'Descartar',
                           () => hub.dismissNotif(peerId, n.key),
                         ),
@@ -578,7 +578,7 @@ class _NotifRowState extends State<_NotifRow> {
                                           ),
                                         )
                                       : const Icon(
-                                          Symbols.send_rounded,
+                                          FluentIcons.send_24_regular,
                                           key: ValueKey('send'),
                                         ),
                                 ),

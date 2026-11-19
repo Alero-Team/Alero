@@ -681,237 +681,88 @@ pub enum Icon {
     Bluetooth,
     Rotate,
     Lock,
+    Router,
+    Camera,
+    CameraSwitch,
+    Cast,
+    Screenshot,
+    Mute,
+    ClipSend,
 }
 
+/// Draws `ic` from Fluent UI System Icons (the app's icon set): regular (outline), except media keys, call buttons and the
+/// charging bolt, which are filled as in the app.
 pub fn icon(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, mask: Option<&Mask>) {
-    let s = size / 24.0;
-    let (ox, oy) = (cx - size / 2.0, cy - size / 2.0);
-    // Paths are drawn in the 24-grid and mapped into logical space.
-    let map = |p: Path| p.transform(Transform::from_scale(s, s).post_translate(ox, oy));
-    let fill = |cv: &mut Canvas, p: Option<Path>| {
-        if let Some(p) = p.and_then(map) {
-            cv.fill_path(&p, c, mask);
-        }
-    };
-    let line = |cv: &mut Canvas, p: Option<Path>, w: f32| {
-        if let Some(p) = p.and_then(map) {
-            cv.stroke_path(&p, c, w * s, mask);
-        }
-    };
-    let poly = |pts: &[(f32, f32)], close: bool| {
-        let mut pb = PathBuilder::new();
-        for (i, (x, y)) in pts.iter().enumerate() {
-            if i == 0 {
-                pb.move_to(*x, *y);
-            } else {
-                pb.line_to(*x, *y);
-            }
-        }
-        if close {
-            pb.close();
-        }
-        pb.finish()
-    };
-    let rrect = |x: f32, y: f32, w: f32, h: f32, r: f32| squircle(R::new(x, y, w, h), r, 3.2);
-    match ic {
-        Icon::Play => fill(cv, poly(&[(7.5, 4.5), (19.5, 12.0), (7.5, 19.5)], true)),
-        Icon::Pause => {
-            fill(cv, rrect(6.0, 4.5, 4.2, 15.0, 1.4));
-            fill(cv, rrect(13.8, 4.5, 4.2, 15.0, 1.4));
-        }
-        Icon::Next => {
-            fill(cv, poly(&[(5.0, 5.0), (15.5, 12.0), (5.0, 19.0)], true));
-            fill(cv, rrect(16.2, 5.0, 2.8, 14.0, 1.2));
-        }
-        Icon::Prev => {
-            fill(cv, poly(&[(19.0, 5.0), (8.5, 12.0), (19.0, 19.0)], true));
-            fill(cv, rrect(5.0, 5.0, 2.8, 14.0, 1.2));
-        }
-        Icon::Bell => {
-            let mut pb = PathBuilder::new();
-            pb.move_to(12.0, 3.0);
-            pb.cubic_to(8.2, 3.0, 6.5, 6.0, 6.5, 9.5);
-            pb.line_to(6.5, 13.4);
-            pb.line_to(4.6, 16.8);
-            pb.line_to(19.4, 16.8);
-            pb.line_to(17.5, 13.4);
-            pb.line_to(17.5, 9.5);
-            pb.cubic_to(17.5, 6.0, 15.8, 3.0, 12.0, 3.0);
-            pb.close();
-            fill(cv, pb.finish());
-            fill(cv, PathBuilder::from_circle(12.0, 19.6, 2.1));
-        }
-        Icon::Clipboard => {
-            line(cv, rrect(5.5, 5.0, 13.0, 16.0, 2.4), 1.9);
-            fill(cv, rrect(8.5, 2.8, 7.0, 4.6, 1.6));
-        }
-        Icon::Phone => {
-            line(cv, rrect(7.0, 2.8, 10.0, 18.4, 2.6), 1.9);
-            line(cv, poly(&[(10.5, 18.0), (13.5, 18.0)], false), 1.8);
-        }
-        Icon::Sliders => {
-            for (y, kx) in [(6.5, 9.0), (12.0, 15.5), (17.5, 8.0)] {
-                line(cv, poly(&[(4.0, y), (20.0, y)], false), 1.8);
-                fill(cv, PathBuilder::from_circle(kx, y, 2.6));
-            }
-        }
-        Icon::Send => {
-            line(cv, poly(&[(12.0, 16.0), (12.0, 4.5)], false), 2.0);
-            line(cv, poly(&[(7.5, 9.0), (12.0, 4.5), (16.5, 9.0)], false), 2.0);
-            line(cv, poly(&[(5.0, 15.0), (5.0, 19.0), (19.0, 19.0), (19.0, 15.0)], false), 2.0);
-        }
-        Icon::Download => {
-            line(cv, poly(&[(12.0, 4.5), (12.0, 16.0)], false), 2.0);
-            line(cv, poly(&[(7.5, 11.5), (12.0, 16.0), (16.5, 11.5)], false), 2.0);
-            line(cv, poly(&[(5.0, 15.0), (5.0, 19.0), (19.0, 19.0), (19.0, 15.0)], false), 2.0);
-        }
-        Icon::Check => line(cv, poly(&[(5.0, 12.5), (10.0, 17.5), (19.0, 7.0)], false), 2.6),
-        Icon::Close => {
-            line(cv, poly(&[(6.0, 6.0), (18.0, 18.0)], false), 2.4);
-            line(cv, poly(&[(18.0, 6.0), (6.0, 18.0)], false), 2.4);
-        }
-        Icon::Call | Icon::CallEnd => {
-            // A handset: a thick arc with a pad at each end. The hang-up one is the same shape turned over.
-            let mut pb = PathBuilder::new();
-            pb.move_to(6.0, 7.5);
-            pb.cubic_to(6.0, 14.5, 9.5, 18.0, 16.5, 18.0);
-            let arc = pb.finish();
-            let flip = |p: Path| -> Option<Path> {
-                if ic == Icon::CallEnd {
-                    p.transform(Transform::from_rotate_at(135.0, 12.0, 12.0))
-                } else {
-                    Some(p)
-                }
-            };
-            let arc = arc.and_then(flip);
-            line(cv, arc, 3.6);
-            for (px, py) in [(5.2, 5.6), (18.4, 18.8)] {
-                let pad = PathBuilder::from_circle(px, py, 2.5).and_then(flip);
-                fill(cv, pad);
-            }
-        }
-        Icon::Moon => {
-            // A crescent: the outer circle where it lies outside the inner one, then the inner circle where it lies inside.
-            let (r1, c1) = (8.6f32, (11.6f32, 12.4f32));
-            let (r2, c2) = (7.2f32, (15.6f32, 9.2f32));
-            let n = 120usize;
-            let on = |c: (f32, f32), r: f32, i: usize| {
-                let t = 2.0 * PI * i as f32 / n as f32;
-                (c.0 + r * t.cos(), c.1 + r * t.sin())
-            };
-            let dist = |p: (f32, f32), c: (f32, f32)| ((p.0 - c.0).powi(2) + (p.1 - c.1).powi(2)).sqrt();
-            let keep_outer: Vec<bool> = (0..n).map(|i| dist(on(c1, r1, i), c2) >= r2).collect();
-            // Start just after a dropped point so the kept ones form one run.
-            let start = (0..n).find(|&i| !keep_outer[i]).map_or(0, |i| i + 1);
-            let mut pts: Vec<(f32, f32)> = (0..n).map(|k| (start + k) % n).filter(|&i| keep_outer[i]).map(|i| on(c1, r1, i)).collect();
-            let mut inner: Vec<(f32, f32)> = (0..n).map(|i| on(c2, r2, i)).filter(|&p| dist(p, c1) <= r1).collect();
-            // Order the inner arc so that it continues from where the outer one stopped.
-            if let (Some(&last), Some(&end)) = (pts.last(), inner.last()) {
-                if dist(end, last) < dist(inner[0], last) {
-                    inner.reverse();
-                }
-            }
-            // Wrap-around of the inner arc: rotate it to start at its largest gap.
-            if inner.len() > 2 {
-                let mut gap = 0usize;
-                let mut best = 0.0f32;
-                for i in 0..inner.len() {
-                    let d = dist(inner[i], inner[(i + 1) % inner.len()]);
-                    if d > best {
-                        best = d;
-                        gap = i;
-                    }
-                }
-                let len = inner.len();
-                inner.rotate_left((gap + 1) % len);
-                if let Some(&last) = pts.last() {
-                    if dist(*inner.last().unwrap(), last) < dist(inner[0], last) {
-                        inner.reverse();
-                    }
-                }
-            }
-            pts.extend(inner);
-            fill(cv, poly(&pts, true));
-        }
-        Icon::Torch => {
-            fill(cv, poly(&[(7.4, 2.6), (16.6, 2.6), (15.2, 8.0), (8.8, 8.0)], true));
-            fill(cv, rrect(9.0, 9.4, 6.0, 12.0, 1.6));
-        }
-        Icon::Bolt => fill(cv, poly(&[(13.5, 2.0), (5.5, 13.5), (11.0, 13.5), (10.0, 22.0), (18.5, 9.5), (13.0, 9.5)], true)),
-        Icon::Find => {
-            line(cv, PathBuilder::from_circle(12.0, 12.0, 8.0), 1.9);
-            line(cv, PathBuilder::from_circle(12.0, 12.0, 3.6), 1.9);
-            fill(cv, PathBuilder::from_circle(12.0, 12.0, 1.3));
-        }
-        Icon::Volume => {
-            fill(cv, poly(&[(4.0, 9.5), (8.0, 9.5), (13.0, 5.0), (13.0, 19.0), (8.0, 14.5), (4.0, 14.5)], true));
-            let mut a = PathBuilder::new();
-            a.move_to(16.2, 9.0);
-            a.quad_to(18.4, 12.0, 16.2, 15.0);
-            line(cv, a.finish(), 1.8);
-            let mut b = PathBuilder::new();
-            b.move_to(18.8, 6.4);
-            b.quad_to(22.6, 12.0, 18.8, 17.6);
-            line(cv, b.finish(), 1.8);
-        }
-        Icon::Battery => {
-            line(cv, rrect(2.5, 7.5, 16.0, 9.0, 2.2), 1.7);
-            fill(cv, rrect(19.6, 10.4, 2.0, 3.2, 1.0));
-        }
-        Icon::Copy => {
-            line(cv, rrect(8.5, 8.5, 11.5, 11.5, 2.4), 1.9);
-            let mut pb = PathBuilder::new();
-            pb.move_to(15.5, 8.0);
-            pb.line_to(15.5, 6.0);
-            pb.quad_to(15.5, 4.0, 13.5, 4.0);
-            pb.line_to(6.0, 4.0);
-            pb.quad_to(4.0, 4.0, 4.0, 6.0);
-            pb.line_to(4.0, 13.5);
-            pb.quad_to(4.0, 15.5, 6.0, 15.5);
-            pb.line_to(8.0, 15.5);
-            line(cv, pb.finish(), 1.9);
-        }
-        // "Now playing": four rounded equalizer bars.
-        Icon::Music => {
-            for (x, h) in [(4.0, 8.0), (8.5, 15.0), (13.0, 11.0), (17.5, 17.0)] {
-                fill(cv, rrect(x, 12.0 - h / 2.0, 2.6, h, 1.3));
-            }
-        }
-        Icon::File => {
-            line(cv, poly(&[(6.5, 3.5), (13.5, 3.5), (18.5, 8.5), (18.5, 20.5), (6.5, 20.5)], true), 1.8);
-            line(cv, poly(&[(13.5, 3.5), (13.5, 8.5), (18.5, 8.5)], false), 1.8);
-        }
-        Icon::Back => line(cv, poly(&[(14.5, 5.5), (8.0, 12.0), (14.5, 18.5)], false), 2.4),
-        Icon::Wifi => {
-            // Three arcs over a dot, centred on (12, 19).
-            for r in [5.0f32, 9.5, 14.0] {
-                let pts: Vec<(f32, f32)> = (0..=12)
-                    .map(|k| {
-                        let a = (-135.0 + 90.0 * k as f32 / 12.0f32).to_radians();
-                        (12.0 + r * a.cos(), 19.0 + r * a.sin())
-                    })
-                    .collect();
-                line(cv, poly(&pts, false), 2.0);
-            }
-            fill(cv, PathBuilder::from_circle(12.0, 18.6, 1.7));
-        }
-        Icon::Bluetooth => line(cv, poly(&[(6.5, 7.5), (17.0, 16.0), (12.0, 20.5), (12.0, 3.5), (17.0, 8.0), (6.5, 16.5)], false), 1.9),
-        Icon::Rotate => {
-            // An open circle with an arrowhead at its end.
-            let pts: Vec<(f32, f32)> = (0..=24)
-                .map(|k| {
-                    let a = (-60.0 + 290.0 * k as f32 / 24.0f32).to_radians();
-                    (12.0 + 7.5 * a.cos(), 12.0 + 7.5 * a.sin())
-                })
-                .collect();
-            line(cv, poly(&pts, false), 2.0);
-            fill(cv, poly(&[(14.2, 1.6), (19.6, 6.4), (12.6, 8.4)], true));
-        }
-        Icon::Lock => {
-            fill(cv, rrect(5.0, 10.5, 14.0, 10.5, 2.4));
-            line(cv, poly(&[(8.2, 10.5), (8.2, 7.6), (9.3, 4.9), (12.0, 3.8), (14.7, 4.9), (15.8, 7.6), (15.8, 10.5)], false), 2.0);
-        }
+    let filled = matches!(ic, Icon::Play | Icon::Pause | Icon::Next | Icon::Prev | Icon::Bolt | Icon::Call | Icon::CallEnd);
+    draw_icon(cv, ic, filled, cx, cy, size, c, mask);
+}
+
+/// The filled twin, for a control that is on (the app fills the icon of a selected tile the same way).
+pub fn icon_filled(cv: &mut Canvas, ic: Icon, cx: f32, cy: f32, size: f32, c: Color, mask: Option<&Mask>) {
+    draw_icon(cv, ic, true, cx, cy, size, c, mask);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_icon(cv: &mut Canvas, ic: Icon, filled: bool, cx: f32, cy: f32, size: f32, c: Color, mask: Option<&Mask>) {
+    let ops = glyph(ic, filled);
+    let mut pb = PathBuilder::new();
+    let mut i = 0;
+    while i < ops.len() {
+        let a = |k: usize| ops.get(i + k).copied().unwrap_or(0.0);
+        i += match ops[i] as u8 {
+            0 => { pb.move_to(a(1), a(2)); 3 }
+            1 => { pb.line_to(a(1), a(2)); 3 }
+            2 => { pb.quad_to(a(1), a(2), a(3), a(4)); 5 }
+            3 => { pb.cubic_to(a(1), a(2), a(3), a(4), a(5), a(6)); 7 }
+            _ => { pb.close(); 1 }
+        };
     }
+    let s = size / 24.0;
+    if let Some(p) = pb.finish().and_then(|p| p.transform(Transform::from_scale(s, s).post_translate(cx - size / 2.0, cy - size / 2.0))) {
+        cv.fill_path(&p, c, mask);
+    }
+}
+
+fn glyph(ic: Icon, filled: bool) -> &'static [f32] {
+    use super::fluent::*;
+    let (r, f) = match ic {
+        Icon::Play => (PLAY_REGULAR, PLAY_FILLED),
+        Icon::Pause => (PAUSE_REGULAR, PAUSE_FILLED),
+        Icon::Next => (NEXT_REGULAR, NEXT_FILLED),
+        Icon::Prev => (PREV_REGULAR, PREV_FILLED),
+        Icon::Bell => (BELL_REGULAR, BELL_FILLED),
+        Icon::Clipboard => (CLIPBOARD_REGULAR, CLIPBOARD_FILLED),
+        Icon::Phone => (PHONE_REGULAR, PHONE_FILLED),
+        Icon::Sliders => (SLIDERS_REGULAR, SLIDERS_FILLED),
+        Icon::Send => (SEND_REGULAR, SEND_FILLED),
+        Icon::Download => (DOWNLOAD_REGULAR, DOWNLOAD_FILLED),
+        Icon::Check => (CHECK_REGULAR, CHECK_FILLED),
+        Icon::Close => (CLOSE_REGULAR, CLOSE_FILLED),
+        Icon::Call => (CALL_REGULAR, CALL_FILLED),
+        Icon::CallEnd => (CALL_END_REGULAR, CALL_END_FILLED),
+        Icon::Moon => (MOON_REGULAR, MOON_FILLED),
+        Icon::Torch => (TORCH_REGULAR, TORCH_FILLED),
+        Icon::Find => (FIND_REGULAR, FIND_FILLED),
+        Icon::Volume => (VOLUME_REGULAR, VOLUME_FILLED),
+        Icon::Battery => (BATTERY_REGULAR, BATTERY_FILLED),
+        Icon::Bolt => (BOLT_REGULAR, BOLT_FILLED),
+        Icon::Copy => (COPY_REGULAR, COPY_FILLED),
+        Icon::Music => (MUSIC_REGULAR, MUSIC_FILLED),
+        Icon::File => (FILE_REGULAR, FILE_FILLED),
+        Icon::Back => (BACK_REGULAR, BACK_FILLED),
+        Icon::Wifi => (WIFI_REGULAR, WIFI_FILLED),
+        Icon::Bluetooth => (BLUETOOTH_REGULAR, BLUETOOTH_FILLED),
+        Icon::Rotate => (ROTATE_REGULAR, ROTATE_FILLED),
+        Icon::Lock => (LOCK_REGULAR, LOCK_FILLED),
+        Icon::Router => (ROUTER_REGULAR, ROUTER_FILLED),
+        Icon::Camera => (CAMERA_REGULAR, CAMERA_FILLED),
+        Icon::CameraSwitch => (CAMERA_SWITCH_REGULAR, CAMERA_SWITCH_FILLED),
+        Icon::Cast => (CAST_REGULAR, CAST_FILLED),
+        Icon::Screenshot => (SCREENSHOT_REGULAR, SCREENSHOT_FILLED),
+        Icon::Mute => (MUTE_REGULAR, MUTE_FILLED),
+        Icon::ClipSend => (CLIP_SEND_REGULAR, CLIP_SEND_FILLED),
+    };
+    if filled { f } else { r }
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../phone_adb.dart';
@@ -72,7 +72,7 @@ class PhonePage extends StatelessWidget {
                           key: ValueKey('none'),
                           alignment: Alignment.topCenter,
                           child: EmptyState(
-                            icon: Symbols.smartphone_rounded,
+                            icon: FluentIcons.phone_24_regular,
                             title: 'Conecta un teléfono',
                             body: 'Abre Alero en el teléfono emparejado, por Wi-Fi o con el cable.',
                           ),
@@ -196,7 +196,7 @@ class NeedsAdb extends StatelessWidget {
   @override
   Widget build(BuildContext context) => EmptyState(
     card: card,
-    icon: Symbols.usb_rounded,
+    icon: FluentIcons.usb_plug_24_regular,
     title: tr('{} necesita la depuración del teléfono', [feature]),
     body:
         'Utiliza «Depuración USB» o «Depuración inalámbrica» en este apartado. '

@@ -1,7 +1,7 @@
 import 'alero_motion.dart';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import 'notifications.dart' show ago;
@@ -48,7 +48,7 @@ class _Sheet extends StatelessWidget {
               const SizedBox(height: Gap.l),
               FilledButton.icon(
                 onPressed: () => hub.sendClipboard(peerId),
-                icon: const Icon(Symbols.content_paste_go_rounded, size: 18),
+                icon: const Icon(FluentIcons.clipboard_arrow_right_24_regular, size: 18),
                 label: const Text('Enviar mi portapapeles'),
               ),
               const SizedBox(height: Gap.l),
@@ -73,8 +73,8 @@ class _Sheet extends StatelessWidget {
                       key: ObjectKey(c),
                       leading: Icon(
                         c.incoming
-                            ? Symbols.south_west_rounded
-                            : Symbols.north_east_rounded,
+                            ? FluentIcons.arrow_down_left_24_regular
+                            : FluentIcons.arrow_up_right_24_regular,
                         size: 20,
                         color: s.onSurfaceVariant,
                       ),
@@ -84,7 +84,7 @@ class _Sheet extends StatelessWidget {
                       trailing: IconButton(
                         tooltip: tx('Copiar'),
                         icon: const Icon(
-                          Symbols.content_copy_rounded,
+                          FluentIcons.copy_24_regular,
                           size: 18,
                         ),
                         onPressed: () => hub.copy(c.text),

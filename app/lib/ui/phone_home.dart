@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
@@ -32,24 +32,24 @@ class QuickActions extends StatelessWidget {
     const remoteHint = 'Requiere activar el control remoto en el ordenador';
     final tiles = [
       _Small(
-        Symbols.upload_rounded,
+        FluentIcons.arrow_upload_24_regular,
         'Enviar',
         online ? () => hub.send(peer.id) : null,
         primary: true,
       ),
       _Small(
-        Symbols.content_paste_go_rounded,
+        FluentIcons.clipboard_arrow_right_24_regular,
         'Portapapeles',
         online ? () => openClipboard(context, hub, peer.id) : null,
       ),
       _Small(
-        Symbols.cast_rounded,
+        FluentIcons.cast_24_regular,
         'Pantalla',
         canShot ? () => openPcScreen(context, hub, peer.id, peer.name) : null,
         hint: online && !canShot ? remoteHint : null,
       ),
       _Small(
-        Symbols.screenshot_monitor_rounded,
+        FluentIcons.screenshot_24_regular,
         'Captura',
         canShot ? _shot : null,
         hint: online && !canShot ? remoteHint : null,
@@ -187,14 +187,14 @@ class RemoteCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(Radii.chip),
                   border: Border.all(color: s.outlineVariant),
                 ),
-                child: const Icon(Symbols.folder_rounded, size: 18),
+                child: const Icon(FluentIcons.folder_24_regular, size: 18),
               ),
               title: Text('Archivos del ordenador', style: t.titleSmall),
               subtitle: Text(
                 'Carpetas que compartiste en el PC',
                 style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
               ),
-              trailing: const Icon(Symbols.chevron_right_rounded),
+              trailing: const Icon(FluentIcons.chevron_right_24_regular),
               onTap: () => openPcFiles(context, hub, peer.id, peer.name),
             ),
           ],
@@ -321,7 +321,7 @@ class _RemotePreviewState extends State<_RemotePreview>
                       );
                     },
                     child: const Icon(
-                      Symbols.arrow_selector_tool_rounded,
+                      FluentIcons.cursor_24_regular,
                       size: 22,
                       fill: 1,
                       color: Colors.white,
@@ -359,7 +359,7 @@ class _RemotePreviewState extends State<_RemotePreview>
                       IgnorePointer(
                         child: FilledButton.tonalIcon(
                           onPressed: on ? () {} : null,
-                          icon: const Icon(Symbols.mouse_rounded, size: 18),
+                          icon: const Icon(FluentIcons.cursor_click_24_regular, size: 18),
                           label: const FitLabel('Abrir'),
                         ),
                       ),

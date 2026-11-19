@@ -5,6 +5,7 @@
 
 pub mod adb;
 pub mod config;
+pub mod fluent;
 pub mod gfx;
 pub mod model;
 pub mod motion;
@@ -33,6 +34,8 @@ use crate::lang::t;
 struct EngineExec {
     engine: Arc<Engine>,
     show: Box<dyn Fn() + Send + Sync>,
+    /// Hands a phone control to the app window (peer id, control), starting the window if none is open.
+    app: Box<dyn Fn(&str, &str) + Send + Sync>,
 }
 
 impl EngineExec {
@@ -85,6 +88,15 @@ impl Exec for EngineExec {
             Cmd::AskMedia => {
                 let _ = self.send(&ctx.target, "pb.x.media.request", json!({}));
             }
+            Cmd::App(what) => {
+                let Some(p) = &ctx.target else {
+                    return Some((false, t("Sin teléfono conectado", "No phone connected").into(), String::new()));
+                };
+                (self.app)(p, what);
+                if what == "shot" {
+                    return Some((true, t("Capturando la pantalla del teléfono", "Taking a phone screenshot").into(), t("Se guarda en la carpeta de descargas", "It goes to the downloads folder").into()));
+                }
+            }
             Cmd::Beep | Cmd::Adb { .. } => {} // run.rs carries these out itself
         }
         None
@@ -97,8 +109,8 @@ pub fn channel() -> (Handle, Receiver<Msg>, Sender<Msg>) {
 }
 
 /// Starts the island's thread. It idles (and costs next to nothing) while the island is turned off.
-pub fn spawn(rx: Receiver<Msg>, tx: Sender<Msg>, data: PathBuf, engine: Arc<Engine>, show: Box<dyn Fn() + Send + Sync>) {
-    let exec = Box::new(EngineExec { engine, show });
+pub fn spawn(rx: Receiver<Msg>, tx: Sender<Msg>, data: PathBuf, engine: Arc<Engine>, show: Box<dyn Fn() + Send + Sync>, app: Box<dyn Fn(&str, &str) + Send + Sync>) {
+    let exec = Box::new(EngineExec { engine, show, app });
     let _ = std::thread::Builder::new().name("island".into()).spawn(move || {
         let host: Option<Box<dyn run::Host>> = make_host();
         match host {

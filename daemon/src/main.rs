@@ -53,6 +53,14 @@ impl Ui {
         }
     }
 
+    /// A phone control the island asked for that only the app runs: kept for the window it starts if none is open.
+    fn control(&self, peer: &str, what: &str) {
+        let event = pb_core::engine::Event::Message { peer_id: peer.into(), kind: pb_core::ipc::ISLAND_CONTROL.into(), body: serde_json::json!({"what": what}) };
+        if !self.subs.push(&Push::Event { event }) {
+            self.launch();
+        }
+    }
+
     fn launch(&self) {
         // The window needs ~2 s to connect; don't start several for a burst of events.
         let mut last = self.last_launch.lock().unwrap();
@@ -217,8 +225,8 @@ fn main() {
     let _ = ui.engine.set(engine.clone());
     ui.remote.spawn_status(engine.clone());
     {
-        let ui2 = ui.clone();
-        island::spawn(island_rx, island_tx, data.clone(), engine.clone(), Box::new(move || ui2.show()));
+        let (ui2, ui3) = (ui.clone(), ui.clone());
+        island::spawn(island_rx, island_tx, data.clone(), engine.clone(), Box::new(move || ui2.show()), Box::new(move |peer, what| ui3.control(peer, what)));
     }
     if let Err(e) = ipc::listen(&data, engine.clone(), subs.clone()) {
         fail(format!("canal local: {e}"));

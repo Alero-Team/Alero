@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
@@ -180,12 +180,12 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                   ButtonSegment(
                     value: PresentationMode.powerpoint,
                     label: FitLabel('PowerPoint'),
-                    icon: Icon(Symbols.slideshow_rounded),
+                    icon: Icon(FluentIcons.slide_play_24_regular),
                   ),
                   ButtonSegment(
                     value: PresentationMode.browser,
                     label: FitLabel('Navegador'),
-                    icon: Icon(Symbols.language_rounded),
+                    icon: Icon(FluentIcons.globe_24_regular),
                   ),
                 ],
                 selected: {_mode},
@@ -219,7 +219,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                       onPressed: enabled
                           ? () => _send(PresentationAction.previous)
                           : null,
-                      icon: const Icon(Symbols.arrow_back_rounded),
+                      icon: const Icon(FluentIcons.arrow_left_24_regular),
                       label: const Text('Anterior'),
                     ),
                   ),
@@ -229,7 +229,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                       onPressed: enabled
                           ? () => _send(PresentationAction.next)
                           : null,
-                      icon: const Icon(Symbols.arrow_forward_rounded),
+                      icon: const Icon(FluentIcons.arrow_right_24_regular),
                       label: const Text('Siguiente'),
                     ),
                   ),
@@ -246,7 +246,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                           onPressed: enabled
                               ? () => _send(PresentationAction.start)
                               : null,
-                          icon: const Icon(Symbols.play_arrow_rounded),
+                          icon: const Icon(FluentIcons.play_24_filled),
                           label: const Text('Iniciar'),
                         ),
                       ),
@@ -257,7 +257,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                         onPressed: enabled
                             ? () => _send(PresentationAction.finish)
                             : null,
-                        icon: const Icon(Symbols.stop_rounded),
+                        icon: const Icon(FluentIcons.stop_24_regular),
                         label: const Text('Salir (Esc)'),
                       ),
                     ),

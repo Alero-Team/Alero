@@ -5,9 +5,10 @@ import 'package:flutter/material.dart' hide Icon;
 
 import '../l10n.dart' show tx;
 import 'expressive.dart' show motion;
+import 'fluent_filled.dart';
 
 /// Alero's `Icon`: Flutter's, plus a short spring when the control it sits in is tapped (it swells, tilts and
-/// fills in for an instant). Files import this one and hide Flutter's, so every icon in the app answers a tap
+/// fills in for an instant). `fill` ≥ .5 (or the theme's) draws the Fluent filled twin. Files import this one and hide Flutter's, so every icon in the app answers a tap
 /// without each call site asking for it. Decorative icons outside a tappable control never move, and nothing
 /// moves when the system asks for reduced motion.
 class Icon extends StatefulWidget {
@@ -88,9 +89,10 @@ class _IconState extends State<Icon> {
   }
 
   Widget _icon([double? fill]) => m.Icon(
-    widget.icon,
+    (fill ?? widget.fill ?? IconTheme.of(context).fill ?? 0) >= .5
+        ? fluentFilled[widget.icon] ?? widget.icon
+        : widget.icon,
     size: widget.size,
-    fill: fill ?? widget.fill,
     color: widget.color,
     semanticLabel: widget.semanticLabel == null ? null : tx(widget.semanticLabel!),
   );

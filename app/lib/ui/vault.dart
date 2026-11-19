@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../native.dart';
@@ -368,7 +368,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Symbols.lock_rounded, size: 44),
+              const Icon(FluentIcons.lock_closed_24_regular, size: 44),
               const SizedBox(height: 16),
               MotionFade(
                 child: Text(
@@ -452,7 +452,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                     ? FilledButton.icon(
                         key: ValueKey('go-$create'),
                         onPressed: _unlock,
-                        icon: const Icon(Symbols.lock_open_rounded, size: 18),
+                        icon: const Icon(FluentIcons.lock_open_24_regular, size: 18),
                         label: Text(create ? 'Crear y abrir' : 'Desbloquear'),
                       )
                     : const SizedBox.shrink(key: ValueKey('none')),
@@ -503,7 +503,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                 ? IconButton(
                     tooltip: tx('Bloquear ahora'),
                     onPressed: _busy ? null : () => setState(_lock),
-                    icon: const Icon(Symbols.lock_rounded),
+                    icon: const Icon(FluentIcons.lock_closed_24_regular),
                   )
                 : null,
           ),
@@ -539,12 +539,12 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                         children: [
                           FilledButton.icon(
                             onPressed: _busy ? null : () => _note(),
-                            icon: const Icon(Symbols.note_add_rounded),
+                            icon: const Icon(FluentIcons.note_add_24_regular),
                             label: const Text('Nueva nota'),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: _busy ? null : _importFiles,
-                            icon: const Icon(Symbols.add_to_drive_rounded),
+                            icon: const Icon(FluentIcons.cloud_add_24_regular),
                             label: const Text('Proteger fotos y archivos'),
                           ),
                         ],
@@ -606,15 +606,14 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                                             excludeFromSemantics: true,
                                             errorBuilder: (_, _, _) =>
                                                 const Icon(
-                                                  Symbols.image_rounded,
+                                                  FluentIcons.image_24_regular,
                                                 ),
                                           ),
                                         )
                                       : Icon(
                                           entry.isNote
-                                              ? Symbols.sticky_note_2_rounded
-                                              : Symbols
-                                                    .insert_drive_file_rounded,
+                                              ? FluentIcons.note_24_regular
+                                              : FluentIcons.document_24_regular,
                                         ),
                                   title: Text(
                                     entry.name,
@@ -631,7 +630,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                                   trailing: IconButton(
                                     tooltip: tx('Eliminar'),
                                     icon: const Icon(
-                                      Symbols.delete_outline_rounded,
+                                      FluentIcons.delete_24_regular,
                                     ),
                                     onPressed: _busy
                                         ? null

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
@@ -48,11 +48,11 @@ class ConnectionPanel extends StatelessWidget {
 
     return Panel(
       title: 'Cable y conexiones',
-      icon: Symbols.usb_rounded,
+      icon: FluentIcons.usb_plug_24_regular,
       child: Column(
         children: [
           row(
-            Symbols.cable_rounded,
+            FluentIcons.plug_connected_24_regular,
             'Alero por cable USB',
             android
                 ? 'Conecta Alero con el ordenador por el cable, sin Wi-Fi. Se inicia desde el ordenador (Dispositivos › Cable y conexiones › Conectar) y necesita «Depuración USB» activada en este teléfono.'
@@ -60,23 +60,23 @@ class ConnectionPanel extends StatelessWidget {
             android
                 ? OutlinedButton.icon(
                     onPressed: Native.openDevSettings,
-                    icon: const Icon(Symbols.developer_mode_rounded, size: 18),
+                    icon: const Icon(FluentIcons.developer_board_24_regular, size: 18),
                     label: const Text('Opciones de desarrollador'),
                   )
                 : FilledButton.tonalIcon(
                     onPressed: hub.connectCable,
-                    icon: const Icon(Symbols.usb_rounded, size: 18),
+                    icon: const Icon(FluentIcons.usb_plug_24_regular, size: 18),
                     label: const Text('Conectar por cable'),
                   ),
           ),
           if (android) ...[
             row(
-              Symbols.folder_open_rounded,
+              FluentIcons.folder_open_24_regular,
               'Transferir archivos por USB (MTP)',
               'Para ver el teléfono en el Explorador de Windows y copiar fotos y archivos con el cable. Android te permite elegir el modo USB desde sus ajustes.',
               FilledButton.tonalIcon(
                 onPressed: () => _mtpGuide(context),
-                icon: const Icon(Symbols.help_rounded, size: 18),
+                icon: const Icon(FluentIcons.question_circle_24_regular, size: 18),
                 label: const Text('Cómo activarlo'),
               ),
             ),

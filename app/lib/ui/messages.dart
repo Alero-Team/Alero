@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../remote.dart';
@@ -152,7 +152,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         padding: const EdgeInsets.only(right: Gap.s),
                         child: FilledButton.tonalIcon(
                           onPressed: () => dialDialog(context, hub, phone.id),
-                          icon: const Icon(Symbols.dialpad_rounded, size: 18),
+                          icon: const Icon(FluentIcons.dialpad_24_regular, size: 18),
                           label: const Text('Llamar'),
                         ),
                       ),
@@ -161,7 +161,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     IconButton(
                       tooltip: tx('Actualizar'),
                       onPressed: sms.refresh,
-                      icon: const Icon(Symbols.refresh_rounded),
+                      icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
                     ),
                 ],
               ),
@@ -174,7 +174,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                           key: ValueKey('none'),
                           alignment: Alignment.topCenter,
                           child: EmptyState(
-                            icon: Symbols.smartphone_rounded,
+                            icon: FluentIcons.phone_24_regular,
                             title: 'Conecta un teléfono',
                             body: 'Aquí verás sus SMS, MMS y los chats de sus apps de mensajería.',
                           ),
@@ -249,7 +249,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: tx('Buscar conversaciones'),
-                      prefixIcon: Icon(Symbols.search_rounded),
+                      prefixIcon: Icon(FluentIcons.search_24_regular),
                     ),
                   ),
                 ),
@@ -320,7 +320,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       key: ValueKey('none'),
                       child: EmptyState(
                         card: false,
-                        icon: Symbols.forum_rounded,
+                        icon: FluentIcons.chat_multiple_24_regular,
                         title: 'Elige una conversación',
                         body: 'Los SMS y MMS vienen del teléfono; los chats de apps, de sus notificaciones.',
                       ),
@@ -371,7 +371,7 @@ class _ConvoRow extends StatelessWidget {
                   child: icon != null
                       ? null
                       : c.thread?.group == true
-                      ? const Icon(Symbols.group_rounded, size: 20)
+                      ? const Icon(FluentIcons.people_24_regular, size: 20)
                       : Text(
                           c.title.isEmpty ? '#' : c.title.characters.first,
                           style: t.titleMedium?.copyWith(
@@ -567,7 +567,7 @@ class _ConversationState extends State<_Conversation> {
                     widget.peerId,
                     c.thread!.addresses.first,
                   ),
-                  icon: const Icon(Symbols.call_rounded),
+                  icon: const Icon(FluentIcons.call_24_regular),
                 ),
             ],
           ),
@@ -618,7 +618,7 @@ class _ConversationState extends State<_Conversation> {
                           IconButton(
                             tooltip: tx('Adjuntar archivo'),
                             onPressed: _sending ? null : _attach,
-                            icon: const Icon(Symbols.attach_file_rounded),
+                            icon: const Icon(FluentIcons.attach_24_regular),
                           ),
                           const SizedBox(width: Gap.xs),
                           Expanded(
@@ -657,7 +657,7 @@ class _ConversationState extends State<_Conversation> {
                             onPressed: _sending || _text.text.trim().isEmpty
                                 ? null
                                 : _send,
-                            icon: const Icon(Symbols.send_rounded),
+                            icon: const Icon(FluentIcons.send_24_regular),
                           ),
                         ],
                       ),

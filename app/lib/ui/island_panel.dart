@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../island_prefs.dart';
@@ -33,30 +33,41 @@ const _accents = <(String, String)>[
   ('#C58AF9', 'Violeta'),
 ];
 
-/// The island's phone controls, in the order they are drawn. The last four need wireless debugging (adb).
+/// Every control the island can show (CONTROLS in daemon/src/island/ui.rs), with the app's icons, in the default
+/// order. The adb ones appear only while the phone has wireless debugging on.
 const _controlNames = <String, (String, IconData)>{
-  'dnd': ('No molestar', Symbols.do_not_disturb_on_rounded),
-  'torch': ('Linterna', Symbols.flashlight_on_rounded),
-  'find': ('Buscar', Symbols.my_location_rounded),
-  'ringer': ('Sonido', Symbols.volume_up_rounded),
-  'wifi': ('Wi-Fi', Symbols.wifi_rounded),
-  'bt': ('Bluetooth', Symbols.bluetooth_rounded),
-  'rotate': ('Rotación', Symbols.screen_rotation_rounded),
-  'lock': ('Bloquear', Symbols.lock_rounded),
+  'dnd': ('No molestar', FluentIcons.weather_moon_24_regular),
+  'torch': ('Linterna', FluentIcons.flashlight_24_regular),
+  'find': ('Buscar teléfono', FluentIcons.phone_speaker_24_regular),
+  'ringer': ('Sonido, vibrar o silencio', FluentIcons.speaker_2_24_regular),
+  'wifi': ('Wi-Fi', FluentIcons.wifi_1_24_regular),
+  'bt': ('Bluetooth', FluentIcons.bluetooth_24_regular),
+  'rotate': ('Rotación', FluentIcons.arrow_rotate_clockwise_24_regular),
+  'lock': ('Bloquear', FluentIcons.lock_closed_24_regular),
+  'hotspot': ('Compartir internet', FluentIcons.router_24_regular),
+  'camBack': ('Cámara trasera', FluentIcons.camera_24_regular),
+  'camFront': ('Cámara frontal', FluentIcons.camera_switch_24_regular),
+  'screen': ('Ver pantalla', FluentIcons.cast_24_regular),
+  'shot': ('Captura', FluentIcons.screenshot_24_regular),
+  'mute': ('Silenciar', FluentIcons.alert_off_24_regular),
+  'clip': ('Portapapeles', FluentIcons.clipboard_arrow_right_24_regular),
 };
 
+/// Three rows of four: what fits the island (MAX_CONTROLS in the daemon).
+const _maxControls = 12;
+
 const _moduleNames = <String, (String, IconData)>{
-  'player': ('Reproductor', Symbols.music_note_rounded),
-  'send': ('Enviar archivos arrastrando', Symbols.upload_rounded),
-  'incoming': ('Archivos entrantes', Symbols.download_rounded),
+  'player': ('Reproductor', FluentIcons.music_note_2_24_regular),
+  'send': ('Enviar archivos arrastrando', FluentIcons.arrow_upload_24_regular),
+  'incoming': ('Archivos entrantes', FluentIcons.arrow_download_24_regular),
   'notifications': (
     'Notificaciones del teléfono',
-    Symbols.notifications_rounded,
+    FluentIcons.alert_24_regular,
   ),
-  'call': ('Llamadas entrantes', Symbols.call_rounded),
-  'clipboard': ('Portapapeles', Symbols.content_paste_rounded),
-  'controls': ('Controles rápidos', Symbols.tune_rounded),
-  'status': ('Estado y batería del teléfono', Symbols.smartphone_rounded),
+  'call': ('Llamadas entrantes', FluentIcons.call_24_regular),
+  'clipboard': ('Portapapeles', FluentIcons.clipboard_paste_24_regular),
+  'controls': ('Controles rápidos', FluentIcons.options_24_regular),
+  'status': ('Estado y batería del teléfono', FluentIcons.phone_24_regular),
 };
 
 Color _hex(String s) {
@@ -89,7 +100,7 @@ class _IslandPanelState extends State<IslandPanel> {
       final on = p.flag('enabled');
       return Panel(
         title: 'Alero Island',
-        icon: Symbols.expand_content_rounded,
+        icon: FluentIcons.arrow_maximize_24_regular,
         action: on
             ? TextButton(onPressed: p.reset, child: const Text('Restablecer'))
             : null,
@@ -482,7 +493,7 @@ class _SwatchesState extends State<_Swatches> {
                                 ),
                                 curve: Fluent.enter,
                                 child: Icon(
-                                  Symbols.check_rounded,
+                                  FluentIcons.checkmark_24_regular,
                                   size: 18,
                                   color: _hex(hex).computeLuminance() > 0.5
                                       ? Colors.black
@@ -529,51 +540,59 @@ class _Hotkey extends StatefulWidget {
   State<_Hotkey> createState() => _HotkeyState();
 }
 
-/// Which phone controls the island shows: tap to add or remove; they keep the order of [_controlNames].
+/// Which phone controls the island shows and in what order: drag to move, switch to show or hide.
 class _Controls extends StatelessWidget {
   const _Controls(this.p);
   final IslandPrefs p;
 
   @override
   Widget build(BuildContext context) {
-    final on = p.text('controls').split(',').toSet();
-    void toggle(String k) {
-      final next = {...on};
-      if (!next.remove(k)) next.add(k);
-      p.set('controls', _controlNames.keys.where(next.contains).join(','));
-    }
-
+    final shown = p
+        .text('controls')
+        .split(',')
+        .where(_controlNames.containsKey)
+        .toList();
+    final all = ordered(_controlNames.keys.toList(), shown, const {});
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: Gap.s,
-            runSpacing: Gap.s,
-            children: [
-              for (final e in _controlNames.entries)
-                FilterChip(
-                  avatar: Icon(e.value.$2, size: 18),
-                  label: Text(e.value.$1),
-                  selected: on.contains(e.key),
-                  chipAnimationStyle: ChipAnimationStyle(
-                    selectAnimation: AnimationStyle(
-                      duration: AleroMotion.micro(context, Fluent.d167),
-                      curve: Fluent.enter,
-                    ),
-                    avatarDrawerAnimation: AnimationStyle(
-                      duration: AleroMotion.micro(context, Fluent.d167),
-                      curve: Fluent.enter,
+          Text(
+            tr(
+              'Arrastra para ordenar y enciende los que quieras en la isla (hasta {}).',
+              [_maxControls],
+            ),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: context.pal.muted),
+          ),
+          const SizedBox(height: Gap.s),
+          OrderList(
+            order: all,
+            names: {for (final e in _controlNames.entries) e.key: e.value.$1},
+            icons: {for (final e in _controlNames.entries) e.key: e.value.$2},
+            hidden: all.where((k) => !shown.contains(k)).toSet(),
+            onChanged: (order, hidden) {
+              final next = order.where((k) => !hidden.contains(k)).toList();
+              if (next.length > _maxControls) {
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      tr(
+                        'La isla muestra hasta {} controles: apaga otro antes.',
+                        [_maxControls],
+                      ),
                     ),
                   ),
-                  onSelected: (_) => toggle(e.key),
-                ),
-            ],
+                );
+                return;
+              }
+              p.set('controls', next.join(','));
+            },
           ),
           const SizedBox(height: Gap.s),
           Text(
-            'Wi-Fi, Bluetooth, Rotación y Bloquear aparecen cuando el teléfono tiene la depuración inalámbrica activa.',
+            'Wi-Fi, Bluetooth, Rotación, Bloquear, Compartir internet, las cámaras y Captura aparecen cuando el teléfono tiene la depuración inalámbrica activa.',
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: context.pal.muted),
           ),
@@ -688,7 +707,7 @@ class _HotkeyState extends State<_Hotkey> {
                         key: const ValueKey('clear'),
                         tooltip: tx('Quitar atajo'),
                         onPressed: () => widget.p.set('hotkey', ''),
-                        icon: const Icon(Symbols.close),
+                        icon: const Icon(FluentIcons.dismiss_24_regular),
                       )
                     : const SizedBox.shrink(key: ValueKey('none')),
               ),
@@ -733,7 +752,7 @@ class _Monitor extends StatelessWidget {
                 child: Text(names[value]!, key: ValueKey(value)),
               ),
             ),
-            const Icon(Symbols.arrow_drop_down_rounded),
+            const Icon(FluentIcons.caret_down_24_regular),
           ],
         ),
       ),

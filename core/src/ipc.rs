@@ -54,6 +54,9 @@ pub enum Cmd {
     Subscribe,
 }
 
+/// Message kind the daemon sends the app when the island asks for one of the app's phone controls.
+pub const ISLAND_CONTROL: &str = "alero.island.control";
+
 /// What the daemon pushes to subscribed windows.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "push")]
@@ -66,9 +69,13 @@ pub enum Push {
 }
 
 impl Push {
-    /// Events that need an answer from the user: kept for the next window if none is open.
+    /// Events that need an answer from the user, and the island's requests: kept for the next window if none is open.
     fn needs_user(&self) -> bool {
-        matches!(self, Push::Event { event: Event::PairRequest { .. } | Event::TransferOffer { .. } })
+        match self {
+            Push::Event { event: Event::PairRequest { .. } | Event::TransferOffer { .. } } => true,
+            Push::Event { event: Event::Message { kind, .. } } => kind == ISLAND_CONTROL,
+            _ => false,
+        }
     }
 }
 

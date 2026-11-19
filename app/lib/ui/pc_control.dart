@@ -1,7 +1,7 @@
 import 'alero_motion.dart';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
@@ -73,7 +73,7 @@ class _PcControlPageState extends State<PcControlPage> {
                           child: info?.canScreen ?? false
                               ? IconButton(
                                   tooltip: tx('Ver pantalla'),
-                                  icon: const Icon(Symbols.cast_rounded),
+                                  icon: const Icon(FluentIcons.cast_24_regular),
                                   onPressed: () => openPcScreen(
                                     context,
                                     hub,
@@ -85,7 +85,7 @@ class _PcControlPageState extends State<PcControlPage> {
                         ),
                         IconButton(
                           tooltip: 'Alero Present',
-                          icon: const Icon(Symbols.slideshow_rounded),
+                          icon: const Icon(FluentIcons.slide_play_24_regular),
                           onPressed: () => openAleroPresent(
                             context,
                             hub,
@@ -95,7 +95,7 @@ class _PcControlPageState extends State<PcControlPage> {
                         ),
                         IconButton(
                           tooltip: tx('Volumen y reproducción'),
-                          icon: const Icon(Symbols.volume_up_rounded),
+                          icon: const Icon(FluentIcons.speaker_2_24_regular),
                           onPressed: () => showModalBottomSheet<void>(
                             sheetAnimationStyle: sheetMotion(context),
                             context: context,

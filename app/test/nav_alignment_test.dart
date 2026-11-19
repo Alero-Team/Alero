@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:pb_app/ui/nav.dart';
 
 void main() {
@@ -14,9 +14,9 @@ void main() {
             child: StatefulBuilder(
               builder: (context, setState) => AleroNavBar(
                 items: const [
-                  NavData(Symbols.home_rounded, 'Inicio'),
-                  NavData(Symbols.devices_rounded, 'Dispositivos', badge: 3),
-                  NavData(Symbols.settings_rounded, 'Ajustes'),
+                  NavData(FluentIcons.home_24_regular, 'Inicio'),
+                  NavData(FluentIcons.phone_desktop_24_regular, 'Dispositivos', badge: 3),
+                  NavData(FluentIcons.settings_24_regular, 'Ajustes'),
                 ],
                 selected: selected,
                 onSelect: (i) => setState(() => selected = i),
@@ -29,8 +29,8 @@ void main() {
     await tester.pumpAndSettle();
 
     for (final (name, glyph) in [
-      ('Dispositivos', Symbols.devices_rounded),
-      ('Ajustes', Symbols.settings_rounded),
+      ('Dispositivos', FluentIcons.phone_desktop_24_regular),
+      ('Ajustes', FluentIcons.settings_24_regular),
     ]) {
       final center = tester.getCenter(find.byKey(ValueKey('alero-nav-$name')));
       final icon = tester.getCenter(find.byIcon(glyph));
@@ -41,7 +41,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('alero-nav-Ajustes')));
     await tester.pumpAndSettle();
     final center = tester.getCenter(find.byKey(const ValueKey('alero-nav-Dispositivos')));
-    final icon = tester.getCenter(find.byIcon(Symbols.devices_rounded));
+    final icon = tester.getCenter(find.byIcon(FluentIcons.phone_desktop_24_regular));
     expect(icon.dx, closeTo(center.dx, 1));
     expect(icon.dy, closeTo(center.dy, 1));
   });

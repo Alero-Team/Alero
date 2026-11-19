@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use tiny_skia::Pixmap;
 
 use super::config::{luma, IslandConfig};
-use super::gfx::{color, icon, mix, Canvas, Fonts, Icon, Image, Rgb, Weight, R};
+use super::gfx::{color, icon, icon_filled, mix, Canvas, Fonts, Icon, Image, Rgb, Weight, R};
 use super::model::{Model, Notice, XState};
 use super::motion::{Motion, Spring, Style};
 use crate::lang::t;
@@ -19,7 +19,7 @@ use crate::lang::t;
 /// Logical size of the drawing surface (the window is this big times the scale). The largest screen plus the
 /// room the spring overshoots into and the shadow.
 pub const CANVAS_W: f32 = 480.0;
-pub const CANVAS_H: f32 = 344.0;
+pub const CANVAS_H: f32 = 376.0;
 const PAD: f32 = 18.0;
 /// The notch at rest: a slim tab on the top edge that says where the island is.
 const PEEK: (f32, f32) = (132.0, 6.0);
@@ -90,8 +90,12 @@ pub enum Act {
     SendClip,
     Dismiss(String),
     Device,
-    /// A control that needs adb: "wifi", "bt", "rotate" or "lock".
+    /// A control that needs adb: "wifi", "bt", "rotate", "lock" or "hotspot".
     Adb(&'static str),
+    /// Ringer silent, or back to normal.
+    Mute,
+    /// A phone control only the app can run (camera, screen, screenshot): it does it as its own button does.
+    App(&'static str),
 }
 
 /// What the host has to carry out (the island has no engine of its own).
@@ -111,6 +115,8 @@ pub enum Cmd {
     Adb { what: &'static str, on: bool },
     /// Asks the phone what it is playing (its answer is a `pb.x.media.state`).
     AskMedia,
+    /// Runs one of the app's phone controls ("camBack", "camFront", "screen", "shot") on the target phone.
+    App(&'static str),
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -564,6 +570,16 @@ impl Island {
                     p.ringer = next.into();
                 }
             }
+            Act::Mute => {
+                let id = self.model.target_id().unwrap_or_default();
+                let silent = self.model.phone.get(&id).is_some_and(|p| p.ringer == "silent");
+                let next = if silent { "normal" } else { "silent" };
+                self.cmds.push(Cmd::Phone { what: "ringer", body: json!({"mode": next}) });
+                if let Some(p) = self.model.phone.get_mut(&id) {
+                    p.ringer = next.into();
+                }
+            }
+            Act::App(what) => self.cmds.push(Cmd::App(what)),
             Act::Volume => {}
             Act::CopyClip(i) => {
                 if let Some(c) = self.model.clips.get(i) {
@@ -1278,9 +1294,9 @@ fn draw_home(d: &mut Draw, m: &Model, cfg: &IslandConfig, body: R, media: Option
                     let level = i.battery.clamp(0, 100) as f32 / 100.0;
                     icon(d.cv, Icon::Battery, bx + 12.0, mid, 24.0, color(d.pal.fg, 0.9), None);
                     let col = if i.charging { SUCCESS } else if level < 0.2 { DANGER } else { d.pal.fg };
-                    d.cv.squircle(R::new(bx + 4.1, mid - 3.1, 10.8 * level.max(0.04), 6.4), 1.6, color(col, 1.0), None);
+                    d.cv.squircle(R::new(bx + 4.5, mid - 3.5, 13.0 * level.max(0.04), 7.0), 1.5, color(col, 1.0), None);
                     if i.charging {
-                        icon(d.cv, Icon::Bolt, bx + 10.7, mid, 10.0, color(d.pal.bg, 1.0), None);
+                        icon(d.cv, Icon::Bolt, bx + 11.0, mid, 10.0, color(d.pal.bg, 1.0), None);
                     }
                     d.text(&format!("{}%", i.battery), bx + 30.0, mid + 5.0, 13.5, Weight::Medium, 1.0);
                 }
@@ -1524,18 +1540,27 @@ fn tile(d: &mut Draw, r: R, ic: Icon, label: &str, on: bool, act: Act) {
     let down = d.is_down(r);
     let fill = if down { mix(bg, d.pal.fg, 0.25) } else if d.hot(r) { mix(bg, d.pal.fg, 0.14) } else { bg };
     d.cv.squircle(r, 20.0, color(fill, 1.0), None);
-    icon(d.cv, ic, r.cx(), r.y + 22.0, 22.0, color(fg, 1.0), None);
+    let draw = if on { icon_filled } else { icon };
+    draw(d.cv, ic, r.cx(), r.y + 22.0, 22.0, color(fg, 1.0), None);
     let label = d.fonts.fit(label, 12.0, Weight::Medium, r.w - 8.0);
     let w = d.fonts.measure(&label, 12.0, Weight::Medium);
     d.cv.text(d.fonts, &label, r.cx() - w / 2.0, r.y + 49.0, 12.0, Weight::Medium, fg, 1.0);
     d.add(r, act);
 }
 
+/// Every control the island can show: the app's phone controls (same keys as `controlNames` in controls.dart)
+/// plus "ringer", which cycles sound, vibrate and silent.
+pub const CONTROLS: [&str; 15] = ["dnd", "torch", "find", "ringer", "wifi", "bt", "rotate", "lock", "hotspot", "camBack", "camFront", "screen", "shot", "mute", "clip"];
+
+/// Three rows of four: what fits the island's canvas.
+pub const MAX_CONTROLS: usize = 12;
+
 /// The controls the user chose (Ajustes), in their order; the adb ones only when adb reaches the phone.
 fn control_keys(list: &str, adb: bool) -> Vec<&'static str> {
     list.split(',')
-        .filter_map(|k| ["dnd", "torch", "find", "ringer", "wifi", "bt", "rotate", "lock"].into_iter().find(|x| *x == k.trim()))
-        .filter(|k| adb || !matches!(*k, "wifi" | "bt" | "rotate" | "lock"))
+        .filter_map(|k| CONTROLS.into_iter().find(|x| *x == k.trim()))
+        .filter(|k| adb || !matches!(*k, "wifi" | "bt" | "rotate" | "lock" | "hotspot" | "camBack" | "camFront" | "shot"))
+        .take(MAX_CONTROLS)
         .collect()
 }
 
@@ -1573,7 +1598,14 @@ fn draw_controls(d: &mut Draw, m: &Model, list: &str, body: R, wifi_confirm: boo
             "wifi" => (Icon::Wifi, if wifi_confirm { t("¿Apagar?", "Turn off?") } else { "Wi-Fi" }, r.wifi, Act::Adb("wifi")),
             "bt" => (Icon::Bluetooth, "Bluetooth", r.bt, Act::Adb("bt")),
             "rotate" => (Icon::Rotate, t("Rotación", "Rotation"), r.rotate, Act::Adb("rotate")),
-            _ => (Icon::Lock, t("Bloquear", "Lock"), false, Act::Adb("lock")),
+            "lock" => (Icon::Lock, t("Bloquear", "Lock"), false, Act::Adb("lock")),
+            "hotspot" => (Icon::Router, t("Zona Wi-Fi", "Hotspot"), false, Act::Adb("hotspot")),
+            "camBack" => (Icon::Camera, t("Trasera", "Rear"), false, Act::App("camBack")),
+            "camFront" => (Icon::CameraSwitch, t("Frontal", "Front"), false, Act::App("camFront")),
+            "screen" => (Icon::Cast, t("Ver pantalla", "View screen"), false, Act::App("screen")),
+            "shot" => (Icon::Screenshot, t("Captura", "Screenshot"), false, Act::App("shot")),
+            "mute" => (Icon::Mute, t("Silenciar", "Mute"), st.ringer == "silent", Act::Mute),
+            _ => (Icon::ClipSend, t("Portapapeles", "Clipboard"), false, Act::SendClip),
         };
         let (col, row) = (i % 4, i / 4);
         tile(d, R::new(body.x + PAD + col as f32 * (tile_w + 8.0), body.y + 48.0 + row as f32 * 70.0, tile_w, 62.0), ic, label, on, act);
@@ -1815,6 +1847,28 @@ mod tests {
         assert_eq!(i.take_cmds(), vec![Cmd::Adb { what: "wifi", on: false }]);
         i.act(Act::Adb("bt"));
         assert_eq!(i.take_cmds(), vec![Cmd::Adb { what: "bt", on: true }]);
+    }
+
+    #[test]
+    fn every_app_control_can_be_chosen_in_order_up_to_three_rows() {
+        let all = CONTROLS.join(",");
+        let with_adb = control_keys(&all, true);
+        assert_eq!(with_adb.len(), MAX_CONTROLS);
+        assert_eq!(with_adb[..3], ["dnd", "torch", "find"]);
+        assert_eq!(control_keys("clip,screen,mute,camBack,nope", false), ["clip", "screen", "mute"]);
+        assert_eq!(control_keys("shot,lock", true), ["shot", "lock"]);
+        let mut i = island();
+        with_phone(&mut i);
+        i.cfg.controls = all;
+        i.model.adb.insert("p".into(), super::super::adb::Radios::default());
+        let (w, h) = i.size_of(&View::Page(Page::Controls));
+        assert!(w * 1.08 <= CANVAS_W && h * 1.08 + 30.0 <= CANVAS_H, "{w}x{h}");
+        i.act(Act::Mute);
+        assert_eq!(i.take_cmds(), vec![Cmd::Phone { what: "ringer", body: json!({"mode": "silent"}) }]);
+        i.act(Act::Mute);
+        assert_eq!(i.take_cmds(), vec![Cmd::Phone { what: "ringer", body: json!({"mode": "normal"}) }]);
+        i.act(Act::App("camFront"));
+        assert_eq!(i.take_cmds(), vec![Cmd::App("camFront")]);
     }
 
     #[test]
@@ -2092,6 +2146,7 @@ mod tests {
             ("notifs", View::Page(Page::Notifs)),
             ("clipboard", View::Page(Page::Clipboard)),
             ("controls", View::Page(Page::Controls)),
+            ("controls-all", View::Page(Page::Controls)),
             ("call", View::Call),
             ("offer", View::Offer),
             ("transfer", View::Transfer("x1".into())),
@@ -2103,6 +2158,9 @@ mod tests {
                 let mut cfg = IslandConfig::default();
                 cfg.animation = "off".into();
                 cfg.color = colour.into();
+                if *name == "controls-all" {
+                    cfg.controls = CONTROLS.join(",");
+                }
                 let mut i = Island::new(cfg);
                 with_phone(&mut i);
                 for (n, (app, title, text)) in [("WhatsApp", "Ana", "¿Vienes a cenar hoy? Te guardé un lugar"), ("Gmail", "Banco", "Tu estado de cuenta está listo"), ("Telegram", "Edwin", "ya lo subí al repo 👍")].iter().enumerate() {

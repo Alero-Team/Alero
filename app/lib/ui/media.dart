@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../remote.dart';
@@ -111,17 +111,17 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       IconButton(
         tooltip: tx('Bajar volumen'),
         onPressed: () => _command('volume_down'),
-        icon: const Icon(Symbols.volume_down_rounded),
+        icon: const Icon(FluentIcons.speaker_1_24_regular),
       ),
       IconButton(
         tooltip: tx('Silenciar'),
         onPressed: () => _command('mute'),
-        icon: const Icon(Symbols.volume_off_rounded),
+        icon: const Icon(FluentIcons.speaker_mute_24_regular),
       ),
       IconButton(
         tooltip: tx('Subir volumen'),
         onPressed: () => _command('volume_up'),
-        icon: const Icon(Symbols.volume_up_rounded),
+        icon: const Icon(FluentIcons.speaker_2_24_regular),
       ),
     ],
   );
@@ -185,7 +185,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       if (!active) {
         return Panel(
           title: 'Reproductor',
-          icon: Symbols.music_note_rounded,
+          icon: FluentIcons.music_note_2_24_regular,
           child: MotionFade(
             child: Text(
               'No se está reproduciendo música.',
@@ -197,7 +197,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       }
       return Panel(
         title: 'Reproductor',
-        icon: Symbols.music_note_rounded,
+        icon: FluentIcons.music_note_2_24_regular,
         child: MotionFade(
           child: Column(
             key: const ValueKey('playing'),
@@ -288,7 +288,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                     onPressed: active && cm.supports(16)
                         ? () => _command('prev')
                         : null,
-                    icon: const Icon(Symbols.skip_previous_rounded),
+                    icon: const Icon(FluentIcons.previous_24_filled),
                   ),
                   const SizedBox(width: 8),
                   IconButton.filled(
@@ -300,8 +300,8 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                     onPressed: active ? () => _command('toggle') : null,
                     icon: Icon(
                       active && cm.playing
-                          ? Symbols.pause_rounded
-                          : Symbols.play_arrow_rounded,
+                          ? FluentIcons.pause_24_filled
+                          : FluentIcons.play_24_filled,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -310,7 +310,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                     onPressed: active && cm.supports(32)
                         ? () => _command('next')
                         : null,
-                    icon: const Icon(Symbols.skip_next_rounded),
+                    icon: const Icon(FluentIcons.next_24_filled),
                   ),
                 ],
               ),
@@ -325,7 +325,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       body = const EmptyState(
         key: ValueKey('no-access'),
         card: false,
-        icon: Symbols.music_off_rounded,
+        icon: FluentIcons.music_note_off_2_24_regular,
         title: 'Falta un permiso en el teléfono',
         body: 'Abre la app en el teléfono y pulsa «Activar» en el aviso de acceso a notificaciones.',
       );
@@ -335,7 +335,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         children: [
           EmptyState(
             card: false,
-            icon: Symbols.music_note_rounded,
+            icon: FluentIcons.music_note_2_24_regular,
             title: 'No suena nada',
             body: widget.computer
                 ? 'Reproduce música o un vídeo en el ordenador.'
@@ -371,10 +371,10 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
               const SizedBox(width: Gap.s),
               Icon(
                 widget.computer
-                    ? Symbols.computer_rounded
+                    ? FluentIcons.desktop_24_regular
                     : m.cast
-                    ? Symbols.cast_rounded
-                    : Symbols.smartphone_rounded,
+                    ? FluentIcons.cast_24_regular
+                    : FluentIcons.phone_24_regular,
                 size: 16,
                 color: s.primary,
               ),
@@ -440,13 +440,13 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             iconSize: 28,
             style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
             onPressed: m.supports(16) ? () => _command('prev') : null,
-            icon: const Icon(Symbols.skip_previous_rounded, fill: 1),
+            icon: const Icon(FluentIcons.previous_24_filled),
           ),
           const SizedBox(width: Gap.m),
           MorphButton(
             icon: m.playing
-                ? Symbols.pause_rounded
-                : Symbols.play_arrow_rounded,
+                ? FluentIcons.pause_24_filled
+                : FluentIcons.play_24_filled,
             label: tx(m.playing ? 'Pausar' : 'Reproducir'),
             on: m.playing,
             size: 64,
@@ -460,7 +460,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             iconSize: 28,
             style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
             onPressed: m.supports(32) ? () => _command('next') : null,
-            icon: const Icon(Symbols.skip_next_rounded, fill: 1),
+            icon: const Icon(FluentIcons.next_24_filled),
           ),
         ],
       );
@@ -513,7 +513,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           : Row(
               children: [
                 Icon(
-                  Symbols.volume_down_rounded,
+                  FluentIcons.speaker_1_24_regular,
                   size: 18,
                   color: s.onSurfaceVariant,
                 ),
@@ -542,7 +542,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                   ),
                 ),
                 Icon(
-                  Symbols.volume_up_rounded,
+                  FluentIcons.speaker_2_24_regular,
                   size: 18,
                   color: s.onSurfaceVariant,
                 ),
@@ -589,11 +589,11 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     }
     return Panel(
       title: 'Reproduciendo',
-      icon: Symbols.music_note_rounded,
+      icon: FluentIcons.music_note_2_24_regular,
       action: IconButton(
         tooltip: tx('Sincronizar reproducción'),
         onPressed: _watchRefresh,
-        icon: const Icon(Symbols.refresh_rounded),
+        icon: const Icon(FluentIcons.arrow_clockwise_24_regular),
       ),
       child: AnimatedSize(
         duration: motion(context, Spring.spatial.settle),
@@ -729,7 +729,7 @@ class _Art extends StatelessWidget {
                           color: s.tertiaryContainer,
                           child: Center(
                             child: Icon(
-                              Symbols.music_note_rounded,
+                              FluentIcons.music_note_2_24_regular,
                               size: size * 0.4,
                               color: s.onTertiaryContainer,
                             ),
@@ -764,8 +764,8 @@ class _Art extends StatelessWidget {
                       )
                     : Icon(
                         computer
-                            ? Symbols.computer_rounded
-                            : Symbols.music_note_rounded,
+                            ? FluentIcons.desktop_24_regular
+                            : FluentIcons.music_note_2_24_regular,
                         key: ValueKey(computer),
                         size: badge * 0.6,
                         color: s.onSurfaceVariant,

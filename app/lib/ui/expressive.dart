@@ -6,7 +6,7 @@ import 'dart:ui' as ui show Image;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/physics.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../device_image.dart';
 import '../remote.dart';
@@ -528,7 +528,7 @@ class PhoneCover extends StatelessWidget {
   Widget build(BuildContext context) {
     final file = look?.file;
     const icon = Icon(
-      Symbols.smartphone_rounded,
+      FluentIcons.phone_24_regular,
       key: ValueKey('icon'),
       size: 20,
     );

@@ -1,5 +1,37 @@
 # Cambios
 
+## Beta 1.4.9 (1.4.9) — 2026-11-19
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Toda la app
+
+- **Iconos nuevos, los mismos en todas partes:** la app, Alero Island, el widget de Android y los avisos de transferencia usan ahora Fluent UI System Icons (Microsoft, MIT). La isla dibuja exactamente los mismos glifos que la app, y un icono seleccionado o encendido pasa a su versión rellena.
+- **Pantalla de carga:** el logo ya no se queda quieto tras la entrada; un trazo de luz lo recorre hasta que Alero termina de cargar (sin bucle con «reducir animaciones»).
+- **Tipos de archivo más claros en modo oscuro:** cada tipo tiene un color vivo (imagen azul, vídeo naranja, audio rosa, documento rojo, hoja de cálculo verde, comprimido ámbar, APK lima).
+- **Controles del teléfono:** se quita «Reproducción en el teléfono» de «Controles avanzados»; el reproductor de Inicio sigue igual.
+
+### Alero Island
+
+- **Controles a tu medida:** en Ajustes › Alero Island › Controles del teléfono, arrastra para ordenar y enciende los que quieras (hasta 12, tres filas). Están todas las acciones de la app: además de las de antes, Zona Wi-Fi, cámara trasera y frontal, Ver pantalla, Captura, Silenciar y Portapapeles.
+- Las cámaras, Ver pantalla y Captura las hace la app igual que su botón; si está cerrada, la isla la abre.
+- «Buscar» usa el mismo icono que en la app y la isla es un poco más alta para caber tres filas.
+
+### English
+
+#### Whole app
+
+- **New icons, the same everywhere:** the app, Alero Island, the Android widget and transfer notifications now use Fluent UI System Icons (Microsoft, MIT). The island draws exactly the same glyphs as the app, and a selected or switched-on icon turns into its filled version.
+- **Loading screen:** the logo no longer stops after its entrance; a trace of light runs along it until Alero has finished loading (no loop with "reduce animations").
+- **Clearer file types in dark mode:** each type gets a vivid colour (image blue, video orange, audio pink, document red, spreadsheet green, archive amber, APK lime).
+- **Phone controls:** "Playback on the phone" is gone from "Advanced controls"; the Home player stays as it was.
+
+#### Alero Island
+
+- **Controls your way:** in Settings › Alero Island › Phone controls, drag to reorder and turn on the ones you want (up to 12, three rows). Every action of the app is there: besides the earlier ones, Hotspot, rear and front camera, View screen, Screenshot, Mute and Clipboard.
+- The cameras, View screen and Screenshot are carried out by the app, just like its own buttons; if it is closed, the island opens it.
+- "Find" uses the same icon as the app, and the island is a little taller to fit three rows.
+
 ## Beta 1.4.8 (1.4.8) — 2026-11-19
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.

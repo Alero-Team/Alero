@@ -4,7 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../pc_remote.dart';
@@ -279,7 +279,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
                           children: [
                             if (box.maxHeight >= 120) ...[
                               Icon(
-                                Symbols.mouse_rounded,
+                                FluentIcons.cursor_click_24_regular,
                                 size: 32,
                                 color: s.onSurfaceVariant,
                               ),
@@ -479,7 +479,7 @@ class _MouseActionBarState extends State<MouseActionBar>
           child: const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Symbols.keyboard_rounded, size: 22),
+              Icon(FluentIcons.keyboard_24_regular, size: 22),
               SizedBox(height: Gap.xs),
               Text('Teclado'),
             ],
@@ -563,7 +563,7 @@ class PointerSensitivity extends StatelessWidget {
   Widget build(BuildContext context) => PopupMenuButton<double>(
     popUpAnimationStyle: popUpMotion(context),
     tooltip: tx('Sensibilidad del cursor'),
-    icon: const Icon(Symbols.tune_rounded),
+    icon: const Icon(FluentIcons.options_24_regular),
     initialValue: value,
     onSelected: onChanged,
     itemBuilder: (_) => [
@@ -751,8 +751,8 @@ class _PcMediaControlsState extends State<PcMediaControls> {
                 MotionFade(
                   child: Icon(
                     playing && m.playing
-                        ? Symbols.graphic_eq_rounded
-                        : Symbols.music_note_rounded,
+                        ? FluentIcons.sound_wave_circle_24_regular
+                        : FluentIcons.music_note_2_24_regular,
                     key: ValueKey(playing && m.playing),
                     size: 18,
                     color: s.onSurfaceVariant,
@@ -794,20 +794,20 @@ class _PcMediaControlsState extends State<PcMediaControls> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 HoldButton(
-                  icon: Symbols.volume_down_rounded,
+                  icon: FluentIcons.speaker_1_24_regular,
                   label: tx('Bajar volumen'),
                   onStep: () => r.media(p, 'volume_down'),
                 ),
                 const SizedBox(width: Gap.s),
                 HoldButton(
-                  icon: Symbols.volume_off_rounded,
+                  icon: FluentIcons.speaker_mute_24_regular,
                   label: tx('Silenciar'),
                   repeat: false,
                   onStep: () => r.media(p, 'mute'),
                 ),
                 const SizedBox(width: Gap.s),
                 HoldButton(
-                  icon: Symbols.volume_up_rounded,
+                  icon: FluentIcons.speaker_2_24_regular,
                   label: tx('Subir volumen'),
                   onStep: () => r.media(p, 'volume_up'),
                 ),
@@ -817,7 +817,7 @@ class _PcMediaControlsState extends State<PcMediaControls> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 HoldButton(
-                  icon: Symbols.skip_previous_rounded,
+                  icon: FluentIcons.previous_24_filled,
                   label: tx('Anterior'),
                   repeat: false,
                   onStep: () => r.media(p, 'prev'),
@@ -825,15 +825,15 @@ class _PcMediaControlsState extends State<PcMediaControls> {
                 const SizedBox(width: Gap.s),
                 HoldButton(
                   icon: playing && m.playing
-                      ? Symbols.pause_rounded
-                      : Symbols.play_arrow_rounded,
+                      ? FluentIcons.pause_24_filled
+                      : FluentIcons.play_24_filled,
                   label: tx('Reproducir o pausar'),
                   repeat: false,
                   onStep: () => r.media(p, 'toggle'),
                 ),
                 const SizedBox(width: Gap.s),
                 HoldButton(
-                  icon: Symbols.skip_next_rounded,
+                  icon: FluentIcons.next_24_filled,
                   label: tx('Siguiente'),
                   repeat: false,
                   onStep: () => r.media(p, 'next'),
@@ -996,7 +996,7 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
                       tooltip: tx(
                         'Vaciar el campo (no borra nada en el ordenador)',
                       ),
-                      icon: const Icon(Symbols.close_rounded),
+                      icon: const Icon(FluentIcons.dismiss_24_regular),
                       onPressed: _clear,
                     ),
             ),
@@ -1008,30 +1008,30 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
             children: [
               _key('Esc', 'esc'),
               _key('Tab', 'tab'),
-              _key('Intro', 'enter', icon: Symbols.keyboard_return_rounded),
-              _key('Borrar', 'backspace', icon: Symbols.backspace_rounded),
+              _key('Intro', 'enter', icon: FluentIcons.arrow_enter_left_24_regular),
+              _key('Borrar', 'backspace', icon: FluentIcons.backspace_24_regular),
               _key('Suprimir', 'delete'),
-              _key('Izquierda', 'left', icon: Symbols.arrow_back_rounded),
-              _key('Arriba', 'up', icon: Symbols.arrow_upward_rounded),
-              _key('Abajo', 'down', icon: Symbols.arrow_downward_rounded),
-              _key('Derecha', 'right', icon: Symbols.arrow_forward_rounded),
+              _key('Izquierda', 'left', icon: FluentIcons.arrow_left_24_regular),
+              _key('Arriba', 'up', icon: FluentIcons.arrow_up_24_regular),
+              _key('Abajo', 'down', icon: FluentIcons.arrow_down_24_regular),
+              _key('Derecha', 'right', icon: FluentIcons.arrow_right_24_regular),
               _key(
                 'Copiar',
                 'c',
                 mods: const ['ctrl'],
-                icon: Symbols.content_copy_rounded,
+                icon: FluentIcons.copy_24_regular,
               ),
               _key(
                 'Pegar',
                 'v',
                 mods: const ['ctrl'],
-                icon: Symbols.content_paste_rounded,
+                icon: FluentIcons.clipboard_paste_24_regular,
               ),
               _key(
                 'Deshacer',
                 'z',
                 mods: const ['ctrl'],
-                icon: Symbols.undo_rounded,
+                icon: FluentIcons.arrow_undo_24_regular,
               ),
               _key('Alt+Tab', 'tab', mods: const ['alt']),
               _key('Windows', 'win'),
@@ -1065,7 +1065,7 @@ class PowerActions extends StatelessWidget {
             hub.remote.power(peer, 'lock');
           }
         },
-        icon: const Icon(Symbols.lock_rounded, size: 18),
+        icon: const Icon(FluentIcons.lock_closed_24_regular, size: 18),
         label: const FitLabel('Bloquear'),
       ),
       OutlinedButton.icon(
@@ -1079,7 +1079,7 @@ class PowerActions extends StatelessWidget {
             hub.remote.power(peer, 'sleep');
           }
         },
-        icon: const Icon(Symbols.bedtime_rounded, size: 18),
+        icon: const Icon(FluentIcons.weather_moon_24_regular, size: 18),
         label: const FitLabel('Suspender'),
       ),
       OutlinedButton.icon(
@@ -1093,7 +1093,7 @@ class PowerActions extends StatelessWidget {
             hub.remote.power(peer, 'shutdown');
           }
         },
-        icon: const Icon(Symbols.power_settings_new_rounded, size: 18),
+        icon: const Icon(FluentIcons.power_24_regular, size: 18),
         label: const FitLabel('Apagar'),
       ),
     ],

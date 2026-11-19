@@ -60,12 +60,12 @@ object TransferNotices {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    /** The file's type as a large icon (system glyphs, so no new assets); an image gets its own thumbnail via [thumb]. */
+    /** The file's type as a large icon (Fluent, like the rest of Alero); an image gets its own thumbnail via [thumb]. */
     private fun typeIcon(c: Context, name: String): Icon {
         val res = when (name.substringAfterLast('.', "").lowercase()) {
-            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "avif" -> android.R.drawable.ic_menu_gallery
-            "mp4", "mkv", "mov", "webm", "avi", "mp3", "flac", "wav", "ogg", "m4a", "opus" -> android.R.drawable.ic_media_play
-            else -> android.R.drawable.ic_menu_save
+            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "avif" -> R.drawable.ic_n_image
+            "mp4", "mkv", "mov", "webm", "avi", "mp3", "flac", "wav", "ogg", "m4a", "opus" -> R.drawable.ic_n_media
+            else -> R.drawable.ic_n_file
         }
         return Icon.createWithResource(c, res)
     }
