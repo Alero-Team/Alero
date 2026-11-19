@@ -630,9 +630,8 @@ class _HotkeyState extends State<_Hotkey> {
   }
 
   KeyEventResult _key(FocusNode _, KeyEvent e) {
-    if (!_recording)
-      return KeyEventResult
-          .ignored; // Tab and Enter keep working when not recording
+    // Tab and Enter keep working when not recording.
+    if (!_recording) return KeyEventResult.ignored;
     if (e is! KeyDownEvent) return KeyEventResult.handled;
     if (e.logicalKey == LogicalKeyboardKey.escape) {
       _stop();
