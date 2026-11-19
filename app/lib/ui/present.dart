@@ -9,6 +9,7 @@ import 'remote_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import 'alero_motion.dart';
 import '../l10n.dart';
 
 /// Alero Present uses the existing, authenticated PC input channel.
@@ -192,18 +193,24 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                     setState(() => _mode = values.first),
               ),
               const SizedBox(height: Gap.m),
-              if (blocked != null)
-                Text(blocked, style: TextStyle(color: s.error))
-              else
-                Text(
-                  _mode == PresentationMode.powerpoint
-                      ? 'F5 inicia una presentación de PowerPoint. '
-                            'Las flechas avanzan o retroceden y Esc la termina.'
-                      : 'Inicia el modo Presentar desde Google Slides u otro '
-                            'servicio en la computadora. Las flechas cambian '
-                            'diapositivas y Esc sale del modo presentación.',
-                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                ),
+              MotionFade(
+                child: blocked != null
+                    ? Text(
+                        blocked,
+                        key: ValueKey(blocked),
+                        style: TextStyle(color: s.error),
+                      )
+                    : Text(
+                        _mode == PresentationMode.powerpoint
+                            ? 'F5 inicia una presentación de PowerPoint. '
+                                  'Las flechas avanzan o retroceden y Esc la termina.'
+                            : 'Inicia el modo Presentar desde Google Slides u otro '
+                                  'servicio en la computadora. Las flechas cambian '
+                                  'diapositivas y Esc sale del modo presentación.',
+                        key: ValueKey(_mode),
+                        style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                      ),
+              ),
               const SizedBox(height: Gap.xxl),
               Row(
                 children: [
@@ -229,30 +236,33 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                 ],
               ),
               const SizedBox(height: Gap.m),
-              Row(
-                children: [
-                  if (_mode == PresentationMode.powerpoint) ...[
+              MotionFade(
+                child: Row(
+                  key: ValueKey(_mode),
+                  children: [
+                    if (_mode == PresentationMode.powerpoint) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: enabled
+                              ? () => _send(PresentationAction.start)
+                              : null,
+                          icon: const Icon(Symbols.play_arrow_rounded),
+                          label: const Text('Iniciar'),
+                        ),
+                      ),
+                      const SizedBox(width: Gap.m),
+                    ],
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: enabled
-                            ? () => _send(PresentationAction.start)
+                            ? () => _send(PresentationAction.finish)
                             : null,
-                        icon: const Icon(Symbols.play_arrow_rounded),
-                        label: const Text('Iniciar'),
+                        icon: const Icon(Symbols.stop_rounded),
+                        label: const Text('Salir (Esc)'),
                       ),
                     ),
-                    const SizedBox(width: Gap.m),
                   ],
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: enabled
-                          ? () => _send(PresentationAction.finish)
-                          : null,
-                      icon: const Icon(Symbols.stop_rounded),
-                      label: const Text('Salir (Esc)'),
-                    ),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: Gap.xxl),
               Card.filled(
@@ -262,14 +272,19 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                     children: [
                       Text('Cronómetro de exposición', style: t.titleMedium),
                       const SizedBox(height: Gap.s),
-                      Text(_time, style: t.displayMedium),
+                      AleroMotion.number(_time, t.displayMedium),
                       const SizedBox(height: Gap.s),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           FilledButton.tonal(
                             onPressed: _toggleTimer,
-                            child: Text(_running ? 'Pausar' : 'Iniciar tiempo'),
+                            child: MotionFade(
+                              child: Text(
+                                _running ? 'Pausar' : 'Iniciar tiempo',
+                                key: ValueKey(_running),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: Gap.s),
                           TextButton(

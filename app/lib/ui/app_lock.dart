@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../native.dart';
 import 'icon.dart';
+import 'alero_motion.dart';
 import '../l10n.dart';
 
 /// Above the Navigator so existing dialogs and routes cannot bypass the lock.
@@ -66,39 +67,48 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
   Widget build(BuildContext context) => Stack(
     children: [
       ExcludeSemantics(excluding: _locked, child: widget.child),
-      if (_locked)
-        Positioned.fill(
-          child: Scaffold(
-            body: SafeArea(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Symbols.lock_rounded, size: 40),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Alero está bloqueado',
-                        style: Theme.of(context).textTheme.titleLarge,
+      // Fades in and out; the empty placeholder lets taps through to the app underneath.
+      Positioned.fill(
+        child: MotionFade(
+          child: !_locked
+              ? const SizedBox.shrink(key: ValueKey('open'))
+              : Scaffold(
+                  key: const ValueKey('locked'),
+                  body: SafeArea(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Symbols.lock_rounded, size: 40),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Alero está bloqueado',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 12),
+                            MotionFade(
+                              child: Text(
+                                _error ??
+                                    'Usa tu huella o el PIN del dispositivo.',
+                                key: ValueKey(_error),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            FilledButton(
+                              onPressed: _busy ? null : _unlock,
+                              child: const Text('Desbloquear'),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _error ?? 'Usa tu huella o el PIN del dispositivo.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: _busy ? null : _unlock,
-                        child: const Text('Desbloquear'),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ),
         ),
+      ),
     ],
   );
 }

@@ -25,6 +25,8 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _back = false;
   bool _busy = false, _startup = false;
   String? _error;
+  // Kept so the message stays readable while its panel collapses.
+  String? _lastError;
 
   // Permissions are granted in Android's own screens: read them again when Alero comes back.
   late final _life = AppLifecycleListener(
@@ -83,13 +85,16 @@ class _SetupScreenState extends State<SetupScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 2, right: Gap.m),
-            child: Icon(
-              ok
-                  ? Symbols.check_circle_rounded
-                  : Symbols.radio_button_unchecked_rounded,
-              fill: ok ? 1 : 0,
-              color: ok ? s.primary : s.onSurfaceVariant,
-              semanticLabel: ok ? 'Concedido' : 'Sin conceder',
+            child: MotionFade(
+              child: Icon(
+                ok
+                    ? Symbols.check_circle_rounded
+                    : Symbols.radio_button_unchecked_rounded,
+                key: ValueKey(ok),
+                fill: ok ? 1 : 0,
+                color: ok ? s.primary : s.onSurfaceVariant,
+                semanticLabel: ok ? 'Concedido' : 'Sin conceder',
+              ),
             ),
           ),
           Expanded(
@@ -98,19 +103,23 @@ class _SetupScreenState extends State<SetupScreen> {
               children: [
                 Text(title, style: Theme.of(context).textTheme.titleSmall),
                 Text(why),
-                ok
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: Gap.s),
-                        child: Text(
-                          'Concedido',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: s.primary),
+                MotionFade(
+                  child: ok
+                      ? Padding(
+                          key: const ValueKey('ok'),
+                          padding: const EdgeInsets.symmetric(vertical: Gap.s),
+                          child: Text(
+                            'Concedido',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(color: s.primary),
+                          ),
+                        )
+                      : TextButton(
+                          key: const ValueKey('ask'),
+                          onPressed: _busy ? null : () => _act(onTap),
+                          child: Text(action),
                         ),
-                      )
-                    : TextButton(
-                        onPressed: _busy ? null : () => _act(onTap),
-                        child: Text(action),
-                      ),
+                ),
               ],
             ),
           ),
@@ -127,6 +136,7 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Widget _build(BuildContext context) {
     final hub = widget.hub;
+    _lastError = _error ?? _lastError;
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -334,16 +344,18 @@ class _SetupScreenState extends State<SetupScreen> {
                     ),
                   ),
                 ),
-                if (_error != null)
-                  Padding(
+                ArcExpand(
+                  expanded: _error != null,
+                  child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: Gap.m),
                     child: Text(
-                      _error!,
+                      _lastError ?? '',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ),
+                ),
                 const SizedBox(height: Gap.xl),
                 Wrap(
                   spacing: Gap.m,

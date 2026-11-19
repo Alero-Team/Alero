@@ -65,9 +65,9 @@ class Spring extends Curve {
   }
 }
 
-/// How much longer every app animation runs than its base value. The computer keeps the calmer 1.45; on the phone
-/// that felt sluggish under the finger, so it runs a little under the springs' own timing.
-final motionScale = isPhone ? 0.85 : 1.45;
+/// How much longer every app animation runs than its base value: 1x on computer and phone (the user asked for
+/// normal speed). Kept as one knob so every spatial duration can be retuned in one place.
+const motionScale = 1.0;
 
 /// Animation length, or zero when the system asks for reduced motion.
 Duration motion(BuildContext c, Duration d) =>
@@ -185,9 +185,8 @@ Future<T?> showAleroDialog<T>({
   ),
 );
 
-/// The small springy press used throughout Orion Store's navigation and cards.
-/// It stays a normal InkWell: keyboard, hover, focus and accessibility still work.
-class OrionPress extends StatefulWidget {
+/// The press used by Orion Store's navigation: [AleroPress] (hover tint, 0.97 press) with a pill radius.
+class OrionPress extends StatelessWidget {
   const OrionPress({
     super.key,
     required this.onTap,
@@ -200,29 +199,8 @@ class OrionPress extends StatefulWidget {
   final double radius;
 
   @override
-  State<OrionPress> createState() => _OrionPressState();
-}
-
-class _OrionPressState extends State<OrionPress> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    type: MaterialType.transparency,
-    child: InkWell(
-      onTap: widget.onTap,
-      borderRadius: BorderRadius.circular(widget.radius),
-      onHighlightChanged: (value) {
-        if (mounted) setState(() => _pressed = value);
-      },
-      child: AnimatedScale(
-        scale: _pressed ? 0.955 : 1,
-        duration: AleroMotion.duration(context, 240),
-        curve: AleroMotion.fastSpatial,
-        child: widget.child,
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      AleroPress(onTap: onTap, radius: radius, child: child);
 }
 
 /// Orion Store's destination motion: the new page rises from 98% scale
@@ -331,7 +309,15 @@ class _WavyProgressState extends State<WavyProgress>
         child: SizedBox(
           height: widget.height,
           width: double.infinity,
-          child: CustomPaint(painter: _Wave(v, _c, p.signal, p.alt)),
+          // The value glides to each new reading; indeterminate (null) passes straight through.
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: v ?? 0),
+            duration: AleroMotion.micro(context, Fluent.d333),
+            curve: Fluent.enter,
+            builder: (_, t, _) => CustomPaint(
+              painter: _Wave(v == null ? null : t, _c, p.signal, p.alt),
+            ),
+          ),
         ),
       ),
     );

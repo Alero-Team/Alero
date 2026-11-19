@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -9,6 +10,8 @@ import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'phone_windows.dart';
+import 'controls.dart' show Presence;
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -211,7 +214,9 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
     final d = _device;
     final live = d != null && PhoneSessions.instance.running(d.serial);
     return Scaffold(
-      appBar: AppBar(title: Text(tr('Acceso remoto a {}', [widget.phone.name]))),
+      appBar: AppBar(
+        title: Text(tr('Acceso remoto a {}', [widget.phone.name])),
+      ),
       body: isPhone || !Scrcpy.available
           ? const EmptyState(
               icon: Symbols.cast_rounded,
@@ -236,23 +241,27 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (_devices.isEmpty)
-                            Text(
-                              'No hay teléfonos a la vista. Conecta uno por USB con «Depuración USB» activada, o búscalo por Wi-Fi.',
-                              style: t.bodyMedium?.copyWith(
-                                color: s.onSurfaceVariant,
-                              ),
-                            ),
+                          Presence(
+                            child: _devices.isEmpty
+                                ? Text(
+                                    'No hay teléfonos a la vista. Conecta uno por USB con «Depuración USB» activada, o búscalo por Wi-Fi.',
+                                    style: t.bodyMedium?.copyWith(
+                                      color: s.onSurfaceVariant,
+                                    ),
+                                  )
+                                : null,
+                          ),
                           RadioGroup<String>(
                             groupValue: _serial,
                             onChanged: (v) {
                               setState(() => _serial = v);
                               _probe();
                             },
-                            child: Column(
+                            child: MotionList(
                               children: [
                                 for (final x in _devices)
                                   RadioListTile<String>(
+                                    key: ValueKey(x.serial),
                                     contentPadding: EdgeInsets.zero,
                                     value: x.serial,
                                     secondary: Icon(
@@ -287,35 +296,43 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                       ),
                     ),
                   ),
-                  if (_screens.length > 1) ...[
-                    gap,
-                    Reveal(
-                      index: 1,
-                      child: Panel(
-                        title: 'Pantalla',
-                        icon: Symbols.smartphone_rounded,
-                        child: DropdownButton<int>(
-                          isExpanded: true,
-                          value: _screens.any((v) => v.id == _displayId)
-                              ? _displayId
-                              : _screens.first.id,
-                          items: [
-                            for (final display in _screens)
-                              DropdownMenuItem(
-                                value: display.id,
-                                child: Text(
-                                  display.description,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                  Presence(
+                    child: _screens.length > 1
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              gap,
+                              Reveal(
+                                index: 1,
+                                child: Panel(
+                                  title: 'Pantalla',
+                                  icon: Symbols.smartphone_rounded,
+                                  child: DropdownButton<int>(
+                                    isExpanded: true,
+                                    value:
+                                        _screens.any((v) => v.id == _displayId)
+                                        ? _displayId
+                                        : _screens.first.id,
+                                    items: [
+                                      for (final display in _screens)
+                                        DropdownMenuItem(
+                                          value: display.id,
+                                          child: Text(
+                                            display.description,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                    onChanged: (id) =>
+                                        setState(() => _displayId = id ?? 0),
+                                  ),
                                 ),
                               ),
-                          ],
-                          onChanged: (id) =>
-                              setState(() => _displayId = id ?? 0),
-                        ),
-                      ),
-                    ),
-                  ],
+                            ],
+                          )
+                        : null,
+                  ),
                   gap,
                   Reveal(
                     index: 2,
@@ -389,15 +406,25 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                   ),
                 ];
                 final right = <Widget>[
-                  if (d != null && d.ready) ...[
-                    PhoneWindowsPanel(serial: d.serial, deviceName: d.name),
-                    const SizedBox(height: Gap.m),
-                    PhoneRecordPanel(
-                      serial: d.serial,
-                      folder: widget.hub.downloads,
-                    ),
-                    const SizedBox(height: Gap.m),
-                  ],
+                  Presence(
+                    child: d != null && d.ready
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              PhoneWindowsPanel(
+                                serial: d.serial,
+                                deviceName: d.name,
+                              ),
+                              const SizedBox(height: Gap.m),
+                              PhoneRecordPanel(
+                                serial: d.serial,
+                                folder: widget.hub.downloads,
+                              ),
+                              const SizedBox(height: Gap.m),
+                            ],
+                          )
+                        : null,
+                  ),
                   _Setup(
                     port: _port,
                     code: _code,
@@ -415,21 +442,28 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (live) _LiveBar(serial: d.serial, name: d.name),
+                            Presence(
+                              child: live
+                                  ? _LiveBar(serial: d.serial, name: d.name)
+                                  : null,
+                            ),
                             Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(Gap.l),
                                 child: Row(
                                   children: [
-                                    Icon(
-                                      live
-                                          ? Symbols.cast_connected_rounded
-                                          : Symbols.cast_rounded,
-                                      size: 32,
-                                      fill: live ? 1 : 0,
-                                      color: live
-                                          ? s.primary
-                                          : s.onSurfaceVariant,
+                                    MotionFade(
+                                      child: Icon(
+                                        live
+                                            ? Symbols.cast_connected_rounded
+                                            : Symbols.cast_rounded,
+                                        key: ValueKey(live),
+                                        size: 32,
+                                        fill: live ? 1 : 0,
+                                        color: live
+                                            ? s.primary
+                                            : s.onSurfaceVariant,
+                                      ),
                                     ),
                                     const SizedBox(width: Gap.l),
                                     Expanded(
@@ -437,83 +471,113 @@ class _PhoneControlPageState extends State<PhoneControlPage> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            live
-                                                ? tr('Controlando {}', [d.name])
-                                                : d == null
-                                                ? 'Conecta el teléfono por USB o depuración inalámbrica'
-                                                : d.ready
-                                                ? tr('{} listo', [d.name])
-                                                : '${d.name}: ${_stateText(d)}',
-                                            style: t.titleLarge,
+                                          MotionFade(
+                                            child: Text(
+                                              live
+                                                  ? tr('Controlando {}', [
+                                                      d.name,
+                                                    ])
+                                                  : d == null
+                                                  ? 'Conecta el teléfono por USB o depuración inalámbrica'
+                                                  : d.ready
+                                                  ? tr('{} listo', [d.name])
+                                                  : '${d.name}: ${_stateText(d)}',
+                                              key: ValueKey(
+                                                live
+                                                    ? 'live-${d.name}'
+                                                    : d == null
+                                                    ? 'none'
+                                                    : '${d.name}|${d.ready}|${d.state}',
+                                              ),
+                                              style: t.titleLarge,
+                                            ),
                                           ),
-                                          if (_status.isNotEmpty)
-                                            Semantics(
-                                              liveRegion: true,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  bottom: Gap.m,
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    if (_busy)
-                                                      const Padding(
-                                                        padding:
-                                                            EdgeInsets.only(
-                                                              right: Gap.s,
+                                          Presence(
+                                            alignment: Alignment.topLeft,
+                                            child: _status.isEmpty
+                                                ? null
+                                                : Semantics(
+                                                    liveRegion: true,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            bottom: Gap.m,
+                                                          ),
+                                                      child: Row(
+                                                        children: [
+                                                          Presence(
+                                                            alignment: Alignment
+                                                                .centerLeft,
+                                                            child: _busy
+                                                                ? const Padding(
+                                                                    padding:
+                                                                        EdgeInsets.only(
+                                                                          right:
+                                                                              Gap.s,
+                                                                        ),
+                                                                    child: SizedBox(
+                                                                      width: 16,
+                                                                      height:
+                                                                          16,
+                                                                      child: CircularProgressIndicator(
+                                                                        strokeWidth:
+                                                                            2,
+                                                                      ),
+                                                                    ),
+                                                                  )
+                                                                : null,
+                                                          ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              _status,
+                                                              style:
+                                                                  t.bodyMedium,
                                                             ),
-                                                        child: SizedBox(
-                                                          width: 16,
-                                                          height: 16,
-                                                          child:
-                                                              CircularProgressIndicator(
-                                                                strokeWidth: 2,
-                                                              ),
-                                                        ),
-                                                      ),
-                                                    Expanded(
-                                                      child: Text(
-                                                        _status,
-                                                        style: t.bodyMedium,
+                                                          ),
+                                                        ],
                                                       ),
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
+                                                  ),
+                                          ),
                                         ],
                                       ),
                                     ),
                                     const SizedBox(width: Gap.l),
                                     Align(
                                       alignment: Alignment.centerRight,
-                                      child: live
-                                          ? FilledButton.tonalIcon(
-                                              onPressed: () => PhoneSessions
-                                                  .instance
-                                                  .stop(d.serial),
-                                              icon: const Icon(
-                                                Symbols.stop_circle_rounded,
-                                                size: 18,
+                                      child: MotionFade(
+                                        child: live
+                                            ? FilledButton.tonalIcon(
+                                                key: const ValueKey('stop'),
+                                                onPressed: () => PhoneSessions
+                                                    .instance
+                                                    .stop(d.serial),
+                                                icon: const Icon(
+                                                  Symbols.stop_circle_rounded,
+                                                  size: 18,
+                                                ),
+                                                label: const Text('Detener'),
+                                              )
+                                            : FilledButton.icon(
+                                                key: const ValueKey('open'),
+                                                onPressed:
+                                                    _busy ||
+                                                        d == null ||
+                                                        !d.ready
+                                                    ? null
+                                                    : () => _run(
+                                                        'Abriendo…',
+                                                        _start,
+                                                      ),
+                                                icon: const Icon(
+                                                  Symbols.cast_rounded,
+                                                  size: 18,
+                                                ),
+                                                label: const Text(
+                                                  'Abrir pantalla',
+                                                ),
                                               ),
-                                              label: const Text('Detener'),
-                                            )
-                                          : FilledButton.icon(
-                                              onPressed:
-                                                  _busy || d == null || !d.ready
-                                                  ? null
-                                                  : () => _run(
-                                                      'Abriendo…',
-                                                      _start,
-                                                    ),
-                                              icon: const Icon(
-                                                Symbols.cast_rounded,
-                                                size: 18,
-                                              ),
-                                              label: const Text(
-                                                'Abrir pantalla',
-                                              ),
-                                            ),
+                                      ),
                                     ),
                                   ],
                                 ),

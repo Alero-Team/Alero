@@ -117,10 +117,29 @@ class HomeScreen extends StatelessWidget {
     }
 
     final recent = _Recent(hub, go: go);
+    final id = main.id;
     final media = online && phone
-        ? MediaPanel(hub, main.id, compact: !isPhone)
+        ? _Select(
+            hub,
+            () => (
+              hub.media[id],
+              hub.info[id]?.notifAccess,
+              hub.appIcons[hub.media[id]?.pkg],
+            ),
+            () => MediaPanel(hub, id, compact: !isPhone),
+          )
         : null;
-    final notifs = online && phone ? NotificationsPanel(hub, main.id) : null;
+    final notifs = online && phone
+        ? _Select(
+            hub,
+            () => (
+              hub.notifs[id],
+              hub.info[id]?.notifAccess,
+              hub.appIcons.length,
+            ),
+            () => NotificationsPanel(hub, id),
+          )
+        : null;
     final controls = online && phone && !isPhone
         ? PhoneControlsPanel(hub, main)
         : null;
@@ -175,35 +194,51 @@ class HomeScreen extends StatelessWidget {
 
     final shown = homeTiles(_pcTiles, hub.homeOrder, hub.homeHidden);
     // A tile with nothing to show yet (phone offline) is skipped, or says so where a column needs it.
+    Widget? swap(String k, Widget? real, Widget? holder) {
+      final w = real ?? holder;
+      // Keyed by which of the two it is: the phone going offline crossfades to the placeholder.
+      return w == null
+          ? null
+          : MotionFade(
+              child: KeyedSubtree(key: ValueKey('$k${real != null}'), child: w),
+            );
+    }
+
     Widget? tile(String t, {bool placeholder = false}) => switch (t) {
       'device' => hero,
-      'media' =>
-        media ??
-            (placeholder
-                ? const Panel(
-                    title: 'Reproductor',
-                    icon: Symbols.music_note_rounded,
-                    child: Text('No hay música en reproducción.'),
-                  )
-                : null),
-      'controls' =>
-        controls ??
-            (placeholder
-                ? const Panel(
-                    title: 'Controles rápidos',
-                    icon: Symbols.tune_rounded,
-                    child: Text('Conecta el teléfono para usar sus controles.'),
-                  )
-                : null),
-      'notifs' =>
-        notifs ??
-            (placeholder
-                ? const Panel(
-                    title: 'Notificaciones',
-                    icon: Symbols.notifications_rounded,
-                    child: Text('Sin notificaciones.'),
-                  )
-                : null),
+      'media' => swap(
+        t,
+        media,
+        placeholder
+            ? const Panel(
+                title: 'Reproductor',
+                icon: Symbols.music_note_rounded,
+                child: Text('No hay música en reproducción.'),
+              )
+            : null,
+      ),
+      'controls' => swap(
+        t,
+        controls,
+        placeholder
+            ? const Panel(
+                title: 'Controles rápidos',
+                icon: Symbols.tune_rounded,
+                child: Text('Conecta el teléfono para usar sus controles.'),
+              )
+            : null,
+      ),
+      'notifs' => swap(
+        t,
+        notifs,
+        placeholder
+            ? const Panel(
+                title: 'Notificaciones',
+                icon: Symbols.notifications_rounded,
+                child: Text('Sin notificaciones.'),
+              )
+            : null,
+      ),
       _ => recent,
     };
     // Two columns on a wide window: the first tiles of the user's order on the left (three fifths of
@@ -533,9 +568,9 @@ class _Hero extends StatelessWidget {
                         child: Semantics(
                           button: true,
                           label: tr('Ver {} en Dispositivos', [p.name]),
-                          child: InkWell(
+                          child: AleroPress(
                             onTap: () => go(Section.devices),
-                            borderRadius: BorderRadius.circular(12),
+                            radius: 12,
                             child: Center(child: picture),
                           ),
                         ),
@@ -596,16 +631,22 @@ class _Hero extends StatelessWidget {
                                     charging: info!.charging,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
+                                  AleroMotion.number(
                                     '${info!.battery}%',
-                                    style: type.titleLarge,
+                                    type.titleLarge,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
-                                    child: LinearProgressIndicator(
-                                      value: (info!.battery / 100).clamp(0, 1),
-                                      minHeight: 7,
-                                      borderRadius: BorderRadius.circular(30),
+                                    child: TweenValue(
+                                      (info!.battery / 100).clamp(0, 1),
+                                      builder: (_, v) =>
+                                          LinearProgressIndicator(
+                                            value: v,
+                                            minHeight: 7,
+                                            borderRadius: BorderRadius.circular(
+                                              30,
+                                            ),
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -623,15 +664,18 @@ class _Hero extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!online) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Comprueba que ambos dispositivos estén conectados a la misma red.',
-                    style: type.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
+                ArcExpand(
+                  expanded: !online,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      'Comprueba que ambos dispositivos estén conectados a la misma red.',
+                      style: type.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ],
+                ),
                 if (isPhone) ...[
                   const SizedBox(height: 18),
                   QuickActions(hub, p),
@@ -714,13 +758,21 @@ class _StatusPanel extends StatelessWidget {
                 LayoutBuilder(
                   builder: (context, box) {
                     final under = box.maxWidth < 280;
-                    final v = Text(
-                      value,
-                      maxLines: 2,
-                      textAlign: under ? TextAlign.start : TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
+                    final v = Align(
+                      alignment: under
+                          ? Alignment.centerLeft
+                          : Alignment.centerRight,
+                      child: MotionFade(
+                        child: Text(
+                          value,
+                          key: ValueKey(value),
+                          maxLines: 2,
+                          textAlign: under ? TextAlign.start : TextAlign.end,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
                       ),
                     );
                     if (under) {
@@ -745,10 +797,13 @@ class _StatusPanel extends StatelessWidget {
                 ),
                 if (progress != null) ...[
                   const SizedBox(height: 9),
-                  LinearProgressIndicator(
-                    value: progress.clamp(0, 1),
-                    minHeight: 6,
-                    borderRadius: BorderRadius.circular(10),
+                  TweenValue(
+                    progress.clamp(0, 1),
+                    builder: (_, v) => LinearProgressIndicator(
+                      value: v,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ],
               ],
@@ -770,20 +825,26 @@ class _StatusPanel extends StatelessWidget {
               : info.wifiLabel,
         ),
         if (total > 0)
-          metric(
-            Symbols.hard_drive_rounded,
-            'Almacenamiento',
-            tr('{} de {}', [size(used), size(total)]),
-            progress: used / total,
+          SizeFade(
+            key: const ValueKey('storage'),
+            child: metric(
+              Symbols.hard_drive_rounded,
+              'Almacenamiento',
+              tr('{} de {}', [size(used), size(total)]),
+              progress: used / total,
+            ),
           ),
         if (info.battery >= 0)
-          metric(
-            info.charging
-                ? Symbols.battery_charging_full_rounded
-                : Symbols.battery_full_rounded,
-            'Batería',
-            ['${info.battery} %', ?info.chargeLabel].join(' · '),
-            progress: info.battery / 100,
+          SizeFade(
+            key: const ValueKey('battery'),
+            child: metric(
+              info.charging
+                  ? Symbols.battery_charging_full_rounded
+                  : Symbols.battery_full_rounded,
+              'Batería',
+              ['${info.battery} %', ?info.chargeLabel].join(' · '),
+              progress: info.battery / 100,
+            ),
           ),
       ],
     );
@@ -843,23 +904,36 @@ class _RecentState extends State<_Recent> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (!wide) ...[filters(), const SizedBox(height: 12)],
-            for (final x in active) TransferRow(x, hub),
-            if (recent.isEmpty && active.isEmpty)
-              Padding(
+            ArcExpand(
+              expanded: recent.isEmpty && active.isEmpty,
+              child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: Gap.m),
                 child: Text(
                   'Todavía no hay archivos en esta categoría.',
                   style: TextStyle(color: context.pal.muted),
                 ),
               ),
-            for (final h in recent) HistoryTile(h, hub),
+            ),
+            MotionList(
+              children: [
+                for (final x in active)
+                  TransferRow(x, hub, key: ValueKey('x${x.id}')),
+                for (final h in recent)
+                  HistoryTile(h, hub, key: ValueKey('h${h.id}')),
+              ],
+            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (active.isEmpty && all > 3)
                   TextButton(
                     onPressed: () => setState(() => more = !more),
-                    child: Text(more ? 'Ver menos' : 'Ver más'),
+                    child: MotionFade(
+                      child: Text(
+                        more ? 'Ver menos' : 'Ver más',
+                        key: ValueKey(more),
+                      ),
+                    ),
                   ),
                 TextButton(
                   onPressed: hub.openDownloads,
@@ -887,4 +961,61 @@ class _AccessHint extends StatelessWidget {
     action: 'Activar',
     onAction: hub.openNotifAccess,
   );
+}
+
+/// Rebuilds [build] only when [select] returns something different (records compare by field, objects by
+/// identity). Hub notifies far more often than any one block changes: this keeps the others still.
+class _Select extends StatefulWidget {
+  const _Select(this.hub, this.select, this.build);
+  final Hub hub;
+  final Object? Function() select;
+  final Widget Function() build;
+
+  @override
+  State<_Select> createState() => _SelectState();
+}
+
+class _SelectState extends State<_Select> {
+  late Object? _value = widget.select();
+  Widget? _child;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.hub.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(_Select old) {
+    super.didUpdateWidget(old);
+    if (old.hub != widget.hub) {
+      old.hub.removeListener(_changed);
+      widget.hub.addListener(_changed);
+      _child = null;
+    }
+    // The parent rebuilt: it may hold something new this block depends on.
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    widget.hub.removeListener(_changed);
+    super.dispose();
+  }
+
+  bool _sync() {
+    final next = widget.select();
+    if (next == _value && _child != null) return false;
+    _value = next;
+    _child = null;
+    return true;
+  }
+
+  void _changed() {
+    if (_sync()) setState(() {});
+  }
+
+  // The same widget instance when nothing changed: Flutter skips rebuilding what is identical.
+  @override
+  Widget build(BuildContext context) => _child ??= widget.build();
 }

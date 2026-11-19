@@ -1,3 +1,5 @@
+import 'alero_motion.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
@@ -240,7 +242,9 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
     final t = Theme.of(context).textTheme;
     return Semantics(
       label: tx('Panel táctil del ordenador'),
-      hint: tx('Un dedo mueve el cursor. Toca para clic. Toca con dos dedos para clic derecho. Dos dedos desplazan. Toca dos veces y mueve sin levantar el segundo toque para seleccionar.'),
+      hint: tx(
+        'Un dedo mueve el cursor. Toca para clic. Toca con dos dedos para clic derecho. Dos dedos desplazan. Toca dos veces y mueve sin levantar el segundo toque para seleccionar.',
+      ),
       onTap: () => _r.click(widget.peer),
       child: Listener(
         onPointerDown: _down,
@@ -281,14 +285,19 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
                               ),
                               const SizedBox(height: Gap.m),
                             ],
-                            Text(
-                              _drag
-                                  ? 'Arrastrando'
-                                  : _two && _active
-                                  ? 'Desplazando'
-                                  : 'Desliza para mover el cursor',
-                              textAlign: TextAlign.center,
-                              style: weight(t.bodyMedium, 500),
+                            MotionFade(
+                              child: Text(
+                                _drag
+                                    ? 'Arrastrando'
+                                    : _two && _active
+                                    ? 'Desplazando'
+                                    : 'Desliza para mover el cursor',
+                                key: ValueKey(
+                                  _drag ? 0 : (_two && _active ? 1 : 2),
+                                ),
+                                textAlign: TextAlign.center,
+                                style: weight(t.bodyMedium, 500),
+                              ),
                             ),
                             if (box.maxHeight >= 160) ...[
                               const SizedBox(height: Gap.s),
@@ -331,10 +340,13 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: Chip(
-                      label: const Text('Arrastrando'),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: s.primaryContainer,
+                    child: PopIn(
+                      origin: Alignment.topCenter,
+                      child: Chip(
+                        label: const Text('Arrastrando'),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: s.primaryContainer,
+                      ),
                     ),
                   ),
                 ),
@@ -404,7 +416,9 @@ class _MouseActionBarState extends State<MouseActionBar>
         behavior: HitTestBehavior.opaque,
         onPointerDown: (_) => _toggle(button),
         onPointerCancel: (_) => _up(button),
-        child: Container(
+        child: AnimatedContainer(
+          duration: AleroMotion.micro(context, Fluent.d167),
+          curve: Fluent.enter,
           height: 64,
           decoration: BoxDecoration(
             color: _held.contains(button)
@@ -418,10 +432,13 @@ class _MouseActionBarState extends State<MouseActionBar>
               children: [
                 MouseButtonIcon(left: button == 'left'),
                 const SizedBox(height: Gap.xs),
-                Text(
-                  _held.contains(button)
-                      ? tr('Soltar {}', [button == 'left' ? 'izq.' : 'der.'])
-                      : label,
+                MotionFade(
+                  child: Text(
+                    _held.contains(button)
+                        ? tr('Soltar {}', [button == 'left' ? 'izq.' : 'der.'])
+                        : label,
+                    key: ValueKey(_held.contains(button)),
+                  ),
                 ),
               ],
             ),
@@ -544,6 +561,7 @@ class PointerSensitivity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<double>(
+    popUpAnimationStyle: popUpMotion(context),
     tooltip: tx('Sensibilidad del cursor'),
     icon: const Icon(Symbols.tune_rounded),
     initialValue: value,
@@ -583,7 +601,7 @@ class HoldButton extends StatefulWidget {
 
 class _HoldButtonState extends State<HoldButton> {
   Timer? _t;
-  bool _down = false;
+  bool _down = false, _lit = false;
 
   void _stop() {
     _t?.cancel();
@@ -604,37 +622,56 @@ class _HoldButtonState extends State<HoldButton> {
       label: widget.label,
       child: Tooltip(
         message: widget.label,
-        child: GestureDetector(
-          onTapDown: (_) {
-            setState(() => _down = true);
-            widget.onStep();
-            HapticFeedback.selectionClick();
-            if (widget.repeat) {
-              _t = Timer(const Duration(milliseconds: 400), () {
-                _t = Timer.periodic(
-                  const Duration(milliseconds: 120),
-                  (_) => widget.onStep(),
-                );
-              });
-            }
+        child: MouseRegion(
+          // Also fires when the button leaves the tree while hovered.
+          onEnter: (_) {
+            if (mounted) setState(() => _lit = true);
           },
-          onTapUp: (_) => _stop(),
-          onTapCancel: _stop,
-          child: AnimatedScale(
-            scale: _down ? 0.92 : 1,
-            duration: motion(context, const Duration(milliseconds: 100)),
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: s.secondaryContainer,
-                borderRadius: BorderRadius.circular(Radii.pill),
-              ),
-              child: ExcludeSemantics(
-                child: Icon(
-                  widget.icon,
-                  size: 22,
-                  color: s.onSecondaryContainer,
+          onExit: (_) {
+            if (mounted) setState(() => _lit = false);
+          },
+          child: GestureDetector(
+            onTapDown: (_) {
+              setState(() => _down = true);
+              widget.onStep();
+              HapticFeedback.selectionClick();
+              if (widget.repeat) {
+                _t = Timer(const Duration(milliseconds: 400), () {
+                  _t = Timer.periodic(
+                    const Duration(milliseconds: 120),
+                    (_) => widget.onStep(),
+                  );
+                });
+              }
+            },
+            onTapUp: (_) => _stop(),
+            onTapCancel: _stop,
+            child: AnimatedScale(
+              scale: _down ? 0.92 : 1,
+              duration: motion(context, const Duration(milliseconds: 100)),
+              child: AnimatedContainer(
+                duration: AleroMotion.micro(
+                  context,
+                  const Duration(milliseconds: 120),
+                ),
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Color.alphaBlend(
+                    s.onSecondaryContainer.withValues(alpha: _lit ? .08 : 0),
+                    s.secondaryContainer,
+                  ),
+                  borderRadius: BorderRadius.circular(Radii.pill),
+                ),
+                child: ExcludeSemantics(
+                  child: MotionFade(
+                    child: Icon(
+                      widget.icon,
+                      key: ValueKey(widget.icon),
+                      size: 22,
+                      color: s.onSecondaryContainer,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -711,26 +748,37 @@ class _PcMediaControlsState extends State<PcMediaControls> {
             padding: const EdgeInsets.only(bottom: Gap.s),
             child: Row(
               children: [
-                Icon(
-                  playing && m.playing
-                      ? Symbols.graphic_eq_rounded
-                      : Symbols.music_note_rounded,
-                  size: 18,
-                  color: s.onSurfaceVariant,
+                MotionFade(
+                  child: Icon(
+                    playing && m.playing
+                        ? Symbols.graphic_eq_rounded
+                        : Symbols.music_note_rounded,
+                    key: ValueKey(playing && m.playing),
+                    size: 18,
+                    color: s.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(width: Gap.s),
                 Expanded(
-                  child: Text(
-                    playing
-                        ? [
-                            m.title,
-                            m.artist,
-                          ].where((x) => x.isNotEmpty).join(' · ')
-                        : 'Nada se está reproduciendo',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: t.bodyMedium?.copyWith(
-                      color: playing ? s.onSurface : s.onSurfaceVariant,
+                  child: MotionFade(
+                    child: Align(
+                      key: ValueKey(
+                        playing ? '${m.title}|${m.artist}' : 'idle',
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        playing
+                            ? [
+                                m.title,
+                                m.artist,
+                              ].where((x) => x.isNotEmpty).join(' · ')
+                            : 'Nada se está reproduciendo',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.bodyMedium?.copyWith(
+                          color: playing ? s.onSurface : s.onSurfaceVariant,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -803,6 +851,7 @@ class _PcMediaControlsState extends State<PcMediaControls> {
 /// shortcut row sends the usual combinations. (IME suggestions can rewrite what was typed: turned off here.)
 Future<void> openKeyboard(BuildContext context, Hub hub, String peer) =>
     showModalBottomSheet<void>(
+      sheetAnimationStyle: sheetMotion(context),
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -944,7 +993,9 @@ class _KeyboardSheetState extends State<_KeyboardSheet> {
               suffixIcon: _prev.isEmpty
                   ? null
                   : IconButton(
-                      tooltip: tx('Vaciar el campo (no borra nada en el ordenador)'),
+                      tooltip: tx(
+                        'Vaciar el campo (no borra nada en el ordenador)',
+                      ),
                       icon: const Icon(Symbols.close_rounded),
                       onPressed: _clear,
                     ),

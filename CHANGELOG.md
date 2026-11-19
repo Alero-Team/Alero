@@ -1,5 +1,20 @@
 # Cambios
 
+## Beta 1.4.8 (1.4.8) — 2026-11-19
+
+Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.
+
+### Windows
+
+- **Juegos con Alero abierto:** la isla se oculta también con juegos en ventana sin bordes (borderless), no solo en pantalla completa exclusiva, y deja de disputarles el primer plano. Con la isla encima, Windows no podía mostrar el juego directamente y se perdían FPS y G-Sync.
+
+### Toda la app
+
+- **Animaciones en todo:** botones y tarjetas reaccionan al pasar el ratón y al pulsar; menús, hojas y avisos aparecen con movimiento; los cambios de contenido, listas, paneles desplegables, progreso y valores se animan en lugar de saltar. Todo a velocidad normal (1×) y respetando «reducir animaciones» del sistema.
+- **Selectores deslizantes** en Ajustes, el panel de la isla y la conexión ADB: la opción elegida se marca con una píldora que se desliza.
+- **Controles del teléfono:** las acciones (cámaras, ver pantalla, captura, rotación, linterna, bloquear, portapapeles) son ahora botones cuadrados del mismo tamaño.
+- **Inicio más fluido:** el reproductor y las notificaciones solo se redibujan cuando cambian.
+
 ## Beta 1.4.7 (1.4.7) — 2026-11-18
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.

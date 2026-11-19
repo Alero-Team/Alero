@@ -7,7 +7,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../hub.dart';
 import '../island_prefs.dart';
 import '../l10n.dart';
+import 'expressive.dart' show Spring, motion;
 import 'icon.dart';
+import 'alero_motion.dart';
+import 'settings.dart' show AleroSegments;
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -103,159 +106,162 @@ class _IslandPanelState extends State<IslandPanel> {
               ),
               onTap: () => p.set('enabled', !on),
             ),
-            if (on) ...[
-              const _Title('Aspecto'),
-              _Swatches(
-                title: 'Color de fondo',
-                options: _backgrounds,
-                value: p.text('color'),
-                onChanged: (v) => p.set('color', v),
-              ),
-              _Swatches(
-                title: 'Color de acento',
-                options: _accents,
-                value: p.text('accent'),
-                onChanged: (v) => p.set('accent', v),
-              ),
-              _Pick(
-                title: 'Tamaño',
-                child: SegmentedButton<int>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 85, label: FitLabel('Pequeña')),
-                    ButtonSegment(value: 100, label: FitLabel('Mediana')),
-                    ButtonSegment(value: 125, label: FitLabel('Grande')),
-                  ],
-                  selected: {
-                    if (const [85, 100, 125].contains(p.number('scale')))
-                      p.number('scale'),
-                  },
-                  emptySelectionAllowed: true,
-                  onSelectionChanged: (s) {
-                    if (s.isNotEmpty) p.set('scale', s.first);
-                  },
-                ),
-              ),
-              _Slide(
-                title: 'Tamaño exacto',
-                value: p.number('scale'),
-                min: 75,
-                max: 150,
-                suffix: '%',
-                onChanged: (v) => p.set('scale', v),
-              ),
-              _Pick(
-                title: 'Animaciones',
-                child: SegmentedButton<String>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 'normal', label: FitLabel('Normales')),
-                    ButtonSegment(value: 'soft', label: FitLabel('Suaves')),
-                    ButtonSegment(value: 'off', label: FitLabel('Ninguna')),
-                  ],
-                  selected: {p.text('animation')},
-                  onSelectionChanged: (s) => p.set('animation', s.first),
-                ),
-              ),
-              _Toggle(
-                title: 'Respetar «reducir animaciones» del sistema',
-                value: p.flag('respect_reduce_motion'),
-                onChanged: (v) => p.set('respect_reduce_motion', v),
-              ),
-              const _Title('Cuándo aparece'),
-              _Pick(
-                title: 'Pantalla',
-                child: DropdownButton<int>(
-                  value: const [-1, 0, 1, 2].contains(p.number('monitor'))
-                      ? p.number('monitor')
-                      : -1,
-                  underline: const SizedBox.shrink(),
-                  items: [
-                    DropdownMenuItem(
-                      value: -1,
-                      child: Text(tx('Donde esté el cursor')),
+            ArcExpand(
+              expanded: on,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _Title('Aspecto'),
+                  _Swatches(
+                    title: 'Color de fondo',
+                    options: _backgrounds,
+                    value: p.text('color'),
+                    onChanged: (v) => p.set('color', v),
+                  ),
+                  _Swatches(
+                    title: 'Color de acento',
+                    options: _accents,
+                    value: p.text('accent'),
+                    onChanged: (v) => p.set('accent', v),
+                  ),
+                  _Pick(
+                    title: 'Tamaño',
+                    child: AleroSegments<int>(
+                      segments: const [
+                        ButtonSegment(value: 85, label: FitLabel('Pequeña')),
+                        ButtonSegment(value: 100, label: FitLabel('Mediana')),
+                        ButtonSegment(value: 125, label: FitLabel('Grande')),
+                      ],
+                      selected: const [85, 100, 125].contains(p.number('scale'))
+                          ? p.number('scale')
+                          : null,
+                      onChanged: (v) => p.set('scale', v),
                     ),
-                    DropdownMenuItem(value: 0, child: Text(tx('Principal'))),
-                    DropdownMenuItem(value: 1, child: Text(tx('Segunda'))),
-                    DropdownMenuItem(value: 2, child: Text(tx('Tercera'))),
-                  ],
-                  onChanged: (v) => p.set('monitor', v ?? -1),
-                ),
+                  ),
+                  _Slide(
+                    title: 'Tamaño exacto',
+                    value: p.number('scale'),
+                    min: 75,
+                    max: 150,
+                    suffix: '%',
+                    onChanged: (v) => p.set('scale', v),
+                  ),
+                  _Pick(
+                    title: 'Animaciones',
+                    child: AleroSegments<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'normal',
+                          label: FitLabel('Normales'),
+                        ),
+                        ButtonSegment(value: 'soft', label: FitLabel('Suaves')),
+                        ButtonSegment(value: 'off', label: FitLabel('Ninguna')),
+                      ],
+                      selected: p.text('animation'),
+                      onChanged: (v) => p.set('animation', v),
+                    ),
+                  ),
+                  _Toggle(
+                    title: 'Respetar «reducir animaciones» del sistema',
+                    value: p.flag('respect_reduce_motion'),
+                    onChanged: (v) => p.set('respect_reduce_motion', v),
+                  ),
+                  const _Title('Cuándo aparece'),
+                  _Pick(
+                    title: 'Pantalla',
+                    // A popup menu rather than DropdownButton: its route timing is fixed, this one takes the Fluent style.
+                    child: _Monitor(
+                      value: const [-1, 0, 1, 2].contains(p.number('monitor'))
+                          ? p.number('monitor')
+                          : -1,
+                      onChanged: (v) => p.set('monitor', v),
+                    ),
+                  ),
+                  _Slide(
+                    title: 'Ancho de la zona de activación',
+                    value: p.number('zone_width'),
+                    min: 100,
+                    max: 400,
+                    suffix: ' px',
+                    onChanged: (v) => p.set('zone_width', v),
+                  ),
+                  _Slide(
+                    title: 'Espera antes de abrirse',
+                    value: p.number('open_delay_ms'),
+                    min: 0,
+                    max: 500,
+                    step: 10,
+                    suffix: ' ms',
+                    onChanged: (v) => p.set('open_delay_ms', v),
+                  ),
+                  _Slide(
+                    title: 'Espera antes de cerrarse',
+                    value: p.number('close_delay_ms'),
+                    min: 0,
+                    max: 1000,
+                    step: 50,
+                    suffix: ' ms',
+                    onChanged: (v) => p.set('close_delay_ms', v),
+                  ),
+                  _Slide(
+                    title: 'Desplazamiento horizontal',
+                    value: p.number('offset_x'),
+                    min: -300,
+                    max: 300,
+                    step: 5,
+                    suffix: ' px',
+                    onChanged: (v) => p.set('offset_x', v),
+                  ),
+                  _Toggle(
+                    title: 'Ocultar con juegos y apps a pantalla completa',
+                    value: p.flag('hide_fullscreen'),
+                    onChanged: (v) => p.set('hide_fullscreen', v),
+                  ),
+                  if (Platform.isWindows) _Hotkey(p),
+                  const _Title('Qué muestra'),
+                  for (final e in _moduleNames.entries)
+                    _Toggle(
+                      title: e.value.$1,
+                      icon: e.value.$2,
+                      value: p.module(e.key),
+                      onChanged: (v) => p.setModule(e.key, v),
+                    ),
+                  ArcExpand(
+                    expanded: p.module('controls'),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _Title('Controles del teléfono'),
+                        _Controls(p),
+                      ],
+                    ),
+                  ),
+                  const _Title('Avisos'),
+                  _Toggle(
+                    title:
+                        'Abrirse sola con llamadas, archivos y notificaciones',
+                    value: p.flag('auto_expand'),
+                    onChanged: (v) => p.set('auto_expand', v),
+                  ),
+                  ArcExpand(
+                    expanded: p.flag('auto_expand'),
+                    child: _Slide(
+                      title: 'Segundos visible',
+                      value: p.number('event_secs'),
+                      min: 3,
+                      max: 15,
+                      suffix: ' s',
+                      onChanged: (v) => p.set('event_secs', v),
+                    ),
+                  ),
+                  _Toggle(
+                    title: 'Sonido en llamadas y archivos entrantes',
+                    value: p.flag('sound'),
+                    onChanged: (v) => p.set('sound', v),
+                  ),
+                ],
               ),
-              _Slide(
-                title: 'Ancho de la zona de activación',
-                value: p.number('zone_width'),
-                min: 100,
-                max: 400,
-                suffix: ' px',
-                onChanged: (v) => p.set('zone_width', v),
-              ),
-              _Slide(
-                title: 'Espera antes de abrirse',
-                value: p.number('open_delay_ms'),
-                min: 0,
-                max: 500,
-                step: 10,
-                suffix: ' ms',
-                onChanged: (v) => p.set('open_delay_ms', v),
-              ),
-              _Slide(
-                title: 'Espera antes de cerrarse',
-                value: p.number('close_delay_ms'),
-                min: 0,
-                max: 1000,
-                step: 50,
-                suffix: ' ms',
-                onChanged: (v) => p.set('close_delay_ms', v),
-              ),
-              _Slide(
-                title: 'Desplazamiento horizontal',
-                value: p.number('offset_x'),
-                min: -300,
-                max: 300,
-                step: 5,
-                suffix: ' px',
-                onChanged: (v) => p.set('offset_x', v),
-              ),
-              _Toggle(
-                title: 'Ocultar con juegos y apps a pantalla completa',
-                value: p.flag('hide_fullscreen'),
-                onChanged: (v) => p.set('hide_fullscreen', v),
-              ),
-              if (Platform.isWindows) _Hotkey(p),
-              const _Title('Qué muestra'),
-              for (final e in _moduleNames.entries)
-                _Toggle(
-                  title: e.value.$1,
-                  icon: e.value.$2,
-                  value: p.module(e.key),
-                  onChanged: (v) => p.setModule(e.key, v),
-                ),
-              if (p.module('controls')) ...[
-                const _Title('Controles del teléfono'),
-                _Controls(p),
-              ],
-              const _Title('Avisos'),
-              _Toggle(
-                title: 'Abrirse sola con llamadas, archivos y notificaciones',
-                value: p.flag('auto_expand'),
-                onChanged: (v) => p.set('auto_expand', v),
-              ),
-              if (p.flag('auto_expand'))
-                _Slide(
-                  title: 'Segundos visible',
-                  value: p.number('event_secs'),
-                  min: 3,
-                  max: 15,
-                  suffix: ' s',
-                  onChanged: (v) => p.set('event_secs', v),
-                ),
-              _Toggle(
-                title: 'Sonido en llamadas y archivos entrantes',
-                value: p.flag('sound'),
-                onChanged: (v) => p.set('sound', v),
-              ),
-            ],
+            ),
           ],
         ),
       );
@@ -446,10 +452,15 @@ class _SwatchesState extends State<_Swatches> {
                         button: true,
                         child: Tooltip(
                           message: tx(name),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
+                          child: AleroPress(
+                            radius: 17,
                             onTap: () => widget.onChanged(hex),
-                            child: Container(
+                            child: AnimatedContainer(
+                              duration: AleroMotion.micro(
+                                context,
+                                Fluent.d167,
+                              ),
+                              curve: Fluent.enter,
                               width: 34,
                               height: 34,
                               decoration: BoxDecoration(
@@ -462,15 +473,22 @@ class _SwatchesState extends State<_Swatches> {
                                   width: cur == hex ? 2.5 : 1,
                                 ),
                               ),
-                              child: cur == hex
-                                  ? Icon(
-                                      Symbols.check_rounded,
-                                      size: 18,
-                                      color: _hex(hex).computeLuminance() > 0.5
-                                          ? Colors.black
-                                          : Colors.white,
-                                    )
-                                  : null,
+                              // Always mounted so the tick scales in and out instead of popping.
+                              child: AnimatedScale(
+                                scale: cur == hex ? 1 : 0,
+                                duration: AleroMotion.micro(
+                                  context,
+                                  Fluent.d167,
+                                ),
+                                curve: Fluent.enter,
+                                child: Icon(
+                                  Symbols.check_rounded,
+                                  size: 18,
+                                  color: _hex(hex).computeLuminance() > 0.5
+                                      ? Colors.black
+                                      : Colors.white,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -539,6 +557,16 @@ class _Controls extends StatelessWidget {
                   avatar: Icon(e.value.$2, size: 18),
                   label: Text(e.value.$1),
                   selected: on.contains(e.key),
+                  chipAnimationStyle: ChipAnimationStyle(
+                    selectAnimation: AnimationStyle(
+                      duration: AleroMotion.micro(context, Fluent.d167),
+                      curve: Fluent.enter,
+                    ),
+                    avatarDrawerAnimation: AnimationStyle(
+                      duration: AleroMotion.micro(context, Fluent.d167),
+                      curve: Fluent.enter,
+                    ),
+                  ),
                   onSelected: (_) => toggle(e.key),
                 ),
             ],
@@ -602,7 +630,9 @@ class _HotkeyState extends State<_Hotkey> {
   }
 
   KeyEventResult _key(FocusNode _, KeyEvent e) {
-    if (!_recording) return KeyEventResult.ignored; // Tab and Enter keep working when not recording
+    if (!_recording)
+      return KeyEventResult
+          .ignored; // Tab and Enter keep working when not recording
     if (e is! KeyDownEvent) return KeyEventResult.handled;
     if (e.logicalKey == LogicalKeyboardKey.escape) {
       _stop();
@@ -639,20 +669,72 @@ class _HotkeyState extends State<_Hotkey> {
           children: [
             OutlinedButton(
               onPressed: _recording ? _stop : _record,
-              child: Text(
-                _recording
-                    ? tx('Pulsa la combinación…')
-                    : v.isEmpty
-                    ? tx('Grabar atajo')
-                    : v.replaceAll('Shift', tx('Mayús')),
+              child: MotionFade(
+                child: Text(
+                  _recording
+                      ? tx('Pulsa la combinación…')
+                      : v.isEmpty
+                      ? tx('Grabar atajo')
+                      : v.replaceAll('Shift', tx('Mayús')),
+                  key: ValueKey(_recording ? 1 : v),
+                ),
               ),
             ),
-            if (v.isNotEmpty && !_recording)
-              IconButton(
-                tooltip: tx('Quitar atajo'),
-                onPressed: () => widget.p.set('hotkey', ''),
-                icon: const Icon(Symbols.close),
+            AnimatedSize(
+              duration: motion(context, Spring.fast.settle),
+              curve: Spring.fast,
+              child: MotionFade(
+                child: v.isNotEmpty && !_recording
+                    ? IconButton(
+                        key: const ValueKey('clear'),
+                        tooltip: tx('Quitar atajo'),
+                        onPressed: () => widget.p.set('hotkey', ''),
+                        icon: const Icon(Symbols.close),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('none')),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Which monitor the island opens on; a popup menu that grows from its button.
+class _Monitor extends StatelessWidget {
+  const _Monitor({required this.value, required this.onChanged});
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final names = {
+      -1: tx('Donde esté el cursor'),
+      0: tx('Principal'),
+      1: tx('Segunda'),
+      2: tx('Tercera'),
+    };
+    return PopupMenuButton<int>(
+      initialValue: value,
+      tooltip: tx('Pantalla'),
+      popUpAnimationStyle: popUpMotion(context),
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final e in names.entries)
+          PopupMenuItem(value: e.key, child: Text(e.value)),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: Gap.s, vertical: Gap.s),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: MotionFade(
+                child: Text(names[value]!, key: ValueKey(value)),
+              ),
+            ),
+            const Icon(Symbols.arrow_drop_down_rounded),
           ],
         ),
       ),

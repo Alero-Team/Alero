@@ -1,8 +1,11 @@
+import 'alero_motion.dart';
+
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
+import 'controls.dart' show Presence;
 import 'pc_screen.dart';
 import 'present.dart';
 import 'remote_ui.dart';
@@ -53,108 +56,131 @@ class _PcControlPageState extends State<PcControlPage> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          actions: blocker == null
-              ? [
-                  PointerSensitivity(
-                    value: _gain,
-                    onChanged: (gain) => setState(() => _gain = gain),
-                  ),
-                  if (info?.canScreen ?? false)
-                    IconButton(
-                      tooltip: tx('Ver pantalla'),
-                      icon: const Icon(Symbols.cast_rounded),
-                      onPressed: () =>
-                          openPcScreen(context, hub, widget.peer, widget.name),
-                    ),
-                  IconButton(
-                    tooltip: 'Alero Present',
-                    icon: const Icon(Symbols.slideshow_rounded),
-                    onPressed: () => openAleroPresent(
-                      context,
-                      hub,
-                      widget.peer,
-                      widget.name,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: tx('Volumen y reproducción'),
-                    icon: const Icon(Symbols.volume_up_rounded),
-                    onPressed: () => showModalBottomSheet<void>(
-                      context: context,
-                      showDragHandle: true,
-                      builder: (_) => SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            Gap.xl,
-                            0,
-                            Gap.xl,
-                            Gap.xl,
+          actions: [
+            Presence(
+              alignment: Alignment.centerRight,
+              child: blocker != null
+                  ? null
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        PointerSensitivity(
+                          value: _gain,
+                          onChanged: (gain) => setState(() => _gain = gain),
+                        ),
+                        Presence(
+                          alignment: Alignment.centerRight,
+                          child: info?.canScreen ?? false
+                              ? IconButton(
+                                  tooltip: tx('Ver pantalla'),
+                                  icon: const Icon(Symbols.cast_rounded),
+                                  onPressed: () => openPcScreen(
+                                    context,
+                                    hub,
+                                    widget.peer,
+                                    widget.name,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        IconButton(
+                          tooltip: 'Alero Present',
+                          icon: const Icon(Symbols.slideshow_rounded),
+                          onPressed: () => openAleroPresent(
+                            context,
+                            hub,
+                            widget.peer,
+                            widget.name,
                           ),
-                          child: PcMediaControls(hub, widget.peer),
+                        ),
+                        IconButton(
+                          tooltip: tx('Volumen y reproducción'),
+                          icon: const Icon(Symbols.volume_up_rounded),
+                          onPressed: () => showModalBottomSheet<void>(
+                            sheetAnimationStyle: sheetMotion(context),
+                            context: context,
+                            showDragHandle: true,
+                            builder: (_) => SafeArea(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  Gap.xl,
+                                  0,
+                                  Gap.xl,
+                                  Gap.xl,
+                                ),
+                                child: PcMediaControls(hub, widget.peer),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: MotionSwitch(
+            axis: Axis.vertical,
+            child: KeyedSubtree(
+              key: ValueKey(blocker != null),
+              child: blocker != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(Gap.xxl),
+                        child: Text(
+                          blocker,
+                          textAlign: TextAlign.center,
+                          style: t.bodyLarge,
+                        ),
+                      ),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.all(Gap.l),
+                      child: LayoutBuilder(
+                        builder: (context, box) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (box.maxHeight >= 380) ...[
+                              Text(
+                                'Control del mouse',
+                                style: weight(t.titleLarge, 600),
+                              ),
+                              const SizedBox(height: Gap.xs),
+                              Text(
+                                tr('Un panel táctil para {}.', [widget.name]),
+                                style: t.bodyMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: Gap.l),
+                            ],
+                            Expanded(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: LayoutBuilder(
+                                      builder: (_, area) => Touchpad(
+                                        hub,
+                                        widget.peer,
+                                        height: area.maxHeight,
+                                        gain: _gain,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: Gap.m),
+                            MouseActionBar(hub, widget.peer),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ]
-              : null,
-        ),
-        body: SafeArea(
-          child: blocker != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(Gap.xxl),
-                    child: Text(
-                      blocker,
-                      textAlign: TextAlign.center,
-                      style: t.bodyLarge,
-                    ),
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.all(Gap.l),
-                  child: LayoutBuilder(
-                    builder: (context, box) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (box.maxHeight >= 380) ...[
-                          Text(
-                            'Control del mouse',
-                            style: weight(t.titleLarge, 600),
-                          ),
-                          const SizedBox(height: Gap.xs),
-                          Text(
-                            tr('Un panel táctil para {}.', [widget.name]),
-                            style: t.bodyMedium?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: Gap.l),
-                        ],
-                        Expanded(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: LayoutBuilder(
-                                  builder: (_, area) => Touchpad(
-                                    hub,
-                                    widget.peer,
-                                    height: area.maxHeight,
-                                    gain: _gain,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: Gap.m),
-                        MouseActionBar(hub, widget.peer),
-                      ],
-                    ),
-                  ),
-                ),
+            ),
+          ),
         ),
       );
     },

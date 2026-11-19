@@ -9,6 +9,7 @@ import '../hub.dart';
 import '../remote.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -125,6 +126,23 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     ],
   );
 
+  /// A slider value that glides to its new one, but only when it jumps by more than [jump] (a normal one-second
+  /// playback tick, or a drag, goes straight through). Always the same widgets, so a drag never remounts the slider.
+  Widget _glide(
+    double value,
+    bool dragging,
+    Duration over,
+    double max,
+    Widget Function(double) build, {
+    double jump = 1.5,
+  }) => _Glide(
+    value: value,
+    dragging: dragging,
+    over: AleroMotion.micro(context, over),
+    jump: jump,
+    builder: (v) => build(v.clamp(0, max)),
+  );
+
   /// Rebuild once a second while playing, so the extrapolated position moves.
   void _ticking(bool playing) {
     if (playing && _tick == null) {
@@ -168,121 +186,136 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         return Panel(
           title: 'Reproductor',
           icon: Symbols.music_note_rounded,
-          child: Text(
-            'No se está reproduciendo música.',
-            style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+          child: MotionFade(
+            child: Text(
+              'No se está reproduciendo música.',
+              key: const ValueKey('idle'),
+              style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+            ),
           ),
         );
       }
       return Panel(
         title: 'Reproductor',
         icon: Symbols.music_note_rounded,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (active)
-              Row(
-                children: [
-                  _Art(
-                    cm,
-                    size: 64,
-                    appIcon: hub.appIcons[cm.pkg],
-                    computer: widget.computer,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          cm.title.isEmpty ? 'Sin título' : cm.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: t.titleSmall,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          [
-                            cm.artist,
-                            cm.app,
-                          ].where((x) => x.isNotEmpty).join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: t.bodySmall?.copyWith(
-                            color: s.onSurfaceVariant,
+        child: MotionFade(
+          child: Column(
+            key: const ValueKey('playing'),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (active)
+                Row(
+                  children: [
+                    _Art(
+                      cm,
+                      size: 64,
+                      appIcon: hub.appIcons[cm.pkg],
+                      computer: widget.computer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: MotionFade(
+                          child: Column(
+                            key: ValueKey('${cm.title}|${cm.artist}'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cm.title.isEmpty ? 'Sin título' : cm.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: t.titleSmall,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                [
+                                  cm.artist,
+                                  cm.app,
+                                ].where((x) => x.isNotEmpty).join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: t.bodySmall?.copyWith(
+                                  color: s.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
+                    ),
+                  ],
+                )
+              else
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text('No se está reproduciendo música.'),
+                ),
+              const SizedBox(height: 12),
+              if (active) ...[
+                _glide(
+                  _seek ?? cm.positionNow.toDouble(),
+                  _seek != null,
+                  Fluent.d250,
+                  cm.duration > 0 ? cm.duration.toDouble() : 1.0,
+                  (v) => Slider(
+                    padding: EdgeInsets.zero,
+                    value: v,
+                    max: cm.duration > 0 ? cm.duration.toDouble() : 1.0,
+                    onChanged: cm.duration > 0 && cm.supports(256)
+                        ? (value) => setState(() => _seek = value)
+                        : null,
+                    onChangeEnd: (value) {
+                      _command('seek', position: value.toInt());
+                      setState(() => _seek = null);
+                    },
+                  ),
+                ),
+                Row(
+                  children: [
+                    AleroMotion.number(_clock(cm.positionNow), t.labelSmall),
+                    const Spacer(),
+                    Text(_clock(cm.duration), style: t.labelSmall),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: tx('Anterior'),
+                    onPressed: active && cm.supports(16)
+                        ? () => _command('prev')
+                        : null,
+                    icon: const Icon(Symbols.skip_previous_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    iconSize: 27,
+                    tooltip: tx(active && cm.playing ? 'Pausar' : 'Reproducir'),
+                    onPressed: active ? () => _command('toggle') : null,
+                    icon: Icon(
+                      active && cm.playing
+                          ? Symbols.pause_rounded
+                          : Symbols.play_arrow_rounded,
                     ),
                   ),
-                ],
-              )
-            else
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Text('No se está reproduciendo música.'),
-              ),
-            const SizedBox(height: 12),
-            if (active) ...[
-              Slider(
-                padding: EdgeInsets.zero,
-                value: (_seek ?? cm.positionNow.toDouble()).clamp(
-                  0,
-                  cm.duration > 0 ? cm.duration.toDouble() : 1.0,
-                ),
-                max: cm.duration > 0 ? cm.duration.toDouble() : 1.0,
-                onChanged: cm.duration > 0 && cm.supports(256)
-                    ? (value) => setState(() => _seek = value)
-                    : null,
-                onChangeEnd: (value) {
-                  _command('seek', position: value.toInt());
-                  setState(() => _seek = null);
-                },
-              ),
-              Row(
-                children: [
-                  Text(_clock(cm.positionNow), style: t.labelSmall),
-                  const Spacer(),
-                  Text(_clock(cm.duration), style: t.labelSmall),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: tx('Siguiente'),
+                    onPressed: active && cm.supports(32)
+                        ? () => _command('next')
+                        : null,
+                    icon: const Icon(Symbols.skip_next_rounded),
+                  ),
                 ],
               ),
             ],
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  tooltip: tx('Anterior'),
-                  onPressed: active && cm.supports(16)
-                      ? () => _command('prev')
-                      : null,
-                  icon: const Icon(Symbols.skip_previous_rounded),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  ),
-                  iconSize: 27,
-                  tooltip: tx(active && cm.playing ? 'Pausar' : 'Reproducir'),
-                  onPressed: active ? () => _command('toggle') : null,
-                  icon: Icon(
-                    active && cm.playing
-                        ? Symbols.pause_rounded
-                        : Symbols.play_arrow_rounded,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: tx('Siguiente'),
-                  onPressed: active && cm.supports(32)
-                      ? () => _command('next')
-                      : null,
-                  icon: const Icon(Symbols.skip_next_rounded),
-                ),
-              ],
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -290,6 +323,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     Widget body;
     if (!access) {
       body = const EmptyState(
+        key: ValueKey('no-access'),
         card: false,
         icon: Symbols.music_off_rounded,
         title: 'Falta un permiso en el teléfono',
@@ -297,6 +331,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       );
     } else if (m == null || !m.active) {
       body = Column(
+        key: const ValueKey('idle'),
         children: [
           EmptyState(
             card: false,
@@ -435,26 +470,32 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
               children: [
                 SliderTheme(
                   data: thin,
-                  child: Slider(
-                    padding: EdgeInsets.zero,
-                    value: pos.clamp(0, m.duration).toDouble(),
-                    max: m.duration.toDouble(),
-                    semanticFormatterCallback: (v) => _clock(v.round()),
-                    onChanged: !widget.computer && m.supports(256)
-                        ? (v) => setState(() => _seek = v)
-                        : null,
-                    onChangeEnd: (v) {
-                      _command('seek', position: v.round());
-                      setState(() => _seek = null);
-                    },
+                  child: _glide(
+                    pos.clamp(0, m.duration).toDouble(),
+                    _seek != null,
+                    Fluent.d250,
+                    m.duration.toDouble(),
+                    (v) => Slider(
+                      padding: EdgeInsets.zero,
+                      value: v,
+                      max: m.duration.toDouble(),
+                      semanticFormatterCallback: (v) => _clock(v.round()),
+                      onChanged: !widget.computer && m.supports(256)
+                          ? (v) => setState(() => _seek = v)
+                          : null,
+                      onChangeEnd: (v) {
+                        _command('seek', position: v.round());
+                        setState(() => _seek = null);
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(height: Gap.xs),
                 Row(
                   children: [
-                    Text(
+                    AleroMotion.number(
                       _clock(pos),
-                      style: t.labelSmall?.copyWith(fontFeatures: tabular),
+                      t.labelSmall?.copyWith(fontFeatures: tabular),
                     ),
                     const Spacer(),
                     Text(
@@ -479,20 +520,24 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 Expanded(
                   child: SliderTheme(
                     data: thin,
-                    child: Slider(
-                      value: (_vol ?? m.volume.toDouble()).clamp(
-                        0,
-                        m.volumeMax.toDouble(),
+                    child: _glide(
+                      _vol ?? m.volume.toDouble(),
+                      _vol != null,
+                      Fluent.d167,
+                      m.volumeMax.toDouble(),
+                      (v) => Slider(
+                        value: v,
+                        max: m.volumeMax.toDouble(),
+                        divisions: m.volumeMax,
+                        semanticFormatterCallback: (v) =>
+                            tr('Volumen {} de {}', [v.round(), m.volumeMax]),
+                        onChanged: (v) => setState(() => _vol = v),
+                        onChangeEnd: (v) {
+                          _command('volume', value: v.round());
+                          setState(() => _vol = null);
+                        },
                       ),
-                      max: m.volumeMax.toDouble(),
-                      divisions: m.volumeMax,
-                      semanticFormatterCallback: (v) =>
-                          tr('Volumen {} de {}', [v.round(), m.volumeMax]),
-                      onChanged: (v) => setState(() => _vol = v),
-                      onChangeEnd: (v) {
-                        _command('volume', value: v.round());
-                        setState(() => _vol = null);
-                      },
+                      jump: 0,
                     ),
                   ),
                 ),
@@ -506,6 +551,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       // One layout everywhere: a square cover beside the text, controls underneath (a cover filling the card
       // looked stretched and crowded on phones).
       body = LayoutBuilder(
+        key: const ValueKey('playing'),
         builder: (context, box) {
           final w = box.maxWidth;
           final art = _Art(
@@ -553,7 +599,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         duration: motion(context, Spring.spatial.settle),
         curve: Spring.spatial,
         alignment: Alignment.topCenter,
-        child: body,
+        child: MotionFade(child: body),
       ),
     );
   }
@@ -706,25 +752,68 @@ class _Art extends StatelessWidget {
                 border: Border.all(color: s.surface, width: 2),
                 shape: BoxShape.circle,
               ),
-              child: appIcon != null
-                  ? ClipOval(
-                      child: Image.memory(
-                        appIcon!,
-                        semanticLabel: m.app,
-                        filterQuality: FilterQuality.medium,
+              child: MotionFade(
+                child: appIcon != null
+                    ? ClipOval(
+                        key: ValueKey(identityHashCode(appIcon)),
+                        child: Image.memory(
+                          appIcon!,
+                          semanticLabel: m.app,
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      )
+                    : Icon(
+                        computer
+                            ? Symbols.computer_rounded
+                            : Symbols.music_note_rounded,
+                        key: ValueKey(computer),
+                        size: badge * 0.6,
+                        color: s.onSurfaceVariant,
                       ),
-                    )
-                  : Icon(
-                      computer
-                          ? Symbols.computer_rounded
-                          : Symbols.music_note_rounded,
-                      size: badge * 0.6,
-                      color: s.onSurfaceVariant,
-                    ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _Glide extends StatefulWidget {
+  const _Glide({
+    required this.value,
+    required this.dragging,
+    required this.over,
+    required this.jump,
+    required this.builder,
+  });
+  final double value, jump;
+  final bool dragging;
+  final Duration over;
+  final Widget Function(double) builder;
+
+  @override
+  State<_Glide> createState() => _GlideState();
+}
+
+class _GlideState extends State<_Glide> {
+  bool _direct = true;
+
+  @override
+  void didUpdateWidget(_Glide o) {
+    super.didUpdateWidget(o);
+    // Right after a drag the value returns to the real position: no sliding back.
+    _direct =
+        widget.dragging ||
+        o.dragging ||
+        (widget.value - o.value).abs() <= widget.jump;
+  }
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(end: widget.value),
+    duration: _direct ? Duration.zero : widget.over,
+    curve: Fluent.enter,
+    builder: (_, v, _) => widget.builder(v),
+  );
 }

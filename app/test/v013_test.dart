@@ -75,7 +75,8 @@ Future<void> openReply(WidgetTester t) async {
     await t.pump(const Duration(milliseconds: 400));
   }
   await t.tap(find.widgetWithText(FilledButton, 'Responder'));
-  await mouse.removePointer(); // replying keeps the actions open without the pointer
+  await mouse
+      .removePointer(); // replying keeps the actions open without the pointer
   // The panel grows with a spring; wait for the field to settle where it can be tapped.
   for (var i = 0; i < 4; i++) {
     await t.pump(const Duration(milliseconds: 400));
@@ -398,6 +399,8 @@ void main() {
           'Solo para este teléfono',
         );
         await tester.pumpWidget(screen(NotificationsPanel(hub, 'other')));
+        // The first phone's row leaves with an exit animation.
+        await tester.pump(const Duration(seconds: 1));
         await openReply(tester);
         expect(
           tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -438,7 +441,8 @@ void main() {
         expect(find.text('Enviando…'), findsOneWidget);
         hub.onNotifReplyResult(peer.id, {...hub.sent.last.$3, 'ok': true});
         await tester.pump();
-        await tester.pump();
+        // The answered row shrinks out instead of vanishing.
+        await tester.pump(const Duration(seconds: 1));
         expect(hub.notifs[peer.id], isEmpty);
         expect(find.byType(TextField), findsNothing);
         expect(find.textContaining('Respuesta enviada'), findsOneWidget);

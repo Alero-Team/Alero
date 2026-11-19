@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../hub.dart';
 import 'expressive.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'icon.dart';
 import '../l10n.dart';
@@ -44,7 +45,9 @@ class _Card extends StatelessWidget {
     final who = c.name.isEmpty ? 'Número desconocido' : c.name;
     return Semantics(
       liveRegion: true,
-      label: c.ringing ? tr('Llamada entrante de {}', [who]) : tr('En llamada con {}', [who]),
+      label: c.ringing
+          ? tr('Llamada entrante de {}', [who])
+          : tr('En llamada con {}', [who]),
       child: Container(
         margin: const EdgeInsets.fromLTRB(Gap.xl, Gap.m, Gap.xl, 0),
         padding: const EdgeInsets.symmetric(horizontal: Gap.l, vertical: Gap.m),
@@ -81,14 +84,17 @@ class _Card extends StatelessWidget {
                         color: s.onTertiaryContainer,
                       ),
                     ),
-                    Text(
-                      c.ringing
-                          ? 'Llamada entrante en el teléfono'
-                          : (c.text.isEmpty ? 'En llamada' : c.text),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: t.bodySmall?.copyWith(
-                        color: s.onTertiaryContainer.withValues(alpha: 0.8),
+                    MotionFade(
+                      child: Text(
+                        c.ringing
+                            ? 'Llamada entrante en el teléfono'
+                            : (c.text.isEmpty ? 'En llamada' : c.text),
+                        key: ValueKey('${c.ringing}|${c.text}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.bodySmall?.copyWith(
+                          color: s.onTertiaryContainer.withValues(alpha: 0.8),
+                        ),
                       ),
                     ),
                   ],

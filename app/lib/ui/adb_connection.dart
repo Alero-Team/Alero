@@ -15,6 +15,8 @@ import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
 import 'expressive.dart';
+import 'alero_motion.dart';
+import 'settings.dart' show AleroSegments;
 
 /// The ADB controls of Dispositivos.
 /// This does not pair/unpair Alero's TLS engine; it only selects an authorised
@@ -36,8 +38,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
   Future<void> _usb() async {
     if (!Scrcpy.hasAdb) {
       setState(
-        () => _message =
-            'adb no está instalado en este ordenador (en Debian: sudo apt install adb).',
+        () => _message = 'adb no está instalado en este ordenador (en Debian: sudo apt install adb).',
       );
       return;
     }
@@ -101,7 +102,8 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
       }
       if (mounted) {
         setState(
-          () => _message = tr('Depuración USB autorizada: {}.', [selected!.name]),
+          () =>
+              _message = tr('Depuración USB autorizada: {}.', [selected!.name]),
         );
       }
     } catch (e) {
@@ -120,8 +122,7 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
   Future<void> _wireless() async {
     if (!Scrcpy.hasAdb) {
       setState(
-        () => _message =
-            'adb no está instalado en este ordenador (en Debian: sudo apt install adb).',
+        () => _message = 'adb no está instalado en este ordenador (en Debian: sudo apt install adb).',
       );
       return;
     }
@@ -132,7 +133,8 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
     if (!mounted || serial == null) return;
     if (widget.phone != null) PhoneAdb.choose(widget.phone!.id, serial);
     setState(
-      () => _message = tr('ADB inalámbrico conectado y autorizado: {}', [serial]),
+      () =>
+          _message = tr('ADB inalámbrico conectado y autorizado: {}', [serial]),
     );
   }
 
@@ -195,13 +197,25 @@ class _AdbConnectionPanelState extends State<AdbConnectionPanel> {
             ],
           ),
           const SizedBox(height: Gap.s),
-          Text(
-            _message ??
-                (serial == null
-                    ? 'USB requiere autorización del teléfono. Para Wi-Fi, activa Depuración inalámbrica en Android y utiliza su IP, puerto y código de vinculación. Marca «Permitir siempre en esta red» en el teléfono: así Alero se reconecta solo cuando vuelve el Wi-Fi.'
-                    : tr('Transporte ADB elegido: {}', [serial])),
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: s.onSurfaceVariant),
+          Builder(
+            builder: (context) {
+              final text =
+                  _message ??
+                  (serial == null
+                      ? 'USB requiere autorización del teléfono. Para Wi-Fi, activa Depuración inalámbrica en Android y utiliza su IP, puerto y código de vinculación. Marca «Permitir siempre en esta red» en el teléfono: así Alero se reconecta solo cuando vuelve el Wi-Fi.'
+                      : tr('Transporte ADB elegido: {}', [serial]));
+              return MotionFade(
+                child: Align(
+                  key: ValueKey(text),
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: s.onSurfaceVariant),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -225,6 +239,8 @@ class _WirelessDialogState extends State<_WirelessDialog> {
   final _connectPort = TextEditingController();
   bool _pair = true, _busy = false, _useQr = true;
   String? _error;
+  // Kept so the message stays readable while its panel collapses.
+  String? _lastError;
   // One-time QR pairing credentials; never persisted or logged.
   late final String _qrName = 'alero-${_random(6)}', _qrPass = _random(10);
   Timer? _qrPoll;
@@ -372,124 +388,153 @@ class _WirelessDialogState extends State<_WirelessDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Depuración inalámbrica'),
-    content: SizedBox(
-      width: 430,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(
-                  value: true,
-                  icon: Icon(Symbols.qr_code_2_rounded),
-                  label: FitLabel('Código QR'),
-                ),
-                ButtonSegment(
-                  value: false,
-                  icon: Icon(Symbols.pin_rounded),
-                  label: FitLabel('Código'),
-                ),
-              ],
-              selected: {_useQr},
-              onSelectionChanged: _busy
-                  ? null
-                  : (v) => setState(() {
-                      _useQr = v.first;
-                      _error = null;
-                    }),
-            ),
-            const SizedBox(height: Gap.m),
-            if (_useQr) ...[
-              const Text(
-                'En el teléfono abre Ajustes › Opciones de desarrollador › Depuración inalámbrica y toca «Vincular dispositivo con código QR». Escanea este código: el resto se completa solo.',
-              ),
-              const SizedBox(height: Gap.m),
-              Center(
-                child: QrView(
-                  'WIFI:T:ADB;S:$_qrName;P:$_qrPass;;',
-                  label: tx('Código QR de vinculación ADB'),
-                ),
-              ),
-              const SizedBox(height: Gap.s),
-              Text(
-                _busy ? 'Vinculando y conectando…' : 'Esperando al teléfono… Ambos deben estar en la misma red Wi-Fi.',
-                textAlign: TextAlign.center,
-              ),
-            ] else ...[
-              const Text(
-                'En el teléfono abre Ajustes › Opciones de desarrollador › Depuración inalámbrica. Actívala y, si es la primera vez, selecciona «Vincular dispositivo con código de vinculación».',
-              ),
-              const SizedBox(height: Gap.m),
-              TextField(
-                controller: _ip,
-                decoration: InputDecoration(
-                  labelText: tx('Dirección IP del teléfono (p. ej., 192.168.1.10)'),
-                ),
-                keyboardType: TextInputType.url,
-              ),
-              SwitchListTile(
-                title: const Text('Vincular por primera vez'),
-                subtitle: const Text(
-                  'Desactívalo si este ordenador ya está autorizado.',
-                ),
-                value: _pair,
+  Widget build(BuildContext context) {
+    _lastError = _error ?? _lastError;
+    return AlertDialog(
+      title: const Text('Depuración inalámbrica'),
+      content: SizedBox(
+        width: 430,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AleroSegments<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: true,
+                    icon: Icon(Symbols.qr_code_2_rounded),
+                    label: FitLabel('Código QR'),
+                  ),
+                  ButtonSegment(
+                    value: false,
+                    icon: Icon(Symbols.pin_rounded),
+                    label: FitLabel('Código'),
+                  ),
+                ],
+                selected: _useQr,
                 onChanged: _busy
                     ? null
-                    : (value) => setState(() => _pair = value),
+                    : (v) => setState(() {
+                        _useQr = v;
+                        _error = null;
+                      }),
               ),
-              if (_pair) ...[
-                TextField(
-                  controller: _pairPort,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: tx('Puerto de vinculación'),
-                  ),
+              const SizedBox(height: Gap.m),
+              MotionSwitch(
+                forward: !_useQr,
+                child: Column(
+                  key: ValueKey(_useQr),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_useQr) ...[
+                      const Text(
+                        'En el teléfono abre Ajustes › Opciones de desarrollador › Depuración inalámbrica y toca «Vincular dispositivo con código QR». Escanea este código: el resto se completa solo.',
+                      ),
+                      const SizedBox(height: Gap.m),
+                      Center(
+                        child: QrView(
+                          'WIFI:T:ADB;S:$_qrName;P:$_qrPass;;',
+                          label: tx('Código QR de vinculación ADB'),
+                        ),
+                      ),
+                      const SizedBox(height: Gap.s),
+                      MotionFade(
+                        child: Text(
+                          _busy ? 'Vinculando y conectando…' : 'Esperando al teléfono… Ambos deben estar en la misma red Wi-Fi.',
+                          key: ValueKey(_busy),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ] else ...[
+                      const Text(
+                        'En el teléfono abre Ajustes › Opciones de desarrollador › Depuración inalámbrica. Actívala y, si es la primera vez, selecciona «Vincular dispositivo con código de vinculación».',
+                      ),
+                      const SizedBox(height: Gap.m),
+                      TextField(
+                        controller: _ip,
+                        decoration: InputDecoration(
+                          labelText: tx(
+                            'Dirección IP del teléfono (p. ej., 192.168.1.10)',
+                          ),
+                        ),
+                        keyboardType: TextInputType.url,
+                      ),
+                      SwitchListTile(
+                        title: const Text('Vincular por primera vez'),
+                        subtitle: const Text(
+                          'Desactívalo si este ordenador ya está autorizado.',
+                        ),
+                        value: _pair,
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() => _pair = value),
+                      ),
+                      ArcExpand(
+                        expanded: _pair,
+                        child: Column(
+                          children: [
+                            TextField(
+                              controller: _pairPort,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                labelText: tx('Puerto de vinculación'),
+                              ),
+                            ),
+                            TextField(
+                              controller: _code,
+                              keyboardType: TextInputType.number,
+                              obscureText: true,
+                              decoration: InputDecoration(
+                                labelText: tx('Código temporal de 6 dígitos'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextField(
+                        controller: _connectPort,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: tx(
+                            'Puerto de conexión ADB (opcional con mDNS)',
+                          ),
+                          helperText: tx(
+                            'No reutilices el puerto de vinculación salvo que Android muestre el mismo.',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                TextField(
-                  controller: _code,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: tx('Código temporal de 6 dígitos'),
+              ),
+              ArcExpand(
+                expanded: _error != null,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: Gap.s),
+                  child: Text(
+                    _lastError ?? '',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
-                ),
-              ],
-              TextField(
-                controller: _connectPort,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: tx('Puerto de conexión ADB (opcional con mDNS)'),
-                  helperText: tx('No reutilices el puerto de vinculación salvo que Android muestre el mismo.'),
                 ),
               ),
             ],
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: Gap.s),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: _busy ? null : () => Navigator.of(context).pop(),
-        child: const Text('Cancelar'),
-      ),
-      if (!_useQr)
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: Text(_busy ? 'Conectando…' : 'Conectar'),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
         ),
-    ],
-  );
+        if (!_useQr)
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: Text(_busy ? 'Conectando…' : 'Conectar'),
+          ),
+      ],
+    );
+  }
 }

@@ -9,6 +9,7 @@ import '../hub.dart';
 import '../native.dart';
 import 'expressive.dart' show Spring, motion, showAleroDialog;
 import 'icon.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -36,7 +37,10 @@ Future<bool> showSendPreview(
                       Padding(
                         padding: const EdgeInsets.only(top: Gap.s),
                         child: Text(
-                          tr('y {} más ({} archivos)', [files.length - 4, files.length]),
+                          tr('y {} más ({} archivos)', [
+                            files.length - 4,
+                            files.length,
+                          ]),
                           style: Theme.of(c).textTheme.bodySmall,
                         ),
                       ),
@@ -57,6 +61,17 @@ Future<bool> showSendPreview(
       ),
     ) ??
     false;
+
+/// A picture that fades in once decoded instead of popping.
+Widget _fadeIn(BuildContext context, Widget child, int? frame, bool sync) =>
+    sync
+    ? child
+    : AnimatedOpacity(
+        opacity: frame == null ? 0 : 1,
+        duration: AleroMotion.micro(context, Fluent.d250),
+        curve: Fluent.enter,
+        child: child,
+      );
 
 String _name(Picked f) =>
     f.name ?? f.path.replaceAll(r'\', '/').split('/').last;
@@ -92,6 +107,8 @@ class _One extends StatelessWidget {
               fit: BoxFit.contain,
               cacheHeight:
                   400, // decode small: a 50 MP photo must not stall the dialog
+              frameBuilder: (c, child, frame, sync) =>
+                  _fadeIn(c, child, frame, sync),
               errorBuilder: (_, _, _) => FileTile(name, size: 72),
             ),
           )
@@ -144,10 +161,7 @@ Future<void> showTransfer(
   // Taken now, not in initState: a small file can start and end before the dialog's first frame.
   final old =
       before ??
-      {
-        for (final x in hub.active) x.id,
-        for (final d in hub.ended) d.x.id,
-      };
+      {for (final x in hub.active) x.id, for (final d in hub.ended) d.x.id};
   return showAleroDialog<void>(
     context: context,
     builder: (_) => _Transfer(hub, count, incoming, old),
@@ -254,14 +268,19 @@ class _TransferState extends State<_Transfer> {
       final peer = (done.lastOrNull?.x ?? mine.firstOrNull)?.peerName ?? '';
       final many = widget.count > 1 || done.length + mine.length > 1;
       return AlertDialog(
-        title: Text(
-          finished && ok.isNotEmpty
-              ? (widget.incoming ? tr('Recibido de {}', [peer]) : tr('Enviado a {}', [peer]))
-              : widget.incoming
-              ? tr('Recibiendo de {}', [peer])
-              : many
-              ? tr('Enviando {} archivos', [widget.count])
-              : 'Enviando archivo',
+        title: MotionFade(
+          child: Text(
+            finished && ok.isNotEmpty
+                ? (widget.incoming
+                      ? tr('Recibido de {}', [peer])
+                      : tr('Enviado a {}', [peer]))
+                : widget.incoming
+                ? tr('Recibiendo de {}', [peer])
+                : many
+                ? tr('Enviando {} archivos', [widget.count])
+                : 'Enviando archivo',
+            key: ValueKey('$finished|$peer|${widget.incoming}|$many'),
+          ),
         ),
         content: SizedBox(
           width: 460,
@@ -269,40 +288,83 @@ class _TransferState extends State<_Transfer> {
             mainAxisSize: MainAxisSize.min,
             children: [
               flight,
-              if (finished) ...[
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    ok.length == done.length
-                        ? 'Finalizado'
-                        : ok.isEmpty
-                        ? done.last.error
-                        : tr('{} de {} finalizados', [ok.length, done.length]),
-                    style: t.titleMedium,
+              // The height follows the swap between moving, waiting and finished.
+              AnimatedSize(
+                alignment: Alignment.topCenter,
+                duration: AleroMotion.micro(context, Fluent.d250),
+                curve: Fluent.enter,
+                child: MotionSwitch(
+                  axis: Axis.vertical,
+                  child: KeyedSubtree(
+                    key: ValueKey(
+                      finished
+                          ? 'done'
+                          : mine.isEmpty
+                          ? 'wait'
+                          : 'moving',
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (finished) ...[
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              ok.length == done.length
+                                  ? 'Finalizado'
+                                  : ok.isEmpty
+                                  ? done.last.error
+                                  : tr('{} de {} finalizados', [
+                                      ok.length,
+                                      done.length,
+                                    ]),
+                              style: t.titleMedium,
+                            ),
+                          ),
+                          if (last != null) ...[
+                            const SizedBox(height: Gap.m),
+                            _Arrived(last, onDisk ? h.path : null),
+                            if (ok.length > 1)
+                              Text(
+                                tr('y {} más', [ok.length - 1]),
+                                style: t.bodySmall,
+                              ),
+                          ],
+                        ] else if (mine.isEmpty) ...[
+                          const SizedBox(height: Gap.s),
+                          Text(
+                            done.isEmpty ? 'Preparando…' : 'Siguiente archivo…',
+                          ),
+                        ] else ...[
+                          MotionList(
+                            children: [
+                              for (final x in mine.take(3))
+                                TransferRow(x, hub, key: ValueKey(x.id)),
+                            ],
+                          ),
+                          if (mine.length > 3)
+                            Text(
+                              tr('y {} más en curso', [mine.length - 3]),
+                              style: t.bodySmall,
+                            ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-                if (last != null) ...[
-                  const SizedBox(height: Gap.m),
-                  _Arrived(last, onDisk ? h.path : null),
-                  if (ok.length > 1)
-                    Text(tr('y {} más', [ok.length - 1]), style: t.bodySmall),
-                ],
-              ] else if (mine.isEmpty) ...[
-                const SizedBox(height: Gap.s),
-                Text(done.isEmpty ? 'Preparando…' : 'Siguiente archivo…'),
-              ] else ...[
-                for (final x in mine.take(3))
-                  TransferRow(x, hub, key: ValueKey(x.id)),
-                if (mine.length > 3)
-                  Text(tr('y {} más en curso', [mine.length - 3]), style: t.bodySmall),
-              ],
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(finished ? 'Cerrar' : 'Ocultar'),
+            child: MotionFade(
+              child: Text(
+                finished ? 'Cerrar' : 'Ocultar',
+                key: ValueKey(finished),
+              ),
+            ),
           ),
           if (finished && last != null) ...[
             if (onDisk && Platform.isWindows)
@@ -359,6 +421,8 @@ class _Arrived extends StatelessWidget {
             height: 200,
             fit: BoxFit.contain,
             cacheHeight: 400,
+            frameBuilder: (c, child, frame, sync) =>
+                _fadeIn(c, child, frame, sync),
             errorBuilder: (_, _, _) => tile,
           )
         : null;

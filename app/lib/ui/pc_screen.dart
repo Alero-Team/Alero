@@ -1,3 +1,5 @@
+import 'alero_motion.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart' hide Icon, Text;
@@ -13,6 +15,7 @@ import 'icon.dart';
 import 'widgets.dart';
 import '../l10n.dart';
 import 'expressive.dart';
+import 'controls.dart' show Presence;
 
 Future<void> openPcScreen(
   BuildContext context,
@@ -279,19 +282,29 @@ class _PcScreenPageState extends State<PcScreenPage>
                   ? tx('Ver toda la pantalla')
                   : tx('Acercar (o pellizca la imagen)'),
               isSelected: _zoom > 1,
-              icon: Icon(
-                _zoom > 1 ? Symbols.zoom_out_rounded : Symbols.zoom_in_rounded,
+              icon: MotionFade(
+                child: Icon(
+                  _zoom > 1
+                      ? Symbols.zoom_out_rounded
+                      : Symbols.zoom_in_rounded,
+                  key: ValueKey(_zoom > 1),
+                ),
               ),
               onPressed: blocker != null || _feed.frame == null
                   ? null
                   : () => setState(() => _zoom = _zoom > 1 ? 1 : 2),
             ),
-            if (canInput)
-              PointerSensitivity(
-                value: _gain,
-                onChanged: (gain) => setState(() => _gain = gain),
-              ),
+            Presence(
+              alignment: Alignment.centerRight,
+              child: canInput
+                  ? PointerSensitivity(
+                      value: _gain,
+                      onChanged: (gain) => setState(() => _gain = gain),
+                    )
+                  : null,
+            ),
             PopupMenuButton<(int, int)>(
+              popUpAnimationStyle: popUpMotion(context),
               tooltip: tx('Calidad de la pantalla'),
               enabled: blocker == null,
               icon: const Icon(Symbols.display_settings_rounded),
@@ -327,48 +340,63 @@ class _PcScreenPageState extends State<PcScreenPage>
           ],
         ),
         body: SafeArea(
-          child: unavailable
-              ? _unavailable(info?.screenNote ?? '', canInput)
-              : blocker != null || _feed.frame == null
-              ? Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(Gap.xl),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (blocker != null)
-                          Icon(
-                            Symbols.link_off_rounded,
-                            size: 32,
-                            color: s.onSurfaceVariant,
-                          )
-                        else if (_waitingTooLong)
-                          Icon(
-                            Symbols.desktop_access_disabled_rounded,
-                            size: 32,
-                            color: s.onSurfaceVariant,
-                          )
-                        else
-                          const CircularProgressIndicator(),
-                        const SizedBox(height: Gap.l),
-                        Text(
-                          blocker ??
-                              (_waitingTooLong
-                                  ? 'El ordenador todavía no ha enviado una imagen.'
-                                  : 'Conectando con la pantalla…'),
-                          textAlign: TextAlign.center,
-                          style: t.bodyLarge,
-                        ),
-                        if (blocker == null && _waitingTooLong) ...[
-                          const SizedBox(height: Gap.m),
-                          FilledButton.tonalIcon(
-                            onPressed: () => setState(_start),
-                            icon: const Icon(Symbols.refresh_rounded),
-                            label: const Text('Reintentar'),
-                          ),
-                        ],
-                      ],
+          // Only the waiting states animate; the live picture is never wrapped in a switcher, so no frame is delayed.
+          child: blocker != null || _feed.frame == null
+              ? MotionSwitch(
+                  axis: Axis.vertical,
+                  child: KeyedSubtree(
+                    key: ValueKey(
+                      unavailable
+                          ? 'unavailable'
+                          : blocker != null
+                          ? 'blocked'
+                          : _waitingTooLong
+                          ? 'late'
+                          : 'wait',
                     ),
+                    child: unavailable
+                        ? _unavailable(info?.screenNote ?? '', canInput)
+                        : Center(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(Gap.xl),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (blocker != null)
+                                    Icon(
+                                      Symbols.link_off_rounded,
+                                      size: 32,
+                                      color: s.onSurfaceVariant,
+                                    )
+                                  else if (_waitingTooLong)
+                                    Icon(
+                                      Symbols.desktop_access_disabled_rounded,
+                                      size: 32,
+                                      color: s.onSurfaceVariant,
+                                    )
+                                  else
+                                    const CircularProgressIndicator(),
+                                  const SizedBox(height: Gap.l),
+                                  Text(
+                                    blocker ??
+                                        (_waitingTooLong
+                                            ? 'El ordenador todavía no ha enviado una imagen.'
+                                            : 'Conectando con la pantalla…'),
+                                    textAlign: TextAlign.center,
+                                    style: t.bodyLarge,
+                                  ),
+                                  if (blocker == null && _waitingTooLong) ...[
+                                    const SizedBox(height: Gap.m),
+                                    FilledButton.tonalIcon(
+                                      onPressed: () => setState(_start),
+                                      icon: const Icon(Symbols.refresh_rounded),
+                                      label: const Text('Reintentar'),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
                   ),
                 )
               : Padding(
@@ -477,7 +505,9 @@ Future<void> showShot(BuildContext context, Hub hub) {
                   child: Image.memory(
                     shot.bytes,
                     fit: BoxFit.contain,
-                    semanticLabel: tr('Captura de pantalla de {}', [shot.peerName]),
+                    semanticLabel: tr('Captura de pantalla de {}', [
+                      shot.peerName,
+                    ]),
                   ),
                 ),
               ),

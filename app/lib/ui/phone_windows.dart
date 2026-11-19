@@ -26,7 +26,10 @@ class PhoneWindowsPanel extends StatelessWidget {
 
   Future<void> _camera(String facing) => PhoneSessions.instance.startCamera(
     serial,
-    tr('Cámara {} · {}', [facing == 'front' ? 'frontal' : 'trasera', deviceName]),
+    tr('Cámara {} · {}', [
+      facing == 'front' ? 'frontal' : 'trasera',
+      deviceName,
+    ]),
     facing,
   );
 
@@ -68,14 +71,16 @@ class PhoneWindowsPanel extends StatelessWidget {
     );
     controller.dispose();
     if (password == null || !context.mounted) return;
-    final title =
-        tr('Cámara {} · {}', [facing == 'front' ? 'frontal' : 'trasera', deviceName]);
+    final title = tr('Cámara {} · {}', [
+      facing == 'front' ? 'frontal' : 'trasera',
+      deviceName,
+    ]);
     try {
       await _camera(facing);
       await Future<void>.delayed(const Duration(milliseconds: 800));
       await ObsWebcam.start(windowTitle: title, password: password);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showToast(
           const SnackBar(
             content: Text(
               'Webcam de Alero activada: selecciona OBS Virtual Camera en tu videollamada.',
@@ -85,8 +90,10 @@ class PhoneWindowsPanel extends StatelessWidget {
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('No se pudo iniciar la webcam: {}', [error]))),
+        ScaffoldMessenger.of(context).showToast(
+          SnackBar(
+            content: Text(tr('No se pudo iniciar la webcam: {}', [error])),
+          ),
         );
       }
     }
@@ -148,10 +155,16 @@ class PhoneWindowsPanel extends StatelessWidget {
                     label: const Text('Webcam frontal'),
                   ),
                   if (cam)
-                    OutlinedButton.icon(
-                      onPressed: () => _stopCamera(),
-                      icon: const Icon(Symbols.videocam_off_rounded, size: 18),
-                      label: const Text('Cerrar cámara'),
+                    SizeFade(
+                      key: const ValueKey('close-camera'),
+                      child: OutlinedButton.icon(
+                        onPressed: () => _stopCamera(),
+                        icon: const Icon(
+                          Symbols.videocam_off_rounded,
+                          size: 18,
+                        ),
+                        label: const Text('Cerrar cámara'),
+                      ),
                     ),
                 ],
               ),
@@ -173,13 +186,30 @@ class CameraFailure extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: PhoneSessions.instance,
     builder: (context, _) {
-      final why = PhoneSessions.instance.failures['$serial|camera'];
-      if (why == null) return const SizedBox.shrink();
-      return Padding(
-        padding: const EdgeInsets.only(top: Gap.s),
-        child: ErrorBanner(why),
-      );
+      return _Failure(PhoneSessions.instance.failures['$serial|camera']);
     },
+  );
+}
+
+/// The error banner under a panel: it grows in and fades when there is a failure and folds away when it clears.
+class _Failure extends StatelessWidget {
+  const _Failure(this.why);
+  final String? why;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+    duration: motion(context, Spring.spatial.settle),
+    curve: Spring.spatial,
+    alignment: Alignment.topCenter,
+    child: MotionFade(
+      child: why == null
+          ? const SizedBox.shrink(key: ValueKey('none'))
+          : Padding(
+              key: ValueKey(why),
+              padding: const EdgeInsets.only(top: Gap.s),
+              child: ErrorBanner(why!),
+            ),
+    ),
   );
 }
 
@@ -244,7 +274,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
         file.deleteSync();
       } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showToast(
           const SnackBar(
             content: Text('La grabación fue demasiado corta y no se guardó.'),
           ),
@@ -253,7 +283,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
       return;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context).showToast(
       SnackBar(
         content: Text(
           tr('Grabación guardada: {}', [f.split(Platform.pathSeparator).last]),
@@ -279,42 +309,51 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: Gap.l),
-            Text(
-              on
-                  ? 'Grabando la pantalla del teléfono…'
-                  : tr('Graba la pantalla del teléfono (con sonido en Android 11 o posterior) en un vídeo .mkv dentro de {}.', [widget.folder]),
-              style: Theme.of(context).textTheme.bodyMedium,
+            MotionFade(
+              child: Align(
+                key: ValueKey(on),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  on
+                      ? 'Grabando la pantalla del teléfono…'
+                      : tr(
+                          'Graba la pantalla del teléfono (con sonido en Android 11 o posterior) en un vídeo .mkv dentro de {}.',
+                          [widget.folder],
+                        ),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
             ),
             const SizedBox(height: Gap.s),
             Align(
               alignment: Alignment.centerLeft,
-              child: on
-                  ? FilledButton.tonalIcon(
-                      onPressed: _stop,
-                      icon: AleroPulse(
-                        active: true,
-                        child: Icon(
-                          Symbols.stop_circle_rounded,
-                          size: 18,
-                          color: Theme.of(context).colorScheme.error,
+              child: MotionFade(
+                child: on
+                    ? FilledButton.tonalIcon(
+                        key: const ValueKey('stop'),
+                        onPressed: _stop,
+                        icon: AleroPulse(
+                          active: true,
+                          child: Icon(
+                            Symbols.stop_circle_rounded,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
+                        label: const Text('Detener grabación'),
+                      )
+                    : FilledButton.icon(
+                        key: const ValueKey('start'),
+                        onPressed: _start,
+                        icon: const Icon(
+                          Symbols.fiber_manual_record_rounded,
+                          size: 18,
+                        ),
+                        label: const Text('Grabar'),
                       ),
-                      label: const Text('Detener grabación'),
-                    )
-                  : FilledButton.icon(
-                      onPressed: _start,
-                      icon: const Icon(
-                        Symbols.fiber_manual_record_rounded,
-                        size: 18,
-                      ),
-                      label: const Text('Grabar'),
-                    ),
-            ),
-            if (why != null)
-              Padding(
-                padding: const EdgeInsets.only(top: Gap.s),
-                child: ErrorBanner(why),
               ),
+            ),
+            _Failure(why),
           ],
         ),
       );

@@ -12,6 +12,8 @@ import 'icon.dart';
 import 'theme.dart';
 import '../l10n.dart';
 import 'expressive.dart';
+import 'alero_motion.dart';
+import 'controls.dart' show Presence;
 
 /// A local vault on each device, deliberately separate from normal Alero
 /// transfers. Encryption keys stay in Android Keystore or Windows DPAPI.
@@ -202,7 +204,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
             FilledButton(
               onPressed: () {
                 if (title.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
+                  ScaffoldMessenger.of(ctx).showToast(
                     const SnackBar(
                       content: Text('Escribe un título para guardar la nota.'),
                     ),
@@ -358,6 +360,8 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     final create = !android && _hasKey == false;
     return Center(
       child: SingleChildScrollView(
+        // The list takes the primary controller while this one leaves.
+        primary: false,
         padding: const EdgeInsets.all(24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 380),
@@ -366,70 +370,93 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
             children: [
               const Icon(Symbols.lock_rounded, size: 44),
               const SizedBox(height: 16),
-              Text(
-                create
-                    ? 'Crea la clave de tu bóveda'
-                    : 'Alero Vault está bloqueado',
-                style: theme.textTheme.titleLarge,
-                textAlign: TextAlign.center,
+              MotionFade(
+                child: Text(
+                  create
+                      ? 'Crea la clave de tu bóveda'
+                      : 'Alero Vault está bloqueado',
+                  key: ValueKey(create),
+                  style: theme.textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 8),
-              Text(
-                android
-                    ? 'Usa tu huella o el PIN del teléfono para ver lo que guardaste.'
-                    : create
-                    ? 'Tus notas y archivos se cifran con esta clave y con tu cuenta de Windows. '
-                          'Alero no la guarda: si la olvidas, nadie puede recuperar el contenido.'
-                    : 'Escribe la clave de tu bóveda.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              MotionFade(
+                child: Text(
+                  android
+                      ? 'Usa tu huella o el PIN del teléfono para ver lo que guardaste.'
+                      : create
+                      ? 'Tus notas y archivos se cifran con esta clave y con tu cuenta de Windows. '
+                            'Alero no la guarda: si la olvidas, nadie puede recuperar el contenido.'
+                      : 'Escribe la clave de tu bóveda.',
+                  key: ValueKey(create),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
-              if (!android && _hasKey != null) ...[
-                TextField(
-                  controller: _key,
-                  obscureText: true,
-                  autofocus: true,
-                  enabled: !_busy,
-                  decoration: InputDecoration(labelText: tx('Clave')),
-                  onSubmitted: (_) => create ? null : _unlock(),
-                ),
-                if (create) ...[
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _again,
-                    obscureText: true,
-                    enabled: !_busy,
-                    decoration: InputDecoration(
-                      labelText: tx('Repite la clave'),
-                    ),
-                    onSubmitted: (_) => _unlock(),
-                  ),
-                ],
-                const SizedBox(height: 16),
-              ],
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
-                  ),
-                ),
-              if (_busy)
-                const CircularProgressIndicator()
-              else if (android || _hasKey != null)
-                FilledButton.icon(
-                  onPressed: _unlock,
-                  icon: const Icon(Symbols.lock_open_rounded, size: 18),
-                  label: Text(create ? 'Crear y abrir' : 'Desbloquear'),
-                ),
+              Presence(
+                child: !android && _hasKey != null
+                    ? Column(
+                        children: [
+                          TextField(
+                            controller: _key,
+                            obscureText: true,
+                            autofocus: true,
+                            enabled: !_busy,
+                            decoration: InputDecoration(labelText: tx('Clave')),
+                            onSubmitted: (_) => create ? null : _unlock(),
+                          ),
+                          Presence(
+                            child: create
+                                ? Padding(
+                                    padding: const EdgeInsets.only(top: 10),
+                                    child: TextField(
+                                      controller: _again,
+                                      obscureText: true,
+                                      enabled: !_busy,
+                                      decoration: InputDecoration(
+                                        labelText: tx('Repite la clave'),
+                                      ),
+                                      onSubmitted: (_) => _unlock(),
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      )
+                    : null,
+              ),
+              Presence(
+                child: _error == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: theme.colorScheme.error),
+                          ),
+                        ),
+                      ),
+              ),
+              MotionFade(
+                child: _busy
+                    ? const CircularProgressIndicator(key: ValueKey('busy'))
+                    : android || _hasKey != null
+                    ? FilledButton.icon(
+                        key: ValueKey('go-$create'),
+                        onPressed: _unlock,
+                        icon: const Icon(Symbols.lock_open_rounded, size: 18),
+                        label: Text(create ? 'Crear y abrir' : 'Desbloquear'),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('none')),
+              ),
             ],
           ),
         ),
@@ -443,7 +470,9 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
       builder: (ctx) => AlertDialog(
         title: const Text('Eliminar de Alero Vault'),
         content: Text(
-          tr('¿Eliminar «{}» de este dispositivo? No se puede deshacer.', [entry.name]),
+          tr('¿Eliminar «{}» de este dispositivo? No se puede deshacer.', [
+            entry.name,
+          ]),
         ),
         actions: [
           TextButton(
@@ -468,115 +497,155 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text('Alero Vault'),
         actions: [
-          if (_unlocked)
-            IconButton(
-              tooltip: tx('Bloquear ahora'),
-              onPressed: _busy ? null : () => setState(_lock),
-              icon: const Icon(Symbols.lock_rounded),
-            ),
+          Presence(
+            alignment: Alignment.centerRight,
+            child: _unlocked
+                ? IconButton(
+                    tooltip: tx('Bloquear ahora'),
+                    onPressed: _busy ? null : () => setState(_lock),
+                    icon: const Icon(Symbols.lock_rounded),
+                  )
+                : null,
+          ),
         ],
       ),
       body: SafeArea(
-        child: !_unlocked
-            ? _gate(theme)
-            : ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  Text(
-                    'Tus archivos y notas privados',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Solo se ven tras desbloquear, y se vuelven a bloquear al salir de aquí o de Alero. '
-                    'Se cifran en este dispositivo y no se sincronizan ni se comparten con el otro. '
-                    'Desinstalar Alero o restablecer el sistema puede hacer imposible recuperarlos.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: color.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
+        child: MotionSwitch(
+          axis: Axis.vertical,
+          child: KeyedSubtree(
+            key: ValueKey(_unlocked),
+            child: !_unlocked
+                ? _gate(theme)
+                : ListView(
+                    padding: const EdgeInsets.all(20),
                     children: [
-                      FilledButton.icon(
-                        onPressed: _busy ? null : () => _note(),
-                        icon: const Icon(Symbols.note_add_rounded),
-                        label: const Text('Nueva nota'),
+                      Text(
+                        'Tus archivos y notas privados',
+                        style: theme.textTheme.titleLarge,
                       ),
-                      FilledButton.tonalIcon(
-                        onPressed: _busy ? null : _importFiles,
-                        icon: const Icon(Symbols.add_to_drive_rounded),
-                        label: const Text('Proteger fotos y archivos'),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Solo se ven tras desbloquear, y se vuelven a bloquear al salir de aquí o de Alero. '
+                        'Se cifran en este dispositivo y no se sincronizan ni se comparten con el otro. '
+                        'Desinstalar Alero o restablecer el sistema puede hacer imposible recuperarlos.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: color.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _busy ? null : () => _note(),
+                            icon: const Icon(Symbols.note_add_rounded),
+                            label: const Text('Nueva nota'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: _busy ? null : _importFiles,
+                            icon: const Icon(Symbols.add_to_drive_rounded),
+                            label: const Text('Proteger fotos y archivos'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Presence(
+                        child: _error == null
+                            ? null
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  _error!,
+                                  style: TextStyle(color: color.error),
+                                ),
+                              ),
+                      ),
+                      Presence(
+                        child: _loading || _busy
+                            ? const LinearProgressIndicator()
+                            : null,
+                      ),
+                      Presence(
+                        child: !_loading && _items.isEmpty && _error == null
+                            ? const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 32),
+                                child: Center(
+                                  child: Text('Tu bóveda está vacía.'),
+                                ),
+                              )
+                            : null,
+                      ),
+                      MotionList(
+                        children: [
+                          for (final entry in _items)
+                            Card(
+                              key: ValueKey(entry.id),
+                              child: AleroPress(
+                                onTap: _busy
+                                    ? null
+                                    : entry.isNote
+                                    ? () => _note(entry)
+                                    : _isPicture(entry)
+                                    ? () => _view(entry)
+                                    : () => _export(entry),
+                                child: ListTile(
+                                  leading: _isPicture(entry)
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          child: Image.memory(
+                                            entry.fileBytes,
+                                            width: 44,
+                                            height: 44,
+                                            fit: BoxFit.cover,
+                                            cacheWidth: 132,
+                                            excludeFromSemantics: true,
+                                            errorBuilder: (_, _, _) =>
+                                                const Icon(
+                                                  Symbols.image_rounded,
+                                                ),
+                                          ),
+                                        )
+                                      : Icon(
+                                          entry.isNote
+                                              ? Symbols.sticky_note_2_rounded
+                                              : Symbols
+                                                    .insert_drive_file_rounded,
+                                        ),
+                                  title: Text(
+                                    entry.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Text(
+                                    entry.isNote
+                                        ? 'Nota cifrada'
+                                        : _isPicture(entry)
+                                        ? 'Foto cifrada · toca para verla'
+                                        : 'Archivo cifrado · toca para exportarlo',
+                                  ),
+                                  trailing: IconButton(
+                                    tooltip: tx('Eliminar'),
+                                    icon: const Icon(
+                                      Symbols.delete_outline_rounded,
+                                    ),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _delete(entry),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(color: color.error),
-                      ),
-                    ),
-                  if (_loading || _busy) const LinearProgressIndicator(),
-                  if (!_loading && _items.isEmpty && _error == null)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32),
-                      child: Center(child: Text('Tu bóveda está vacía.')),
-                    ),
-                  for (final entry in _items)
-                    Card(
-                      child: ListTile(
-                        leading: _isPicture(entry)
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.memory(
-                                  entry.fileBytes,
-                                  width: 44,
-                                  height: 44,
-                                  fit: BoxFit.cover,
-                                  cacheWidth: 132,
-                                  excludeFromSemantics: true,
-                                  errorBuilder: (_, _, _) =>
-                                      const Icon(Symbols.image_rounded),
-                                ),
-                              )
-                            : Icon(
-                                entry.isNote
-                                    ? Symbols.sticky_note_2_rounded
-                                    : Symbols.insert_drive_file_rounded,
-                              ),
-                        title: Text(
-                          entry.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          entry.isNote
-                              ? 'Nota cifrada'
-                              : _isPicture(entry)
-                              ? 'Foto cifrada · toca para verla'
-                              : 'Archivo cifrado · toca para exportarlo',
-                        ),
-                        onTap: _busy
-                            ? null
-                            : entry.isNote
-                            ? () => _note(entry)
-                            : _isPicture(entry)
-                            ? () => _view(entry)
-                            : () => _export(entry),
-                        trailing: IconButton(
-                          tooltip: tx('Eliminar'),
-                          icon: const Icon(Symbols.delete_outline_rounded),
-                          onPressed: _busy ? null : () => _delete(entry),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+          ),
+        ),
       ),
     );
   }

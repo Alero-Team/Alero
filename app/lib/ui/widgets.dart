@@ -223,7 +223,13 @@ class StatusLine extends StatelessWidget {
         ),
         const SizedBox(width: Gap.s),
         Flexible(
-          child: Text(s.label, style: Theme.of(context).textTheme.labelLarge),
+          child: MotionFade(
+            child: Text(
+              s.label,
+              key: ValueKey(s.label),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
         ),
       ],
     );
@@ -330,7 +336,8 @@ class IconTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    return Container(
+    return AnimatedContainer(
+      duration: AleroMotion.micro(context, Fluent.d167),
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -338,10 +345,13 @@ class IconTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(Radii.chip),
       ),
       child: ExcludeSemantics(
-        child: Icon(
-          icon,
-          size: size * 0.5,
-          color: tonal ? s.onSecondaryContainer : s.onSurfaceVariant,
+        child: MotionFade(
+          child: Icon(
+            icon,
+            key: ValueKey(icon),
+            size: size * 0.5,
+            color: tonal ? s.onSecondaryContainer : s.onSurfaceVariant,
+          ),
         ),
       ),
     );
@@ -494,19 +504,22 @@ class HistoryTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: Gap.s),
-            if (!ok && !h.incoming)
-              TextButton(
-                onPressed: () => hub.retry(h.id),
-                child: const Text('Reintentar'),
-              )
-            else
-              // The status is already in words; the icon only repeats it.
-              Padding(
-                padding: const EdgeInsets.only(right: Gap.s),
-                child: ExcludeSemantics(
-                  child: Icon(icon, size: 18, color: color, fill: 1),
-                ),
-              ),
+            MotionFade(
+              child: !ok && !h.incoming
+                  ? TextButton(
+                      key: const ValueKey('retry'),
+                      onPressed: () => hub.retry(h.id),
+                      child: const Text('Reintentar'),
+                    )
+                  // The status is already in words; the icon only repeats it.
+                  : Padding(
+                      key: ValueKey(icon),
+                      padding: const EdgeInsets.only(right: Gap.s),
+                      child: ExcludeSemantics(
+                        child: Icon(icon, size: 18, color: color, fill: 1),
+                      ),
+                    ),
+            ),
             // Only the list entry goes; the file stays where it is.
             IconButton(
               tooltip: tx('Quitar del historial (no borra el archivo)'),
@@ -736,8 +749,9 @@ class SettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return _Pressable(
+    return AleroPress(
       onTap: onTap,
+      radius: Radii.tile,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 56),
         child: Padding(
@@ -778,35 +792,6 @@ class SettingTile extends StatelessWidget {
       ),
     );
   }
-}
-
-/// An InkWell row that sinks a little while pressed, on the fast spring.
-class _Pressable extends StatefulWidget {
-  const _Pressable({required this.onTap, required this.child});
-  final VoidCallback? onTap;
-  final Widget child;
-
-  @override
-  State<_Pressable> createState() => _PressableState();
-}
-
-class _PressableState extends State<_Pressable> {
-  bool _down = false;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: widget.onTap,
-    borderRadius: BorderRadius.circular(Radii.tile),
-    onHighlightChanged: (d) {
-      if (mounted) setState(() => _down = d);
-    },
-    child: AnimatedScale(
-      scale: _down ? .97 : 1,
-      duration: motion(context, Spring.fast.settle),
-      curve: Spring.fast,
-      child: widget.child,
-    ),
-  );
 }
 
 /// A switch whose thumb shows a check when on (M3 Expressive), as a [SettingTile] trailing control.
@@ -873,13 +858,16 @@ class BatteryGlyph extends StatelessWidget {
         child: SizedBox(
           width: width + 2,
           height: h,
-          child: CustomPaint(
-            painter: _Battery(
-              level.clamp(0, 100) / 100,
-              low ? s.error : s.primary,
-              s.onSurfaceVariant,
-              charging,
-              s.surface,
+          child: TweenValue(
+            level.clamp(0, 100) / 100,
+            builder: (_, v) => CustomPaint(
+              painter: _Battery(
+                v,
+                low ? s.error : s.primary,
+                s.onSurfaceVariant,
+                charging,
+                s.surface,
+              ),
             ),
           ),
         ),

@@ -8,6 +8,7 @@ import '../hub.dart';
 import '../native.dart';
 import '../remote.dart';
 import 'expressive.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -55,11 +56,16 @@ class NotificationsScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            if (list.isEmpty)
-              const Text('No hay notificaciones recientes.')
-            else
-              for (final n in list)
-                _NotifRow(hub, peer.id, n, key: ValueKey((peer.id, n.key))),
+            ArcExpand(
+              expanded: list.isEmpty,
+              child: const Text('No hay notificaciones recientes.'),
+            ),
+            MotionList(
+              children: [
+                for (final n in list)
+                  _NotifRow(hub, peer.id, n, key: ValueKey((peer.id, n.key))),
+              ],
+            ),
           ],
         ],
       ),
@@ -84,6 +90,7 @@ class NotificationsPanel extends StatelessWidget {
     final Widget body;
     if (!access) {
       body = const EmptyState(
+        key: ValueKey('no-access'),
         card: false,
         icon: Symbols.notifications_off_rounded,
         title: 'Falta un permiso en el teléfono',
@@ -91,6 +98,7 @@ class NotificationsPanel extends StatelessWidget {
       );
     } else if (list.isEmpty) {
       body = Align(
+        key: const ValueKey('empty'),
         alignment: Alignment.centerLeft,
         child: Text(
           'Todo al día: no hay notificaciones en el teléfono.',
@@ -99,7 +107,8 @@ class NotificationsPanel extends StatelessWidget {
         ),
       );
     } else {
-      body = Column(
+      body = MotionList(
+        key: const ValueKey('list'),
         children: [
           for (final n in list.take(_shown))
             _NotifRow(hub, peerId, n, key: ValueKey((peerId, n.key))),
@@ -114,34 +123,41 @@ class NotificationsPanel extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (list.isNotEmpty)
-            TextButton.icon(
-              onPressed: () => showAleroDialog<void>(
-                context: context,
-                builder: (_) => _AllDialog(hub, peerId),
+            SizeFade(
+              key: const ValueKey('history'),
+              child: TextButton.icon(
+                onPressed: () => showAleroDialog<void>(
+                  context: context,
+                  builder: (_) => _AllDialog(hub, peerId),
+                ),
+                icon: const Icon(Symbols.history_rounded, size: 18),
+                label: const Text('Historial'),
               ),
-              icon: const Icon(Symbols.history_rounded, size: 18),
-              label: const Text('Historial'),
             ),
-          if (list.any((n) => n.clearable)) ...[
-            const SizedBox(width: Gap.xs),
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                backgroundColor: s.surfaceContainerHighest,
-                foregroundColor: s.onSurface,
-                shape: const StadiumBorder(),
+          if (list.any((n) => n.clearable))
+            SizeFade(
+              key: const ValueKey('clear'),
+              child: Padding(
+                padding: const EdgeInsets.only(left: Gap.xs),
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    backgroundColor: s.surfaceContainerHighest,
+                    foregroundColor: s.onSurface,
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: () => hub.clearNotifs(peerId),
+                  icon: const Icon(Symbols.close_rounded, size: 18),
+                  label: const Text('Borrar todo'),
+                ),
               ),
-              onPressed: () => hub.clearNotifs(peerId),
-              icon: const Icon(Symbols.close_rounded, size: 18),
-              label: const Text('Borrar todo'),
             ),
-          ],
         ],
       ),
       child: AnimatedSize(
         duration: motion(context, Spring.spatial.settle),
         curve: Spring.spatial,
         alignment: Alignment.topCenter,
-        child: body,
+        child: MotionFade(child: body),
       ),
     );
   }
@@ -161,15 +177,21 @@ class _AllDialog extends StatelessWidget {
         title: Text(tr('Notificaciones · {}', [list.length])),
         content: SizedBox(
           width: 520,
-          child: list.isEmpty
-              ? const Text('No hay notificaciones.')
-              : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final n in list)
-                      _NotifRow(hub, peerId, n, key: ValueKey((peerId, n.key))),
-                  ],
-                ),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              ArcExpand(
+                expanded: list.isEmpty,
+                child: const Text('No hay notificaciones.'),
+              ),
+              MotionList(
+                children: [
+                  for (final n in list)
+                    _NotifRow(hub, peerId, n, key: ValueKey((peerId, n.key))),
+                ],
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -229,10 +251,12 @@ class _NotifRowState extends State<_NotifRow> {
       _drafts.remove(_draftKey);
       // Answered: the notification has done its job, so it leaves the phone and this list.
       unawaited(hub.dismissNotif(peerId, n.key));
-      messenger?.showSnackBar(
+      messenger?.showToast(
         SnackBar(
           content: Text(
-            tr('Respuesta enviada{}', [n.title.isEmpty ? '' : tr(' a {}', [n.title])]),
+            tr('Respuesta enviada{}', [
+              n.title.isEmpty ? '' : tr(' a {}', [n.title]),
+            ]),
           ),
         ),
       );
@@ -304,24 +328,29 @@ class _NotifRowState extends State<_NotifRow> {
     );
     final icon = ClipRRect(
       borderRadius: BorderRadius.circular(side * 0.28),
-      child: appIcon != null || n.avatar != null
-          ? Image.memory(
-              appIcon ?? n.avatar!,
-              width: side,
-              height: side,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-            )
-          : Container(
-              width: side,
-              height: side,
-              color: s.secondaryContainer,
-              child: Icon(
-                Symbols.notifications_rounded,
-                size: side / 2,
-                color: s.onSecondaryContainer,
+      // The app's icon arrives after the row: it fades in over the placeholder.
+      child: MotionFade(
+        child: appIcon != null || n.avatar != null
+            ? Image.memory(
+                appIcon ?? n.avatar!,
+                key: ValueKey(identityHashCode(appIcon ?? n.avatar)),
+                width: side,
+                height: side,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+              )
+            : Container(
+                key: const ValueKey('none'),
+                width: side,
+                height: side,
+                color: s.secondaryContainer,
+                child: Icon(
+                  Symbols.notifications_rounded,
+                  size: side / 2,
+                  color: s.onSecondaryContainer,
+                ),
               ),
-            ),
+      ),
     );
     return Focus(
       canRequestFocus: false,
@@ -354,46 +383,53 @@ class _NotifRowState extends State<_NotifRow> {
                       ExcludeSemantics(child: icon),
                       SizedBox(width: Gap.m * k),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              [
-                                if (n.app.isNotEmpty) n.app,
-                                ago(n.time),
-                                if (lines.length > 1)
-                                  tr('{} mensajes', [lines.length]),
-                              ].join(' · '),
-                              style: muted,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (n.title.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  n.title,
-                                  style: t.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
+                        // Opening a conversation grows the row instead of snapping.
+                        child: AnimatedSize(
+                          duration: motion(context, Spring.spatial.settle),
+                          curve: Spring.spatial,
+                          alignment: Alignment.topLeft,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                [
+                                  if (n.app.isNotEmpty) n.app,
+                                  ago(n.time),
+                                  if (lines.length > 1)
+                                    tr('{} mensajes', [lines.length]),
+                                ].join(' · '),
+                                style: muted,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (n.title.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    n.title,
+                                    style: t.titleSmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            for (final line in shown)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  line,
-                                  style: t.bodyMedium,
-                                  maxLines: _open ? 4 : 2,
-                                  overflow: TextOverflow.ellipsis,
+                              for (final line in shown)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    line,
+                                    style: t.bodyMedium,
+                                    maxLines: _open ? 4 : 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       PopupMenuButton<String>(
+                        popUpAnimationStyle: popUpMotion(context),
                         tooltip: tx('Más opciones'),
                         iconSize: 18 * k,
                         padding: EdgeInsets.zero,
@@ -411,7 +447,9 @@ class _NotifRowState extends State<_NotifRow> {
                           PopupMenuItem(
                             value: 'muteApp',
                             child: Text(
-                              tr('Silenciar {} en el ordenador', [n.app.isEmpty ? 'esta app' : n.app]),
+                              tr('Silenciar {} en el ordenador', [
+                                n.app.isEmpty ? 'esta app' : n.app,
+                              ]),
                             ),
                           ),
                         ],
@@ -429,115 +467,134 @@ class _NotifRowState extends State<_NotifRow> {
                     duration: motion(context, Spring.fast.settle),
                     curve: Spring.fast,
                     alignment: Alignment.topLeft,
-                    child:
-                        !actions ||
-                            !(canReply ||
-                                n.markable ||
-                                n.clearable ||
-                                n.mutable)
-                        ? const SizedBox(width: double.infinity)
-                        : Padding(
-                            padding: EdgeInsets.only(
-                              left: side + Gap.m * k - 12,
-                              top: Gap.xs,
-                            ),
-                            child: Wrap(
-                              spacing: Gap.xs,
-                              children: [
-                                if (canReply)
-                                  FilledButton.tonal(
-                                    style: FilledButton.styleFrom(
-                                      visualDensity: VisualDensity.compact,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
+                    child: MotionFade(
+                      child:
+                          !actions ||
+                              !(canReply ||
+                                  n.markable ||
+                                  n.clearable ||
+                                  n.mutable)
+                          ? const SizedBox(
+                              key: ValueKey('hidden'),
+                              width: double.infinity,
+                            )
+                          : Padding(
+                              key: const ValueKey('actions'),
+                              padding: EdgeInsets.only(
+                                left: side + Gap.m * k - 12,
+                                top: Gap.xs,
+                              ),
+                              child: Wrap(
+                                spacing: Gap.xs,
+                                children: [
+                                  if (canReply)
+                                    FilledButton.tonal(
+                                      style: FilledButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                        ),
                                       ),
+                                      onPressed: () => setState(
+                                        () => _replying = !_replying,
+                                      ),
+                                      child: const Text('Responder'),
                                     ),
-                                    onPressed: () =>
-                                        setState(() => _replying = !_replying),
-                                    child: const Text('Responder'),
-                                  ),
-                                if (n.markable || n.clearable)
-                                  word(
-                                    'Marcar como leído',
-                                    () => hub.notifAction(peerId, n, 'read'),
-                                  ),
-                                if (n.mutable)
-                                  word(
-                                    'Silenciar',
-                                    () => hub.notifAction(peerId, n, 'mute'),
-                                  ),
-                              ],
+                                  if (n.markable || n.clearable)
+                                    word(
+                                      'Marcar como leído',
+                                      () => hub.notifAction(peerId, n, 'read'),
+                                    ),
+                                  if (n.mutable)
+                                    word(
+                                      'Silenciar',
+                                      () => hub.notifAction(peerId, n, 'mute'),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
+                    ),
                   ),
                   if (canReply && _replying)
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        side + Gap.m * k,
-                        Gap.s,
-                        Gap.s,
-                        0,
-                      ),
-                      // Enter sends; Shift+Enter is a line break (the field's own behaviour).
-                      child: CallbackShortcuts(
-                        bindings: {
-                          const SingleActivator(LogicalKeyboardKey.enter):
-                              _reply,
-                          const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                              _reply,
-                        },
-                        // No maxLength: the phone and the messaging app set the real limits.
-                        child: TextField(
-                          controller: _text,
-                          autofocus: true,
-                          readOnly: _sending,
-                          minLines: 1,
-                          maxLines: 5,
-                          style: t.bodyMedium,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            filled: true,
-                            fillColor: s.surfaceContainerHighest,
-                            hintText:
-                                tr('Responder{}', [n.title.isEmpty ? '' : tr(' a {}', [n.title])]),
-                            contentPadding: const EdgeInsets.fromLTRB(
-                              16,
-                              10,
-                              4,
-                              10,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(Radii.pill),
-                              borderSide: BorderSide.none,
-                            ),
-                            suffixIcon: IconButton(
-                              tooltip: tx('Enviar respuesta'),
-                              iconSize: 18,
-                              color: s.primary,
-                              onPressed: _sending || _text.text.trim().isEmpty
-                                  ? null
-                                  : _reply,
-                              icon: _sending
-                                  ? const SizedBox.square(
-                                      dimension: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Symbols.send_rounded),
-                            ),
-                          ),
-                          onChanged: (v) {
-                            _drafts[_draftKey] = v;
-                            setState(() {});
+                    SizeFade(
+                      key: const ValueKey('reply'),
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          side + Gap.m * k,
+                          Gap.s,
+                          Gap.s,
+                          0,
+                        ),
+                        // Enter sends; Shift+Enter is a line break (the field's own behaviour).
+                        child: CallbackShortcuts(
+                          bindings: {
+                            const SingleActivator(LogicalKeyboardKey.enter):
+                                _reply,
+                            const SingleActivator(
+                              LogicalKeyboardKey.numpadEnter,
+                            ): _reply,
                           },
+                          // No maxLength: the phone and the messaging app set the real limits.
+                          child: TextField(
+                            controller: _text,
+                            autofocus: true,
+                            readOnly: _sending,
+                            minLines: 1,
+                            maxLines: 5,
+                            style: t.bodyMedium,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            decoration: InputDecoration(
+                              isDense: true,
+                              filled: true,
+                              fillColor: s.surfaceContainerHighest,
+                              hintText: tr('Responder{}', [
+                                n.title.isEmpty ? '' : tr(' a {}', [n.title]),
+                              ]),
+                              contentPadding: const EdgeInsets.fromLTRB(
+                                16,
+                                10,
+                                4,
+                                10,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(Radii.pill),
+                                borderSide: BorderSide.none,
+                              ),
+                              suffixIcon: IconButton(
+                                tooltip: tx('Enviar respuesta'),
+                                iconSize: 18,
+                                color: s.primary,
+                                onPressed: _sending || _text.text.trim().isEmpty
+                                    ? null
+                                    : _reply,
+                                icon: MotionFade(
+                                  child: _sending
+                                      ? const SizedBox.square(
+                                          key: ValueKey('sending'),
+                                          dimension: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Symbols.send_rounded,
+                                          key: ValueKey('send'),
+                                        ),
+                                ),
+                              ),
+                            ),
+                            onChanged: (v) {
+                              _drafts[_draftKey] = v;
+                              setState(() {});
+                            },
+                          ),
                         ),
                       ),
                     ),
-                  if (_status != null)
-                    Padding(
+                  ArcExpand(
+                    expanded: _status != null,
+                    child: Padding(
                       padding: EdgeInsets.fromLTRB(
                         side + Gap.m * k,
                         Gap.xs,
@@ -546,9 +603,10 @@ class _NotifRowState extends State<_NotifRow> {
                       ),
                       child: Semantics(
                         liveRegion: true,
-                        child: Text(_status!, style: muted),
+                        child: Text(_status ?? '', style: muted),
                       ),
                     ),
+                  ),
                 ],
               ),
             ),

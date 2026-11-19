@@ -11,6 +11,7 @@ import 'src/rust/frb_generated.dart';
 import 'ui/shell.dart';
 import 'ui/brand.dart';
 import 'ui/expressive.dart' show motion, motionScale;
+import 'ui/alero_motion.dart' show MotionFade;
 import 'ui/setup.dart';
 import 'ui/app_lock.dart';
 import 'ui/icon.dart';
@@ -169,18 +170,23 @@ class _ReadyHomeState extends State<_ReadyHome> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.hub,
-    builder: (_, _) => widget.hub.setupDone
-        ? Shell(
-            widget.hub,
-            onResume: widget.color.load,
-            initialSection: _initial,
-          )
-        : SetupScreen(
-            widget.hub,
-            onDone: (pair) {
-              _initial = pair ? Section.devices : Section.home;
-              widget.hub.finishSetup();
-            },
-          ),
+    // Finishing the setup fades into the app instead of cutting.
+    builder: (_, _) => MotionFade(
+      child: widget.hub.setupDone
+          ? Shell(
+              widget.hub,
+              key: const ValueKey('shell'),
+              onResume: widget.color.load,
+              initialSection: _initial,
+            )
+          : SetupScreen(
+              widget.hub,
+              key: const ValueKey('setup'),
+              onDone: (pair) {
+                _initial = pair ? Section.devices : Section.home;
+                widget.hub.finishSetup();
+              },
+            ),
+    ),
   );
 }

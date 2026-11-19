@@ -10,6 +10,8 @@ import '../sms_client.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'call_bar.dart';
 import 'notifications.dart' show ago;
+import 'phone_page.dart' show phoneSwap;
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -144,12 +146,15 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ),
                   ),
                   if (phone != null && hub.info[phone.id]?.calls == true)
-                    Padding(
-                      padding: const EdgeInsets.only(right: Gap.s),
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => dialDialog(context, hub, phone.id),
-                        icon: const Icon(Symbols.dialpad_rounded, size: 18),
-                        label: const Text('Llamar'),
+                    SizeFade(
+                      key: const ValueKey('dial'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: Gap.s),
+                        child: FilledButton.tonalIcon(
+                          onPressed: () => dialDialog(context, hub, phone.id),
+                          icon: const Icon(Symbols.dialpad_rounded, size: 18),
+                          label: const Text('Llamar'),
+                        ),
                       ),
                     ),
                   if (phone != null && hub.info[phone.id]?.sms == true)
@@ -162,16 +167,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ),
               const SizedBox(height: Gap.l),
               Expanded(
-                child: phone == null
-                    ? const Align(
-                        alignment: Alignment.topCenter,
-                        child: EmptyState(
-                          icon: Symbols.smartphone_rounded,
-                          title: 'Conecta un teléfono',
-                          body: 'Aquí verás sus SMS, MMS y los chats de sus apps de mensajería.',
+                child: phoneSwap(
+                  context,
+                  phone == null
+                      ? const Align(
+                          key: ValueKey('none'),
+                          alignment: Alignment.topCenter,
+                          child: EmptyState(
+                            icon: Symbols.smartphone_rounded,
+                            title: 'Conecta un teléfono',
+                            body: 'Aquí verás sus SMS, MMS y los chats de sus apps de mensajería.',
+                          ),
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey('inbox'),
+                          child: _body(context, phone),
                         ),
-                      )
-                    : _body(context, phone),
+                ),
               ),
             ],
           ),
@@ -241,59 +253,80 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ),
                   ),
                 ),
-                if (notice != null)
-                  Padding(
+                ArcExpand(
+                  expanded: notice != null,
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(Gap.l, 0, Gap.l, Gap.s),
                     child: Text(
-                      notice,
+                      notice ?? '',
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: s.onSurfaceVariant),
                     ),
                   ),
-                if (sms.loading && sms.threads.isEmpty)
-                  const LinearProgressIndicator(),
+                ),
+                // Unmounted once faded out: an indeterminate bar never stops drawing frames.
+                MotionFade(
+                  child: sms.loading && sms.threads.isEmpty
+                      ? const LinearProgressIndicator(key: ValueKey('loading'))
+                      : const SizedBox.shrink(key: ValueKey('idle')),
+                ),
                 Expanded(
-                  child: list.isEmpty
-                      ? Center(
-                          child: Text(
-                            _search.text.isEmpty
-                                ? 'No hay conversaciones.'
-                                : 'Nada coincide con la búsqueda.',
-                            style: TextStyle(color: s.onSurfaceVariant),
+                  child: phoneSwap(
+                    context,
+                    list.isEmpty
+                        ? Center(
+                            key: const ValueKey('empty'),
+                            child: Text(
+                              _search.text.isEmpty
+                                  ? 'No hay conversaciones.'
+                                  : 'Nada coincide con la búsqueda.',
+                              style: TextStyle(color: s.onSurfaceVariant),
+                            ),
+                          )
+                        : ListView.builder(
+                            // Two lists overlap while switching: neither may grab the primary controller.
+                            primary: false,
+                            key: const ValueKey('list'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Gap.s,
+                            ),
+                            itemCount: list.length,
+                            itemBuilder: (_, i) => AleroMotion.reveal(
+                              context,
+                              i,
+                              _ConvoRow(
+                                hub,
+                                list[i],
+                                selected: list[i].key == _open,
+                                onTap: () {
+                                  setState(() => _open = list[i].key);
+                                  final th = list[i].thread;
+                                  if (th != null) sms.select(th.id);
+                                },
+                              ),
+                            ),
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: Gap.s,
-                          ),
-                          itemCount: list.length,
-                          itemBuilder: (_, i) => _ConvoRow(
-                            hub,
-                            list[i],
-                            selected: list[i].key == _open,
-                            onTap: () {
-                              setState(() => _open = list[i].key);
-                              final th = list[i].thread;
-                              if (th != null) sms.select(th.id);
-                            },
-                          ),
-                        ),
+                  ),
                 ),
               ],
             ),
           ),
           VerticalDivider(width: 1, color: s.outlineVariant),
           Expanded(
-            child: open == null
-                ? const Center(
-                    child: EmptyState(
-                      card: false,
-                      icon: Symbols.forum_rounded,
-                      title: 'Elige una conversación',
-                      body: 'Los SMS y MMS vienen del teléfono; los chats de apps, de sus notificaciones.',
-                    ),
-                  )
-                : _Conversation(hub, phone.id, open, key: ValueKey(open.key)),
+            child: phoneSwap(
+              context,
+              open == null
+                  ? const Center(
+                      key: ValueKey('none'),
+                      child: EmptyState(
+                        card: false,
+                        icon: Symbols.forum_rounded,
+                        title: 'Elige una conversación',
+                        body: 'Los SMS y MMS vienen del teléfono; los chats de apps, de sus notificaciones.',
+                      ),
+                    )
+                  : _Conversation(hub, phone.id, open, key: ValueKey(open.key)),
+            ),
           ),
         ],
       ),
@@ -323,8 +356,8 @@ class _ConvoRow extends StatelessWidget {
       child: Material(
         color: selected ? s.secondaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(Radii.tile),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(Radii.tile),
+        child: AleroPress(
+          radius: Radii.tile,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(Gap.m),
@@ -514,7 +547,10 @@ class _ConversationState extends State<_Conversation> {
                     Text(
                       c.thread != null
                           ? c.thread!.addresses.join(', ')
-                          : tr('{} · solo los últimos mensajes de la notificación', [c.source]),
+                          : tr(
+                              '{} · solo los últimos mensajes de la notificación',
+                              [c.source],
+                            ),
                       style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
                     ),
                   ],
@@ -538,87 +574,106 @@ class _ConversationState extends State<_Conversation> {
         ),
         Divider(color: s.outlineVariant),
         Expanded(
-          child: msgs == null
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  reverse: true,
-                  padding: const EdgeInsets.all(Gap.l),
-                  itemCount: visibleMsgs.length,
-                  itemBuilder: (_, i) => _Bubble(
-                    visibleMsgs[visibleMsgs.length - 1 - i],
-                    showSender: group,
+          child: phoneSwap(
+            context,
+            msgs == null
+                ? const Center(
+                    key: ValueKey('loading'),
+                    child: CircularProgressIndicator(),
+                  )
+                : ListView.builder(
+                    primary: false,
+                    key: const ValueKey('messages'),
+                    reverse: true,
+                    padding: const EdgeInsets.all(Gap.l),
+                    itemCount: visibleMsgs.length,
+                    itemBuilder: (_, i) => AleroMotion.reveal(
+                      context,
+                      i,
+                      _Bubble(
+                        visibleMsgs[visibleMsgs.length - 1 - i],
+                        showSender: group,
+                      ),
+                    ),
                   ),
-                ),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(Gap.l, Gap.s, Gap.l, Gap.l),
-          child: blocked != null
-              ? Text(
-                  blocked,
-                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          tooltip: tx('Adjuntar archivo'),
-                          onPressed: _sending ? null : _attach,
-                          icon: const Icon(Symbols.attach_file_rounded),
-                        ),
-                        const SizedBox(width: Gap.xs),
-                        Expanded(
-                          // Enter sends; Shift+Enter is a line break.
-                          child: CallbackShortcuts(
-                            bindings: {
-                              const SingleActivator(LogicalKeyboardKey.enter):
-                                  _send,
-                              const SingleActivator(
-                                LogicalKeyboardKey.numpadEnter,
-                              ): _send,
-                            },
-                            child: TextField(
-                              controller: _text,
-                              readOnly: _sending,
-                              minLines: 1,
-                              maxLines: 5,
-                              keyboardType: TextInputType.multiline,
-                              onChanged: (_) => setState(() {}),
-                              decoration: InputDecoration(
-                                hintText: c.thread != null
-                                    ? 'SMS'
-                                    : tr('Responder en {}', [c.source]),
+          child: phoneSwap(
+            context,
+            blocked != null
+                ? Text(
+                    blocked,
+                    key: ValueKey(blocked),
+                    style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                  )
+                : Column(
+                    key: const ValueKey('composer'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            tooltip: tx('Adjuntar archivo'),
+                            onPressed: _sending ? null : _attach,
+                            icon: const Icon(Symbols.attach_file_rounded),
+                          ),
+                          const SizedBox(width: Gap.xs),
+                          Expanded(
+                            // Enter sends; Shift+Enter is a line break.
+                            child: CallbackShortcuts(
+                              bindings: {
+                                const SingleActivator(LogicalKeyboardKey.enter):
+                                    _send,
+                                const SingleActivator(
+                                  LogicalKeyboardKey.numpadEnter,
+                                ): _send,
+                              },
+                              child: TextField(
+                                controller: _text,
+                                readOnly: _sending,
+                                minLines: 1,
+                                maxLines: 5,
+                                keyboardType: TextInputType.multiline,
+                                onChanged: (_) => setState(() {}),
+                                decoration: InputDecoration(
+                                  hintText: c.thread != null
+                                      ? 'SMS'
+                                      : tr('Responder en {}', [c.source]),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: Gap.s),
-                        IconButton.filled(
-                          style: IconButton.styleFrom(
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimary,
+                          const SizedBox(width: Gap.s),
+                          IconButton.filled(
+                            style: IconButton.styleFrom(
+                              foregroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimary,
+                            ),
+                            tooltip: tx('Enviar'),
+                            onPressed: _sending || _text.text.trim().isEmpty
+                                ? null
+                                : _send,
+                            icon: const Icon(Symbols.send_rounded),
                           ),
-                          tooltip: tx('Enviar'),
-                          onPressed: _sending || _text.text.trim().isEmpty
-                              ? null
-                              : _send,
-                          icon: const Icon(Symbols.send_rounded),
-                        ),
-                      ],
-                    ),
-                    if (_status != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: Gap.xs),
-                        child: Semantics(
-                          liveRegion: true,
-                          child: Text(_status!, style: t.bodySmall),
+                        ],
+                      ),
+                      ArcExpand(
+                        expanded: _status != null,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: Gap.xs),
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(_status ?? '', style: t.bodySmall),
+                          ),
                         ),
                       ),
-                  ],
-                ),
+                    ],
+                  ),
+          ),
         ),
       ],
     );
@@ -675,7 +730,11 @@ class _Bubble extends StatelessWidget {
                 ),
               if (m.media > 0)
                 Text(
-                  tr('{} (en el teléfono)', [m.media == 1 ? tx('Un adjunto') : tr('{} adjuntos', [m.media])]),
+                  tr('{} (en el teléfono)', [
+                    m.media == 1
+                        ? tx('Un adjunto')
+                        : tr('{} adjuntos', [m.media]),
+                  ]),
                   style: t.bodySmall?.copyWith(
                     color: fg,
                     fontStyle: FontStyle.italic,

@@ -8,10 +8,10 @@ use std::mem::size_of;
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use windows::core::{implement, w, Ref, BOOL};
-use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, POINTL, SIZE, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, POINTL, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Dwm::DwmFlush;
 use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, MonitorFromPoint, SelectObject, MONITOR_DEFAULTTONEAREST, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ,
@@ -29,7 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     RegisterClassW, SetWindowPos, ShowWindow, SystemParametersInfoW, TranslateMessage, UpdateLayeredWindow, GUITHREADINFO, GUI_INMOVESIZE, HWND_TOPMOST, MB_ICONASTERISK, MSG, PM_REMOVE,
     QS_ALLINPUT, SPI_GETCLIENTAREAANIMATION, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, ULW_ALPHA, WM_HOTKEY,
     WM_MOUSEACTIVATE, WM_MOUSEWHEEL, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
-    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE,
+    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetDesktopWindow, GetShellWindow, GetWindowRect, WS_CAPTION,
 };
 
 use super::run::{Host, HostEvent, Rect};
@@ -140,7 +140,6 @@ pub struct WinHost {
     bits: *mut c_void,
     size: (i32, i32),
     shown: bool,
-    topmost_at: Instant,
     _target: IDropTarget,
     hotkey: bool,
     /// The window takes the mouse (otherwise every click goes through it to what is below).
@@ -163,7 +162,7 @@ impl WinHost {
             let target: IDropTarget = Target.into();
             let _ = RegisterDragDrop(hwnd, &target);
             let dc = CreateCompatibleDC(None);
-            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, topmost_at: Instant::now(), _target: target, hotkey: false, input: false })
+            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false })
         }
     }
 
@@ -250,9 +249,31 @@ impl Host for WinHost {
         if d == 0 { 1.0 } else { (d as f32 / 96.0).clamp(0.75, 4.0) }
     }
 
-    fn fullscreen(&mut self, _mon: Rect) -> bool {
-        // The shell's own answer: a game in exclusive or borderless full screen, a presentation, a "busy" app.
-        unsafe { SHQueryUserNotificationState().is_ok_and(|s| s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN || s == QUNS_PRESENTATION_MODE) }
+    fn fullscreen(&mut self, mon: Rect) -> bool {
+        unsafe {
+            // The shell's own answer: a game in exclusive full screen, a presentation, a "busy" app.
+            if SHQueryUserNotificationState().is_ok_and(|s| s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN || s == QUNS_PRESENTATION_MODE) {
+                return true;
+            }
+            // Borderless games and F11 videos tell the shell nothing: a captionless foreground window covering the
+            // monitor is one. Our topmost window over it would make DWM compose the game instead of flipping it.
+            let fg = GetForegroundWindow();
+            if fg.0.is_null() || fg == self.hwnd || fg == GetShellWindow() || fg == GetDesktopWindow() {
+                return false;
+            }
+            let mut cls = [0u16; 16];
+            let n = GetClassNameW(fg, &mut cls) as usize;
+            // The desktop itself (wallpaper, icons) covers the monitor too.
+            if matches!(String::from_utf16_lossy(&cls[..n]).as_str(), "Progman" | "WorkerW") {
+                return false;
+            }
+            // A maximized app with an auto-hidden taskbar also covers the monitor, but keeps its caption.
+            if GetWindowLongW(fg, GWL_STYLE) as u32 & WS_CAPTION.0 == WS_CAPTION.0 {
+                return false;
+            }
+            let mut r = RECT::default();
+            GetWindowRect(fg, &mut r).is_ok() && r.left <= mon.0 && r.top <= mon.1 && r.right >= mon.2 && r.bottom >= mon.3
+        }
     }
 
     fn moving_window(&mut self) -> bool {
@@ -314,15 +335,12 @@ impl Host for WinHost {
             let src = POINT { x: 0, y: 0 };
             let blend = BLENDFUNCTION { BlendOp: 0, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: 1 };
             let _ = UpdateLayeredWindow(self.hwnd, None, Some(ptr::from_ref(&at)), Some(ptr::from_ref(&size)), Some(self.dc), Some(ptr::from_ref(&src)), COLORREF(0), Some(ptr::from_ref(&blend)), ULW_ALPHA);
+            // On top once when shown; the run loop's keep_on_top (1 s, unless a game has the screen) covers the rest.
+            // Re-asserting every frame fought topmost games for the z-order and made DWM re-pick their present mode.
             if !self.shown {
                 let _ = ShowWindow(self.hwnd, SW_SHOWNOACTIVATE);
-                self.shown = true;
-                self.topmost_at = Instant::now() - Duration::from_secs(1);
-            }
-            // Full-screen-ish windows and the taskbar may take the top of the stack: take it back now and then.
-            if self.topmost_at.elapsed() > Duration::from_millis(500) {
                 let _ = SetWindowPos(self.hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-                self.topmost_at = Instant::now();
+                self.shown = true;
             }
         }
     }

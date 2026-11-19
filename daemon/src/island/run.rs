@@ -299,16 +299,19 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             None => (false, false),
         };
         // Only asked when the pointer is in the zone: nothing else depends on it.
-        let fullscreen = hot && cfg.hide_fullscreen && !island.is_open() && mon.is_some_and(|m| host.fullscreen(m));
+        // Last second's answer: asking the system 25 times a second while a game's pointer sits at the top costs.
+        let fullscreen = hot && cfg.hide_fullscreen && !island.is_open() && full;
         // The resting notch steps aside for games and videos; asked once a second, it is not free.
         if full_at.is_none_or(|t| t.elapsed() > Duration::from_secs(1)) {
-            full = cfg.hide_fullscreen && !island.is_open() && mon.is_some_and(|m| host.fullscreen(m));
+            // Kept up to date while open too, so closing the island over a game hides the notch at once.
+            full = cfg.hide_fullscreen && mon.is_some_and(|m| host.fullscreen(m));
             full_at = Some(Instant::now());
-            if shown && !island.is_open() {
+            // Open or at rest, the taskbar may have taken the top: take it back, but never fight a game for it.
+            if shown && !full {
                 host.keep_on_top();
             }
         }
-        island.set_rest(!full);
+        island.set_rest(!(full && !island.is_open()));
         let dragging_window = btn && hot && host.moving_window();
         island.set_reduce_motion(reduce);
         island.set_zone(hot && !fullscreen && !dragging_window, btn && !dragging_window, dt);
@@ -447,6 +450,9 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             host.vsync();
         } else if st.visible && island.is_open() {
             pending.extend(host.pump(14));
+        } else if full {
+            // A game has the screen and the notch is hidden: nothing to hover, the hotkey still wakes the pump.
+            pending.extend(host.pump(200));
         } else {
             pending.extend(host.pump(40));
         }

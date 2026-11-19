@@ -10,6 +10,7 @@ import 'clipboard.dart';
 import 'pc_control.dart';
 import 'pc_files.dart';
 import 'pc_screen.dart';
+import 'alero_motion.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
 import 'widgets.dart' show FitLabel;
@@ -103,8 +104,8 @@ class _Small extends StatelessWidget {
                 ? BorderSide.none
                 : BorderSide(color: s.outlineVariant),
           ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(Radii.tile),
+          child: AleroPress(
+            radius: Radii.tile,
             onTap: onTap,
             child: SizedBox(
               height: 60,
@@ -163,13 +164,16 @@ class RemoteCard extends StatelessWidget {
                   ? () => openPcControl(context, hub, peer.id, peer.name)
                   : null,
             ),
-            if (blocker != null) ...[
-              const SizedBox(height: Gap.s),
-              Text(
-                blocker,
-                style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+            ArcExpand(
+              expanded: blocker != null,
+              child: Padding(
+                padding: const EdgeInsets.only(top: Gap.s),
+                child: Text(
+                  blocker ?? '',
+                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                ),
               ),
-            ],
+            ),
             const SizedBox(height: Gap.s),
             Divider(color: s.outlineVariant),
             ListTile(
@@ -265,26 +269,33 @@ class _RemotePreviewState extends State<_RemotePreview>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (paper != null)
-                  Image.memory(
-                    paper,
-                    fit: BoxFit.cover,
-                    gaplessPlayback: true,
-                    cacheWidth: 720,
-                    excludeFromSemantics: true,
-                    errorBuilder: (_, _, _) =>
-                        ColoredBox(color: s.primaryContainer),
-                  )
-                else
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [s.primaryContainer, s.tertiaryContainer],
-                      ),
-                    ),
+                MotionFade(
+                  child: SizedBox.expand(
+                    key: ValueKey(paper == null ? 0 : identityHashCode(paper)),
+                    child: paper != null
+                        ? Image.memory(
+                            paper,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            cacheWidth: 720,
+                            excludeFromSemantics: true,
+                            errorBuilder: (_, _, _) =>
+                                ColoredBox(color: s.primaryContainer),
+                          )
+                        : DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  s.primaryContainer,
+                                  s.tertiaryContainer,
+                                ],
+                              ),
+                            ),
+                          ),
                   ),
+                ),
                 // Text stays readable on any wallpaper.
                 const DecoratedBox(
                   decoration: BoxDecoration(
@@ -356,9 +367,10 @@ class _RemotePreviewState extends State<_RemotePreview>
                   ),
                 ),
                 // One touch target for the whole picture, with its ripple on top.
-                Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(onTap: widget.onOpen),
+                AleroPress(
+                  onTap: widget.onOpen,
+                  radius: Radii.tile,
+                  child: const SizedBox.expand(),
                 ),
               ],
             ),

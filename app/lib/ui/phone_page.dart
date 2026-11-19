@@ -5,6 +5,7 @@ import '../hub.dart';
 import '../phone_adb.dart';
 import '../phone_control.dart';
 import '../src/rust/api/engine.dart' as pb;
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -64,16 +65,23 @@ class PhonePage extends StatelessWidget {
               ),
               const SizedBox(height: Gap.l),
               Expanded(
-                child: phone == null
-                    ? const Align(
-                        alignment: Alignment.topCenter,
-                        child: EmptyState(
-                          icon: Symbols.smartphone_rounded,
-                          title: 'Conecta un teléfono',
-                          body: 'Abre Alero en el teléfono emparejado, por Wi-Fi o con el cable.',
+                child: phoneSwap(
+                  context,
+                  phone == null
+                      ? const Align(
+                          key: ValueKey('none'),
+                          alignment: Alignment.topCenter,
+                          child: EmptyState(
+                            icon: Symbols.smartphone_rounded,
+                            title: 'Conecta un teléfono',
+                            body: 'Abre Alero en el teléfono emparejado, por Wi-Fi o con el cable.',
+                          ),
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey('body'),
+                          child: body(context, phone),
                         ),
-                      )
-                    : body(context, phone),
+                ),
               ),
             ],
           ),
@@ -82,6 +90,22 @@ class PhonePage extends StatelessWidget {
     },
   );
 }
+
+/// Crossfade between two states of a screen (key each state); the Stack passes the parent's constraints through unchanged, so
+/// the content keeps the tight or loose box it had before.
+Widget phoneSwap(BuildContext context, Widget child) => AnimatedSwitcher(
+  duration: AleroMotion.micro(context, Fluent.d250),
+  switchInCurve: Fluent.enter,
+  switchOutCurve: Fluent.exit,
+  layoutBuilder: (current, previous) => Stack(
+    fit: StackFit.passthrough,
+    alignment: Alignment.topCenter,
+    children: [...previous, ?current],
+  ),
+  transitionBuilder: (c, a) =>
+      FadeTransition(opacity: a, child: switcherChild(a, c)),
+  child: child,
+);
 
 /// Finds (and keeps looking for) the adb connection of [phone]; [builder] gets null until there is one.
 class AdbFinder extends StatefulWidget {
@@ -149,9 +173,18 @@ class _AdbFinderState extends State<AdbFinder> {
   }
 
   @override
-  Widget build(BuildContext context) => _looking
-      ? const Center(child: CircularProgressIndicator())
-      : widget.builder(context, _d);
+  Widget build(BuildContext context) => phoneSwap(
+    context,
+    _looking
+        ? const Center(
+            key: ValueKey('looking'),
+            child: CircularProgressIndicator(),
+          )
+        : KeyedSubtree(
+            key: const ValueKey('found'),
+            child: widget.builder(context, _d),
+          ),
+  );
 }
 
 /// What to do when a feature needs adb and there is none.

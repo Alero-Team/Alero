@@ -9,6 +9,8 @@ import 'media.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
+import 'controls.dart' show Presence;
+import 'alero_motion.dart';
 import '../l10n.dart';
 
 /// What a connected computer reports and what the phone may do with it: the advanced side of "controlling the
@@ -62,89 +64,122 @@ class PcDetails extends StatelessWidget {
             'Conexión',
             online ? tr('Conectado · {}', [hub.routeOf(peer)]) : 'Sin conexión',
           ),
-          if (info != null) ...[
-            fact(
-              Icon(Symbols.laptop_rounded, size: 20, color: s.onSurfaceVariant),
-              'Modelo',
-              [
-                info.manufacturer,
-                info.model,
-              ].where((s) => s.isNotEmpty).join(' '),
-            ),
-            if (info.screen != null)
-              fact(
-                Icon(
-                  Symbols.aspect_ratio_rounded,
-                  size: 20,
-                  color: s.onSurfaceVariant,
-                ),
-                'Pantalla',
-                '${info.screen!.w} × ${info.screen!.h} px',
-              ),
-            fact(
-              Icon(
-                Symbols.desktop_windows_rounded,
-                size: 20,
-                color: s.onSurfaceVariant,
-              ),
-              'Sistema',
-              info.osLabel.isEmpty ? '—' : info.osLabel,
-            ),
-            if (info.hasBattery)
-              fact(
-                BatteryGlyph(info.battery, charging: info.charging, width: 22),
-                'Batería',
-                '${info.battery} % · ${info.charging ? 'cargando' : 'con batería'}',
-              )
-            else
-              fact(
-                Icon(
-                  Symbols.power_rounded,
-                  size: 20,
-                  color: s.onSurfaceVariant,
-                ),
-                'Energía',
-                'Sin batería (sobremesa)',
-              ),
-          ],
-          if (blocker != null) ...[
-            const SizedBox(height: Gap.s),
-            Text(
-              blocker,
-              style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-            ),
-          ] else ...[
-            const Divider(height: Gap.xl),
-            MediaPanel(hub, peer.id, computer: true, hideInactive: false),
-            const Divider(height: Gap.xl),
-            Wrap(
-              spacing: Gap.s,
-              runSpacing: Gap.s,
-              children: [
-                FilledButton.tonalIcon(
-                  onPressed: () {
-                    hub.remote.shot(peer.id);
-                    hub.messages.add(tr('Pidiendo la captura a {}…', [peer.name]));
-                  },
-                  icon: const Icon(
-                    Symbols.screenshot_monitor_rounded,
-                    size: 18,
+          Presence(
+            child: info == null
+                ? null
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      fact(
+                        Icon(
+                          Symbols.laptop_rounded,
+                          size: 20,
+                          color: s.onSurfaceVariant,
+                        ),
+                        'Modelo',
+                        [
+                          info.manufacturer,
+                          info.model,
+                        ].where((s) => s.isNotEmpty).join(' '),
+                      ),
+                      if (info.screen != null)
+                        fact(
+                          Icon(
+                            Symbols.aspect_ratio_rounded,
+                            size: 20,
+                            color: s.onSurfaceVariant,
+                          ),
+                          'Pantalla',
+                          '${info.screen!.w} × ${info.screen!.h} px',
+                        ),
+                      fact(
+                        Icon(
+                          Symbols.desktop_windows_rounded,
+                          size: 20,
+                          color: s.onSurfaceVariant,
+                        ),
+                        'Sistema',
+                        info.osLabel.isEmpty ? '—' : info.osLabel,
+                      ),
+                      if (info.hasBattery)
+                        fact(
+                          BatteryGlyph(
+                            info.battery,
+                            charging: info.charging,
+                            width: 22,
+                          ),
+                          'Batería',
+                          '${info.battery} % · ${info.charging ? 'cargando' : 'con batería'}',
+                        )
+                      else
+                        fact(
+                          Icon(
+                            Symbols.power_rounded,
+                            size: 20,
+                            color: s.onSurfaceVariant,
+                          ),
+                          'Energía',
+                          'Sin batería (sobremesa)',
+                        ),
+                    ],
                   ),
-                  label: const Text('Capturar pantalla'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: () =>
-                      openPcScreen(context, hub, peer.id, peer.name),
-                  icon: const Icon(Symbols.cast_rounded, size: 18),
-                  label: const Text('Ver pantalla'),
-                ),
-              ],
+          ),
+          MotionSwitch(
+            axis: Axis.vertical,
+            child: KeyedSubtree(
+              key: ValueKey(blocker != null),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (blocker != null) ...[
+                    const SizedBox(height: Gap.s),
+                    Text(
+                      blocker,
+                      style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                    ),
+                  ] else ...[
+                    const Divider(height: Gap.xl),
+                    MediaPanel(
+                      hub,
+                      peer.id,
+                      computer: true,
+                      hideInactive: false,
+                    ),
+                    const Divider(height: Gap.xl),
+                    Wrap(
+                      spacing: Gap.s,
+                      runSpacing: Gap.s,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () {
+                            hub.remote.shot(peer.id);
+                            hub.messages.add(
+                              tr('Pidiendo la captura a {}…', [peer.name]),
+                            );
+                          },
+                          icon: const Icon(
+                            Symbols.screenshot_monitor_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Capturar pantalla'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: () =>
+                              openPcScreen(context, hub, peer.id, peer.name),
+                          icon: const Icon(Symbols.cast_rounded, size: 18),
+                          label: const Text('Ver pantalla'),
+                        ),
+                      ],
+                    ),
+                    if (info?.canPower ?? false) ...[
+                      const SizedBox(height: Gap.m),
+                      PowerActions(hub, peer.id, peer.name),
+                    ],
+                  ],
+                ],
+              ),
             ),
-            if (info?.canPower ?? false) ...[
-              const SizedBox(height: Gap.m),
-              PowerActions(hub, peer.id, peer.name),
-            ],
-          ],
+          ),
         ],
       ),
     );

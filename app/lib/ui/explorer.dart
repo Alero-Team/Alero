@@ -1,3 +1,5 @@
+import 'alero_motion.dart';
+
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -11,6 +13,7 @@ import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
 import 'expressive.dart';
+import 'controls.dart' show Presence;
 
 String _date(DateTime d) {
   String two(int n) => n.toString().padLeft(2, '0');
@@ -36,7 +39,11 @@ Future<void> _delete(
     one == null
         ? tr('¿Eliminar {} elementos?', [items.length])
         : tr('¿Eliminar «{}»?', [one.name]),
-    tr('{} del teléfono. No se puede deshacer.', [one?.dir == true ? 'La carpeta y todo su contenido se borrarán' : 'Se borrará']),
+    tr('{} del teléfono. No se puede deshacer.', [
+      one?.dir == true
+          ? 'La carpeta y todo su contenido se borrarán'
+          : 'Se borrará',
+    ]),
     'Eliminar',
   );
   if (ok) fs.delete(items);
@@ -170,6 +177,9 @@ class ExplorerScreen extends StatefulWidget {
 class _ExplorerScreenState extends State<ExplorerScreen> {
   Hub get hub => widget.hub;
   FsClient get fs => hub.fs;
+  // Folder changes slide forward when going in and back when going up.
+  int _depth = 0;
+  bool _forward = true;
 
   pb.Peer? get _phone => hub.peers
       .where(
@@ -234,34 +244,51 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
               ),
               const SizedBox(height: Gap.l),
               Expanded(
-                child: phone == null
-                    ? const Align(
-                        alignment: Alignment.topCenter,
-                        child: EmptyState(
-                          icon: Symbols.smartphone_rounded,
-                          title: 'Conecta un teléfono',
-                          body: 'Abre Alero en el teléfono emparejado (por Wi-Fi o con el cable) y aquí aparecerán sus archivos.',
-                        ),
-                      )
-                    : _body(context, phone),
-              ),
-              if (hub.active.isNotEmpty) ...[
-                const SizedBox(height: Gap.m),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 190),
-                  child: Panel(
-                    title: 'Transferencias en curso',
-                    icon: Symbols.sync_rounded,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          for (final x in hub.active) TransferRow(x, hub),
-                        ],
-                      ),
+                child: MotionSwitch(
+                  axis: Axis.vertical,
+                  child: KeyedSubtree(
+                    key: ValueKey(
+                      phone == null
+                          ? 'none'
+                          : fs.error != null && fs.roots.isEmpty
+                          ? 'error-${fs.error}'
+                          : 'files',
                     ),
+                    child: phone == null
+                        ? const Align(
+                            alignment: Alignment.topCenter,
+                            child: EmptyState(
+                              icon: Symbols.smartphone_rounded,
+                              title: 'Conecta un teléfono',
+                              body: 'Abre Alero en el teléfono emparejado (por Wi-Fi o con el cable) y aquí aparecerán sus archivos.',
+                            ),
+                          )
+                        : _body(context, phone),
                   ),
                 ),
-              ],
+              ),
+              Presence(
+                child: hub.active.isEmpty
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(top: Gap.m),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 190),
+                          child: Panel(
+                            title: 'Transferencias en curso',
+                            icon: Symbols.sync_rounded,
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: [
+                                  for (final x in hub.active)
+                                    TransferRow(x, hub),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
             ],
           ),
         ),
@@ -272,30 +299,42 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
   List<Widget> _actions(BuildContext context, pb.Peer phone) {
     final chosen = fs.entries.where((e) => fs.selected.contains(e.id)).toList();
     return [
-      if (chosen.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(right: Gap.s),
-          child: FilledButton.icon(
-            onPressed: () {
-              fs.download(chosen);
-              hub.messages.add(
-                tr('Pidiendo {} al teléfono…', [chosen.length == 1 ? chosen.first.name : tr('{} archivos', [chosen.length])]),
-              );
-              fs.clearSelection();
-            },
-            icon: const Icon(Symbols.download_rounded, size: 18),
-            label: Text(tr('Descargar ({})', [chosen.length])),
-          ),
-        ),
-      if (chosen.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(right: Gap.s),
-          child: IconButton.filledTonal(
-            tooltip: tr('Eliminar ({})', [chosen.length]),
-            onPressed: () => _delete(context, fs, chosen),
-            icon: const Icon(Symbols.delete_rounded),
-          ),
-        ),
+      Presence(
+        alignment: Alignment.centerRight,
+        child: chosen.isEmpty
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: Gap.s),
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        fs.download(chosen);
+                        hub.messages.add(
+                          tr('Pidiendo {} al teléfono…', [
+                            chosen.length == 1
+                                ? chosen.first.name
+                                : tr('{} archivos', [chosen.length]),
+                          ]),
+                        );
+                        fs.clearSelection();
+                      },
+                      icon: const Icon(Symbols.download_rounded, size: 18),
+                      label: Text(tr('Descargar ({})', [chosen.length])),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: Gap.s),
+                    child: IconButton.filledTonal(
+                      tooltip: tr('Eliminar ({})', [chosen.length]),
+                      onPressed: () => _delete(context, fs, chosen),
+                      icon: const Icon(Symbols.delete_rounded),
+                    ),
+                  ),
+                ],
+              ),
+      ),
       FilledButton.tonalIcon(
         onPressed: () => hub.send(phone.id),
         icon: const Icon(Symbols.upload_rounded, size: 18),
@@ -309,6 +348,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
       ),
       const SizedBox(width: Gap.xs),
       PopupMenuButton<String>(
+        popUpAnimationStyle: popUpMotion(context),
         tooltip: tx('Ordenar'),
         icon: const Icon(Symbols.sort_rounded),
         initialValue: fs.sort,
@@ -387,17 +427,29 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                     style: t.labelLarge?.copyWith(color: s.onSurfaceVariant),
                   ),
                 ),
-                for (final r in fs.roots)
-                  _RootItem(
-                    r,
-                    selected: r.id == fs.root,
-                    onTap: r.ok ? () => fs.selectRoot(r.id) : null,
-                  ),
-                if (fs.roots.isEmpty && fs.loading)
-                  const Padding(
-                    padding: EdgeInsets.all(Gap.l),
-                    child: LinearProgressIndicator(),
-                  ),
+                // The highlight glides between locations; the items draw no background of their own.
+                SlidingSelection(
+                  selected: fs.roots.indexWhere((r) => r.id == fs.root),
+                  color: s.secondaryContainer,
+                  radius: Radii.pill,
+                  inset: const EdgeInsets.only(bottom: 2),
+                  children: [
+                    for (final r in fs.roots)
+                      _RootItem(
+                        r,
+                        selected: r.id == fs.root,
+                        onTap: r.ok ? () => fs.selectRoot(r.id) : null,
+                      ),
+                  ],
+                ),
+                Presence(
+                  child: fs.roots.isEmpty && fs.loading
+                      ? const Padding(
+                          padding: EdgeInsets.all(Gap.l),
+                          child: LinearProgressIndicator(),
+                        )
+                      : null,
+                ),
               ],
             ),
           ),
@@ -413,6 +465,10 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
     final s = Theme.of(context).colorScheme;
     final list = fs.sorted;
     final root = fs.roots.where((r) => r.id == fs.root).firstOrNull;
+    if (fs.crumbs.length != _depth) {
+      _forward = fs.crumbs.length > _depth;
+      _depth = fs.crumbs.length;
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -448,60 +504,97 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             ],
           ),
         ),
-        if (fs.root == 'audio')
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Gap.l,
-              vertical: Gap.xs,
-            ),
-            child: Text(
-              'Audio de más de 5 segundos · sin tonos, alarmas ni notificaciones',
-              style: t.bodySmall,
+        Presence(
+          child: fs.root == 'audio'
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Gap.l,
+                    vertical: Gap.xs,
+                  ),
+                  child: Text(
+                    'Audio de más de 5 segundos · sin tonos, alarmas ni notificaciones',
+                    style: t.bodySmall,
+                  ),
+                )
+              : null,
+        ),
+        Presence(child: fs.loading ? const LinearProgressIndicator() : null),
+        Expanded(
+          child: MotionSwitch(
+            forward: _forward,
+            child: KeyedSubtree(
+              // One key per folder and state: a new folder slides in, the same one just fills.
+              key: ValueKey(
+                '${fs.root}|${fs.crumbs.map((c) => c.$1).join('/')}|${fs.grid}|${list.isEmpty && !fs.loading}',
+              ),
+              child: list.isEmpty && !fs.loading
+                  ? Center(
+                      child: Text(
+                        fs.error != null
+                            ? 'No se pudo leer esta carpeta.'
+                            : 'Esta carpeta está vacía.',
+                        style: t.bodyMedium?.copyWith(
+                          color: s.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : fs.grid
+                  ? _Scrolled(
+                      (c) => GridView.builder(
+                        controller: c,
+                        padding: const EdgeInsets.all(Gap.l),
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 150,
+                              mainAxisSpacing: Gap.m,
+                              crossAxisSpacing: Gap.m,
+                              childAspectRatio: 0.82,
+                            ),
+                        itemCount: list.length,
+                        itemBuilder: (_, i) => AleroMotion.reveal(
+                          context,
+                          i,
+                          _GridTile(fs, list[i]),
+                        ),
+                      ),
+                    )
+                  : _Scrolled(
+                      (c) => ListView.builder(
+                        controller: c,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Gap.m,
+                          vertical: Gap.s,
+                        ),
+                        itemCount: list.length,
+                        itemBuilder: (_, i) =>
+                            AleroMotion.reveal(context, i, _Row(fs, list[i])),
+                      ),
+                    ),
             ),
           ),
-        if (fs.loading) const LinearProgressIndicator(),
-        Expanded(
-          child: list.isEmpty && !fs.loading
-              ? Center(
-                  child: Text(
-                    fs.error != null
-                        ? 'No se pudo leer esta carpeta.'
-                        : 'Esta carpeta está vacía.',
-                    style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
-                  ),
-                )
-              : fs.grid
-              ? GridView.builder(
-                  padding: const EdgeInsets.all(Gap.l),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 150,
-                    mainAxisSpacing: Gap.m,
-                    crossAxisSpacing: Gap.m,
-                    childAspectRatio: 0.82,
-                  ),
-                  itemCount: list.length,
-                  itemBuilder: (_, i) => _GridTile(fs, list[i]),
-                )
-              : ListView.builder(
+        ),
+        Presence(
+          child: fs.total > 0
+              ? Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: Gap.m,
+                    horizontal: Gap.l,
                     vertical: Gap.s,
                   ),
-                  itemCount: list.length,
-                  itemBuilder: (_, i) => _Row(fs, list[i]),
-                ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: AleroMotion.number(
+                      tr('{} elementos{}', [
+                        fs.total,
+                        fs.selected.isEmpty
+                            ? ''
+                            : tr(' · {} seleccionados', [fs.selected.length]),
+                      ]),
+                      t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                    ),
+                  ),
+                )
+              : null,
         ),
-        if (fs.total > 0)
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Gap.l,
-              vertical: Gap.s,
-            ),
-            child: Text(
-              tr('{} elementos{}', [fs.total, fs.selected.isEmpty ? '' : tr(' · {} seleccionados', [fs.selected.length])]),
-              style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-            ),
-          ),
       ],
     );
   }
@@ -527,30 +620,35 @@ class _RootItem extends StatelessWidget {
       message: r.ok
           ? tx(r.name)
           : r.id == 'storage'
-          ? tx('En el teléfono: Ajustes › Archivos para el ordenador › Todas las carpetas › Permitir')
-          : tr('Falta el permiso de Android para ver {}', [r.name.toLowerCase()]),
+          ? tx(
+              'En el teléfono: Ajustes › Archivos para el ordenador › Todas las carpetas › Permitir',
+            )
+          : tr('Falta el permiso de Android para ver {}', [
+              r.name.toLowerCase(),
+            ]),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 2),
-        child: Material(
-          color: selected ? s.secondaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(Radii.pill),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(Radii.pill),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: Gap.m,
-                vertical: 10,
-              ),
-              child: Row(
+        child: AleroPress(
+          radius: Radii.pill,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Gap.m,
+              vertical: 10,
+            ),
+            child: TweenValue(
+              selected ? 1 : 0,
+              builder: (_, v) => Row(
                 children: [
                   Icon(
                     icon,
                     size: 20,
                     fill: selected ? 1 : 0,
-                    color: selected
-                        ? s.onSecondaryContainer
-                        : s.onSurfaceVariant,
+                    color: Color.lerp(
+                      s.onSurfaceVariant,
+                      s.onSecondaryContainer,
+                      v,
+                    ),
                   ),
                   const SizedBox(width: Gap.m),
                   Expanded(
@@ -559,7 +657,11 @@ class _RootItem extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected ? s.onSecondaryContainer : s.onSurface,
+                        color: Color.lerp(
+                          s.onSurface,
+                          s.onSecondaryContainer,
+                          v,
+                        ),
                       ),
                     ),
                   ),
@@ -636,72 +738,81 @@ class _GridTile extends StatelessWidget {
       button: true,
       selected: sel,
       label: '${e.name}${e.dir ? ', carpeta' : ''}',
+      // The press tints and shrinks; double tap, right click and long press stay on the outer detector.
       child: GestureDetector(
-        onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
         onDoubleTap: e.dir ? null : () => fs.download([e], openWhenDone: true),
         onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
         onLongPressStart: (d) => _menu(context, fs, e, d.globalPosition),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Radii.tile),
-            border: Border.all(
-              color: sel ? s.primary : Colors.transparent,
-              width: 2,
+        child: AleroPress(
+          radius: Radii.tile,
+          onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Radii.tile),
+              border: Border.all(
+                color: sel ? s.primary : Colors.transparent,
+                width: 2,
+              ),
+              color: sel
+                  ? s.primaryContainer.withValues(alpha: 0.4)
+                  : Colors.transparent,
             ),
-            color: sel
-                ? s.primaryContainer.withValues(alpha: 0.4)
-                : Colors.transparent,
-          ),
-          padding: const EdgeInsets.all(6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(Radii.chip),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _Preview(fs, e, size: 120),
-                      if (sel)
+            padding: const EdgeInsets.all(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(Radii.chip),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _Preview(fs, e, size: 120),
+                        // Always mounted: it pops in and out instead of appearing.
                         Positioned(
                           top: 6,
                           right: 6,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: s.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(2),
-                              child: Icon(
-                                Symbols.check_rounded,
-                                size: 16,
-                                color: s.onPrimary,
+                          child: AnimatedScale(
+                            scale: sel ? 1 : 0,
+                            duration: AleroMotion.micro(context, Fluent.d167),
+                            curve: Fluent.enter,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: s.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(2),
+                                child: Icon(
+                                  Symbols.check_rounded,
+                                  size: 16,
+                                  color: s.onPrimary,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                e.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: t.bodySmall,
-              ),
-              Text(
-                e.dir ? e.itemCount : size(e.size),
-                maxLines: 1,
-                textAlign: TextAlign.center,
-                style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  e.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: t.bodySmall,
+                ),
+                Text(
+                  e.dir ? e.itemCount : size(e.size),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: t.labelSmall?.copyWith(color: s.onSurfaceVariant),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -724,93 +835,120 @@ class _Row extends StatelessWidget {
           ? s.primaryContainer.withValues(alpha: 0.4)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(Radii.tile),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.tile),
-        onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
+      child: GestureDetector(
         onDoubleTap: e.dir ? null : () => fs.download([e], openWhenDone: true),
         onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Gap.m, vertical: 6),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 22,
-                child: e.dir
-                    ? null
-                    : Icon(
-                        sel
-                            ? Symbols.check_box_rounded
-                            : Symbols.check_box_outline_blank_rounded,
-                        size: 20,
-                        color: sel ? s.primary : s.onSurfaceVariant,
-                      ),
-              ),
-              const SizedBox(width: Gap.s),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(Radii.chip),
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: _Preview(fs, e, size: 40),
+        child: AleroPress(
+          radius: Radii.tile,
+          onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Gap.m, vertical: 6),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: e.dir
+                      ? null
+                      : MotionFade(
+                          child: Icon(
+                            sel
+                                ? Symbols.check_box_rounded
+                                : Symbols.check_box_outline_blank_rounded,
+                            key: ValueKey(sel),
+                            size: 20,
+                            color: sel ? s.primary : s.onSurfaceVariant,
+                          ),
+                        ),
                 ),
-              ),
-              const SizedBox(width: Gap.m),
-              Expanded(
-                child: Text(
-                  e.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: weight(t.bodyMedium, 500),
-                ),
-              ),
-              SizedBox(
-                width: 64,
-                child: Text(
-                  e.dir ? 'Carpeta' : _ext(e.name),
-                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                ),
-              ),
-              SizedBox(
-                width: 90,
-                child: Text(
-                  e.dir ? e.itemCount : size(e.size),
-                  textAlign: TextAlign.end,
-                  style: t.bodySmall?.copyWith(
-                    color: s.onSurfaceVariant,
-                    fontFeatures: tabular,
+                const SizedBox(width: Gap.s),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(Radii.chip),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: _Preview(fs, e, size: 40),
                   ),
                 ),
-              ),
-              SizedBox(
-                width: 100,
-                child: Text(
-                  e.mtime.millisecondsSinceEpoch > 0 ? _date(e.mtime) : '',
-                  textAlign: TextAlign.end,
-                  style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                const SizedBox(width: Gap.m),
+                Expanded(
+                  child: Text(
+                    e.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: weight(t.bodyMedium, 500),
+                  ),
                 ),
-              ),
-              Builder(
-                builder: (b) => IconButton(
-                  tooltip: tx('Más opciones'),
-                  iconSize: 20,
-                  onPressed: () {
-                    final box = b.findRenderObject()! as RenderBox;
-                    _menu(
-                      context,
-                      fs,
-                      e,
-                      box.localToGlobal(box.size.center(Offset.zero)),
-                    );
-                  },
-                  icon: const Icon(Symbols.more_vert_rounded),
+                SizedBox(
+                  width: 64,
+                  child: Text(
+                    e.dir ? 'Carpeta' : _ext(e.name),
+                    style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  width: 90,
+                  child: Text(
+                    e.dir ? e.itemCount : size(e.size),
+                    textAlign: TextAlign.end,
+                    style: t.bodySmall?.copyWith(
+                      color: s.onSurfaceVariant,
+                      fontFeatures: tabular,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    e.mtime.millisecondsSinceEpoch > 0 ? _date(e.mtime) : '',
+                    textAlign: TextAlign.end,
+                    style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
+                  ),
+                ),
+                Builder(
+                  builder: (b) => IconButton(
+                    tooltip: tx('Más opciones'),
+                    iconSize: 20,
+                    onPressed: () {
+                      final box = b.findRenderObject()! as RenderBox;
+                      _menu(
+                        context,
+                        fs,
+                        e,
+                        box.localToGlobal(box.size.center(Offset.zero)),
+                      );
+                    },
+                    icon: const Icon(Symbols.more_vert_rounded),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// A scroll view with its own controller, so two of them mounted while a folder switch plays never share the primary one.
+class _Scrolled extends StatefulWidget {
+  const _Scrolled(this.build);
+  final Widget Function(ScrollController) build;
+
+  @override
+  State<_Scrolled> createState() => _ScrolledState();
+}
+
+class _ScrolledState extends State<_Scrolled> {
+  final _c = ScrollController();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.build(_c);
 }
 
 /// "Fotos": the phone's photos (or videos), newest first, as a big grid. Same session, thumbnails and actions
@@ -875,23 +1013,34 @@ class _PhotosScreenState extends State<PhotosScreen> {
               .toList();
           return Row(
             children: [
-              if (chosen.isNotEmpty) ...[
-                FilledButton.icon(
-                  onPressed: () {
-                    fs.download(chosen);
-                    fs.clearSelection();
-                  },
-                  icon: const Icon(Symbols.download_rounded, size: 18),
-                  label: Text(tr('Descargar ({})', [chosen.length])),
-                ),
-                const SizedBox(width: Gap.s),
-                IconButton.filledTonal(
-                  tooltip: tr('Eliminar ({})', [chosen.length]),
-                  onPressed: () => _delete(context, fs, chosen),
-                  icon: const Icon(Symbols.delete_rounded),
-                ),
-                const SizedBox(width: Gap.s),
-              ],
+              Presence(
+                alignment: Alignment.centerRight,
+                child: chosen.isEmpty
+                    ? null
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () {
+                              fs.download(chosen);
+                              fs.clearSelection();
+                            },
+                            icon: const Icon(
+                              Symbols.download_rounded,
+                              size: 18,
+                            ),
+                            label: Text(tr('Descargar ({})', [chosen.length])),
+                          ),
+                          const SizedBox(width: Gap.s),
+                          IconButton.filledTonal(
+                            tooltip: tr('Eliminar ({})', [chosen.length]),
+                            onPressed: () => _delete(context, fs, chosen),
+                            icon: const Icon(Symbols.delete_rounded),
+                          ),
+                          const SizedBox(width: Gap.s),
+                        ],
+                      ),
+              ),
               SegmentedButton<String>(
                 segments: const [
                   ButtonSegment(
@@ -926,54 +1075,87 @@ class _PhotosScreenState extends State<PhotosScreen> {
       builder: (context, _) {
         final s = Theme.of(context).colorScheme;
         final root = fs.roots.where((r) => r.id == _kind).firstOrNull;
-        if (fs.error == 'not_allowed' ||
+        final locked =
+            fs.error == 'not_allowed' ||
             (root != null && !root.ok) ||
-            fs.error == 'no_permission') {
-          return const Align(
-            alignment: Alignment.topCenter,
-            child: EmptyState(
-              icon: Symbols.lock_rounded,
-              title: 'El teléfono aún no comparte sus fotos',
-              body: 'En el teléfono: Alero › Ajustes › Archivos para el ordenador, y concede «Fotos y vídeos».',
-            ),
-          );
-        }
+            fs.error == 'no_permission';
         final list = fs.root == _kind ? fs.sorted : const <FsEntry>[];
-        if (list.isEmpty) {
-          return Center(
-            child: fs.loading
-                ? const CircularProgressIndicator()
-                : Text(
-                    'No hay nada aquí.',
-                    style: TextStyle(color: s.onSurfaceVariant),
+        final state = locked
+            ? 'locked'
+            : list.isEmpty
+            ? (fs.loading ? 'loading' : 'empty')
+            : 'grid-$_kind';
+        return MotionSwitch(
+          forward: _kind == 'video',
+          child: KeyedSubtree(
+            key: ValueKey(state),
+            child: locked
+                ? const Align(
+                    alignment: Alignment.topCenter,
+                    child: EmptyState(
+                      icon: Symbols.lock_rounded,
+                      title: 'El teléfono aún no comparte sus fotos',
+                      body: 'En el teléfono: Alero › Ajustes › Archivos para el ordenador, y concede «Fotos y vídeos».',
+                    ),
+                  )
+                : list.isEmpty
+                ? Center(
+                    child: fs.loading
+                        ? const CircularProgressIndicator()
+                        : Text(
+                            'No hay nada aquí.',
+                            style: TextStyle(color: s.onSurfaceVariant),
+                          ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Presence(
+                        child: fs.loading
+                            ? const LinearProgressIndicator()
+                            : null,
+                      ),
+                      Expanded(
+                        child: _Scrolled(
+                          (c) => GridView.builder(
+                            controller: c,
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 200,
+                                  mainAxisSpacing: Gap.m,
+                                  crossAxisSpacing: Gap.m,
+                                  childAspectRatio: 0.85,
+                                ),
+                            itemCount: list.length,
+                            itemBuilder: (_, i) => AleroMotion.reveal(
+                              context,
+                              i,
+                              _GridTile(fs, list[i]),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: Gap.s),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: AleroMotion.number(
+                            tr('{} elementos{}', [
+                              fs.total,
+                              fs.selected.isEmpty
+                                  ? ''
+                                  : tr(' · {} seleccionados', [
+                                      fs.selected.length,
+                                    ]),
+                            ]),
+                            Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: s.onSurfaceVariant),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (fs.loading) const LinearProgressIndicator(),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 200,
-                  mainAxisSpacing: Gap.m,
-                  crossAxisSpacing: Gap.m,
-                  childAspectRatio: 0.85,
-                ),
-                itemCount: list.length,
-                itemBuilder: (_, i) => _GridTile(fs, list[i]),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: Gap.s),
-              child: Text(
-                tr('{} elementos{}', [fs.total, fs.selected.isEmpty ? '' : tr(' · {} seleccionados', [fs.selected.length])]),
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: s.onSurfaceVariant),
-              ),
-            ),
-          ],
+          ),
         );
       },
     ),

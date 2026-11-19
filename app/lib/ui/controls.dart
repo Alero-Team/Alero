@@ -11,6 +11,7 @@ import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'phone_page.dart' show NeedsAdb;
 import 'expressive.dart' show Spring, motion, showAleroDialog;
+import 'alero_motion.dart';
 import 'phone_windows.dart' show CameraFailure;
 import 'screen.dart' show openScreen;
 import 'shell.dart' show confirm;
@@ -70,6 +71,19 @@ const controlNames = {
   'clip': 'Portapapeles',
 };
 const _mainCount = 8;
+
+/// One-shot actions (and the torch and rotation, which show their state in the button): square buttons.
+/// Everything else stays a wide tile in the grid.
+const _squareKeys = {
+  'camBack',
+  'camFront',
+  'screen',
+  'shot',
+  'rotate',
+  'torch',
+  'lock',
+  'clip',
+};
 
 Future<void> _customize(BuildContext context, Hub hub) => showAleroDialog<void>(
   context: context,
@@ -368,6 +382,27 @@ class _ControlsState extends State<_Controls> {
         hub.controlHidden,
       );
       final rest = order.skip(_mainCount).toList();
+      // Switches keep the wide tiles; the actions go below them as square buttons of one size.
+      Widget tilesOf(List<String> keys) {
+        final wide = [
+          for (final k in keys)
+            if (!_squareKeys.contains(k)) tiles[k]!,
+        ];
+        final square = [
+          for (final k in keys)
+            if (_squareKeys.contains(k)) tiles[k]!,
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (wide.isNotEmpty) _Grid(hub, wide),
+            if (wide.isNotEmpty && square.isNotEmpty)
+              const SizedBox(height: Gap.s),
+            if (square.isNotEmpty) _Squares(square),
+          ],
+        );
+      }
+
       Widget heading(String text) => Padding(
         padding: const EdgeInsets.only(bottom: Gap.s),
         child: Text(
@@ -379,53 +414,67 @@ class _ControlsState extends State<_Controls> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Tiles that share the whole width, like the phone's quick settings.
-          _Grid(hub, [for (final k in order.take(_mainCount)) tiles[k]!]),
-          if (adb != null) CameraFailure(adb.serial),
-          if (st != null) ...[
-            const SizedBox(height: Gap.l),
-            heading('Sonido'),
-            SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(
-                  value: 'normal',
-                  icon: Icon(Symbols.notifications_active_rounded, size: 18),
-                  label: FitLabel('Sonido'),
-                ),
-                ButtonSegment(
-                  value: 'vibrate',
-                  icon: Icon(Symbols.vibration_rounded, size: 18),
-                  label: FitLabel('Vibrar'),
-                ),
-                ButtonSegment(
-                  value: 'silent',
-                  icon: Icon(Symbols.notifications_off_rounded, size: 18),
-                  label: FitLabel('Silencio'),
-                ),
-              ],
-              selected: {st.ringer},
-              onSelectionChanged: (v) => cmd('ringer', {'mode': v.first}),
-            ),
-            const SizedBox(height: Gap.s),
-            _Volume(
-              'Multimedia',
-              Symbols.music_note_rounded,
-              st.media,
-              st.mediaMax,
-              (v) => cmd('volume', {'stream': 'media', 'value': v}),
-            ),
-            _Volume(
-              'Tono de llamada',
-              Symbols.ring_volume_rounded,
-              st.ring,
-              st.ringMax,
-              (v) => cmd('volume', {'stream': 'ring', 'value': v}),
-            ),
-          ],
+          tilesOf(order.take(_mainCount).toList()),
+          Presence(child: adb == null ? null : CameraFailure(adb.serial)),
+          Presence(
+            child: st == null
+                ? null
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: Gap.l),
+                      heading('Sonido'),
+                      SegmentedButton<String>(
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(
+                            value: 'normal',
+                            icon: Icon(
+                              Symbols.notifications_active_rounded,
+                              size: 18,
+                            ),
+                            label: FitLabel('Sonido'),
+                          ),
+                          ButtonSegment(
+                            value: 'vibrate',
+                            icon: Icon(Symbols.vibration_rounded, size: 18),
+                            label: FitLabel('Vibrar'),
+                          ),
+                          ButtonSegment(
+                            value: 'silent',
+                            icon: Icon(
+                              Symbols.notifications_off_rounded,
+                              size: 18,
+                            ),
+                            label: FitLabel('Silencio'),
+                          ),
+                        ],
+                        selected: {st.ringer},
+                        onSelectionChanged: (v) =>
+                            cmd('ringer', {'mode': v.first}),
+                      ),
+                      const SizedBox(height: Gap.s),
+                      _Volume(
+                        'Multimedia',
+                        Symbols.music_note_rounded,
+                        st.media,
+                        st.mediaMax,
+                        (v) => cmd('volume', {'stream': 'media', 'value': v}),
+                      ),
+                      _Volume(
+                        'Tono de llamada',
+                        Symbols.ring_volume_rounded,
+                        st.ring,
+                        st.ringMax,
+                        (v) => cmd('volume', {'stream': 'ring', 'value': v}),
+                      ),
+                    ],
+                  ),
+          ),
           const SizedBox(height: Gap.s),
           // The second drawer: every other control, and what is playing on the phone.
-          InkWell(
-            borderRadius: BorderRadius.circular(Radii.chip),
+          AleroPress(
+            radius: Radii.chip,
             onTap: () => setState(() => _more = !_more),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: Gap.s),
@@ -447,54 +496,52 @@ class _ControlsState extends State<_Controls> {
               ),
             ),
           ),
-          AnimatedSize(
-            duration: motion(context, Spring.spatial.settle),
-            curve: Spring.spatial,
-            alignment: Alignment.topCenter,
-            child: !_more
-                ? const SizedBox(width: double.infinity)
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (rest.isNotEmpty) ...[
-                        _Grid(hub, [for (final k in rest) tiles[k]!]),
-                        const SizedBox(height: Gap.l),
-                      ],
-                      heading('Reproducción en el teléfono'),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          for (final (tip, icon, action) in const [
-                            ('Anterior', Symbols.skip_previous_rounded, 'prev'),
-                            (
-                              'Reproducir o pausar',
-                              Symbols.play_pause_rounded,
-                              'toggle',
-                            ),
-                            ('Siguiente', Symbols.skip_next_rounded, 'next'),
-                          ])
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: Gap.xs,
-                              ),
-                              child: IconButton.filledTonal(
-                                tooltip: tx(tip),
-                                onPressed: () => hub.mediaCmd(id, action),
-                                icon: Icon(icon),
-                              ),
-                            ),
-                        ],
+          ArcExpand(
+            expanded: _more,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (rest.isNotEmpty) ...[
+                  tilesOf(rest),
+                  const SizedBox(height: Gap.l),
+                ],
+                heading('Reproducción en el teléfono'),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final (tip, icon, action) in const [
+                      ('Anterior', Symbols.skip_previous_rounded, 'prev'),
+                      (
+                        'Reproducir o pausar',
+                        Symbols.play_pause_rounded,
+                        'toggle',
                       ),
-                    ],
-                  ),
-          ),
-          if (_looked && adb == null) ...[
-            const SizedBox(height: Gap.s),
-            const NeedsAdb(
-              'Wi-Fi, Bluetooth, bloqueo, rotación, captura y cámara',
-              card: false,
+                      ('Siguiente', Symbols.skip_next_rounded, 'next'),
+                    ])
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Gap.xs),
+                        child: IconButton.filledTonal(
+                          tooltip: tx(tip),
+                          onPressed: () => hub.mediaCmd(id, action),
+                          icon: Icon(icon),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
+          Presence(
+            child: _looked && adb == null
+                ? const Padding(
+                    padding: EdgeInsets.only(top: Gap.s),
+                    child: NeedsAdb(
+                      'Wi-Fi, Bluetooth, bloqueo, rotación, captura y cámara',
+                      card: false,
+                    ),
+                  )
+                : null,
+          ),
         ],
       );
     },
@@ -650,57 +697,172 @@ class _Tile extends StatelessWidget {
             borderRadius: BorderRadius.circular(Radii.tile),
             side: BorderSide(color: active ? s.primary : s.outlineVariant),
           ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(Radii.tile),
+          child: AleroPress(
+            radius: Radii.tile,
             onTap: onTap,
-            child: Opacity(
+            child: AnimatedOpacity(
               opacity: onTap == null ? 0.45 : 1,
+              duration: AleroMotion.micro(context, Fluent.d167),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: active
-                            ? s.onPrimary.withValues(alpha: .16)
-                            : s.surfaceContainerHighest,
-                      ),
-                      child: Icon(
-                        icon,
-                        size: 18,
-                        fill: active ? 1 : 0,
-                        color: active ? s.onPrimary : s.onSurface,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.labelLarge?.copyWith(
-                              color: active ? s.onPrimary : s.onSurface,
+                // One 0..1 value drives every color so the tile eases between off and on.
+                child: TweenValue(
+                  active ? 1 : 0,
+                  builder: (_, v) {
+                    Color mix(Color off, Color on) => Color.lerp(off, on, v)!;
+                    final fg = mix(s.onSurface, s.onPrimary);
+                    return Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: mix(
+                              s.surfaceContainerHighest,
+                              s.onPrimary.withValues(alpha: .16),
                             ),
                           ),
-                          if (on != null)
-                            Text(
-                              active ? 'Activado' : 'Desactivado',
-                              maxLines: 1,
-                              style: text.labelSmall?.copyWith(
-                                color: active
-                                    ? s.onPrimary.withValues(alpha: .8)
-                                    : s.onSurfaceVariant,
+                          child: Icon(
+                            icon,
+                            size: 18,
+                            fill: active ? 1 : 0,
+                            color: fg,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelLarge?.copyWith(color: fg),
                               ),
-                            ),
-                        ],
+                              if (on != null)
+                                MotionFade(
+                                  child: Text(
+                                    active ? 'Activado' : 'Desactivado',
+                                    key: ValueKey(active),
+                                    maxLines: 1,
+                                    style: text.labelSmall?.copyWith(
+                                      color: mix(
+                                        s.onSurfaceVariant,
+                                        s.onPrimary.withValues(alpha: .8),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Square action buttons in equal columns: five when they fit at 84 px or more, else four.
+class _Squares extends StatelessWidget {
+  const _Squares(this.tiles);
+  final List<_Tile> tiles;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, box) {
+      const gap = Gap.s;
+      final cols = box.maxWidth >= 5 * 84 + 4 * gap ? 5 : 4;
+      final w = (box.maxWidth - gap * (cols - 1)) / cols;
+      final h = 72 * TileScale.of(context);
+      return Wrap(
+        spacing: gap,
+        runSpacing: gap,
+        children: [
+          for (final x in tiles)
+            SizedBox(width: w, height: h, child: _Square(x)),
+        ],
+      );
+    },
+  );
+}
+
+/// A round icon with the label under it on a rounded surface; the icon fills in when the control is on.
+class _Square extends StatelessWidget {
+  const _Square(this.x);
+  final _Tile x;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final on = x.on == true;
+    final tip = [
+      x.label,
+      ?(x.on == null ? null : (x.on! ? 'activado' : 'desactivado')),
+      ?x.hint,
+    ].map(tx).join(' · ');
+    return Tooltip(
+      message: tip,
+      child: Semantics(
+        button: true,
+        toggled: x.on,
+        enabled: x.onTap != null,
+        label: tip,
+        child: AleroPress(
+          radius: 18,
+          onTap: x.onTap,
+          child: AnimatedOpacity(
+            opacity: x.onTap == null ? 0.45 : 1,
+            duration: AleroMotion.micro(context, Fluent.d167),
+            child: Material(
+              color: s.surfaceContainerHigh,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(color: s.outlineVariant.withValues(alpha: .5)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(end: on ? 1 : 0),
+                      duration: AleroMotion.micro(context, Fluent.d167),
+                      builder: (_, v, _) => Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color.lerp(
+                            s.surfaceContainerHighest,
+                            s.onSurface,
+                            v,
+                          ),
+                        ),
+                        child: Icon(
+                          x.icon,
+                          size: 18,
+                          fill: on ? 1 : 0,
+                          color: Color.lerp(s.onSurface, s.surface, v),
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      x.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelSmall,
                     ),
                   ],
                 ),
@@ -711,6 +873,36 @@ class _Tile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Content that comes and goes in place: the space eases open or closed and the content crossfades.
+/// Usage: `Presence(child: show ? Banner() : null)`. Not for scrolling builders.
+class Presence extends StatelessWidget {
+  const Presence({
+    super.key,
+    required this.child,
+    this.alignment = Alignment.topCenter,
+  });
+  final Widget? child;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSize(
+    alignment: alignment,
+    duration: AleroMotion.micro(context, Fluent.d250),
+    curve: Fluent.enter,
+    child: MotionFade(
+      // Passthrough keeps full-width banners from shrinking and centering.
+      layoutBuilder: (current, previous) => Stack(
+        fit: StackFit.passthrough,
+        alignment: alignment,
+        children: [...previous, ?current],
+      ),
+      child: child == null
+          ? const SizedBox.shrink(key: ValueKey('none'))
+          : KeyedSubtree(key: const ValueKey('some'), child: child!),
+    ),
+  );
 }
 
 class _Volume extends StatefulWidget {

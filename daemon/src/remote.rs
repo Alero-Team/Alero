@@ -197,6 +197,10 @@ impl Remote {
         let owner = engine.clone();
         thread::spawn(move || loop {
             thread::sleep(Duration::from_secs(1));
+            // Nothing held (almost always): skip reading peers.json from disk every second.
+            if guard.held.lock().unwrap().is_empty() {
+                continue;
+            }
             let online: Vec<_> = owner.peers().into_iter().filter(|p| p.trusted && p.state == PeerState::Connected).map(|p| p.id).collect();
             let allowed = guard.allowed();
             guard.held.lock().unwrap().retain(|(peer, button), at| {

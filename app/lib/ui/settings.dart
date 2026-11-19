@@ -14,6 +14,7 @@ import 'icon.dart';
 import 'island_panel.dart';
 import '../l10n.dart';
 import 'expressive.dart';
+import 'alero_motion.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
 String _mediaStatus(Hub hub) {
@@ -32,6 +33,123 @@ String _mediaStatus(Hub hub) {
         ? ''
         : tr('Sin acceso a: {}. ', [missing.map(tx).join(', ')]),
   ]);
+}
+
+/// SegmentedButton with a highlight that glides to the chosen segment instead of swapping colors in place.
+/// Same segments and callback shape; each one is a [AleroPress], so keyboard and screen readers keep working.
+/// A null [selected] shows no highlight; a null [onChanged] disables it.
+class AleroSegments<T> extends StatelessWidget {
+  const AleroSegments({
+    super.key,
+    required this.segments,
+    required this.selected,
+    required this.onChanged,
+  });
+  final List<ButtonSegment<T>> segments;
+  final T? selected;
+  final ValueChanged<T>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final n = segments.length;
+    final i = segments.indexWhere((e) => e.value == selected);
+    final on = onChanged != null;
+    // The pill sits 3 px inside the outline and every layer fills the whole bar, so the labels stay centred.
+    return IntrinsicWidth(
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.all(3),
+        decoration: ShapeDecoration(
+          shape: StadiumBorder(side: BorderSide(color: s.outline)),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedAlign(
+              alignment: Alignment(
+                n < 2 ? 0 : -1 + 2 * i.clamp(0, n - 1) / (n - 1),
+                0,
+              ),
+              duration: motion(context, Spring.fast.settle),
+              curve: Spring.fast,
+              child: FractionallySizedBox(
+                widthFactor: 1 / n,
+                heightFactor: 1,
+                child: AnimatedOpacity(
+                  opacity: i < 0 ? 0 : 1,
+                  duration: AleroMotion.micro(context, Fluent.d167),
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: s.secondaryContainer,
+                      shape: const StadiumBorder(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final (k, seg) in segments.indexed)
+                  Expanded(
+                    child: MergeSemantics(
+                      child: Semantics(
+                        button: true,
+                        selected: k == i,
+                        enabled: on && seg.enabled,
+                        child: AleroPress(
+                          radius: 17,
+                          onTap: on && seg.enabled
+                              ? () => onChanged!(seg.value)
+                              : null,
+                          child: TweenAnimationBuilder<Color?>(
+                            tween: ColorTween(
+                              end: k == i
+                                  ? s.onSecondaryContainer
+                                  : s.onSurface.withValues(alpha: on ? 1 : .38),
+                            ),
+                            duration: AleroMotion.micro(context, Fluent.d167),
+                            builder: (_, c, child) => IconTheme.merge(
+                              data: IconThemeData(color: c),
+                              child: DefaultTextStyle.merge(
+                                style: TextStyle(color: c),
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.ellipsis,
+                                child: child!,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: Gap.m,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  if (seg.icon != null) ...[
+                                    seg.icon!,
+                                    const SizedBox(width: Gap.xs),
+                                  ],
+                                  Flexible(
+                                    child: seg.label ?? const SizedBox(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 final _appearanceKey = GlobalKey();
@@ -268,18 +386,25 @@ class SettingsScreen extends StatelessWidget {
                       child: const Text('Añadir'),
                     ),
                   ),
-                  for (final folder in hub.pcFolders)
-                    SettingTile(
-                      title: folder,
-                      subtitle: 'Carpeta compartida con teléfonos emparejados',
-                      trailing: IconButton(
-                        tooltip: tx('Dejar de compartir'),
-                        icon: const Icon(Symbols.close_rounded),
-                        onPressed: () => hub.removePcFolder(folder),
-                      ),
-                    ),
-                  if (hub.pcFolders.isNotEmpty)
-                    SettingTile(
+                  MotionList(
+                    children: [
+                      for (final folder in hub.pcFolders)
+                        SettingTile(
+                          key: ValueKey(folder),
+                          title: folder,
+                          subtitle:
+                              'Carpeta compartida con teléfonos emparejados',
+                          trailing: IconButton(
+                            tooltip: tx('Dejar de compartir'),
+                            icon: const Icon(Symbols.close_rounded),
+                            onPressed: () => hub.removePcFolder(folder),
+                          ),
+                        ),
+                    ],
+                  ),
+                  ArcExpand(
+                    expanded: hub.pcFolders.isNotEmpty,
+                    child: SettingTile(
                       title: 'Permitir cambios en los archivos compartidos',
                       subtitle: 'Autoriza también renombrar y eliminar archivos desde Android. Desactivado por defecto. No permite eliminar carpetas completas.',
                       trailing: AleroSwitch(
@@ -289,6 +414,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       onTap: () => hub.setPcFileEdits(!hub.pcFilesWrite),
                     ),
+                  ),
                 ],
               ],
             ),
@@ -310,9 +436,11 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   onTap: () => hub.setFilesAllowed(!hub.filesAllowed),
                 ),
-                if (hub.filesAllowed &&
-                    (hub.filesMedia.length < 3 || hub.filesLimited))
-                  SettingTile(
+                ArcExpand(
+                  expanded:
+                      hub.filesAllowed &&
+                      (hub.filesMedia.length < 3 || hub.filesLimited),
+                  child: SettingTile(
                     title: 'Permisos de fotos, vídeos y música',
                     subtitle: _mediaStatus(hub),
                     trailing: TextButton(
@@ -320,25 +448,34 @@ class SettingsScreen extends StatelessWidget {
                       child: const Text('Conceder'),
                     ),
                   ),
-                for (final (i, name) in hub.filesFolders.indexed)
-                  SettingTile(
-                    leading: Icon(
-                      Symbols.folder_rounded,
-                      size: 20,
-                      color: s.onSurfaceVariant,
-                    ),
-                    title: name,
-                    subtitle: 'Carpeta añadida',
-                    trailing: IconButton(
-                      tooltip: tr('Quitar {}', [name]),
-                      icon: Icon(
-                        Symbols.close_rounded,
-                        size: 20,
-                        color: s.onSurfaceVariant,
+                ),
+                MotionList(
+                  children: [
+                    for (final (i, name) in hub.filesFolders.indexed)
+                      SettingTile(
+                        // Names can repeat: name plus repeat count stays stable when an earlier folder is removed.
+                        key: ValueKey(
+                          '$name#${hub.filesFolders.take(i).where((e) => e == name).length}',
+                        ),
+                        leading: Icon(
+                          Symbols.folder_rounded,
+                          size: 20,
+                          color: s.onSurfaceVariant,
+                        ),
+                        title: name,
+                        subtitle: 'Carpeta añadida',
+                        trailing: IconButton(
+                          tooltip: tr('Quitar {}', [name]),
+                          icon: Icon(
+                            Symbols.close_rounded,
+                            size: 20,
+                            color: s.onSurfaceVariant,
+                          ),
+                          onPressed: () => hub.removeFilesFolder(i),
+                        ),
                       ),
-                      onPressed: () => hub.removeFilesFolder(i),
-                    ),
-                  ),
+                  ],
+                ),
                 SettingTile(
                   title: 'Todas las carpetas del dispositivo',
                   subtitle: hub.allFiles
@@ -415,7 +552,7 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: Gap.s),
-              child: SegmentedButton<String>(
+              child: AleroSegments<String>(
                 segments: const [
                   ButtonSegment(
                     value: 'system',
@@ -433,9 +570,8 @@ class SettingsScreen extends StatelessWidget {
                     icon: Icon(Symbols.dark_mode_rounded, size: 18),
                   ),
                 ],
-                selected: {hub.theme},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) => hub.setTheme(v.first),
+                selected: hub.theme,
+                onChanged: hub.setTheme,
               ),
             ),
             // Named in both languages on purpose: it has to be findable whichever one the app is in now.
@@ -445,15 +581,14 @@ class SettingsScreen extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(bottom: Gap.s),
-              child: SegmentedButton<String>(
+              child: AleroSegments<String>(
                 segments: const [
                   ButtonSegment(value: 'system', label: FitLabel('Sistema')),
                   ButtonSegment(value: 'es', label: FitLabel('Español')),
                   ButtonSegment(value: 'en', label: FitLabel('English')),
                 ],
-                selected: {L10n.instance.pref},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) => hub.setLanguage(v.first),
+                selected: L10n.instance.pref,
+                onChanged: hub.setLanguage,
               ),
             ),
             SettingTile(
@@ -499,20 +634,25 @@ class SettingsScreen extends StatelessWidget {
                   ok: hub.notifAccess,
                   onFix: hub.openNotifAccess,
                 ),
-                for (final (pkg, name) in hub.mutedApps)
-                  SettingTile(
-                    leading: Icon(
-                      Symbols.notifications_off_rounded,
-                      size: 20,
-                      color: s.onSurfaceVariant,
-                    ),
-                    title: name,
-                    subtitle: 'Silenciada en el ordenador',
-                    trailing: TextButton(
-                      onPressed: () => hub.unmuteApp(pkg),
-                      child: const Text('Reactivar'),
-                    ),
-                  ),
+                MotionList(
+                  children: [
+                    for (final (pkg, name) in hub.mutedApps)
+                      SettingTile(
+                        key: ValueKey(pkg),
+                        leading: Icon(
+                          Symbols.notifications_off_rounded,
+                          size: 20,
+                          color: s.onSurfaceVariant,
+                        ),
+                        title: name,
+                        subtitle: 'Silenciada en el ordenador',
+                        trailing: TextButton(
+                          onPressed: () => hub.unmuteApp(pkg),
+                          child: const Text('Reactivar'),
+                        ),
+                      ),
+                  ],
+                ),
                 _Perm(
                   icon: Symbols.install_mobile_rounded,
                   title: 'Instalar apps recibidas',
@@ -584,9 +724,9 @@ class SettingsScreen extends StatelessWidget {
             ClipboardData(text: hub.diagnostics.join('\n')),
           );
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Diagnóstico copiado')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showToast(const SnackBar(content: Text('Diagnóstico copiado')));
           }
         },
         icon: const Icon(Symbols.content_copy_rounded, size: 18),
@@ -694,17 +834,21 @@ class _Perm extends StatelessWidget {
       subtitle: ok == null
           ? body
           : '${ok! ? 'Activado' : 'Desactivado'}. $body',
-      trailing: ok == true
-          ? Icon(
-              Symbols.check_circle_rounded,
-              color: s.primary,
-              fill: 1,
-              semanticLabel: tx('Activado'),
-            )
-          : TextButton(
-              onPressed: onFix,
-              child: Text(ok == null ? 'Abrir' : 'Activar'),
-            ),
+      trailing: MotionFade(
+        child: ok == true
+            ? Icon(
+                Symbols.check_circle_rounded,
+                key: const ValueKey('ok'),
+                color: s.primary,
+                fill: 1,
+                semanticLabel: tx('Activado'),
+              )
+            : TextButton(
+                key: const ValueKey('fix'),
+                onPressed: onFix,
+                child: Text(ok == null ? 'Abrir' : 'Activar'),
+              ),
+      ),
     );
   }
 }

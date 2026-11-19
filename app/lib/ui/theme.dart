@@ -257,6 +257,8 @@ ThemeData buildTheme(
     borderRadius: BorderRadius.circular(Radii.button),
   );
   const tap = Size(48, 48);
+  // Hover and press colors fade over 120 ms (Material's 200 ms feels slow next to Linear/Raycast).
+  const fade = Duration(milliseconds: 120);
   return base.copyWith(
     extensions: [p],
     scaffoldBackgroundColor: p.bg,
@@ -281,6 +283,7 @@ ThemeData buildTheme(
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
+        animationDuration: fade,
         minimumSize: tap,
         padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
         shape: corner,
@@ -289,6 +292,7 @@ ThemeData buildTheme(
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
+        animationDuration: fade,
         minimumSize: tap,
         padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
         shape: corner,
@@ -299,13 +303,18 @@ ThemeData buildTheme(
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
+        animationDuration: fade,
         minimumSize: tap,
         shape: corner,
         textStyle: text.labelLarge,
       ),
     ),
     iconButtonTheme: IconButtonThemeData(
-      style: IconButton.styleFrom(minimumSize: tap, foregroundColor: p.ink),
+      style: IconButton.styleFrom(
+        animationDuration: fade,
+        minimumSize: tap,
+        foregroundColor: p.ink,
+      ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,

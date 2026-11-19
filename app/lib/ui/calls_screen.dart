@@ -8,6 +8,7 @@ import '../remote.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'notifications.dart' show ago;
 import 'phone_page.dart';
+import 'alero_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -30,22 +31,25 @@ class CallsScreen extends StatelessWidget {
         icon: const Icon(Symbols.refresh_rounded),
       ),
     ],
-    body: (context, phone) => hub.info[phone.id]?.calls == true
-        ? _Calls(hub, phone)
-        : const Align(
-            alignment: Alignment.topCenter,
-            child: EmptyState(
-              icon: Symbols.call_rounded,
-              title: 'Activa las llamadas en el teléfono',
-              body:
-                  'En el teléfono: Alero › Ajustes › Llamadas en el ordenador.',
+    body: (context, phone) => phoneSwap(
+      context,
+      hub.info[phone.id]?.calls == true
+          ? _Calls(hub, phone, key: const ValueKey('calls'))
+          : const Align(
+              key: ValueKey('off'),
+              alignment: Alignment.topCenter,
+              child: EmptyState(
+                icon: Symbols.call_rounded,
+                title: 'Activa las llamadas en el teléfono',
+                body: 'En el teléfono: Alero › Ajustes › Llamadas en el ordenador.',
+              ),
             ),
-          ),
+    ),
   );
 }
 
 class _Calls extends StatefulWidget {
-  const _Calls(this.hub, this.phone);
+  const _Calls(this.hub, this.phone, {super.key});
   final Hub hub;
   final pb.Peer phone;
 
@@ -138,8 +142,9 @@ class _CallsState extends State<_Calls> {
                                 ),
                         ),
                       ),
-                      if (found.isNotEmpty)
-                        ConstrainedBox(
+                      ArcExpand(
+                        expanded: found.isNotEmpty,
+                        child: ConstrainedBox(
                           constraints: const BoxConstraints(maxHeight: 180),
                           child: ListView(
                             shrinkWrap: true,
@@ -155,6 +160,7 @@ class _CallsState extends State<_Calls> {
                             ],
                           ),
                         ),
+                      ),
                       const SizedBox(height: Gap.m),
                       GridView.count(
                         crossAxisCount: 3,
@@ -211,56 +217,69 @@ class _CallsState extends State<_Calls> {
               child: Panel(
                 title: 'Recientes',
                 icon: Symbols.history_rounded,
-                child: log == null
-                    ? const Padding(
-                        padding: EdgeInsets.all(Gap.xl),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : hub.phoneState[id]?.callLog == false
-                    ? const EmptyState(
-                        card: false,
-                        icon: Symbols.lock_rounded,
-                        title: 'Falta el permiso del registro de llamadas',
-                        body: 'En el teléfono: Alero › Ajustes › Llamadas en el ordenador. Apágalo y vuelve a encenderlo para concederlo.',
-                      )
-                    : log.isEmpty
-                    ? const Text('No hay llamadas recientes.')
-                    : Column(
-                        children: [
-                          for (final c in log.take(60))
-                            ListTile(
-                              leading: Icon(
-                                switch (c.type) {
-                                  'in' => Symbols.call_received_rounded,
-                                  'out' => Symbols.call_made_rounded,
-                                  'missed' => Symbols.call_missed_rounded,
-                                  _ => Symbols.call_end_rounded,
-                                },
-                                color:
-                                    c.type == 'missed' || c.type == 'rejected'
-                                    ? s.error
-                                    : s.onSurfaceVariant,
+                child: MotionFade(
+                  child: log == null
+                      ? const Padding(
+                          key: ValueKey('loading'),
+                          padding: EdgeInsets.all(Gap.xl),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : hub.phoneState[id]?.callLog == false
+                      ? const EmptyState(
+                          key: ValueKey('denied'),
+                          card: false,
+                          icon: Symbols.lock_rounded,
+                          title: 'Falta el permiso del registro de llamadas',
+                          body: 'En el teléfono: Alero › Ajustes › Llamadas en el ordenador. Apágalo y vuelve a encenderlo para concederlo.',
+                        )
+                      : log.isEmpty
+                      ? const Text(
+                          'No hay llamadas recientes.',
+                          key: ValueKey('empty'),
+                        )
+                      : Column(
+                          key: const ValueKey('log'),
+                          children: [
+                            for (final (i, c) in log.take(60).indexed)
+                              AleroMotion.reveal(
+                                context,
+                                i,
+                                ListTile(
+                                  leading: Icon(
+                                    switch (c.type) {
+                                      'in' => Symbols.call_received_rounded,
+                                      'out' => Symbols.call_made_rounded,
+                                      'missed' => Symbols.call_missed_rounded,
+                                      _ => Symbols.call_end_rounded,
+                                    },
+                                    color:
+                                        c.type == 'missed' ||
+                                            c.type == 'rejected'
+                                        ? s.error
+                                        : s.onSurfaceVariant,
+                                  ),
+                                  title: Text(c.who),
+                                  subtitle: Text(
+                                    '${switch (c.type) {
+                                      'in' => 'Recibida',
+                                      'out' => 'Realizada',
+                                      'missed' => 'Perdida',
+                                      'rejected' => 'Rechazada',
+                                      _ => 'Llamada',
+                                    }} · ${ago(c.date)}${c.duration > 0 ? ' · ${c.duration ~/ 60}:${(c.duration % 60).toString().padLeft(2, '0')}' : ''}',
+                                  ),
+                                  trailing: IconButton(
+                                    tooltip: tr('Llamar a {}', [c.who]),
+                                    onPressed: c.number.isEmpty
+                                        ? null
+                                        : () => _call(c.number),
+                                    icon: const Icon(Symbols.call_rounded),
+                                  ),
+                                ),
                               ),
-                              title: Text(c.who),
-                              subtitle: Text(
-                                '${switch (c.type) {
-                                  'in' => 'Recibida',
-                                  'out' => 'Realizada',
-                                  'missed' => 'Perdida',
-                                  'rejected' => 'Rechazada',
-                                  _ => 'Llamada',
-                                }} · ${ago(c.date)}${c.duration > 0 ? ' · ${c.duration ~/ 60}:${(c.duration % 60).toString().padLeft(2, '0')}' : ''}',
-                              ),
-                              trailing: IconButton(
-                                tooltip: tr('Llamar a {}', [c.who]),
-                                onPressed: c.number.isEmpty
-                                    ? null
-                                    : () => _call(c.number),
-                                icon: const Icon(Symbols.call_rounded),
-                              ),
-                            ),
-                        ],
-                      ),
+                          ],
+                        ),
+                ),
               ),
             ),
           ),

@@ -1,3 +1,5 @@
+import 'alero_motion.dart';
+
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -10,6 +12,7 @@ import '../l10n.dart';
 
 Future<void> openClipboard(BuildContext context, Hub hub, String peerId) =>
     showModalBottomSheet<void>(
+      sheetAnimationStyle: sheetMotion(context),
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -51,31 +54,45 @@ class _Sheet extends StatelessWidget {
               const SizedBox(height: Gap.l),
               Text('Historial', style: t.titleSmall),
               const SizedBox(height: Gap.xs),
-              if (hub.clips.isEmpty)
-                Text(
-                  'Aún no hay nada reciente.',
-                  style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
-                )
-              else
-                for (final c in hub.clips)
-                  SettingTile(
-                    leading: Icon(
-                      c.incoming
-                          ? Symbols.south_west_rounded
-                          : Symbols.north_east_rounded,
-                      size: 20,
-                      color: s.onSurfaceVariant,
+              MotionFade(
+                child: hub.clips.isEmpty
+                    ? Text(
+                        'Aún no hay nada reciente.',
+                        key: const ValueKey('empty'),
+                        style: t.bodyMedium?.copyWith(
+                          color: s.onSurfaceVariant,
+                        ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('has')),
+              ),
+              // New copies grow in at the top; the list is at most 30 long, so it is built whole.
+              MotionList(
+                children: [
+                  for (final c in hub.clips)
+                    SettingTile(
+                      key: ObjectKey(c),
+                      leading: Icon(
+                        c.incoming
+                            ? Symbols.south_west_rounded
+                            : Symbols.north_east_rounded,
+                        size: 20,
+                        color: s.onSurfaceVariant,
+                      ),
+                      title: c.text.replaceAll('\n', ' '),
+                      subtitle:
+                          '${c.incoming ? 'De' : 'A'} ${c.peerName} · ${ago(c.time)}',
+                      trailing: IconButton(
+                        tooltip: tx('Copiar'),
+                        icon: const Icon(
+                          Symbols.content_copy_rounded,
+                          size: 18,
+                        ),
+                        onPressed: () => hub.copy(c.text),
+                      ),
+                      onTap: () => hub.copy(c.text),
                     ),
-                    title: c.text.replaceAll('\n', ' '),
-                    subtitle:
-                        '${c.incoming ? 'De' : 'A'} ${c.peerName} · ${ago(c.time)}',
-                    trailing: IconButton(
-                      tooltip: tx('Copiar'),
-                      icon: const Icon(Symbols.content_copy_rounded, size: 18),
-                      onPressed: () => hub.copy(c.text),
-                    ),
-                    onTap: () => hub.copy(c.text),
-                  ),
+                ],
+              ),
             ],
           ),
         ),

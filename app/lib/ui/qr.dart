@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:qr/qr.dart';
 
+import 'alero_motion.dart';
+
 /// QR code drawn from modules. Always dark on white with a quiet zone, whatever the theme, so cameras read it.
 class QrView extends StatelessWidget {
   const QrView(this.data, {super.key, this.size = 200, required this.label});
@@ -15,18 +17,22 @@ class QrView extends StatelessWidget {
         errorCorrectLevel: QrErrorCorrectLevel.medium,
       ),
     );
-    return Semantics(
-      image: true,
-      label: label,
-      child: Container(
-        width: size,
-        height: size,
-        padding: EdgeInsets.all(size * 0.06),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+    // A new payload cross-fades instead of swapping in place.
+    return MotionFade(
+      child: Semantics(
+        key: ValueKey(data),
+        image: true,
+        label: label,
+        child: Container(
+          width: size,
+          height: size,
+          padding: EdgeInsets.all(size * 0.06),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: RepaintBoundary(child: CustomPaint(painter: _Qr(img))),
         ),
-        child: CustomPaint(painter: _Qr(img)),
       ),
     );
   }

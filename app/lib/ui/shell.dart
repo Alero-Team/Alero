@@ -149,7 +149,7 @@ class _ShellState extends State<Shell>
     if (Native.pc) windowManager.addListener(this);
     _msgs = hub.messages.stream.listen((m) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+        ScaffoldMessenger.of(context).showToast(SnackBar(content: Text(m)));
       }
     });
     hub.addListener(_questions);
@@ -300,6 +300,7 @@ class _ShellState extends State<Shell>
     if (hub.share != null && !_shareOpen) {
       _shareOpen = true;
       showModalBottomSheet<void>(
+        sheetAnimationStyle: sheetMotion(context),
         context: context,
         backgroundColor: Colors.transparent,
         builder: (_) => _ShareSheet(hub),
@@ -400,26 +401,39 @@ class _ShellState extends State<Shell>
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 7),
               children: [
-                for (final d in _dests) ...[
-                  if (d.group != null && full)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
-                      child: Text(
-                        d.group!,
-                        style: t.labelSmall?.copyWith(
-                          color: s.onSurfaceVariant,
-                          letterSpacing: .8,
+                // One highlight glides between destinations (group headers count as children too).
+                SlidingSelection(
+                  color: s.surfaceContainerHighest,
+                  inset: const EdgeInsets.only(bottom: 2),
+                  selected: [
+                    for (final d in _dests) ...[
+                      if (d.group != null && full) null,
+                      d.section,
+                    ],
+                  ].indexOf(_section),
+                  children: [
+                    for (final d in _dests) ...[
+                      if (d.group != null && full)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 16, 12, 9),
+                          child: Text(
+                            d.group!,
+                            style: t.labelSmall?.copyWith(
+                              color: s.onSurfaceVariant,
+                              letterSpacing: .8,
+                            ),
+                          ),
                         ),
+                      _NavItem(
+                        icon: d.icon,
+                        label: full ? d.label : '',
+                        selected: d.section == _section,
+                        badge: _badge(d.section),
+                        onTap: () => _go(d.section),
                       ),
-                    ),
-                  _NavItem(
-                    icon: d.icon,
-                    label: full ? d.label : '',
-                    selected: d.section == _section,
-                    badge: _badge(d.section),
-                    onTap: () => _go(d.section),
-                  ),
-                ],
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -523,7 +537,7 @@ class _ShellState extends State<Shell>
 
 /// Sidebar destination: a full-width pill with icon and label on one line, so they line up exactly.
 /// The pill and the icon fill change with spring motion.
-class _NavItem extends StatefulWidget {
+class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
     required this.label,
@@ -538,65 +552,50 @@ class _NavItem extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_NavItem> createState() => _NavItemState();
-}
-
-class _NavItemState extends State<_NavItem> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
-    final sel = widget.selected;
-    final fg = sel ? s.onSurface : s.onSurfaceVariant;
-    final bg = sel
-        ? s.surfaceContainerHighest
-        : (_hover ? s.onSurface.withValues(alpha: 0.06) : Colors.transparent);
+    final sel = selected;
+    // The selected pill is drawn by the sliding highlight behind the list; hover is AleroPress's tint.
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Semantics(
         button: true,
         selected: sel,
-        label: widget.label,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: AleroPress(
-            radius: 12,
-            onTap: widget.onTap,
-            child: AnimatedContainer(
-              duration: motion(context, Spring.spatial.settle),
-              curve: Spring.spatial,
-              height: 40,
-              padding: EdgeInsets.symmetric(horizontal: sel ? Gap.m : Gap.m),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(10),
-              ),
+        label: label,
+        child: AleroPress(
+          radius: 12,
+          onTap: onTap,
+          child: SizedBox(
+            height: 40,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Gap.m),
               child: ExcludeSemantics(
-                child: Row(
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(end: sel ? 1 : 0),
-                      duration: motion(
-                        context,
-                        const Duration(milliseconds: 250),
-                      ),
-                      builder: (_, f, _) =>
-                          Icon(widget.icon, size: 22, color: fg, fill: f),
-                    ),
-                    const SizedBox(width: Gap.m),
-                    Expanded(
-                      child: Text(
-                        widget.label,
-                        style: (sel ? t.labelLarge : weight(t.labelLarge, 500))
-                            ?.copyWith(color: fg),
-                      ),
-                    ),
-                    if (widget.badge > 0) Badge(label: Text('${widget.badge}')),
-                  ],
+                // Icon fill, color and label weight all follow the selection together.
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: sel ? 1 : 0),
+                  duration: AleroMotion.micro(context, Fluent.d167),
+                  curve: Fluent.enter,
+                  builder: (_, f, _) {
+                    final fg = Color.lerp(s.onSurfaceVariant, s.onSurface, f)!;
+                    return Row(
+                      children: [
+                        Icon(icon, size: 22, color: fg, fill: f),
+                        const SizedBox(width: Gap.m),
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: TextStyle.lerp(
+                              weight(t.labelLarge, 500),
+                              t.labelLarge,
+                              f,
+                            )?.copyWith(color: fg),
+                          ),
+                        ),
+                        if (badge > 0) Badge(label: Text('$badge')),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),

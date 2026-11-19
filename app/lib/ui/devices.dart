@@ -8,6 +8,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'adb_connection.dart';
 import 'connect_help.dart';
 import 'pc_details.dart';
+import 'alero_motion.dart';
 import 'qr.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -44,59 +45,76 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final pairedPanel = Panel(
       title: 'Emparejados',
       icon: Symbols.verified_user_rounded,
-      child: paired.isEmpty
-          ? const EmptyState(
+      child: Column(
+        children: [
+          ArcExpand(
+            expanded: paired.isEmpty,
+            child: const EmptyState(
               card: false,
               icon: Symbols.devices_rounded,
               title: 'Ninguno todavía',
               body: 'Empareja tu teléfono con el código QR o desde la lista de la red.',
-            )
-          : Column(children: [for (final p in paired) _Paired(p, hub)]),
+            ),
+          ),
+          MotionList(
+            children: [
+              for (final p in paired) _Paired(p, hub, key: ValueKey(p.id)),
+            ],
+          ),
+        ],
+      ),
     );
 
     final nearbyPanel = Panel(
       title: 'En esta red',
       icon: Symbols.wifi_rounded,
-      child: nearby.isEmpty
-          ? Padding(
+      child: Column(
+        children: [
+          ArcExpand(
+            expanded: nearby.isEmpty,
+            child: Padding(
               padding: const EdgeInsets.symmetric(vertical: Gap.s),
               child: Text(
                 'No hay nada a la vista. Abre Alero en el otro dispositivo, en la misma red Wi-Fi, o conéctalos con un cable.',
                 style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
               ),
-            )
-          : Column(
-              children: [
-                for (final p in nearby)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: Gap.s),
-                    child: Row(
-                      children: [
-                        const IconTile(Symbols.devices_rounded),
-                        const SizedBox(width: Gap.m),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(p.name, style: t.titleSmall),
-                              Text(
-                                p.addr,
-                                style: t.bodySmall?.copyWith(
-                                  color: s.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        FilledButton.tonal(
-                          onPressed: () => hub.pair(p.id),
-                          child: const Text('Emparejar'),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
             ),
+          ),
+          MotionList(
+            children: [
+              for (final p in nearby)
+                Padding(
+                  key: ValueKey(p.id),
+                  padding: const EdgeInsets.symmetric(vertical: Gap.s),
+                  child: Row(
+                    children: [
+                      const IconTile(Symbols.devices_rounded),
+                      const SizedBox(width: Gap.m),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(p.name, style: t.titleSmall),
+                            Text(
+                              p.addr,
+                              style: t.bodySmall?.copyWith(
+                                color: s.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: () => hub.pair(p.id),
+                        child: const Text('Emparejar'),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
 
     final qrPanel = Panel(
@@ -124,12 +142,16 @@ class _DevicesScreenState extends State<DevicesScreen> {
             )
           : Row(
               children: [
-                if (hub.myId.isNotEmpty)
-                  QrView(
-                    hub.qrPayload,
-                    size: 156,
-                    label: tx('Código QR para emparejar este equipo'),
-                  ),
+                MotionFade(
+                  child: hub.myId.isNotEmpty
+                      ? QrView(
+                          hub.qrPayload,
+                          key: const ValueKey('qr'),
+                          size: 156,
+                          label: tx('Código QR para emparejar este equipo'),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('no-qr')),
+                ),
                 const SizedBox(width: Gap.xl),
                 Expanded(
                   child: Column(
@@ -251,7 +273,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 }
 
 class _Paired extends StatelessWidget {
-  const _Paired(this.p, this.hub);
+  const _Paired(this.p, this.hub, {super.key});
   final pb.Peer p;
   final Hub hub;
 
@@ -338,20 +360,34 @@ class _Paired extends StatelessWidget {
                     ),
                     StatusLine(p),
                     if (facts.isNotEmpty)
-                      Text(
-                        facts,
-                        style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      MotionFade(
+                        child: Text(
+                          facts,
+                          key: ValueKey(facts),
+                          style: t.bodySmall?.copyWith(
+                            color: s.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                 ),
               ),
+              // The buttons depend on the state: the group crossfades when it changes.
               if (!compact)
-                ...actions.map(
-                  (action) => Padding(
-                    padding: const EdgeInsets.only(left: Gap.s),
-                    child: action,
+                MotionFade(
+                  child: Row(
+                    key: ValueKey(p.state),
+                    mainAxisSize: MainAxisSize.min,
+                    children: actions
+                        .map(
+                          (action) => Padding(
+                            padding: const EdgeInsets.only(left: Gap.s),
+                            child: action,
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
             ],
@@ -362,11 +398,17 @@ class _Paired extends StatelessWidget {
             children: [
               summary,
               const SizedBox(height: Gap.xs),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: Gap.s,
-                runSpacing: Gap.xs,
-                children: actions,
+              Align(
+                alignment: Alignment.centerRight,
+                child: MotionFade(
+                  child: Wrap(
+                    key: ValueKey(p.state),
+                    alignment: WrapAlignment.end,
+                    spacing: Gap.s,
+                    runSpacing: Gap.xs,
+                    children: actions,
+                  ),
+                ),
               ),
             ],
           );
