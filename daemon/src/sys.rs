@@ -75,6 +75,10 @@ mod other {
     pub fn media_art() -> Option<Vec<u8>> {
         None
     }
+    pub fn media_changes() -> Option<u64> {
+        None
+    }
+    pub fn media_wake(_: std::thread::Thread) {}
     pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
         None
     }
@@ -417,12 +421,98 @@ mod win {
         });
     }
 
+    /// The media session manager, made once and kept: asking the shell for a new one on every poll (once a second)
+    /// was a cross-process round trip that kept Explorer and the media service busy all the time. Its events and those
+    /// of the current session bump `MEDIA_GEN`, so watchers ask again only when something changed.
+    struct MediaWatch {
+        mgr: GlobalSystemMediaTransportControlsSessionManager,
+        /// The session we listen to and its two event tokens.
+        session: Option<(windows::Media::Control::GlobalSystemMediaTransportControlsSession, i64, i64)>,
+    }
+
+    static MEDIA: std::sync::Mutex<Option<MediaWatch>> = std::sync::Mutex::new(None);
+    static MEDIA_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    /// The current session changed: listen to the new one (done by the next caller, never inside an event handler).
+    static MEDIA_RESUB: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+    static MEDIA_FAILED: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+    static MEDIA_WAKE: std::sync::Mutex<Vec<std::thread::Thread>> = std::sync::Mutex::new(Vec::new());
+
+    fn media_bump() {
+        MEDIA_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(w) = MEDIA_WAKE.lock() {
+            w.iter().for_each(|t| t.unpark());
+        }
+    }
+
+    /// The kept manager (made on first use; after a failure, tried again 10 s later at the earliest).
+    fn media_manager() -> Option<GlobalSystemMediaTransportControlsSessionManager> {
+        use std::sync::atomic::Ordering;
+        use windows::Foundation::TypedEventHandler;
+        let mut g = MEDIA.lock().ok()?;
+        if g.is_none() {
+            if MEDIA_FAILED.lock().ok()?.is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(10)) {
+                return None;
+            }
+            unsafe {
+                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            }
+            let Some(mgr) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok().and_then(|a| a.join().ok()) else {
+                *MEDIA_FAILED.lock().ok()? = Some(std::time::Instant::now());
+                return None;
+            };
+            fn on_change() -> windows::core::Result<()> {
+                MEDIA_RESUB.store(true, Ordering::Relaxed);
+                media_bump();
+                Ok(())
+            }
+            let _ = mgr.CurrentSessionChanged(&TypedEventHandler::new(|_, _| on_change()));
+            let _ = mgr.SessionsChanged(&TypedEventHandler::new(|_, _| on_change()));
+            MEDIA_RESUB.store(true, Ordering::Relaxed);
+            *g = Some(MediaWatch { mgr, session: None });
+        }
+        let w = g.as_mut()?;
+        if MEDIA_RESUB.swap(false, Ordering::Relaxed) {
+            if let Some((s, a, b)) = w.session.take() {
+                let _ = s.RemoveMediaPropertiesChanged(a);
+                let _ = s.RemovePlaybackInfoChanged(b);
+            }
+            if let Ok(s) = w.mgr.GetCurrentSession() {
+                let a = s.MediaPropertiesChanged(&TypedEventHandler::new(|_, _| {
+                    media_bump();
+                    Ok(())
+                })).unwrap_or_default();
+                let b = s.PlaybackInfoChanged(&TypedEventHandler::new(|_, _| {
+                    media_bump();
+                    Ok(())
+                })).unwrap_or_default();
+                w.session = Some((s, a, b));
+            }
+        }
+        Some(w.mgr.clone())
+    }
+
+    /// A number that changes whenever the system's player reports a change (song, play/pause, another app). None
+    /// when the system's media service cannot be reached: then the caller polls as before.
+    pub fn media_changes() -> Option<u64> {
+        media_manager()?;
+        Some(MEDIA_GEN.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// Wakes `t` (it parks with a timeout) as soon as the player changes.
+    pub fn media_wake(t: std::thread::Thread) {
+        if let Ok(mut w) = MEDIA_WAKE.lock() {
+            if !w.iter().any(|x| x.id() == t.id()) {
+                w.push(t);
+            }
+        }
+    }
+
     /// What the system's current media session (any player) reports. None when nothing is open.
     pub fn media_state() -> Option<Media> {
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         }
-        let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok()?.join().ok()?;
+        let mgr = media_manager()?;
         let s = mgr.GetCurrentSession().ok()?;
         let props = s.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
         let playback = s.GetPlaybackInfo().ok()?;
@@ -555,7 +645,7 @@ mod win {
     /// The cover as is when it weighs at most `limit` bytes, else shrunk.
     pub(crate) fn cover(limit: u64) -> Option<Vec<u8>> {
         use windows::core::Interface;
-        let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok()?.join().ok()?;
+        let mgr = media_manager()?;
         let props = mgr.GetCurrentSession().ok()?.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
         let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.join().ok()?;
         let size = stream.Size().ok().filter(|&n| n > 0)?;

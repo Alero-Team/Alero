@@ -55,6 +55,10 @@ pub trait Host {
     /// Whether the window takes the mouse. Off, clicks fall through to the windows below (the island reads the
     /// pointer by polling, so it only needs the mouse while the pointer is on it: to keep clicks, the wheel and drops).
     fn set_input(&mut self, _on: bool) {}
+    /// Whether the window may change size between frames without a flicker (then, closed, it is cut to the notch).
+    fn resizes_cleanly(&self) -> bool {
+        false
+    }
 }
 
 pub enum Msg {
@@ -106,11 +110,27 @@ fn spawn_media(tx: Sender<Msg>, wants: Arc<AtomicBool>) -> std::thread::Thread {
             let mut last = String::new();
             let mut art: Option<Vec<u8>> = None;
             let mut icon: (String, Option<Image>) = (String::new(), None);
+            crate::sys::media_wake(std::thread::current());
+            // What was last sent, to send again only when something the island shows changed.
+            let mut sent: Option<Option<Sent>> = None;
+            let mut seen_gen: Option<u64> = None;
+            let mut asked = Instant::now();
             loop {
                 if !wants.load(Ordering::Relaxed) {
+                    sent = None;
+                    seen_gen = None;
                     std::thread::park_timeout(Duration::from_secs(3));
                     continue;
                 }
+                // Where the system reports changes, ask only after one (or every 5 s, for players that report a
+                // seek and nothing else); where it does not, every second as before.
+                let gen = crate::sys::media_changes();
+                if gen.is_some() && gen == seen_gen && sent.is_some() && asked.elapsed() < Duration::from_secs(5) {
+                    std::thread::park_timeout(Duration::from_millis(1000));
+                    continue;
+                }
+                seen_gen = gen;
+                asked = Instant::now();
                 let state = crate::sys::media_state();
                 let msg = match state {
                     Some(m) if !(m.title.is_empty() && m.artist.is_empty()) => {
@@ -131,14 +151,48 @@ fn spawn_media(tx: Sender<Msg>, wants: Arc<AtomicBool>) -> std::thread::Thread {
                         None
                     }
                 };
-                if tx.send(Msg::Media(msg)).is_err() {
-                    return;
+                let now = msg.as_ref().map(|(m, a, _)| Sent::of(m, a.as_deref()));
+                if sent.as_ref().is_none_or(|s| !Sent::same(s, &now)) {
+                    if tx.send(Msg::Media(msg)).is_err() {
+                        return;
+                    }
+                    sent = Some(now);
                 }
                 std::thread::park_timeout(Duration::from_millis(1000));
             }
         })
         .expect("media thread");
     t.thread().clone()
+}
+
+/// The part of the player's state the island draws, as last sent.
+struct Sent {
+    key: (String, String, String, bool, i64, u64),
+    art: usize,
+    /// Position reported and when, to tell a seek from the clock running.
+    pos: (i64, Instant, f64),
+}
+
+impl Sent {
+    fn of(m: &crate::sys::Media, art: Option<&[u8]>) -> Self {
+        Sent {
+            key: (m.app.clone(), m.title.clone(), m.artist.clone(), m.playing, m.duration_ms, m.actions),
+            art: art.map_or(0, |a| a.len()),
+            pos: (m.position_ms, Instant::now(), if m.speed > 0.0 { m.speed } else { 1.0 }),
+        }
+    }
+
+    /// Nothing the island shows differs: same song and state, and the position is where the clock says it is.
+    fn same(a: &Option<Sent>, b: &Option<Sent>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some(a), Some(b)) => {
+                let ran = if a.key.3 { b.pos.1.duration_since(a.pos.1).as_millis() as f64 * a.pos.2 } else { 0.0 };
+                a.key == b.key && a.art == b.art && ((a.pos.0 as f64 + ran) - b.pos.0 as f64).abs() < 2000.0
+            }
+            _ => false,
+        }
+    }
 }
 
 fn contains(r: Rect, x: i32, y: i32) -> bool {
@@ -163,6 +217,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let media = spawn_media(tx.clone(), wants.clone());
 
     let mut canvas: Option<Canvas> = None;
+    let mut crop: Vec<u8> = Vec::new();
     let mut canvas_key = (0u32, 0u32);
     let mut geom = Geometry { x: 0, y: 0, k: 1.0 };
     let mut shown = false;
@@ -417,6 +472,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             } else if closed_since.get_or_insert_with(Instant::now).elapsed() > Duration::from_secs(5) && !st.animating {
                 // Only the resting notch for a while: the next frame makes a new canvas if it needs one.
                 canvas = None;
+                crop = Vec::new();
                 island.release_buffers();
             }
             if st.animating {
@@ -428,7 +484,24 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 }
                 if let Some(cv) = canvas.as_mut() {
                     island.render(cv);
-                    host.present(Some((cv.pm.data(), cv.width_px(), cv.height_px(), geom.x, geom.y)));
+                    let (cw, ch) = (cv.width_px(), cv.height_px());
+                    match island.rest_box().filter(|_| host.resizes_cleanly()) {
+                        // Closed: only the rows and columns the notch can reach go to the window.
+                        Some(b) => {
+                            let x0 = ((b.x * geom.k).floor().max(0.0) as u32).min(cw);
+                            let x1 = ((b.right() * geom.k).ceil() as u32).clamp(x0, cw);
+                            let y1 = ((b.bottom() * geom.k).ceil() as u32).min(ch);
+                            let (w, h) = (x1 - x0, y1);
+                            crop.clear();
+                            let src = cv.pm.data();
+                            for row in 0..h as usize {
+                                let at = (row * cw as usize + x0 as usize) * 4;
+                                crop.extend_from_slice(&src[at..at + w as usize * 4]);
+                            }
+                            host.present(Some((&crop, w, h, geom.x + x0 as i32, geom.y)));
+                        }
+                        None => host.present(Some((cv.pm.data(), cw, ch, geom.x, geom.y))),
+                    }
                     shown = true;
                 }
             }
@@ -441,6 +514,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             // Closed for a while: give the frame buffers back.
             if closed_since.is_some_and(|t| t.elapsed() > Duration::from_secs(5)) {
                 canvas = None;
+                crop = Vec::new();
                 island.release_buffers();
             }
         }
@@ -456,5 +530,27 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         } else {
             pending.extend(host.pump(40));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn m(title: &str, playing: bool, pos: i64) -> crate::sys::Media {
+        crate::sys::Media { app: "Spotify".into(), title: title.into(), artist: "A".into(), playing, position_ms: pos, duration_ms: 200_000, actions: 0, speed: 1.0 }
+    }
+
+    /// The player thread sends again only what the island would draw differently: a new song, play/pause, a seek.
+    #[test]
+    fn only_changes_are_sent_again() {
+        let a = Some(Sent::of(&m("T", true, 10_000), None));
+        assert!(Sent::same(&a, &Some(Sent::of(&m("T", true, 10_300), None))), "the clock running is not a change");
+        assert!(!Sent::same(&a, &Some(Sent::of(&m("T", true, 40_000), None))), "a seek is");
+        assert!(!Sent::same(&a, &Some(Sent::of(&m("U", true, 10_000), None))), "a new song is");
+        assert!(!Sent::same(&a, &Some(Sent::of(&m("T", false, 10_000), None))), "a pause is");
+        assert!(!Sent::same(&a, &Some(Sent::of(&m("T", true, 10_000), Some(&[1, 2, 3])))), "a cover is");
+        assert!(!Sent::same(&a, &None), "the player closing is");
+        assert!(Sent::same(&None, &None), "nothing playing, again, is not");
     }
 }
