@@ -27,6 +27,9 @@ const MAX_RADIUS: f32 = 32.0;
 const SHADOW_DIV: f32 = 4.0;
 /// The notch while something lives in it (music, charging): the iPhone's compact island.
 const LIVE: (f32, f32) = (320.0, 40.0);
+/// Logical size of the window while the island is closed: the widest closed notch (LIVE swollen under the pointer),
+/// its shadow (26 around it) and room for the spring's overshoot. See `rest_box`.
+const REST_BOX: (f32, f32) = (430.0, 84.0);
 
 /// What the closed island shows, like the iPhone's Dynamic Island.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -1015,6 +1018,19 @@ impl Island {
     }
 
     /// Gives back the memory of the drawing layer (the island has been closed for a while).
+    /// While closed, the only part of the canvas that can hold pixels (the notch, its ears and its shadow, with room
+    /// for the spring's overshoot): the window shrinks to it, so the compositor carries ~85 % fewer pixels over
+    /// whatever is below. One fixed size for every closed state, so the window is not remade while the notch swells.
+    /// None while open, or if the notch ever outgrows it (then the whole canvas is shown, as before).
+    pub fn rest_box(&self) -> Option<R> {
+        if self.phase != Phase::Closed {
+            return None;
+        }
+        let b = R::new((CANVAS_W - REST_BOX.0) / 2.0, 0.0, REST_BOX.0, REST_BOX.1);
+        let need = self.pill().inflate(28.0);
+        (need.x >= b.x && need.right() <= b.right() && need.bottom() <= b.bottom()).then_some(b)
+    }
+
     pub fn release_buffers(&mut self) {
         self.layer = None;
         self.shadow = None;
@@ -1893,6 +1909,64 @@ mod tests {
         run(&mut i, 0.1);
         assert_eq!(i.live(), Some(Live::Media));
         assert!(!i.is_open());
+    }
+
+    /// The closed window is cut to `rest_box`: nothing may ever be drawn outside it, in any closed state and on any
+    /// frame of the springs (normal animation, with its overshoot), or the notch or its shadow would be clipped.
+    #[test]
+    fn the_closed_island_never_draws_outside_its_box() {
+        let mut i = Island::new(IslandConfig::default());
+        with_phone(&mut i);
+        let k = 1.5;
+        let mut cv = Canvas::new(CANVAS_W, CANVAS_H, k);
+        let mut checked = 0;
+        let mut frame = |i: &mut Island, hot: bool, secs: f32| {
+            let mut t = 0.0;
+            while t < secs {
+                i.set_zone(hot, false, 0.0);
+                i.update(1.0 / 60.0);
+                t += 1.0 / 60.0;
+                if i.is_open() {
+                    continue;
+                }
+                let b = i.rest_box().expect("a closed notch fits its box");
+                i.render(&mut cv);
+                let (w, h) = (cv.width_px() as usize, cv.height_px() as usize);
+                let (x0, x1, y1) = ((b.x * k).floor() as usize, ((b.right() * k).ceil() as usize).min(w), ((b.bottom() * k).ceil() as usize).min(h));
+                let px = cv.pm.data();
+                for y in 0..h {
+                    for x in 0..w {
+                        if !(x >= x0 && x < x1 && y < y1) {
+                            assert_eq!(px[(y * w + x) * 4 + 3], 0, "pixel ({x}, {y}) outside the box at w={} h={}", i.w.value, i.h.value);
+                        }
+                    }
+                }
+                checked += 1;
+            }
+        };
+        frame(&mut i, false, 0.6);
+        // Swelling under the pointer (open_delay keeps it closed for a while).
+        i.cfg.open_delay_ms = 100_000;
+        frame(&mut i, true, 0.8);
+        frame(&mut i, false, 0.8);
+        // Music: the compact island, then swollen under the pointer.
+        i.model.pc_media = Some(super::super::model::Media { title: "T".into(), artist: "A".into(), playing: true, speed: 1.0, ..Default::default() });
+        frame(&mut i, false, 0.8);
+        frame(&mut i, true, 0.8);
+        frame(&mut i, false, 4.5);
+        // Charging.
+        let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.info".into(), body: json!({"kind":"phone","battery":{"level":50,"charging":true}}) });
+        i.notices(n);
+        frame(&mut i, true, 1.0);
+        frame(&mut i, false, 4.5);
+        // Opened and closed again: the frames after it is closed.
+        i.cfg.open_delay_ms = 0;
+        frame(&mut i, true, 0.5);
+        assert!(i.is_open());
+        i.cfg.open_delay_ms = 100_000;
+        frame(&mut i, false, 3.0);
+        assert!(!i.is_open());
+        assert!(checked > 600, "{checked}");
     }
 
     #[test]

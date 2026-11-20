@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use windows::core::{implement, w, Ref, BOOL};
 use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, POINTL, RECT, SIZE, WPARAM};
-use windows::Win32::Graphics::Dwm::DwmFlush;
+use windows::Win32::Graphics::Dwm::{DwmFlush, DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, MonitorFromPoint, SelectObject, MONITOR_DEFAULTTONEAREST, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ,
 };
@@ -29,7 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     RegisterClassW, SetWindowPos, ShowWindow, SystemParametersInfoW, TranslateMessage, UpdateLayeredWindow, GUITHREADINFO, GUI_INMOVESIZE, HWND_TOPMOST, MB_ICONASTERISK, MSG, PM_REMOVE,
     QS_ALLINPUT, SPI_GETCLIENTAREAANIMATION, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, ULW_ALPHA, WM_HOTKEY,
     WM_MOUSEACTIVATE, WM_MOUSEWHEEL, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
-    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, GWL_STYLE, GetClassNameW, GetDesktopWindow, GetShellWindow, GetWindowRect, WS_CAPTION,
+    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, GetWindow, GW_HWNDPREV, IsWindowVisible, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING, GWL_STYLE, GetClassNameW, GetDesktopWindow, GetShellWindow, GetWindowRect, WS_CAPTION,
 };
 
 use super::run::{Host, HostEvent, Rect};
@@ -144,6 +144,9 @@ pub struct WinHost {
     hotkey: bool,
     /// The window takes the mouse (otherwise every click goes through it to what is below).
     input: bool,
+    /// keep_on_top: how many times in a row it had to take the top back, and when it may look again.
+    top_fights: u32,
+    top_next: Option<std::time::Instant>,
 }
 
 impl WinHost {
@@ -162,7 +165,7 @@ impl WinHost {
             let target: IDropTarget = Target.into();
             let _ = RegisterDragDrop(hwnd, &target);
             let dc = CreateCompatibleDC(None);
-            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false })
+            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false, top_fights: 0, top_next: None })
         }
     }
 
@@ -382,10 +385,62 @@ impl Host for WinHost {
         }
     }
 
+    // UpdateLayeredWindow takes the new size, place and picture in one call: nothing flickers.
+    fn resizes_cleanly(&self) -> bool {
+        true
+    }
+
+    // Called once a second. Putting the window back on top every time, covered or not, re-sorted the z-order each
+    // second and made DWM and the shell rebuild their picture of the desktop. Now only when something visible and
+    // always-on-top really covers it; if another program keeps taking the top back, it is asked less and less often.
     fn keep_on_top(&mut self) {
-        if self.shown {
-            let _ = unsafe { SetWindowPos(self.hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+        if !self.shown || self.top_next.is_some_and(|t| std::time::Instant::now() < t) {
+            return;
         }
+        if !covered(self.hwnd) {
+            self.top_fights = 0;
+            self.top_next = None;
+            return;
+        }
+        let _ = unsafe { SetWindowPos(self.hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING) };
+        // 1, 2, 4, 8 s between tries while the other window keeps winning.
+        self.top_next = Some(std::time::Instant::now() + Duration::from_secs(1 << self.top_fights.min(3)));
+        self.top_fights = self.top_fights.saturating_add(1);
+    }
+}
+
+/// Is a visible always-on-top window above ours and over it? Read-only: walks the windows above it in the z-order.
+fn covered(hwnd: HWND) -> bool {
+    unsafe {
+        let mut mine = RECT::default();
+        if GetWindowRect(hwnd, &mut mine).is_err() {
+            return false;
+        }
+        let mut cur = hwnd;
+        for _ in 0..64 {
+            let Ok(prev) = GetWindow(cur, GW_HWNDPREV) else { return false };
+            if prev.0.is_null() {
+                return false;
+            }
+            cur = prev;
+            if !IsWindowVisible(prev).as_bool() {
+                continue;
+            }
+            let ex = GetWindowLongW(prev, GWL_EXSTYLE) as u32;
+            // Click-through overlays (like ours) draw over everything on purpose and fighting them helps nobody.
+            if ex & WS_EX_TRANSPARENT.0 != 0 {
+                continue;
+            }
+            let mut cloaked = 0u32;
+            if DwmGetWindowAttribute(prev, DWMWA_CLOAKED, &mut cloaked as *mut u32 as *mut c_void, size_of::<u32>() as u32).is_ok() && cloaked != 0 {
+                continue;
+            }
+            let mut r = RECT::default();
+            if GetWindowRect(prev, &mut r).is_ok() && r.left < mine.right && r.right > mine.left && r.top < mine.bottom && r.bottom > mine.top {
+                return true;
+            }
+        }
+        false
     }
 }
 

@@ -469,6 +469,13 @@ pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
     None
 }
 
+/// No change events here: None makes the watchers poll.
+pub fn media_changes() -> Option<u64> {
+    None
+}
+
+pub fn media_wake(_: std::thread::Thread) {}
+
 pub fn media_art() -> Option<Vec<u8>> {
     let conn = Connection::new_session().ok()?;
     let (_, props) = current_player(&conn)?;
