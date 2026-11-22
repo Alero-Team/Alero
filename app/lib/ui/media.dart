@@ -45,6 +45,60 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
   bool _foreground = true;
   Timer? _tick;
   double? _seek, _vol;
+
+  // What the cover is: its width/height (a video thumbnail is wide) and, in the Expressive color style, a
+  // palette taken from it. Worked out once per cover, off the build.
+  Uint8List? _artOf, _schemeOf;
+  double? _ratio;
+  ColorScheme? _artScheme;
+  Brightness? _schemeFor;
+
+  void _inspect(Uint8List? art, Brightness b, bool expressive) {
+    if (art == null) return;
+    if (!identical(art, _artOf)) {
+      _artOf = art;
+      _ratio = null;
+      decodeImageFromList(art).then((img) {
+        if (!mounted || !identical(art, _artOf)) return;
+        setState(() => _ratio = img.width / img.height.clamp(1, 1 << 20));
+        img.dispose();
+      }, onError: (_) {});
+    }
+    if (expressive && (!identical(art, _schemeOf) || b != _schemeFor)) {
+      _schemeOf = art;
+      _schemeFor = b;
+      ColorScheme.fromImageProvider(provider: MemoryImage(art), brightness: b)
+          .then((cs) {
+            if (mounted && identical(art, _schemeOf)) {
+              setState(() => _artScheme = cs);
+            }
+          }, onError: (_) {});
+    }
+  }
+
+  /// Expressive style: the player's card and buttons take the cover's colors (a tint over the card, the
+  /// cover's primary on the play button). The Alero style keeps the app's own colors.
+  Widget _tinted(BuildContext context, Widget child) {
+    final cs = _artScheme;
+    if (widget.hub.colorStyle.value != 'expressive' || cs == null) return child;
+    final th = Theme.of(context);
+    final scheme = th.brightness == Brightness.dark
+        ? cs.copyWith(surface: th.colorScheme.surface)
+        : cs;
+    final card = Color.alphaBlend(
+      scheme.primaryContainer.withValues(alpha: .55),
+      th.colorScheme.surfaceContainerLow,
+    );
+    return AnimatedTheme(
+      duration: motion(context, const Duration(milliseconds: 400)),
+      data: th.copyWith(
+        colorScheme: scheme,
+        cardTheme: th.cardTheme.copyWith(color: card),
+        extensions: [Palette.of(scheme)],
+      ),
+      child: child,
+    );
+  }
   @override
   void initState() {
     super.initState();
@@ -345,6 +399,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         ],
       );
     } else {
+      _inspect(m.art, Theme.of(context).brightness, hub.colorStyle.value == 'expressive');
       final pos = _seek?.round() ?? m.positionNow;
       final name = hub.peers.where((p) => p.id == id).firstOrNull?.name ?? '';
       final where = widget.computer
@@ -468,8 +523,13 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           ? null
           : Column(
               children: [
-                SliderTheme(
-                  data: thin,
+                // M3 Expressive: the played part waves while it plays and lies flat when paused.
+                WavePhase(
+                  active: m.playing,
+                  builder: (context, phase, amount) => SliderTheme(
+                  data: thin.copyWith(
+                    trackShape: WavyTrackShape(phase: phase, amplitude: 3 * amount),
+                  ),
                   child: _glide(
                     pos.clamp(0, m.duration).toDouble(),
                     _seek != null,
@@ -489,6 +549,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                       },
                     ),
                   ),
+                ),
                 ),
                 const SizedBox(height: Gap.xs),
                 Row(
@@ -560,6 +621,23 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             appIcon: hub.appIcons[m.pkg],
             computer: widget.computer,
           );
+          // A video (YouTube in the browser, VLC…) sends a wide thumbnail: it is shown whole, 16:9, above the
+          // text instead of cropped into a square.
+          if ((_ratio ?? 1) > 1.3 && m.art != null) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _WideArt(m, appIcon: hub.appIcons[m.pkg], computer: widget.computer),
+                const SizedBox(height: Gap.m),
+                info(center: false),
+                const SizedBox(height: Gap.m),
+                ?progress,
+                const SizedBox(height: Gap.m),
+                transport,
+                if (volume != null) ...[const SizedBox(height: Gap.s), volume],
+              ],
+            );
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -587,7 +665,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         },
       );
     }
-    return Panel(
+    return _tinted(context, Panel(
       title: 'Reproduciendo',
       icon: FluentIcons.music_note_2_24_regular,
       action: IconButton(
@@ -600,6 +678,71 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         curve: Spring.spatial,
         alignment: Alignment.topCenter,
         child: MotionFade(child: body),
+      ),
+    ));
+  }
+}
+
+/// A video's thumbnail, whole and wide (16:9), with the app that plays it in a corner. Like the square cover it
+/// sinks to 90 % while paused and crossfades when the video changes.
+class _WideArt extends StatelessWidget {
+  const _WideArt(this.m, {this.appIcon, this.computer = false});
+  final MediaState m;
+  final Uint8List? appIcon;
+  final bool computer;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    return AnimatedScale(
+      scale: m.playing ? 1 : 0.94,
+      duration: motion(context, const Duration(milliseconds: 400)),
+      curve: Curves.easeOutBack,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: AnimatedSwitcher(
+                duration: motion(context, const Duration(milliseconds: 400)),
+                child: Image.memory(
+                  m.art!,
+                  key: ValueKey(m.title),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  cacheWidth: (MediaQuery.sizeOf(context).width *
+                          MediaQuery.devicePixelRatioOf(context))
+                      .round(),
+                  semanticLabel: tx('Portada'),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: Container(
+                width: 30,
+                height: 30,
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: s.surfaceContainerHigh,
+                  shape: BoxShape.circle,
+                ),
+                child: appIcon != null
+                    ? ClipOval(child: Image.memory(appIcon!, semanticLabel: m.app))
+                    : Icon(
+                        computer
+                            ? FluentIcons.desktop_24_regular
+                            : FluentIcons.video_24_regular,
+                        size: 18,
+                        color: s.onSurfaceVariant,
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

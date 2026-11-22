@@ -7,6 +7,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import '../hub.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'clipboard.dart';
+import 'expressive.dart' show Spring, motion;
 import 'pc_control.dart';
 import 'pc_files.dart';
 import 'pc_screen.dart';
@@ -18,10 +19,24 @@ import 'icon.dart';
 import '../l10n.dart';
 
 /// The four things you do all day with the computer, as small equal buttons in one row of the device card.
-class QuickActions extends StatelessWidget {
+/// M3 Expressive connected group: the button under the finger widens a little and its neighbours make room.
+class QuickActions extends StatefulWidget {
   const QuickActions(this.hub, this.peer, {super.key});
   final Hub hub;
   final pb.Peer peer;
+
+  @override
+  State<QuickActions> createState() => _QuickActionsState();
+}
+
+class _QuickActionsState extends State<QuickActions> {
+  int _down = -1;
+  Hub get hub => widget.hub;
+  pb.Peer get peer => widget.peer;
+
+  void _press(int i) {
+    if (_down != i) setState(() => _down = i);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,8 +56,8 @@ class QuickActions extends StatelessWidget {
         FluentIcons.clipboard_arrow_right_24_regular,
         'Portapapeles',
         online ? () => openClipboard(context, hub, peer.id) : null,
-        // The arrow sticks out to the right: the glyph's ink sits 1.49/24 right of its box's center.
-        nudge: -1.49 / 24,
+        // The Fluent arrow sticks out to the right: its ink sits 1.49/24 right of its box's center.
+        nudge: isPhone ? 0 : -1.49 / 24,
       ),
       _Small(
         FluentIcons.cast_24_regular,
@@ -61,7 +76,19 @@ class QuickActions extends StatelessWidget {
       children: [
         for (final (i, tile) in tiles.indexed) ...[
           if (i > 0) const SizedBox(width: Gap.s),
-          Expanded(child: tile),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: i == _down ? 1.25 : 1.0),
+            duration: motion(context, Spring.fast.settle),
+            curve: Spring.fast,
+            builder: (_, w, child) =>
+                Expanded(flex: (w * 100).round(), child: child!),
+            child: Listener(
+              onPointerDown: (_) => _press(i),
+              onPointerUp: (_) => _press(-1),
+              onPointerCancel: (_) => _press(-1),
+              child: tile,
+            ),
+          ),
         ],
       ],
     );

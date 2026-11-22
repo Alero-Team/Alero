@@ -817,8 +817,8 @@ class AleroSwitch extends StatelessWidget {
       onChanged: onChanged,
       thumbIcon: WidgetStateProperty.resolveWith(
         (s) => s.contains(WidgetState.selected)
-            ? const m.Icon(
-                FluentIcons.checkmark_24_regular,
+            ? m.Icon(
+                isPhone ? Icons.check_rounded : FluentIcons.checkmark_24_regular,
                 size: 16,
               ) // Switch takes Flutter's own Icon
             : null,
@@ -838,7 +838,19 @@ class Reveal extends StatelessWidget {
       AleroMotion.reveal(context, index, child);
 }
 
+/// Status color of a battery level, the same in both color styles: green above 50 %, amber from 21 to 50 %,
+/// red at 20 % or less. Charging always reads green.
+Color batteryColor(BuildContext context, int level, {bool charging = false}) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  if (charging || level > 50) {
+    return dark ? Tokens.dark.success : Tokens.light.success;
+  }
+  if (level > 20) return dark ? const Color(0xFFF2B33D) : const Color(0xFFB26A00);
+  return dark ? const Color(0xFFFF6B60) : const Color(0xFFC62828);
+}
+
 /// The battery as a drawn glyph: body, nub and a level fill, so it sits on the text baseline whatever the font.
+/// The fill takes [batteryColor] and changes color smoothly when the level crosses a threshold.
 class BatteryGlyph extends StatelessWidget {
   const BatteryGlyph(
     this.level, {
@@ -853,7 +865,6 @@ class BatteryGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final low = level <= 15 && !charging;
     final h = width * 0.5;
     return Semantics(
       label: tr('Batería {} %{}', [level, charging ? ', cargando' : '']),
@@ -861,15 +872,21 @@ class BatteryGlyph extends StatelessWidget {
         child: SizedBox(
           width: width + 2,
           height: h,
-          child: TweenValue(
-            level.clamp(0, 100) / 100,
-            builder: (_, v) => CustomPaint(
-              painter: _Battery(
-                v,
-                low ? s.error : s.primary,
-                s.onSurfaceVariant,
-                charging,
-                s.surface,
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(
+              end: batteryColor(context, level, charging: charging),
+            ),
+            duration: AleroMotion.micro(context, Fluent.d333),
+            builder: (_, fill, _) => TweenValue(
+              level.clamp(0, 100) / 100,
+              builder: (_, v) => CustomPaint(
+                painter: _Battery(
+                  v,
+                  fill ?? s.primary,
+                  s.onSurfaceVariant,
+                  charging,
+                  s.surface,
+                ),
               ),
             ),
           ),

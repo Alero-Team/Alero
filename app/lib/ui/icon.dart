@@ -6,9 +6,12 @@ import 'package:flutter/material.dart' hide Icon;
 import '../l10n.dart' show tx;
 import 'expressive.dart' show motion;
 import 'fluent_filled.dart';
+import 'material_icons.dart';
+import 'theme.dart' show isPhone;
 
 /// Alero's `Icon`: Flutter's, plus a short spring when the control it sits in is tapped (it swells, tilts and
-/// fills in for an instant). `fill` ≥ .5 (or the theme's) draws the Fluent filled twin. Files import this one and hide Flutter's, so every icon in the app answers a tap
+/// fills in for an instant). `fill` ≥ .5 (or the theme's) draws the Fluent filled twin. On Android the glyph
+/// is the Material one (M3 Expressive, see [materialFor]): outlined at rest, rounded and filled when filled. Files import this one and hide Flutter's, so every icon in the app answers a tap
 /// without each call site asking for it. Decorative icons outside a tappable control never move, and nothing
 /// moves when the system asks for reduced motion.
 class Icon extends StatefulWidget {
@@ -89,13 +92,18 @@ class _IconState extends State<Icon> {
   }
 
   Widget _icon([double? fill]) => m.Icon(
-    (fill ?? widget.fill ?? IconTheme.of(context).fill ?? 0) >= .5
-        ? fluentFilled[widget.icon] ?? widget.icon
-        : widget.icon,
+    _glyph((fill ?? widget.fill ?? IconTheme.of(context).fill ?? 0) >= .5),
     size: widget.size,
     color: widget.color,
     semanticLabel: widget.semanticLabel == null ? null : tx(widget.semanticLabel!),
   );
+
+  IconData? _glyph(bool filled) {
+    final fluent = filled
+        ? fluentFilled[widget.icon] ?? widget.icon
+        : widget.icon;
+    return isPhone && fluent != null ? materialFor[fluent] ?? fluent : fluent;
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -1204,4 +1204,11 @@ const Map<String, String> kEnglish = {
   'Compartir internet': 'Hotspot',
   'Enviando al teléfono. Toca «Compartir» en su notificación para mandarlo a {}.': 'Sending to the phone. Tap “Share” on its notification to send it to {}.',
   'Alero': 'Alero',
+  'Estilo de color': 'Color style',
+  'Fondo de pantalla': 'Wallpaper',
+  'Turquesa': 'Turquoise',
+  'Oliva': 'Olive',
+  'Color': 'Color',
+  'cargando': 'charging',
+  'Paleta tonal de Material 3 Expressive, del fondo de pantalla o del color que elijas. El reproductor toma el color de la carátula. Formas, iconos y animaciones no cambian.': 'Material 3 Expressive tonal palette, from the wallpaper or the color you choose. The player takes the cover art\'s color. Shapes, icons and motion stay the same.',
 };

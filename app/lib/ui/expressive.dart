@@ -883,3 +883,123 @@ class LaptopMockup extends StatelessWidget {
     );
   }
 }
+
+/// Slider track whose played part is a wave (M3 Expressive media seek bar); the rest stays a flat line, with a
+/// small gap on each side of the thumb. [phase] moves the wave; [amplitude] 0 draws it flat (paused).
+class WavyTrackShape extends SliderTrackShape with BaseSliderTrackShape {
+  const WavyTrackShape({this.phase = 0, this.amplitude = 3, this.wavelength = 26});
+  final double phase, amplitude, wavelength;
+
+  @override
+  bool get isRounded => true;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+    required TextDirection textDirection,
+  }) {
+    final rect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final h = sliderTheme.trackHeight ?? 4;
+    final y = rect.center.dy;
+    final gap = h + 3;
+    Paint pen(Color? c) => Paint()
+      ..color = c ?? const Color(0xFF808080)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = h
+      ..strokeCap = StrokeCap.round;
+    final rtl = textDirection == TextDirection.rtl;
+    final start = rtl ? rect.right - h / 2 : rect.left + h / 2;
+    final end = rtl ? rect.left + h / 2 : rect.right - h / 2;
+    final dir = rtl ? -1.0 : 1.0;
+    final played = (thumbCenter.dx - start) * dir - gap;
+    final canvas = context.canvas;
+    if (played > 0) {
+      final wave = Path()..moveTo(start, y + amplitude * math.sin(-phase));
+      for (var d = 2.0; d <= played; d += 2) {
+        wave.lineTo(
+          start + d * dir,
+          y + amplitude * math.sin(d / wavelength * math.pi * 2 - phase),
+        );
+      }
+      canvas.drawPath(wave, pen(sliderTheme.activeTrackColor));
+    }
+    final rest = thumbCenter.dx + gap * dir;
+    if ((end - rest) * dir > 0) {
+      canvas.drawLine(
+        Offset(rest, y),
+        Offset(end, y),
+        pen(sliderTheme.inactiveTrackColor),
+      );
+    }
+  }
+}
+
+/// Drives a wave: [builder] gets the phase (radians, moving while [active]) and an amplitude factor that eases
+/// to 0 when [active] turns false, so a paused track settles flat. Still with reduced motion.
+class WavePhase extends StatefulWidget {
+  const WavePhase({super.key, required this.active, required this.builder});
+  final bool active;
+  final Widget Function(BuildContext context, double phase, double amount)
+  builder;
+
+  @override
+  State<WavePhase> createState() => _WavePhaseState();
+}
+
+class _WavePhaseState extends State<WavePhase>
+    with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+
+  void _sync() {
+    final run = widget.active && motion(context, Spring.fast.settle) != Duration.zero;
+    if (run && !_c.isAnimating) _c.repeat();
+    if (!run && _c.isAnimating) _c.stop();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(WavePhase old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween<double>(end: widget.active ? 1.0 : 0.0),
+    duration: motion(context, const Duration(milliseconds: 300)),
+    curve: Curves.easeOut,
+    builder: (context, amount, _) => AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) =>
+          widget.builder(context, _c.value * math.pi * 2, amount),
+    ),
+  );
+}

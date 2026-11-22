@@ -230,6 +230,13 @@ class Hub extends ChangeNotifier {
   /// Pure-black variant of the dark theme; independent of the mode above (it only shows while dark is in use).
   final amoled = ValueNotifier(true);
 
+  /// Color style, apart from light/dark: 'alero' (monochrome identity) or 'expressive' (Material 3 Expressive
+  /// tonal palette). Shapes, icons and motion are the same in both; only colors change.
+  final colorStyle = ValueNotifier('alero');
+
+  /// Where the Expressive palette comes from: 'wallpaper' (the system color) or a fixed seed as hex 'ff2f6b5e'.
+  final colorSeed = ValueNotifier('wallpaper');
+
   /// Size of Home's tiles (padding and spacing): compact, normal or large.
   final tileSize = ValueNotifier('normal');
 
@@ -276,6 +283,8 @@ class Hub extends ChangeNotifier {
     L10n.instance.set(s['language'] as String? ?? 'system');
     _languageChanged();
     amoled.value = s['amoled'] as bool? ?? true;
+    colorStyle.value = s['colorStyle'] == 'expressive' ? 'expressive' : 'alero';
+    colorSeed.value = s['colorSeed'] as String? ?? 'wallpaper';
     tileSize.value = s['tileSize'] as String? ?? 'normal';
     homeOrder = (s['homeOrder'] as List? ?? []).whereType<String>().toList();
     homeHidden = (s['homeHidden'] as List? ?? []).whereType<String>().toSet();
@@ -436,6 +445,8 @@ class Hub extends ChangeNotifier {
         'theme': theme,
         'language': L10n.instance.pref,
         'amoled': amoled.value,
+        'colorStyle': colorStyle.value,
+        'colorSeed': colorSeed.value,
         'tileSize': tileSize.value,
         'homeOrder': homeOrder,
         'homeHidden': homeHidden.toList(),
@@ -1237,6 +1248,18 @@ class Hub extends ChangeNotifier {
 
   void setAmoled(bool on) {
     amoled.value = on;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setColorStyle(String style) {
+    colorStyle.value = style == 'expressive' ? 'expressive' : 'alero';
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setColorSeed(String seed) {
+    colorSeed.value = seed;
     _saveSettings();
     notifyListeners();
   }

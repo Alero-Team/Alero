@@ -70,11 +70,17 @@ class App extends StatelessWidget {
       color,
       hub.themeMode,
       hub.amoled,
+      hub.colorStyle,
+      hub.colorSeed,
       boot,
       L10n.instance,
     ]),
     builder: (_, _) {
-      final (seed, variant) = color.value;
+      final (system, variant) = color.value;
+      final expressive = hub.colorStyle.value == 'expressive';
+      // A fixed seed chosen in Apariencia wins over the wallpaper's color (only the Expressive style uses it).
+      final fixed = int.tryParse(hub.colorSeed.value, radix: 16);
+      final seed = expressive && fixed != null ? Color(fixed) : system;
       return MaterialApp(
         title: 'Alero',
         locale: L10n.instance.locale,
@@ -85,12 +91,18 @@ class App extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(seed, variant, Brightness.light),
+        theme: buildTheme(
+          seed,
+          variant,
+          Brightness.light,
+          expressive: expressive,
+        ),
         darkTheme: buildTheme(
           seed,
           variant,
           Brightness.dark,
           amoled: hub.amoled.value,
+          expressive: expressive,
         ),
         themeMode: switch (hub.theme) {
           'light' => ThemeMode.light,

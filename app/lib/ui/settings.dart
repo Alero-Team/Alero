@@ -35,10 +35,12 @@ String _mediaStatus(Hub hub) {
   ]);
 }
 
-/// SegmentedButton with a highlight that glides to the chosen segment instead of swapping colors in place.
-/// Same segments and callback shape; each one is a [AleroPress], so keyboard and screen readers keep working.
-/// A null [selected] shows no highlight; a null [onChanged] disables it.
-class AleroSegments<T> extends StatelessWidget {
+/// Material 3 Expressive connected button group: each option is its own button (round outer ends, small inner
+/// corners). The chosen one fills with the primary color and rounds fully; the one under the finger widens a
+/// little while its neighbours make room, and squares its corners. Same segments and callback shape as
+/// SegmentedButton; each button is a [AleroPress], so keyboard and screen readers keep working.
+/// A null [selected] shows none chosen; a null [onChanged] disables it.
+class AleroSegments<T> extends StatefulWidget {
   const AleroSegments({
     super.key,
     required this.segments,
@@ -50,102 +52,223 @@ class AleroSegments<T> extends StatelessWidget {
   final ValueChanged<T>? onChanged;
 
   @override
+  State<AleroSegments<T>> createState() => _AleroSegmentsState<T>();
+}
+
+class _AleroSegmentsState<T> extends State<AleroSegments<T>> {
+  static const _outer = 20.0, _inner = 8.0, _pressed = 12.0;
+  int _down = -1;
+
+  void _press(int k) {
+    if (_down != k) setState(() => _down = k);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
+    final segments = widget.segments;
     final n = segments.length;
-    final i = segments.indexWhere((e) => e.value == selected);
-    final on = onChanged != null;
-    // The pill sits 3 px inside the outline and every layer fills the whole bar, so the labels stay centred.
+    final i = segments.indexWhere((e) => e.value == widget.selected);
+    final on = widget.onChanged != null;
+    final spring = motion(context, Spring.fast.settle);
+    final fade = AleroMotion.micro(context, Fluent.d167);
     return IntrinsicWidth(
-      child: Container(
+      child: SizedBox(
         height: 40,
-        padding: const EdgeInsets.all(3),
-        decoration: ShapeDecoration(
-          shape: StadiumBorder(side: BorderSide(color: s.outline)),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AnimatedAlign(
-              alignment: Alignment(
-                n < 2 ? 0 : -1 + 2 * i.clamp(0, n - 1) / (n - 1),
-                0,
+            for (final (k, seg) in segments.indexed) ...[
+              if (k > 0) const SizedBox(width: 3),
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(end: k == _down ? 1.18 : 1.0),
+                duration: spring,
+                curve: Spring.fast,
+                builder: (_, w, child) =>
+                    Expanded(flex: (w * 100).round(), child: child!),
+                child: _segment(context, s, k, seg, k == i, n, on, spring, fade),
               ),
-              duration: motion(context, Spring.fast.settle),
-              curve: Spring.fast,
-              child: FractionallySizedBox(
-                widthFactor: 1 / n,
-                heightFactor: 1,
-                child: AnimatedOpacity(
-                  opacity: i < 0 ? 0 : 1,
-                  duration: AleroMotion.micro(context, Fluent.d167),
-                  child: DecoratedBox(
-                    decoration: ShapeDecoration(
-                      color: s.secondaryContainer,
-                      shape: const StadiumBorder(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(
+    BuildContext context,
+    ColorScheme s,
+    int k,
+    ButtonSegment<T> seg,
+    bool chosen,
+    int n,
+    bool on,
+    Duration spring,
+    Duration fade,
+  ) {
+    final enabled = on && seg.enabled;
+    // Outer ends round, inner corners small; the chosen one rounds fully, the pressed one squares a little.
+    final left = chosen ? _outer : (k == 0 ? _outer : _inner);
+    final right = chosen ? _outer : (k == n - 1 ? _outer : _inner);
+    final down = k == _down;
+    final fg = chosen
+        ? s.onPrimary
+        : s.onSurface.withValues(alpha: on ? 1 : .38);
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        selected: chosen,
+        enabled: enabled,
+        child: Listener(
+          onPointerDown: enabled ? (_) => _press(k) : null,
+          onPointerUp: (_) => _press(-1),
+          onPointerCancel: (_) => _press(-1),
+          child: TweenAnimationBuilder<BorderRadius?>(
+            tween: BorderRadiusTween(
+              end: down
+                  ? BorderRadius.circular(_pressed)
+                  : BorderRadius.horizontal(
+                      left: Radius.circular(left),
+                      right: Radius.circular(right),
                     ),
+            ),
+            duration: spring,
+            curve: Spring.fast,
+            builder: (_, r, child) => AnimatedContainer(
+              duration: fade,
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                color: chosen ? s.primary : s.surfaceContainerHighest,
+                borderRadius: r,
+              ),
+              child: ClipRRect(borderRadius: r ?? BorderRadius.zero, child: child),
+            ),
+            child: AleroPress(
+              radius: _inner,
+              onTap: enabled ? () => widget.onChanged!(seg.value) : null,
+              child: TweenAnimationBuilder<Color?>(
+                tween: ColorTween(end: fg),
+                duration: fade,
+                builder: (_, c, child) => IconTheme.merge(
+                  data: IconThemeData(color: c),
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(color: c),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    child: child!,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Gap.m),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (seg.icon != null) ...[
+                        seg.icon!,
+                        const SizedBox(width: Gap.xs),
+                      ],
+                      Flexible(child: seg.label ?? const SizedBox()),
+                    ],
                   ),
                 ),
               ),
             ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (k, seg) in segments.indexed)
-                  Expanded(
-                    child: MergeSemantics(
-                      child: Semantics(
-                        button: true,
-                        selected: k == i,
-                        enabled: on && seg.enabled,
-                        child: AleroPress(
-                          radius: 17,
-                          onTap: on && seg.enabled
-                              ? () => onChanged!(seg.value)
-                              : null,
-                          child: TweenAnimationBuilder<Color?>(
-                            tween: ColorTween(
-                              end: k == i
-                                  ? s.onSecondaryContainer
-                                  : s.onSurface.withValues(alpha: on ? 1 : .38),
-                            ),
-                            duration: AleroMotion.micro(context, Fluent.d167),
-                            builder: (_, c, child) => IconTheme.merge(
-                              data: IconThemeData(color: c),
-                              child: DefaultTextStyle.merge(
-                                style: TextStyle(color: c),
-                                maxLines: 1,
-                                softWrap: false,
-                                overflow: TextOverflow.ellipsis,
-                                child: child!,
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: Gap.m,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  if (seg.icon != null) ...[
-                                    seg.icon!,
-                                    const SizedBox(width: Gap.xs),
-                                  ],
-                                  Flexible(
-                                    child: seg.label ?? const SizedBox(),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Where the Expressive palette comes from: the wallpaper (system color) or one of a few fixed colors.
+/// Small circles; the chosen one shows a check and a ring, with room around it so the ring is never cut.
+class _SeedPicker extends StatelessWidget {
+  const _SeedPicker(this.hub);
+  final Hub hub;
+
+  static const seeds = [
+    ('wallpaper', 'Fondo de pantalla', null),
+    ('ff00838f', 'Turquesa', Color(0xFF00838F)),
+    ('ff7c7a12', 'Oliva', Color(0xFF7C7A12)),
+    ('ff6750a4', 'Violeta', Color(0xFF6750A4)),
+    ('ffc2414b', 'Coral', Color(0xFFC2414B)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Gap.xs, Gap.s, Gap.xs, Gap.s),
+      child: Wrap(
+        spacing: Gap.m,
+        runSpacing: Gap.s,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Color', style: t.bodySmall?.copyWith(color: s.onSurfaceVariant)),
+          for (final (id, name, color) in seeds)
+            Tooltip(
+              message: tx(name),
+              child: Semantics(
+                button: true,
+                selected: hub.colorSeed.value == id,
+                label: tx(name),
+                child: GestureDetector(
+                  onTap: () => hub.setColorSeed(id),
+                  child: _Seed(
+                    // The wallpaper's circle shows the color the system gives now.
+                    color: color ?? s.primary,
+                    chosen: hub.colorSeed.value == id,
+                    wallpaper: color == null,
                   ),
-              ],
+                ),
+              ),
             ),
-          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Seed extends StatelessWidget {
+  const _Seed({required this.color, required this.chosen, this.wallpaper = false});
+  final Color color;
+  final bool chosen, wallpaper;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final on = ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    return AnimatedContainer(
+      duration: motion(context, Spring.fast.settle),
+      curve: Curves.easeOutCubic,
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(
+          color: chosen ? s.onSurface : Colors.transparent,
+          width: 2,
+          strokeAlign: BorderSide.strokeAlignOutside,
+        ),
+      ),
+      child: AnimatedScale(
+        scale: chosen ? 1 : .4,
+        duration: motion(context, Spring.fast.settle),
+        curve: Spring.fast,
+        child: AnimatedOpacity(
+          opacity: chosen ? 1 : (wallpaper ? .9 : 0),
+          duration: AleroMotion.micro(context, Fluent.d167),
+          child: Icon(
+            chosen ? FluentIcons.checkmark_24_regular : FluentIcons.image_24_regular,
+            size: 16,
+            color: on,
+          ),
         ),
       ),
     );
@@ -574,6 +697,28 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: hub.setTheme,
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.only(top: Gap.xs, bottom: Gap.xs),
+              child: Text('Estilo de color', style: t.titleSmall),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: Gap.xs),
+              child: AleroSegments<String>(
+                segments: const [
+                  ButtonSegment(value: 'alero', label: FitLabel('Alero')),
+                  ButtonSegment(
+                    value: 'expressive',
+                    label: FitLabel('Expressive'),
+                  ),
+                ],
+                selected: hub.colorStyle.value,
+                onChanged: hub.setColorStyle,
+              ),
+            ),
+            ArcExpand(
+              expanded: hub.colorStyle.value == 'expressive',
+              child: _SeedPicker(hub),
+            ),
             // Named in both languages on purpose: it has to be findable whichever one the app is in now.
             Padding(
               padding: const EdgeInsets.only(top: Gap.xs, bottom: Gap.xs),
@@ -606,7 +751,9 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: Gap.xs),
             Text(
-              'Identidad monocroma de Alero: el mismo aspecto en Windows y Android, con el color reservado al estado (conectado, avisos, errores).',
+              hub.colorStyle.value == 'expressive'
+                  ? 'Paleta tonal de Material 3 Expressive, del fondo de pantalla o del color que elijas. El reproductor toma el color de la carátula. Formas, iconos y animaciones no cambian.'
+                  : 'Identidad monocroma de Alero: el mismo aspecto en Windows y Android, con el color reservado al estado (conectado, avisos, errores).',
               style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
             ),
           ],

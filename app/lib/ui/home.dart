@@ -640,18 +640,54 @@ class _Hero extends StatelessWidget {
                                     '${info!.battery}%',
                                     type.titleLarge,
                                   ),
+                                  // Charging: a short word in the battery's color slides in after the number.
+                                  AnimatedSize(
+                                    duration: motion(
+                                      context,
+                                      Spring.spatial.settle,
+                                    ),
+                                    curve: Curves.easeOutCubic,
+                                    child: !info!.charging
+                                        ? const SizedBox.shrink()
+                                        : Padding(
+                                      padding: const EdgeInsets.only(left: 6),
+                                      child: Text(
+                                        'cargando',
+                                        style: type.labelMedium?.copyWith(
+                                          color: batteryColor(
+                                            context,
+                                            info!.battery,
+                                            charging: true,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                   const SizedBox(width: 10),
                                   Expanded(
-                                    child: TweenValue(
-                                      (info!.battery / 100).clamp(0, 1),
-                                      builder: (_, v) =>
-                                          LinearProgressIndicator(
-                                            value: v,
-                                            minHeight: 7,
-                                            borderRadius: BorderRadius.circular(
-                                              30,
+                                    child: TweenAnimationBuilder<Color?>(
+                                      tween: ColorTween(
+                                        end: batteryColor(
+                                          context,
+                                          info!.battery,
+                                          charging: info!.charging,
+                                        ),
+                                      ),
+                                      duration: AleroMotion.micro(
+                                        context,
+                                        Fluent.d333,
+                                      ),
+                                      builder: (_, c, _) => TweenValue(
+                                        (info!.battery / 100).clamp(0, 1),
+                                        builder: (_, v) =>
+                                            LinearProgressIndicator(
+                                              value: v,
+                                              color: c,
+                                              minHeight: 7,
+                                              borderRadius:
+                                                  BorderRadius.circular(30),
                                             ),
-                                          ),
+                                      ),
                                     ),
                                   ),
                                 ],

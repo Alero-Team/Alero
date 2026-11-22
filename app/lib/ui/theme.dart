@@ -179,12 +179,16 @@ class Tokens {
 
 /// The color scheme for a brightness. [amoled] (dark only) uses pure black and near-black steps.
 /// [seed] only tints the roles Alero does not set (tertiary), the accent stays monochrome.
+/// [expressive]: the Material 3 Expressive color style instead, a tonal palette from [seed] (the wallpaper's
+/// color or a fixed one); it follows light/dark and AMOLED the same way.
 ColorScheme schemeFor(
   Color seed,
   DynamicSchemeVariant variant,
   Brightness b, {
   bool amoled = false,
+  bool expressive = false,
 }) {
+  if (expressive) return expressiveScheme(seed, b, amoled: amoled);
   final k = b == Brightness.light
       ? Tokens.light
       : (amoled ? Tokens.amoled : Tokens.dark);
@@ -222,13 +226,47 @@ ColorScheme schemeFor(
   );
 }
 
+/// Material 3 Expressive color style: the system's tonal palette from [seed]. With [amoled] in dark, the
+/// background turns pure black and the containers are near-black steps tinted by the seed.
+ColorScheme expressiveScheme(Color seed, Brightness b, {bool amoled = false}) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: b,
+    dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot,
+  );
+  if (b == Brightness.light || !amoled) {
+    return scheme.copyWith(surfaceTint: Colors.transparent);
+  }
+  const black = Color(0xFF000000);
+  Color step(double a) =>
+      Color.alphaBlend(scheme.primary.withValues(alpha: a), black);
+  return scheme.copyWith(
+    surface: black,
+    surfaceDim: black,
+    surfaceContainerLowest: black,
+    surfaceContainerLow: step(.06),
+    surfaceContainer: step(.09),
+    surfaceContainerHigh: step(.12),
+    surfaceContainerHighest: step(.16),
+    surfaceBright: step(.18),
+    surfaceTint: Colors.transparent,
+  );
+}
+
 ThemeData buildTheme(
   Color seed,
   DynamicSchemeVariant variant,
   Brightness b, {
   bool amoled = false,
+  bool expressive = false,
 }) {
-  final scheme = schemeFor(seed, variant, b, amoled: amoled);
+  final scheme = schemeFor(
+    seed,
+    variant,
+    b,
+    amoled: amoled,
+    expressive: expressive,
+  );
   final p = Palette.of(scheme);
   final base = ThemeData(
     useMaterial3: true,
