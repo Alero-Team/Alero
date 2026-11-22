@@ -22,13 +22,13 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Ole::{IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, ReleaseStgMedium, CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE};
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, GetDpiForSystem, SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, MDT_EFFECTIVE_DPI};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN, VK_LBUTTON};
+use windows::Win32::UI::Input::KeyboardAndMouse::{SetFocus, VK_BACK, VK_ESCAPE, VK_RETURN, GetAsyncKeyState, RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT, MOD_WIN, VK_LBUTTON};
 use windows::Win32::UI::Shell::{DragQueryFileW, SHQueryUserNotificationState, HDROP, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetCursorPos, GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, MsgWaitForMultipleObjects, PeekMessageW,
     RegisterClassW, SetWindowPos, ShowWindow, SystemParametersInfoW, TranslateMessage, UpdateLayeredWindow, GUITHREADINFO, GUI_INMOVESIZE, HWND_TOPMOST, MB_ICONASTERISK, MSG, PM_REMOVE,
     QS_ALLINPUT, SPI_GETCLIENTAREAANIMATION, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SW_HIDE, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, ULW_ALPHA, WM_HOTKEY,
-    WM_MOUSEACTIVATE, WM_MOUSEWHEEL, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    WM_MOUSEACTIVATE, WM_MOUSEWHEEL, WM_KEYDOWN, WM_CHAR, WM_ACTIVATE, SetForegroundWindow, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
     GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, GetWindow, GW_HWNDPREV, IsWindowVisible, SWP_NOOWNERZORDER, SWP_NOSENDCHANGING, GWL_STYLE, GetClassNameW, GetDesktopWindow, GetShellWindow, GetWindowRect, WS_CAPTION,
 };
 
@@ -37,6 +37,10 @@ use super::ui::Drag;
 
 /// Events from the window procedure and the drop target, collected for `pump`.
 static QUEUE: Mutex<Vec<HostEvent>> = Mutex::new(Vec::new());
+/// The window holds the keyboard (a reply is being written in the island).
+static KEYBOARD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The first half of a character outside the BMP (an emoji), waiting for its second half.
+static SURROGATE: Mutex<Option<u16>> = Mutex::new(None);
 
 fn push(e: HostEvent) {
     if let Ok(mut q) = QUEUE.lock() {
@@ -55,8 +59,37 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             push(HostEvent::Hotkey);
             LRESULT(0)
         }
-        // Clicking the island must never take the focus from what the user is working in.
-        WM_MOUSEACTIVATE => LRESULT(3),
+        // Clicking the island must never take the focus from what the user is working in (unless it is writing).
+        WM_MOUSEACTIVATE => LRESULT(if KEYBOARD.load(std::sync::atomic::Ordering::Relaxed) { 1 } else { 3 }),
+        WM_KEYDOWN if KEYBOARD.load(std::sync::atomic::Ordering::Relaxed) => {
+            use super::ui::Key;
+            match wparam.0 as u16 {
+                k if k == VK_BACK.0 => push(HostEvent::Key(Key::Back)),
+                k if k == VK_RETURN.0 => push(HostEvent::Key(Key::Enter)),
+                k if k == VK_ESCAPE.0 => push(HostEvent::Key(Key::Escape)),
+                _ => return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+            }
+            LRESULT(0)
+        }
+        WM_CHAR if KEYBOARD.load(std::sync::atomic::Ordering::Relaxed) => {
+            let u = wparam.0 as u16;
+            if u == 0x16 {
+                // Ctrl+V: what is in the clipboard.
+                push(HostEvent::Text(crate::platform::get_clipboard()));
+            } else if (0xD800..0xDC00).contains(&u) {
+                *SURROGATE.lock().unwrap_or_else(|e| e.into_inner()) = Some(u);
+            } else if u >= 0x20 {
+                let hi = SURROGATE.lock().unwrap_or_else(|e| e.into_inner()).take();
+                let units: Vec<u16> = hi.into_iter().chain(std::iter::once(u)).collect();
+                push(HostEvent::Text(String::from_utf16_lossy(&units)));
+            }
+            LRESULT(0)
+        }
+        // Another window took the keyboard: the reply is left.
+        WM_ACTIVATE if KEYBOARD.load(std::sync::atomic::Ordering::Relaxed) && (wparam.0 & 0xffff) == 0 => {
+            push(HostEvent::Key(super::ui::Key::Escape));
+            LRESULT(0)
+        }
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
 }
@@ -147,6 +180,8 @@ pub struct WinHost {
     /// keep_on_top: how many times in a row it had to take the top back, and when it may look again.
     top_fights: u32,
     top_next: Option<std::time::Instant>,
+    /// The window that had the keyboard before a reply was started: it gets it back afterwards.
+    prev_focus: Option<HWND>,
 }
 
 impl WinHost {
@@ -165,7 +200,7 @@ impl WinHost {
             let target: IDropTarget = Target.into();
             let _ = RegisterDragDrop(hwnd, &target);
             let dc = CreateCompatibleDC(None);
-            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false, top_fights: 0, top_next: None })
+            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false, top_fights: 0, top_next: None, prev_focus: None })
         }
     }
 
@@ -388,6 +423,34 @@ impl Host for WinHost {
     // UpdateLayeredWindow takes the new size, place and picture in one call: nothing flickers.
     fn resizes_cleanly(&self) -> bool {
         true
+    }
+
+    fn set_keyboard(&mut self, on: bool) {
+        use std::sync::atomic::Ordering;
+        if KEYBOARD.swap(on, Ordering::Relaxed) == on {
+            return;
+        }
+        unsafe {
+            let ex = GetWindowLongW(self.hwnd, GWL_EXSTYLE) as u32;
+            if on {
+                // The island may now be activated: the user clicked into it, so Windows lets it take the foreground.
+                SetWindowLongW(self.hwnd, GWL_EXSTYLE, (ex & !WS_EX_NOACTIVATE.0 & !WS_EX_TRANSPARENT.0) as i32);
+                let fg = GetForegroundWindow();
+                self.prev_focus = (fg != self.hwnd && !fg.is_invalid()).then_some(fg);
+                let _ = SetForegroundWindow(self.hwnd);
+                let _ = SetFocus(Some(self.hwnd));
+            } else {
+                SetWindowLongW(self.hwnd, GWL_EXSTYLE, (ex | WS_EX_NOACTIVATE.0) as i32);
+                // Back to what the user was working in, if the island still has the foreground.
+                if GetForegroundWindow() == self.hwnd {
+                    if let Some(prev) = self.prev_focus.take() {
+                        let _ = SetForegroundWindow(prev);
+                    }
+                }
+                self.prev_focus = None;
+                *SURROGATE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            }
+        }
     }
 
     // Called once a second. Putting the window back on top every time, covered or not, re-sorted the z-order each

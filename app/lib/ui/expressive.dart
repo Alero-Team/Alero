@@ -95,7 +95,11 @@ class Entrance extends StatefulWidget {
 class _EntranceState extends State<Entrance> {
   // The same tree either way (only where it starts): switching structure later would remount the child.
   late final double _from =
-      Entrance.quiet || MediaQuery.of(context).disableAnimations ? 1 : 0;
+      Entrance.quiet ||
+          MediaQuery.of(context).disableAnimations ||
+          ScrollReveal.inside(context)
+      ? 1
+      : 0;
 
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(

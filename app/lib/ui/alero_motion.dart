@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart' hide Text;
+import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import 'expressive.dart';
 import '../l10n.dart';
@@ -89,7 +93,12 @@ class AleroMotion {
 
   /// Card entrance: initial rows reveal with +24 px and 40 ms stagger.
   static Widget reveal(BuildContext context, int index, Widget child) {
-    if (MediaQuery.of(context).disableAnimations || index > 8) return child;
+    // Inside a ScrollReveal the scroll entrance already moves it; a second slide would double the motion.
+    if (MediaQuery.of(context).disableAnimations ||
+        index > 8 ||
+        ScrollReveal.inside(context)) {
+      return child;
+    }
     final delay = (index.clamp(0, 8)) * 40;
     return TweenAnimationBuilder<double>(
       key: ValueKey('alero-reveal-$index'),
@@ -104,6 +113,147 @@ class AleroMotion {
       child: RepaintBoundary(child: child),
     );
   }
+}
+
+/// Fade up as it scrolls into view, every time it comes back in, not only the first time: slides 32 px from the
+/// side it enters from (below when scrolling down, above when scrolling back up), fades in over the first 55 %,
+/// and grows from 0.98. What enters in the same frame cascades 55 ms apart. It starts only once it is past
+/// [topInset] (the pinned bar) and [bottomInset] (the floating navigation), where it can actually be seen.
+/// Reduced motion: shown still. Entrance and AleroMotion.reveal inside it stay still, so nothing moves twice.
+class ScrollReveal extends StatefulWidget {
+  const ScrollReveal({
+    super.key,
+    required this.child,
+    this.topInset = 64,
+    this.bottomInset = 72,
+  });
+  final Widget child;
+  final double topInset, bottomInset;
+
+  /// Whether [context] is inside a ScrollReveal, so mount entrances can skip their own motion.
+  static bool inside(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<_InScrollReveal>() != null;
+
+  @override
+  State<ScrollReveal> createState() => _ScrollRevealState();
+}
+
+class _InScrollReveal extends InheritedWidget {
+  const _InScrollReveal({required super.child});
+  @override
+  bool updateShouldNotify(_InScrollReveal old) => false;
+}
+
+class _ScrollRevealState extends State<ScrollReveal>
+    with SingleTickerProviderStateMixin {
+  static const _distance = 32.0, _stagger = 55;
+  // Easing.emphasizedDecelerate: a long soft landing, the M3 curve for things arriving on screen.
+  static const Curve _slide = Cubic(.05, .7, .1, 1);
+  static const Curve _fade = Interval(0, .55, curve: Curves.easeOutCubic);
+
+  // Rows that start in the same frame share a counter, so they cascade instead of moving as one block.
+  static int _batch = 0;
+  static bool _batchOpen = false;
+  static int _slot() {
+    if (!_batchOpen) {
+      _batchOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _batch = 0;
+        _batchOpen = false;
+      });
+    }
+    return math.min(_batch++, 8);
+  }
+
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 560) * motionScale,
+  );
+  ScrollPosition? _pos;
+  Timer? _wait;
+  bool _shown = false, _still = false;
+  double _dir = 1;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _still = MediaQuery.of(context).disableAnimations;
+    if (_still) {
+      _wait?.cancel();
+      _c.value = 1;
+    }
+    final pos = Scrollable.maybeOf(context)?.position;
+    if (!identical(pos, _pos)) {
+      _pos?.removeListener(_check);
+      _pos = pos;
+      pos?.addListener(_check);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+  }
+
+  void _check() {
+    if (!mounted || _still) return;
+    final box = context.findRenderObject();
+    final view = Scrollable.maybeOf(context)?.context.findRenderObject();
+    if (box is! RenderBox ||
+        view is! RenderBox ||
+        !box.attached ||
+        !box.hasSize ||
+        !view.hasSize) {
+      return;
+    }
+    final top = box.localToGlobal(Offset.zero, ancestor: view).dy;
+    final seen =
+        top < view.size.height - widget.bottomInset &&
+        top + box.size.height > widget.topInset;
+    if (seen && !_shown) {
+      _shown = true;
+      // forward = the content moves down, so the user is scrolling back up and this enters from the top.
+      _dir = _pos?.userScrollDirection == ScrollDirection.forward ? -1 : 1;
+      final delay = _slot() * _stagger;
+      _wait?.cancel();
+      _c.value = 0;
+      if (delay == 0) {
+        _c.forward();
+      } else {
+        _wait = Timer(Duration(milliseconds: delay), () {
+          if (mounted) _c.forward();
+        });
+      }
+    } else if (!seen && _shown && !_c.isAnimating && !(_wait?.isActive ?? false)) {
+      // Gone off screen: reset, so it plays again when it comes back.
+      _shown = false;
+      _c.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pos?.removeListener(_check);
+    _wait?.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  // Always the same widgets around the child, still or moving: changing them would remount it and lose its state.
+  @override
+  Widget build(BuildContext context) => _InScrollReveal(
+    child: AnimatedBuilder(
+      animation: _c,
+      // Painted once: the slide moves a finished layer instead of repainting the card every frame.
+      child: RepaintBoundary(child: widget.child),
+      builder: (_, c) {
+        final t = _c.value, v = _slide.transform(t);
+        return Opacity(
+          opacity: _fade.transform(t),
+          child: Transform.translate(
+            offset: Offset(0, (1 - v) * _distance * _dir),
+            child: Transform.scale(scale: .98 + .02 * v, child: c),
+          ),
+        );
+      },
+    ),
+  );
 }
 
 /// Linear-style press for cards, rows and buttons: a 120 ms tint and border fade on hover or focus, and 0.97 scale
@@ -497,12 +647,17 @@ class SlidingSelection extends StatefulWidget {
     required this.color,
     this.radius = 10,
     this.inset = EdgeInsets.zero,
+    this.glide = true,
   });
   final int selected;
   final List<Widget> children;
   final Color color;
   final double radius;
   final EdgeInsets inset;
+
+  /// False while the items themselves move (a menu folding): the highlight then sticks to its item every frame
+  /// instead of gliding after it.
+  final bool glide;
 
   @override
   State<SlidingSelection> createState() => _SlidingSelectionState();
@@ -535,7 +690,7 @@ class _SlidingSelectionState extends State<SlidingSelection> {
     }
     // The first measurement places the highlight; later ones move it.
     setState(() {
-      _glide = old != null;
+      _glide = old != null && widget.glide;
       _rect = r;
     });
   }

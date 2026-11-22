@@ -36,6 +36,9 @@ pub struct X11Host {
     dpi_at: Option<Instant>,
     atoms: Atoms,
     dnd: Option<Dnd>,
+    /// The window holds the keyboard (a reply is being written); the one that had it before.
+    keys: bool,
+    prev_focus: Option<Window>,
 }
 
 #[derive(Clone, Copy)]
@@ -159,7 +162,7 @@ impl X11Host {
             });
             let mut host = Self {
                 x, dpy, root, win, gc, visual: vi.visual, mapped: false, geom: (0, 0, 0, 0), drawn: None, fixes, input: false, shape: None,
-                buf: Vec::new(), raised: Instant::now(), dpi: 1.0, dpi_at: None, atoms, dnd: None,
+                buf: Vec::new(), raised: Instant::now(), dpi: 1.0, dpi_at: None, atoms, dnd: None, keys: false, prev_focus: None,
             };
             // Starts click-through: the resting notch and the shadow must never cover the window below.
             host.apply_input();
@@ -227,6 +230,26 @@ impl X11Host {
         let a = self.atoms;
         unsafe {
             match ev.get_type() {
+                xlib::KeyPress if self.keys => {
+                    use super::ui::Key;
+                    let mut buf = [0u8; 32];
+                    let mut sym: xlib::KeySym = 0;
+                    let n = (self.x.XLookupString)(&mut ev.key, buf.as_mut_ptr() as *mut std::os::raw::c_char, buf.len() as i32, &mut sym, ptr::null_mut());
+                    match sym {
+                        0xff08 => out.push(HostEvent::Key(Key::Back)),
+                        0xff0d | 0xff8d => out.push(HostEvent::Key(Key::Enter)),
+                        0xff1b => out.push(HostEvent::Key(Key::Escape)),
+                        // Latin-1, which covers every accent of Spanish and the other western languages.
+                        _ if n > 0 => {
+                            let s: String = buf[..n as usize].iter().map(|&b| b as char).filter(|c| !c.is_control()).collect();
+                            if !s.is_empty() {
+                                out.push(HostEvent::Text(s));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                xlib::FocusOut if self.keys => out.push(HostEvent::Key(super::ui::Key::Escape)),
                 xlib::ClientMessage => {
                     let m = ev.client_message;
                     let d = m.data.as_longs().to_vec();
@@ -471,7 +494,13 @@ impl Host for X11Host {
             if left == 0 || !out.is_empty() {
                 break;
             }
-            std::thread::sleep(Duration::from_millis(left.min(if ms >= 30 { 20 } else { 4 })));
+            // Sleep until the X server has something for us (or the time is up), instead of waking every 20 ms
+            // to look.
+            let mut fd = libc::pollfd { fd: unsafe { (self.x.XConnectionNumber)(self.dpy) }, events: libc::POLLIN, revents: 0 };
+            let n = unsafe { libc::poll(&mut fd, 1, left.min(i32::MAX as u64) as i32) };
+            if n < 0 {
+                std::thread::sleep(Duration::from_millis(left.min(20)));
+            }
         }
         out
     }
@@ -494,6 +523,28 @@ impl Host for X11Host {
     fn set_input(&mut self, on: bool) {
         self.input = on;
         self.apply_input();
+    }
+
+    fn set_keyboard(&mut self, on: bool) {
+        if self.keys == on {
+            return;
+        }
+        self.keys = on;
+        unsafe {
+            if on {
+                let (mut prev, mut revert) = (0 as Window, 0);
+                (self.x.XGetInputFocus)(self.dpy, &mut prev, &mut revert);
+                self.prev_focus = (prev > 1 && prev != self.win).then_some(prev);
+                (self.x.XSelectInput)(self.dpy, self.win, xlib::ExposureMask | xlib::KeyPressMask | xlib::FocusChangeMask);
+                (self.x.XSetInputFocus)(self.dpy, self.win, xlib::RevertToParent, xlib::CurrentTime);
+            } else {
+                (self.x.XSelectInput)(self.dpy, self.win, xlib::ExposureMask);
+                if let Some(prev) = self.prev_focus.take() {
+                    (self.x.XSetInputFocus)(self.dpy, prev, xlib::RevertToParent, xlib::CurrentTime);
+                }
+            }
+            (self.x.XFlush)(self.dpy);
+        }
     }
 }
 

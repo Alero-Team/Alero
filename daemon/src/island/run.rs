@@ -26,6 +26,9 @@ pub enum HostEvent {
     Drag(Drag),
     Drop(Vec<PathBuf>),
     Hotkey,
+    /// Typed text and editing keys, while the window holds the keyboard (a reply being written).
+    Text(String),
+    Key(super::ui::Key),
 }
 
 pub trait Host {
@@ -55,10 +58,12 @@ pub trait Host {
     /// Whether the window takes the mouse. Off, clicks fall through to the windows below (the island reads the
     /// pointer by polling, so it only needs the mouse while the pointer is on it: to keep clicks, the wheel and drops).
     fn set_input(&mut self, _on: bool) {}
-    /// Whether the window may change size between frames without a flicker (then, closed, it is cut to the notch).
+    /// Whether the window may change size between frames without a flicker (then it is cut to the island).
     fn resizes_cleanly(&self) -> bool {
         false
     }
+    /// Takes the keyboard (a reply is being written in the island) or gives it back to where it was.
+    fn set_keyboard(&mut self, _on: bool) {}
 }
 
 pub enum Msg {
@@ -67,6 +72,10 @@ pub enum Msg {
     Media(Option<(crate::sys::Media, Option<Vec<u8>>, Option<Image>)>),
     /// A phone's state over adb (peer id); None: no adb for it now.
     Adb(String, Option<super::adb::Radios>),
+    /// A song's synced lyrics (its key; None when there are none).
+    Lyrics(String, Option<crate::lyrics::Lines>),
+    /// The computer's output volume, 0..1.
+    PcVolume(Option<f32>),
 }
 
 /// What the executor needs to know to address a command.
@@ -210,6 +219,9 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let mut cfg: IslandConfig = watcher.current.clone();
     let mut island = Island::new(cfg.clone());
     island.model.set_peers(exec.peers());
+    // Lyrics on or off is the island's own choice (its player button), kept apart from the app's settings file.
+    let lyrics_file = data.join("island-lyrics");
+    island.set_lyrics_pref(std::fs::read_to_string(&lyrics_file).is_ok_and(|s| s.trim() == "on"));
     host.hotkey(&cfg.hotkey);
     SHOWS_OFFERS.store(cfg.enabled && cfg.auto_expand && cfg.modules.incoming, Ordering::Relaxed);
 
@@ -275,6 +287,8 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                     };
                     island.mark_dirty();
                 }
+                Msg::Lyrics(key, lines) => island.set_lyrics(key, lines),
+                Msg::PcVolume(v) => island.set_pc_volume(v),
                 Msg::Media(m) => {
                     // The player thread repeats the same cover every second: decode it only when it changes.
                     let same_art = m.as_ref().map(|(_, a, _)| a) == Some(&last_art);
@@ -288,6 +302,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         icon,
                         title: m.title,
                         artist: m.artist,
+                        pkg: String::new(),
                         app: m.app,
                         playing: m.playing,
                         position_ms: m.position_ms,
@@ -368,8 +383,22 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         }
         island.set_rest(!(full && !island.is_open()));
         let dragging_window = btn && hot && host.moving_window();
+        // Far from the island (a quarter of a screen below its edge, no button held, nothing on screen moving).
+        let far = !island.is_open() && !btn && cur.zip(mon).is_some_and(|((_, cy, _), m)| (cy - m.1) as f32 > 260.0 * dpi);
         island.set_reduce_motion(reduce);
         island.set_zone(hot && !fullscreen && !dragging_window, btn && !dragging_window, dt);
+        // A button held near the top centre may be carrying a file: the closed notch reaches out to it.
+        let carry = match cur {
+            Some((cx, cy, true)) if !fullscreen && mon.is_some() && !island.is_open() => {
+                let (lx, ly) = ((cx - geom.x) as f32 / geom.k, (cy - geom.y) as f32 / geom.k);
+                let dist = ((lx - CANVAS_W / 2.0).powi(2) + (ly - 20.0).powi(2)).sqrt();
+                let n = (1.0 - (dist - 60.0) / 300.0).clamp(0.0, 1.0);
+                // Asked only when it matters: whether a window is being dragged is a system call.
+                if n > 0.0 && !host.moving_window() { n * n * (3.0 - 2.0 * n) } else { 0.0 }
+            }
+            _ => 0.0,
+        };
+        island.set_carry(carry);
 
         // ------------------------------------------------------------------------------ geometry and input
         if let Some(m) = mon {
@@ -409,6 +438,8 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 HostEvent::Drag(d) => island.drag(d),
                 HostEvent::Drop(files) => island.dropped(files),
                 HostEvent::Hotkey => island.hotkey(),
+                HostEvent::Text(s) => island.text(&s),
+                HostEvent::Key(k) => island.key(k),
             }
         }
 
@@ -437,6 +468,27 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         if let Some((peer, ip)) = &adb_peer {
                             let _ = adb_tx.send(super::adb::Req { peer: peer.clone(), ip: ip.clone(), act: Some((what, on)) });
                         }
+                    }
+                    Cmd::Lyrics { key, title, artist, duration_ms } => {
+                        // One small request, in its own thread: the island never waits for the network.
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-lyrics".into()).spawn(move || {
+                            let _ = tx.send(Msg::Lyrics(key, crate::lyrics::fetch(&title, &artist, duration_ms)));
+                        });
+                    }
+                    Cmd::AskPcVolume => {
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-volume".into()).spawn(move || {
+                            let _ = tx.send(Msg::PcVolume(crate::sys::volume()));
+                        });
+                    }
+                    Cmd::SaveLyrics(on) => {
+                        let _ = std::fs::write(&lyrics_file, if on { "on" } else { "off" });
+                    }
+                    Cmd::Keyboard(on) => host.set_keyboard(on),
+                    Cmd::PcSeek(ms) => {
+                        exec.run(Cmd::PcSeek(ms), &ctx);
+                        media.unpark();
                     }
                     Cmd::PcMedia(k) => {
                         exec.run(Cmd::PcMedia(k), &ctx);
@@ -485,8 +537,8 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 if let Some(cv) = canvas.as_mut() {
                     island.render(cv);
                     let (cw, ch) = (cv.width_px(), cv.height_px());
-                    match island.rest_box().filter(|_| host.resizes_cleanly()) {
-                        // Closed: only the rows and columns the notch can reach go to the window.
+                    match island.crop_box().filter(|_| host.resizes_cleanly()) {
+                        // Only the rows and columns the island (and its shadow) can reach go to the window.
                         Some(b) => {
                             let x0 = ((b.x * geom.k).floor().max(0.0) as u32).min(cw);
                             let x1 = ((b.right() * geom.k).ceil() as u32).clamp(x0, cw);
@@ -527,6 +579,10 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         } else if full {
             // A game has the screen and the notch is hidden: nothing to hover, the hotkey still wakes the pump.
             pending.extend(host.pump(200));
+        } else if far {
+            // The pointer is far below the top edge: it takes longer than this to reach the zone, so the hover
+            // still answers at once, with 10 wake-ups a second instead of 25.
+            pending.extend(host.pump(100));
         } else {
             pending.extend(host.pump(40));
         }

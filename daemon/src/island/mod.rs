@@ -97,7 +97,20 @@ impl Exec for EngineExec {
                     return Some((true, t("Capturando la pantalla del teléfono", "Taking a phone screenshot").into(), t("Se guarda en la carpeta de descargas", "It goes to the downloads folder").into()));
                 }
             }
-            Cmd::Beep | Cmd::Adb { .. } => {} // run.rs carries these out itself
+            Cmd::PcSeek(ms) => {
+                crate::sys::media_seek(ms);
+            }
+            Cmd::PhoneSeek(ms) => return self.send(&ctx.target, "pb.x.media.cmd", json!({"action": "seek", "position": ms})),
+            Cmd::PcVolume(v) => {
+                crate::sys::set_volume(v);
+            }
+            Cmd::NotifRead(key) => return self.send(&ctx.target, "pb.x.notif.action", json!({"key": key, "action": "read"})),
+            Cmd::NotifReply { key, text } => {
+                let request = format!("island-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
+                return self.send(&ctx.target, "pb.x.notif.reply", json!({"key": key, "text": text, "request": request}));
+            }
+            // run.rs carries these out itself.
+            Cmd::Beep | Cmd::Adb { .. } | Cmd::AskPcVolume | Cmd::Lyrics { .. } | Cmd::SaveLyrics(_) | Cmd::Keyboard(_) => {}
         }
         None
     }

@@ -86,6 +86,10 @@ pub struct Notif {
     pub title: String,
     pub text: String,
     pub at: Instant,
+    /// The phone can answer it in place (a chat with a reply action).
+    pub replyable: bool,
+    /// The app has a "mark as read" action.
+    pub markable: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -101,6 +105,8 @@ pub struct Media {
     pub title: String,
     pub artist: String,
     pub app: String,
+    /// The phone's package (the computer's player id is in `app`).
+    pub pkg: String,
     pub playing: bool,
     pub position_ms: i64,
     pub duration_ms: i64,
@@ -142,6 +148,8 @@ pub enum Notice {
     Clip,
     /// The phone appeared or disappeared: the screens must pick another target.
     Peers,
+    /// The phone answered a reply sent from the island: sent or not.
+    Replied(bool),
 }
 
 #[derive(Default)]
@@ -347,7 +355,16 @@ impl Model {
                         self.icons.insert(pkg, img);
                     }
                 }
-                let n = Notif { key: key.clone(), app: s(b, "app"), pkg: s(b, "pkg"), title: s(b, "title"), text: s(b, "text"), at: Instant::now() };
+                let n = Notif {
+                    key: key.clone(),
+                    app: s(b, "app"),
+                    pkg: s(b, "pkg"),
+                    title: s(b, "title"),
+                    text: s(b, "text"),
+                    at: Instant::now(),
+                    replyable: b["replyable"].as_bool().unwrap_or(false),
+                    markable: b["markable"].as_bool().unwrap_or(false),
+                };
                 // A reply (from the app or the phone) re-posts the chat with your own message last, and some apps
                 // re-post unchanged: neither is news, so the list updates but the island does not pop.
                 let own = b["messages"].as_array().and_then(|m| m.last()).is_some_and(|m| m["out"].as_bool() == Some(true));
@@ -357,6 +374,8 @@ impl Model {
                 self.notifs.truncate(12);
                 (!own && !same).then_some(Notice::Notif(key))
             }
+            // The phone's answer to a reply sent from the island.
+            "pb.x.notif.reply.result" => Some(Notice::Replied(b["ok"].as_bool().unwrap_or(false))),
             "pb.x.notif.removed" => {
                 let key = s(b, "key");
                 self.notifs.retain(|o| o.key != key);
@@ -400,6 +419,7 @@ impl Model {
                     title: s(b, "title"),
                     artist: s(b, "artist"),
                     app: s(b, "app"),
+                    pkg: pkg.clone(),
                     playing: b["playing"].as_bool().unwrap_or(false),
                     position_ms: b["position"].as_i64().unwrap_or(0),
                     duration_ms: b["duration"].as_i64().unwrap_or(0),

@@ -41,6 +41,8 @@ class QuickActions extends StatelessWidget {
         FluentIcons.clipboard_arrow_right_24_regular,
         'Portapapeles',
         online ? () => openClipboard(context, hub, peer.id) : null,
+        // The arrow sticks out to the right: the glyph's ink sits 1.49/24 right of its box's center.
+        nudge: -1.49 / 24,
       ),
       _Small(
         FluentIcons.cast_24_regular,
@@ -71,7 +73,9 @@ class QuickActions extends StatelessWidget {
   }
 }
 
-/// A small button: icon over a one-line name. [primary] fills it with the accent.
+/// A small button: icon over a one-line name. [primary] fills it with the accent. [nudge] shifts the icon
+/// sideways, as a fraction of its size, for glyphs whose ink is not centered in their box. A name too long for
+/// the tile shrinks to fit instead of being cut with an ellipsis.
 class _Small extends StatelessWidget {
   const _Small(
     this.icon,
@@ -79,12 +83,16 @@ class _Small extends StatelessWidget {
     this.onTap, {
     this.hint,
     this.primary = false,
+    this.nudge = 0,
   });
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
   final String? hint;
   final bool primary;
+  final double nudge;
+
+  static const _iconSize = 19.0;
 
   @override
   Widget build(BuildContext context) {
@@ -115,16 +123,22 @@ class _Small extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(icon, size: 19, color: fg),
+                      Transform.translate(
+                        offset: Offset(nudge * _iconSize, 0),
+                        child: Icon(icon, size: _iconSize, color: fg),
+                      ),
                       const SizedBox(height: 4),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: fg),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: fg),
+                          ),
                         ),
                       ),
                     ],

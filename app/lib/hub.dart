@@ -318,11 +318,18 @@ class Hub extends ChangeNotifier {
           _uiVisible = visible;
         },
       );
+    } else {
+      // The computer: a window minimised or hidden in the tray shows nothing, so it asks for nothing.
+      _uiLifecycle = AppLifecycleListener(
+        onStateChange: (state) => _uiVisible =
+            state == AppLifecycleState.resumed ||
+            state == AppLifecycleState.inactive,
+      );
     }
     // Only the visible QR/diagnostics UI needs address polling. The native
     // background service keeps connections and transfers working as before.
     Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (myId.isEmpty || (Platform.isAndroid && !_uiVisible)) return;
+      if (myId.isEmpty || !_uiVisible) return;
       final d = await pb.diagnostics();
       if (!listEquals(d, diagnostics)) {
         diagnostics = d;

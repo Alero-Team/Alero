@@ -375,12 +375,38 @@ pub fn media_key(action: &str) -> bool {
                 "prev" => "Previous",
                 _ => "Stop",
             };
-            let Ok(conn) = Connection::new_session() else { return false };
+            let Some(conn) = bus() else { return false };
             let Some((name, _)) = current_player(&conn) else { return false };
             conn.with_proxy(name, "/org/mpris/MediaPlayer2", Duration::from_secs(2)).method_call::<(), _, _, _>(PLAYER, method, ()).is_ok()
         }
         _ => false,
     }
+}
+
+/// Moves the active player to `ms` (MPRIS SetPosition, which needs the track's id from its metadata).
+pub fn media_seek(ms: i64) -> bool {
+    let Some(conn) = bus() else { return false };
+    let Some((name, props)) = current_player(&conn) else { return false };
+    let Some(track) = prop_cast::<PropMap>(&props, "Metadata").and_then(|m| m.get("mpris:trackid")).and_then(|v| v.0.as_str().map(String::from)) else {
+        return false;
+    };
+    let Ok(path) = dbus::Path::new(track) else { return false };
+    conn.with_proxy(name, "/org/mpris/MediaPlayer2", Duration::from_secs(2))
+        .method_call::<(), _, _, _>(PLAYER, "SetPosition", (path, ms.max(0) * 1000))
+        .is_ok()
+}
+
+/// The sound server's output volume, 0 to 1 (`pactl`, as the volume keys use). None without one.
+pub fn volume() -> Option<f32> {
+    let out = Command::new(which("pactl")?).args(["get-sink-volume", "@DEFAULT_SINK@"]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    // "Volume: front-left: 41287 /  63% / -12.00 dB, ..." : the first percentage.
+    let text = String::from_utf8_lossy(&out.stdout);
+    let pct = text.split('%').next()?.rsplit(|c: char| !c.is_ascii_digit()).next()?.parse::<f32>().ok()?;
+    Some((pct / 100.0).clamp(0.0, 1.5))
+}
+
+pub fn set_volume(v: f32) -> bool {
+    run("pactl", &["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", (v.clamp(0.0, 1.0) * 100.0).round() as u32)])
 }
 
 /// "lock", "sleep" or "shutdown" (the phone confirms first).
@@ -415,6 +441,28 @@ pub fn battery() -> Option<(u8, bool)> {
 
 const PLAYER: &str = "org.mpris.MediaPlayer2.Player";
 
+thread_local! {
+    /// The session bus, opened once per thread and kept: the island's media thread asks every second, and a new
+    /// connection each time (socket, authentication, Hello) cost more than the questions themselves.
+    static BUS: std::cell::RefCell<Option<std::rc::Rc<Connection>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The kept session bus of this thread (made on first use, made again if it was lost).
+fn bus() -> Option<std::rc::Rc<Connection>> {
+    BUS.with(|b| {
+        let mut b = b.borrow_mut();
+        if let Some(c) = b.as_ref() {
+            // A dead bus (the session restarted) fails this cheap call: drop it and connect again.
+            if c.channel().is_connected() {
+                return Some(c.clone());
+            }
+        }
+        let c = std::rc::Rc::new(Connection::new_session().ok()?);
+        *b = Some(c.clone());
+        Some(c)
+    })
+}
+
 /// The player that is playing, else the first one. Name on the bus and its Player properties.
 fn current_player(conn: &Connection) -> Option<(String, PropMap)> {
     let (names,): (Vec<String>,) = conn
@@ -434,7 +482,7 @@ fn current_player(conn: &Connection) -> Option<(String, PropMap)> {
 
 /// What the active MPRIS player (Spotify, Firefox, VLC, Elisa…) reports. None when nothing is open.
 pub fn media_state() -> Option<Media> {
-    let conn = Connection::new_session().ok()?;
+    let conn = bus()?;
     let (name, props) = current_player(&conn)?;
     let meta = prop_cast::<PropMap>(&props, "Metadata");
     let text = |k: &str| meta.and_then(|m| m.get(k)).and_then(|v| v.0.as_str()).unwrap_or("").to_string();
@@ -477,7 +525,7 @@ pub fn media_changes() -> Option<u64> {
 pub fn media_wake(_: std::thread::Thread) {}
 
 pub fn media_art() -> Option<Vec<u8>> {
-    let conn = Connection::new_session().ok()?;
+    let conn = bus()?;
     let (_, props) = current_player(&conn)?;
     let url = prop_cast::<PropMap>(&props, "Metadata")?.get("mpris:artUrl")?.0.as_str()?.to_string();
     let bytes = if let Some(path) = url.strip_prefix("file://") {

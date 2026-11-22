@@ -43,7 +43,10 @@ class NotifListener : NotificationListenerService() {
             val all = getSystemService(MediaSessionManager::class.java)
                 .getActiveSessions(ComponentName(this@NotifListener, NotifListener::class.java))
             pick(all)
-            main.postDelayed(this, 2000)
+            // Sessions report their changes to the listener above; this look is the safety net. With the screen
+            // off nobody is starting a player by hand, so it looks ten times less often (less wake-ups, less heat).
+            val awake = getSystemService(android.os.PowerManager::class.java)?.isInteractive != false
+            main.postDelayed(this, if (awake) 2000 else 20_000)
         }
     }
 

@@ -435,6 +435,34 @@ impl Canvas {
         self.pm.fill_path(path, &Self::paint(c), FillRule::Winding, tf, mask);
     }
 
+    /// Fills `path` with a vertical gradient: `top` down to `y0`, then towards `bottom` at `y1` (logical units).
+    pub fn fill_path_vgradient(&mut self, path: &Path, top: Color, bottom: Color, y0: f32, y1: f32, mask: Option<&Mask>) {
+        let stops = vec![tiny_skia::GradientStop::new(0.0, top), tiny_skia::GradientStop::new(1.0, bottom)];
+        let Some(shader) = tiny_skia::LinearGradient::new(tiny_skia::Point::from_xy(0.0, y0), tiny_skia::Point::from_xy(0.0, y1.max(y0 + 1.0)), stops, SpreadMode::Pad, Transform::identity()) else {
+            return self.fill_path(path, top, mask);
+        };
+        let mut paint = Paint::default();
+        paint.shader = shader;
+        paint.anti_alias = true;
+        let tf = self.tf();
+        self.pm.fill_path(path, &paint, FillRule::Winding, tf, mask);
+    }
+
+    /// A dashed outline whose dashes can travel (`phase`, logical units): a light running round the island.
+    pub fn stroke_dashed(&mut self, path: &Path, c: Color, width: f32, dash: (f32, f32), phase: f32) {
+        let mut stroke = Stroke { width, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Stroke::default() };
+        stroke.dash = tiny_skia::StrokeDash::new(vec![dash.0, dash.1], phase);
+        let tf = self.tf();
+        self.pm.stroke_path(path, &Self::paint(c), &stroke, tf, None);
+    }
+
+    /// A circle outline.
+    pub fn ring(&mut self, cx: f32, cy: f32, rad: f32, c: Color, width: f32, mask: Option<&Mask>) {
+        if let Some(p) = PathBuilder::from_circle(cx, cy, rad.max(0.1)) {
+            self.stroke_path(&p, c, width, mask);
+        }
+    }
+
     pub fn stroke_path(&mut self, path: &Path, c: Color, width: f32, mask: Option<&Mask>) {
         let tf = self.tf();
         let stroke = Stroke { width, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Stroke::default() };
@@ -688,6 +716,10 @@ pub enum Icon {
     Screenshot,
     Mute,
     ClipSend,
+    Lyrics,
+    Reply,
+    SpeakerLow,
+    MailRead,
 }
 
 /// Draws `ic` from Fluent UI System Icons (the app's icon set): regular (outline), except media keys, call buttons and the
@@ -761,6 +793,10 @@ fn glyph(ic: Icon, filled: bool) -> &'static [f32] {
         Icon::Screenshot => (SCREENSHOT_REGULAR, SCREENSHOT_FILLED),
         Icon::Mute => (MUTE_REGULAR, MUTE_FILLED),
         Icon::ClipSend => (CLIP_SEND_REGULAR, CLIP_SEND_FILLED),
+        Icon::Lyrics => (LYRICS_REGULAR, LYRICS_FILLED),
+        Icon::Reply => (REPLY_REGULAR, REPLY_FILLED),
+        Icon::SpeakerLow => (SPEAKER_LOW_REGULAR, SPEAKER_LOW_FILLED),
+        Icon::MailRead => (MAIL_READ_REGULAR, MAIL_READ_FILLED),
     };
     if filled { f } else { r }
 }

@@ -159,13 +159,15 @@ class HomeScreen extends StatelessWidget {
         title: 'Inicio',
         maxWidth: 980,
         onRefresh: hub.refresh,
+        // Each tile fades up on its own as it scrolls in, not the whole column as one block.
+        revealEach: false,
         trailing: IconButton(
           tooltip: tx('Personalizar'),
           onPressed: () => _customize(context, hub, go, _phoneTiles),
           icon: const Icon(FluentIcons.apps_add_in_24_regular),
         ),
         children: [
-          _DevicePicker(hub, main),
+          ScrollReveal(child: _DevicePicker(hub, main)),
           // Same order as the computer's Inicio: device, what it plays, its controls, then activity.
           ScaledTiles(
             scale,
@@ -178,12 +180,15 @@ class HomeScreen extends StatelessWidget {
                   hub.homeHidden,
                 ).indexed) ...[
                   if (i > 0) gap,
-                  switch (t) {
-                    'device' => hero,
-                    'remote' => RemoteCard(hub, main),
-                    'media' => MediaPanel(hub, main.id, computer: true),
-                    _ => recent,
-                  },
+                  ScrollReveal(
+                    key: ValueKey(t),
+                    child: switch (t) {
+                      'device' => hero,
+                      'remote' => RemoteCard(hub, main),
+                      'media' => MediaPanel(hub, main.id, computer: true),
+                      _ => recent,
+                    },
+                  ),
                 ],
               ],
             ),

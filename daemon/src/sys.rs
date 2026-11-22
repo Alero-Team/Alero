@@ -58,6 +58,15 @@ mod other {
     pub fn media_key(_: &str) -> bool {
         false
     }
+    pub fn media_seek(_: i64) -> bool {
+        false
+    }
+    pub fn volume() -> Option<f32> {
+        None
+    }
+    pub fn set_volume(_: f32) -> bool {
+        false
+    }
     pub fn power(_: &str) -> bool {
         false
     }
@@ -546,6 +555,34 @@ mod win {
             actions,
             speed: playback.PlaybackRate().ok().and_then(|rate| rate.Value().ok()).unwrap_or(1.0),
         })
+    }
+
+    /// Moves the current media session to `ms` (the island's progress bar).
+    pub fn media_seek(ms: i64) -> bool {
+        let Some(mgr) = media_manager() else { return false };
+        let Ok(s) = mgr.GetCurrentSession() else { return false };
+        s.TryChangePlaybackPositionAsync(ms.max(0) * 10_000).ok().and_then(|a| a.join().ok()).unwrap_or(false)
+    }
+
+    /// The default output's master volume (the one the volume keys move), through Core Audio.
+    fn endpoint() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume> {
+        use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+            let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+            dev.Activate(CLSCTX_ALL, None).ok()
+        }
+    }
+
+    /// Output volume, 0 to 1.
+    pub fn volume() -> Option<f32> {
+        unsafe { endpoint()?.GetMasterVolumeLevelScalar().ok() }
+    }
+
+    pub fn set_volume(v: f32) -> bool {
+        endpoint().is_some_and(|e| unsafe { e.SetMasterVolumeLevelScalar(v.clamp(0.0, 1.0), std::ptr::null()).is_ok() })
     }
 
     /// Now as a Windows `DateTime` (100 ns ticks since 1601-01-01 UTC), like the timeline's update time.

@@ -1,5 +1,51 @@
 # Cambios
 
+## Beta 2 (2.0.0) — 2026-11-22
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Android
+
+- **Sections fade up as you scroll:** cards and panels on Home, Devices and Settings rise into place each time they come into view, from the side they enter (from below when scrolling down, from above when scrolling back up), in a soft cascade.
+- **Collapsing title:** the large page title fades out as you scroll and a compact title slides into a pinned bar, switching at the same moment as the bottom navigation pill.
+- **Clipboard button on Home:** the icon is centred properly and the label shrinks to fit instead of being cut off.
+
+### Windows and Linux
+
+- **Side menu folds smoothly:** collapsing and expanding the menu runs on a soft spring with a slight bounce, and the cards resize with it instead of jumping to their final size.
+- Names fade and slide, group titles fold into a thin line, unread counters turn into a dot on the icon and the toggle icon cross-fades; the selected highlight stays with its item.
+
+### Alero Island
+
+- **New player:** drag the progress bar to move through the song (computer and phone). The speaker button stretches into a volume slider (the computer's output, or the phone's media volume); the mouse wheel over the player works too.
+- **Lyrics:** for Spotify, YouTube Music, Tidal, Apple Music and Deezer, a lyrics button shows synced lyrics in a second column of the player. While lyrics are on, the closed island keeps showing the line being sung and the whole island takes the colours of the album cover. Lyrics come from LRCLIB (lrclib.net) and are only requested when you turn them on: the song's title, artist and length are sent, nothing else.
+- **The closed island behaves as before otherwise:** music still appears for a few seconds when a song starts or changes, then the island goes back to its slim tab.
+- **Touch feedback:** every button answers with a ripple from where you touched it.
+- **Phone controls:** a tile's colour grows from the point you touched when it turns on and shrinks back to it when it turns off; the icon jumps, and the flashlight gives a warm glow.
+- **Clipboard:** copying turns the copy icon into a check, the row turns green and "Copied" slides in; "Send my clipboard" swaps to "Sent to the phone".
+- **Notifications:** dismissing slides the notification out and the others glide up (you can also drag it to the right). New buttons mark a notification as read and reply to chats right from the island, with quick replies or your own text.
+- **Dragging files:** the closed island reaches out to a file you carry towards it, a light runs round the drop target while the file is over it, and dropping lands with a soft squash, a pop and two rings before the transfer starts.
+
+### Performance
+
+- **Windows:** while open, the island's window is cut to the island and its shadow, so far fewer pixels go to the compositor.
+- **Windows and Linux:** with the pointer far from the top of the screen, Alero Island wakes 10 times a second instead of 25.
+- **Linux:** the island waits for X11 events instead of waking every 20 ms to check, and Alero keeps a single session-bus connection for media instead of opening a new one every second.
+- **Android:** with the screen off, the media-session check runs every 20 seconds instead of every 2 (changes still arrive immediately). Decoded images are released when Alero goes to the background.
+- **Computer app:** no network-diagnostics polling while the window is minimised or hidden in the tray.
+
+## Beta 1.4.10 (1.4.10) — 2026-11-21
+
+Install the Android APK and the Windows or Linux package from this version together. This is a performance release for Alero Island on Windows; nothing changes on Android.
+
+### Windows
+
+- **Lower idle cost for Alero Island:** the island now uses far less CPU while it sits closed or nothing is playing.
+- **Media:** Alero keeps a single media session manager and wakes on its change events instead of asking Windows for a new one every second. A 5-second poll stays as a fallback.
+- **Player updates:** the player state is sent to the island only when something the island draws has changed.
+- **Closed island:** the layered window shrinks to the notch and its shadow while the island is closed.
+- **Always on top:** the island re-asserts its topmost position only when a visible topmost window actually covers it, and backs off if another program keeps taking the top.
+
 ## Beta 1.4.9 (1.4.9) — 2026-11-19
 
 Instala juntos el APK de Android y el instalador de Windows o Linux de esta versión.

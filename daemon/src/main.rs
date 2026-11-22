@@ -18,6 +18,7 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEv
 
 mod island;
 mod lang;
+mod lyrics;
 mod pc_files;
 mod remote;
 mod sys;

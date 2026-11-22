@@ -42,6 +42,10 @@ const ICONS: &[(&str, &str)] = &[
     ("SCREENSHOT", "screenshot"),
     ("MUTE", "alert_off"),
     ("CLIP_SEND", "clipboard_arrow_right"),
+    ("LYRICS", "comment_text"),
+    ("REPLY", "arrow_reply"),
+    ("SPEAKER_LOW", "speaker_1"),
+    ("MAIL_READ", "mail_read"),
 ];
 
 /// Android vector drawables (app/android/.../res/drawable): (file, Fluent name, filled, fill colour).
