@@ -1,5 +1,30 @@
 # Cambios
 
+## Beta 2.5 (2.5.0) — 2026-11-22
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Android
+
+- **Material 3 Expressive:** icons are Material on the phone (outlined at rest, filled when selected); choices such as theme and language are connected buttons, where the chosen one fills and rounds and the pressed one widens; Home's quick actions widen under your finger. Existing motion (cards rising in, sections fading up as you scroll, tab changes, the floating bar) is unchanged.
+- **New "Estilo de color" in Appearance:** keep Alero's monochrome look or pick Expressive, a tonal palette from your wallpaper or from a fixed color. Both follow light, dark and AMOLED.
+- **Player:** the progress bar waves while music plays; video thumbnails (YouTube in a browser, VLC…) are shown whole at 16:9; in the Expressive style the card takes the cover's colors.
+- **Battery colors:** the computer's battery icon and bar turn green above 50 %, amber from 21 to 50 % and red at 20 % or less, and green with "charging" while plugged in.
+
+### Windows and Linux
+
+- **Phone controls in color:** each control takes its own color when on (Wi-Fi blue, Bluetooth indigo, Do Not Disturb violet, flashlight amber…), growing from where you clicked; the tile rounds a little more when on.
+- **Battery and storage by color:** green, amber or red depending on the phone's battery level and how full its storage is.
+- **Player:** the card takes the colors of the cover that is playing, and one volume button stretches into a slider (the bar thickens and the value shows while you drag).
+- **Side menu:** the phone card at the bottom shows only the maker's mark with a connection dot; the phone itself, with its wallpaper, is on Home.
+- **Sections fade up as you scroll,** as on Android. Every other animation (the folding menu, cards rising in, the sliding selection, dialogs, toasts) is unchanged.
+
+### Everywhere
+
+- **Reconnecting takes one tap:** after "Desconectar" on one device, "Conectar" on either device brings the pair back.
+- **Pairing again after "Olvidar" asks only once:** the device that still trusts the other accepts by itself; only the one that forgot confirms the code.
+- **System language:** "Sistema" follows a language change while Alero is open, and the Windows background service (tray, notifications, Alero Island) now reads the Windows display language instead of defaulting to Spanish.
+
 ## Beta 2 (2.0.0) — 2026-11-22
 
 Install the Android APK and the Windows or Linux package from this version together.

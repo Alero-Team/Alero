@@ -1315,6 +1315,14 @@ class Hub extends ChangeNotifier {
   }
 
   /// 'system' | 'es' | 'en' (see `L10n`). Screens listening to the hub rebuild, so their non-const strings follow.
+  /// Windows, Linux or Android switched language: follow it now when the app is set to the system's language
+  /// (the computer's background service and Alero Island too, through remote.json).
+  void systemLocaleChanged() {
+    if (L10n.instance.pref != 'system') return;
+    L10n.instance.systemChanged();
+    _languageChanged();
+  }
+
   void setLanguage(String lang) {
     L10n.instance.set(lang);
     _languageChanged();

@@ -96,6 +96,12 @@ fn disconnect_keeps_pairing_and_connect_restores_it() {
         wait("connected again without pairing", || state(&a, &ib).0 == PeerState::Connected);
         assert!(a.peers().iter().any(|p| p.id == ib && p.trusted));
     }
+    // "Conectar" on the other device is enough: B taps it and A, which had disconnected, comes back too.
+    a.disconnect(&ib).unwrap();
+    wait("B sees the pause again", || state(&b, &ia) == (PeerState::Disconnected, PAUSED_REMOTE.to_string()));
+    b.connect(&ia).unwrap();
+    wait("reconnected from the other side", || state(&a, &ib).0 == PeerState::Connected && state(&b, &ia).0 == PeerState::Connected);
+    assert_ne!(state(&a, &ib).1, PAUSED);
     let _ = (std::fs::remove_dir_all(da), std::fs::remove_dir_all(db));
 }
 
@@ -131,9 +137,10 @@ fn unpair_then_pair_again_from_either_side() {
             wait("B is refused", || state(&b, &ia).0 == PeerState::Rejected);
             b.pair_with_addr(&format!("127.0.0.1:{}", a.port())).unwrap();
         }
+        // Only A, the side that forgot, confirms the code: B still trusts A's certificate and accepts by itself.
         confirm(&ra, &a);
-        confirm(&rb, &b);
         paired(&a, &b);
+        assert!(!matches!(rb.try_recv(), Ok(Event::PairRequest { .. })), "B must not be asked again");
         assert!(a.peers().iter().any(|p| p.id == ib && p.trusted));
         assert!(b.peers().iter().any(|p| p.id == ia && p.trusted));
     }

@@ -248,6 +248,9 @@ struct Peer {
     busy: bool,
     /// Last time we answered its announcement (see discovery_loop).
     replied: Option<Instant>,
+    /// The user tapped "Conectar" here: the next control dials ask the other side to resume too, so one tap on
+    /// either device reconnects a pair that was disconnected from the other one. Cleared once connected.
+    resume: bool,
 }
 
 struct ConnHandle {
@@ -399,6 +402,13 @@ impl Inner {
         json!({"type":"pb.hello","body":{"name":self.my_name(),"port":self.port,"protocol":PROTOCOL,"kind":kind}})
     }
 
+    /// A control hello that also asks the other side to drop its "Desconectar" (the user tapped "Conectar" here).
+    fn hello_resume(&self) -> Value {
+        let mut h = self.hello("control");
+        h["body"]["resume"] = json!(true);
+        h
+    }
+
     // --- peers -------------------------------------------------------------------------------------------
 
     fn view(&self, id: &str) -> PeerView {
@@ -442,6 +452,7 @@ impl Inner {
             wait_since: None,
             busy: false,
             replied: None,
+            resume: false,
         });
         f(p)
     }
@@ -616,8 +627,16 @@ impl Inner {
             return Ok(());
         }
         if kind != "pair" && self.is_paused(&peer_id) {
-            let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PAUSED"}}));
-            return Ok(());
+            // "Conectar" on the other device is as good as "Conectar" here: the pairing stands (this is a trusted
+            // device, checked above), so the user does not have to tap it on both sides.
+            if kind == "control" && b["resume"] == true {
+                self.set_paused(&peer_id, false)?;
+                self.with_peer(&peer_id, |p| p.detail.clear());
+                self.log(format!("{peer_id} asked to reconnect: resuming"));
+            } else {
+                let _ = write_frame(&mut tls, &json!({"type":"pb.error","body":{"code":"PAUSED"}}));
+                return Ok(());
+            }
         }
         write_frame(&mut tls, &self.hello(&kind)).map_err(|e| e.code().to_string())?;
         let addr = (port > 0 && port < 65536).then(|| SocketAddr::new(ip, port as u16));
@@ -729,8 +748,15 @@ impl Inner {
             }
             w.insert(peer_id.to_string(), tx);
         }
-        self.emit(Event::PairRequest { peer_id: peer_id.into(), name: name.into(), code, incoming });
-        let local = rx.recv_timeout(PAIR_TIMEOUT).unwrap_or(false);
+        // Pairing again with a device this side still trusts (the other one tapped "Olvidar" and paired again):
+        // its certificate is the one we already checked once, so this side accepts by itself and only the device
+        // that forgot asks. One confirmation, on one device, instead of one on each.
+        let local = if self.is_trusted(peer_id) {
+            true
+        } else {
+            self.emit(Event::PairRequest { peer_id: peer_id.into(), name: name.into(), code, incoming });
+            rx.recv_timeout(PAIR_TIMEOUT).unwrap_or(false)
+        };
         lk(&self.pair_wait).remove(peer_id);
         write_frame(&mut tls, &json!({"type":"pb.pair.response","body":{"accept":local}})).map_err(|e| e.code().to_string())?;
         let remote = read_frame(&mut tls).ok().map_or(false, |r| r["type"] == "pb.pair.response" && r["body"]["accept"] == true);
@@ -860,14 +886,14 @@ impl Inner {
                         return None;
                     }
                     p.busy = true;
-                    Some((addr, stale))
+                    Some((addr, stale, p.resume))
                 });
-                if let Some((addr, quiet)) = go {
+                if let Some((addr, quiet, resume)) = go {
                     if !quiet {
                         self.set_state(&id, PeerState::Connecting, "");
                     }
                     let me = self.clone();
-                    thread::spawn(move || me.dial_control(id, addr, quiet));
+                    thread::spawn(move || me.dial_control(id, addr, quiet, resume));
                 }
             }
             thread::sleep(Duration::from_millis(1000));
@@ -875,10 +901,21 @@ impl Inner {
     }
 
     /// `quiet`: a blind retry of a device not heard for a while; its failure is not news for the UI.
-    fn dial_control(self: Arc<Self>, id: String, addr: SocketAddr, quiet: bool) {
+    fn dial_control(self: Arc<Self>, id: String, addr: SocketAddr, quiet: bool, resume: bool) {
         let r = (|| {
             let mut tls = self.dial(addr, Some(&id))?;
-            self.hello_out(&mut tls, "control")?;
+            if resume {
+                write_frame(&mut tls, &self.hello_resume()).map_err(|e| e.code().to_string())?;
+                let r = read_frame(&mut tls).map_err(|e| e.code().to_string())?;
+                match r["type"].as_str() {
+                    Some("pb.hello") => {}
+                    Some("pb.error") => return Err(r["body"]["code"].as_str().unwrap_or("ERROR").to_string()),
+                    _ => return Err("PROTOCOL".into()),
+                }
+                self.with_peer(&id, |p| p.resume = false);
+            } else {
+                self.hello_out(&mut tls, "control")?;
+            }
             self.run_control(tls, id.clone(), true)
         })();
         let mut state = (PeerState::Disconnected, String::new());
@@ -1358,6 +1395,7 @@ impl Engine {
             return Err("that device is not paired".into());
         }
         self.inner.set_paused(peer_id, true)?;
+        self.inner.with_peer(peer_id, |p| p.resume = false);
         lk(&self.inner.msg_queues).remove(peer_id); // its worker ends and closes the message connection
         if let Some(c) = lk(&self.inner.conns).remove(peer_id) {
             let _ = c.sock.shutdown(std::net::Shutdown::Both);
@@ -1380,6 +1418,7 @@ impl Engine {
             p.next_try = Instant::now();
             p.backoff = Duration::from_secs(1);
             p.wait_since = None;
+            p.resume = true; // the other device may have disconnected: one tap here reconnects both
             p.seen = Instant::now(); // dial even a device not heard for a while: the user asked
             if p.state == PeerState::Rejected {
                 p.state = PeerState::Disconnected;

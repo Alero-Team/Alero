@@ -849,6 +849,14 @@ Color batteryColor(BuildContext context, int level, {bool charging = false}) {
   return dark ? const Color(0xFFFF6B60) : const Color(0xFFC62828);
 }
 
+/// Status color of how full the storage is: green below 75 %, amber from 75 %, red from 90 %.
+Color storageColor(BuildContext context, double used) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  if (used >= .9) return dark ? const Color(0xFFFF6B60) : const Color(0xFFC62828);
+  if (used >= .75) return dark ? const Color(0xFFF2B33D) : const Color(0xFFB26A00);
+  return dark ? Tokens.dark.success : Tokens.light.success;
+}
+
 /// The battery as a drawn glyph: body, nub and a level fill, so it sits on the text baseline whatever the font.
 /// The fill takes [batteryColor] and changes color smoothly when the level crosses a threshold.
 class BatteryGlyph extends StatelessWidget {

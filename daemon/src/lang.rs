@@ -33,10 +33,20 @@ fn from_file() -> Option<bool> {
     c.1
 }
 
-#[cfg(not(test))]
-/// `LC_ALL`, `LC_MESSAGES` and `LANG`, the first that is set: "es_PE.UTF-8" is Spanish, "C" and the rest are not.
+#[cfg(all(not(test), windows))]
+/// Windows keeps no language in the environment: the user's display language decides. In a LANGID the low ten
+/// bits are the primary language, and 0x0A is Spanish (any country).
 fn from_system() -> Option<bool> {
-    ["LC_ALL", "LC_MESSAGES", "LANG"]
+    // SAFETY: no arguments, no pointers; it only reads the user's settings.
+    let id = unsafe { windows::Win32::Globalization::GetUserDefaultUILanguage() };
+    Some(id & 0x3ff == 0x0a)
+}
+
+#[cfg(all(not(test), not(windows)))]
+/// `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` and `LANG`, the first that is set: "es_PE.UTF-8" (or "es:en") is Spanish,
+/// "C" and the rest are not.
+fn from_system() -> Option<bool> {
+    ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
         .iter()
         .filter_map(|k| std::env::var(k).ok())
         .find(|v| !v.is_empty())

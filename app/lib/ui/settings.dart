@@ -697,6 +697,8 @@ class SettingsScreen extends StatelessWidget {
                 onChanged: hub.setTheme,
               ),
             ),
+            // Material 3 Expressive's color style is an Android choice; Windows and Linux keep Alero's identity.
+            if (isPhone) ...[
             Padding(
               padding: const EdgeInsets.only(top: Gap.xs, bottom: Gap.xs),
               child: Text('Estilo de color', style: t.titleSmall),
@@ -719,6 +721,7 @@ class SettingsScreen extends StatelessWidget {
               expanded: hub.colorStyle.value == 'expressive',
               child: _SeedPicker(hub),
             ),
+            ],
             // Named in both languages on purpose: it has to be findable whichever one the app is in now.
             Padding(
               padding: const EdgeInsets.only(top: Gap.xs, bottom: Gap.xs),
@@ -751,7 +754,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: Gap.xs),
             Text(
-              hub.colorStyle.value == 'expressive'
+              isPhone && hub.colorStyle.value == 'expressive'
                   ? 'Paleta tonal de Material 3 Expressive, del fondo de pantalla o del color que elijas. El reproductor toma el color de la carátula. Formas, iconos y animaciones no cambian.'
                   : 'Identidad monocroma de Alero: el mismo aspecto en Windows y Android, con el color reservado al estado (conectado, avisos, errores).',
               style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),

@@ -40,6 +40,14 @@ class L10n extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The device's language changed while the app runs. Only matters when following it: the looked-up strings
+  /// are dropped and every listener (the app, the service's language file) picks the new one up at once.
+  void systemChanged() {
+    if (_pref != 'system') return;
+    _memo.clear();
+    notifyListeners();
+  }
+
   // Looked-up strings by source text; cleared when the language changes.
   final _memo = <String, String>{};
 

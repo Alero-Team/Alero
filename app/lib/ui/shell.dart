@@ -222,6 +222,9 @@ class _ShellState extends State<Shell>
 
   /// Back from system settings or another app: permissions, shares and the system color may have changed.
   @override
+  void didChangeLocales(List<Locale>? locales) => hub.systemLocaleChanged();
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
     hub.remote.mediaForeground(s == AppLifecycleState.resumed);
     // In the background the phone needs its memory more than Alero needs decoded pictures it is not showing; the
@@ -501,7 +504,13 @@ class _ShellState extends State<Shell>
                 child: o < .5
                     ? IconButton(
                         key: const ValueKey('icon'),
-                        icon: const Icon(FluentIcons.phone_24_regular),
+                        icon: BrandMark(
+                          online.isEmpty
+                              ? ''
+                              : _PhoneChip._maker(hub, online.first.id),
+                          online: online.isNotEmpty,
+                          size: 28,
+                        ),
                         onPressed: () => _go(Section.devices),
                         tooltip: tx('Dispositivos'),
                       )
@@ -809,56 +818,136 @@ class _PhoneChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final t = Theme.of(context).textTheme;
-    final look = online.isEmpty ? null : hub.look[online.first.id];
-    return Material(
-      color: s.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(Radii.tile),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.tile),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(Gap.m),
-          child: Row(
-            children: [
-              // The exact back cover when Alero found one; the plain phone icon otherwise.
-              SizedBox(
-                width: 28,
-                height: 40,
-                child: Center(
-                  child: online.isEmpty
-                      ? const Icon(FluentIcons.phone_dismiss_24_regular, size: 20)
-                      : PhoneCover(look, online.first.name),
-                ),
-              ),
-              const SizedBox(width: Gap.m),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final peer = online.firstOrNull;
+    final look = peer == null ? null : hub.look[peer.id];
+    final name = peer == null ? null : look?.name ?? peer.name;
+    final status = online.isEmpty
+        ? tx('Ningún dispositivo conectado.')
+        : (online.length == 1
+              ? '$name · ${tx('Conectado')}'
+              : tr('{} conectados', [online.length]));
+    // Only the maker's mark here: the big picture of the phone, with its wallpaper, is on Inicio.
+    return Tooltip(
+      message: status,
+      child: Semantics(
+        button: true,
+        label: status,
+        child: Material(
+          color: s.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(Radii.tile),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(Radii.tile),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(Gap.s),
+              child: ExcludeSemantics(
+                child: Row(
                   children: [
-                    Text(
-                      online.isEmpty
-                          ? 'Sin conexión'
-                          : look?.name ?? online.first.name,
-                      style: t.labelLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    BrandMark(
+                      peer == null ? '' : _maker(hub, peer.id),
+                      online: peer != null,
                     ),
-                    Text(
-                      online.isEmpty
-                          ? 'Ningún dispositivo'
-                          : (online.length == 1
-                                ? 'Conectado'
-                                : tr('{} conectados', [online.length])),
-                      style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
-                    ),
+                    const Spacer(),
+                    const Icon(FluentIcons.chevron_right_24_regular, size: 20),
                   ],
                 ),
               ),
-              const Icon(FluentIcons.chevron_right_24_regular, size: 20),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  static String _maker(Hub hub, String id) {
+    final i = hub.info[id];
+    if (i == null) return '';
+    return i.manufacturer.isNotEmpty ? i.manufacturer : i.phoneId.brand;
+  }
+}
+
+/// The maker of a phone as a round mark (its initial, in the maker's own color when known) with a dot that says
+/// it is connected. Without a maker, the plain phone icon.
+class BrandMark extends StatelessWidget {
+  const BrandMark(this.maker, {super.key, this.online = false, this.size = 32});
+  final String maker;
+  final bool online;
+  final double size;
+
+  static const _colors = {
+    'google': Color(0xFF4285F4),
+    'samsung': Color(0xFF1428A0),
+    'xiaomi': Color(0xFFFF6900),
+    'redmi': Color(0xFFFF6900),
+    'poco': Color(0xFFFFC107),
+    'motorola': Color(0xFF5C92FA),
+    'oneplus': Color(0xFFEB0029),
+    'oppo': Color(0xFF1BA784),
+    'realme': Color(0xFFFFC915),
+    'vivo': Color(0xFF415FFF),
+    'huawei': Color(0xFFCF0A2C),
+    'honor': Color(0xFF00A4E4),
+    'nothing': Color(0xFF111111),
+    'sony': Color(0xFF111111),
+    'nokia': Color(0xFF124191),
+    'asus': Color(0xFF00539B),
+    'fairphone': Color(0xFF3E8F85),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final key = maker.trim().toLowerCase().split(' ').first;
+    final tint = _colors[key];
+    final letter = maker.trim().isEmpty ? '' : maker.trim()[0].toUpperCase();
+    return SizedBox(
+      width: size + 2,
+      height: size + 2,
+      child: Stack(
+        children: [
+          Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: tint ?? s.surfaceContainerHighest,
+            ),
+            child: letter.isEmpty
+                ? Icon(FluentIcons.phone_24_regular, size: size * .55)
+                : Text(
+                    letter,
+                    style: TextStyle(
+                      fontSize: size * .52,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                      color: tint == null
+                          ? s.onSurface
+                          : (ThemeData.estimateBrightnessForColor(tint) ==
+                                    Brightness.dark
+                                ? Colors.white
+                                : Colors.black),
+                    ),
+                  ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: AnimatedOpacity(
+              opacity: online ? 1 : 0,
+              duration: AleroMotion.micro(context, Fluent.d167),
+              child: Container(
+                width: size * .3,
+                height: size * .3,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.pal.signal,
+                  border: Border.all(color: s.surfaceContainerHigh, width: 2),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1118,10 +1207,14 @@ class _ScreenFrameState extends State<ScreenFrame> {
       header: true,
       child: Text(widget.title, style: style),
     );
+    // Sections fade up as they scroll into view on the phone and, since Beta 2.5, on the computer too (no pinned
+    // bar or floating navigation there, so nothing to clear at the edges). Narrow windows keep the list reveal.
     Widget reveal(int i, Widget c) => !widget.revealEach
         ? c
         : collapsing
         ? ScrollReveal(child: c)
+        : wide && !isPhone
+        ? ScrollReveal(topInset: 0, bottomInset: 0, child: c)
         : Reveal(index: i, child: c);
     final list = ListView(
       controller: _scroll,

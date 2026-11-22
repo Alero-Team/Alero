@@ -784,12 +784,14 @@ class _StatusPanel extends StatelessWidget {
       String label,
       String value, {
       double? progress,
+      Color? tone,
+      Widget? glyph,
     }) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 13),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: colors.onSurfaceVariant),
+          glyph ?? Icon(icon, size: 20, color: colors.onSurfaceVariant),
           const SizedBox(width: 13),
           Expanded(
             child: Column(
@@ -838,12 +840,17 @@ class _StatusPanel extends StatelessWidget {
                 ),
                 if (progress != null) ...[
                   const SizedBox(height: 9),
-                  TweenValue(
-                    progress.clamp(0, 1),
-                    builder: (_, v) => LinearProgressIndicator(
-                      value: v,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(10),
+                  TweenAnimationBuilder<Color?>(
+                    tween: ColorTween(end: tone),
+                    duration: AleroMotion.micro(context, Fluent.d333),
+                    builder: (_, c, _) => TweenValue(
+                      progress.clamp(0, 1),
+                      builder: (_, v) => LinearProgressIndicator(
+                        value: v,
+                        color: c,
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ],
@@ -873,6 +880,7 @@ class _StatusPanel extends StatelessWidget {
               'Almacenamiento',
               tr('{} de {}', [size(used), size(total)]),
               progress: used / total,
+              tone: storageColor(context, used / total),
             ),
           ),
         if (info.battery >= 0)
@@ -885,6 +893,11 @@ class _StatusPanel extends StatelessWidget {
               'Batería',
               ['${info.battery} %', ?info.chargeLabel].join(' · '),
               progress: info.battery / 100,
+              tone: batteryColor(context, info.battery, charging: info.charging),
+              glyph: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: BatteryGlyph(info.battery, charging: info.charging, width: 20),
+              ),
             ),
           ),
       ],

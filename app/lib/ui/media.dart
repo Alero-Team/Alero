@@ -76,11 +76,15 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
     }
   }
 
+  /// On the computer always, and on the phone in the Expressive style, the player takes the cover's colors.
+  bool get _coverColors =>
+      !isPhone || widget.hub.colorStyle.value == 'expressive';
+
   /// Expressive style: the player's card and buttons take the cover's colors (a tint over the card, the
   /// cover's primary on the play button). The Alero style keeps the app's own colors.
   Widget _tinted(BuildContext context, Widget child) {
     final cs = _artScheme;
-    if (widget.hub.colorStyle.value != 'expressive' || cs == null) return child;
+    if (!_coverColors || cs == null) return child;
     final th = Theme.of(context);
     final scheme = th.brightness == Brightness.dark
         ? cs.copyWith(surface: th.colorScheme.surface)
@@ -249,7 +253,8 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           ),
         );
       }
-      return Panel(
+      _inspect(cm.art, Theme.of(context).brightness, _coverColors);
+      return _tinted(context, Panel(
         title: 'Reproductor',
         icon: FluentIcons.music_note_2_24_regular,
         child: MotionFade(
@@ -366,12 +371,25 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                         : null,
                     icon: const Icon(FluentIcons.next_24_filled),
                   ),
+                  // One volume button that stretches into a slider (like Alero Island's), instead of two.
+                  if (cm.volumeMax > 0) ...[
+                    const SizedBox(width: 8),
+                    VolumePill(
+                      value: _vol ?? cm.volume.toDouble(),
+                      max: cm.volumeMax.toDouble(),
+                      onChanged: (v) => setState(() => _vol = v),
+                      onChangeEnd: (v) {
+                        _command('volume', value: v.round());
+                        setState(() => _vol = null);
+                      },
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
         ),
-      );
+      ));
     }
 
     Widget body;
@@ -399,7 +417,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
         ],
       );
     } else {
-      _inspect(m.art, Theme.of(context).brightness, hub.colorStyle.value == 'expressive');
+      _inspect(m.art, Theme.of(context).brightness, _coverColors);
       final pos = _seek?.round() ?? m.positionNow;
       final name = hub.peers.where((p) => p.id == id).firstOrNull?.name ?? '';
       final where = widget.computer
@@ -959,4 +977,148 @@ class _GlideState extends State<_Glide> {
     curve: Fluent.enter,
     builder: (_, v, _) => widget.builder(v),
   );
+}
+
+
+/// A speaker button that stretches into a volume slider on a spring and folds back a few seconds after the last
+/// touch. While dragging, the track thickens, the handle narrows and the value shows above it.
+class VolumePill extends StatefulWidget {
+  const VolumePill({
+    super.key,
+    required this.value,
+    required this.max,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+  final double value, max;
+  final ValueChanged<double> onChanged, onChangeEnd;
+
+  @override
+  State<VolumePill> createState() => _VolumePillState();
+}
+
+class _VolumePillState extends State<VolumePill> {
+  bool _open = false, _drag = false;
+  Timer? _fold;
+
+  void _later() {
+    _fold?.cancel();
+    _fold = Timer(const Duration(seconds: 3), () {
+      if (mounted && !_drag) setState(() => _open = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _fold?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    final v = widget.value.clamp(0, widget.max).toDouble();
+    final icon = v <= 0
+        ? FluentIcons.speaker_mute_24_regular
+        : v < widget.max * .45
+        ? FluentIcons.speaker_1_24_regular
+        : FluentIcons.speaker_2_24_regular;
+    final pct = widget.max <= 0 ? 0 : (v / widget.max * 100).round();
+    return AnimatedContainer(
+      duration: motion(context, Spring.spatial.settle * 2),
+      curve: Spring.spatial,
+      width: _open ? 220 : 44,
+      height: 40,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: _open ? s.primary.withValues(alpha: .12) : Colors.transparent,
+      ),
+      child: OverflowBox(
+        alignment: Alignment.centerLeft,
+        minWidth: 220,
+        maxWidth: 220,
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: tx('Volumen'),
+              onPressed: () {
+                setState(() => _open = !_open);
+                if (_open) _later();
+              },
+              icon: Icon(icon),
+            ),
+            Expanded(
+              child: AnimatedOpacity(
+                opacity: _open ? 1 : 0,
+                duration: AleroMotion.micro(context, Fluent.d167),
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: _drag ? 10 : 6,
+                    thumbShape: _Handle(_drag),
+                    overlayShape: SliderComponentShape.noOverlay,
+                    showValueIndicator: ShowValueIndicator.onDrag,
+                    activeTrackColor: s.primary,
+                    inactiveTrackColor: s.primary.withValues(alpha: .25),
+                    thumbColor: s.primary,
+                  ),
+                  child: Slider(
+                    value: v,
+                    max: widget.max,
+                    label: '$pct %',
+                    semanticFormatterCallback: (_) => '$pct %',
+                    onChangeStart: (_) {
+                      _fold?.cancel();
+                      setState(() => _drag = true);
+                    },
+                    onChanged: _open ? widget.onChanged : null,
+                    onChangeEnd: (x) {
+                      setState(() => _drag = false);
+                      widget.onChangeEnd(x);
+                      _later();
+                    },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The slider's handle: a short bar, thinner and taller while dragging.
+class _Handle extends SliderComponentShape {
+  const _Handle(this.drag);
+  final bool drag;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(6, 22);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final w = drag ? 4.0 : 6.0, h = drag ? 26.0 : 22.0;
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: center, width: w, height: h),
+        Radius.circular(w / 2),
+      ),
+      Paint()..color = sliderTheme.thumbColor ?? const Color(0xFF808080),
+    );
+  }
 }

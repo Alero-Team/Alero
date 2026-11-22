@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -670,8 +671,34 @@ class _GridState extends State<_Grid> {
   );
 }
 
+/// The color a control takes when it is on, by what it does: Wi-Fi blue, Bluetooth indigo, Do Not Disturb violet,
+/// torch amber… (they were all the accent, black or white). Returns (fill, text, icon bubble) for the brightness.
+(Color, Color, Color) controlTone(BuildContext context, String label) {
+  final h = switch (label) {
+    'Wi-Fi' => 215.0,
+    'Bluetooth' => 238.0,
+    'No molestar' => 275.0,
+    'Linterna' => 42.0,
+    'Compartir internet' || 'Punto de acceso' || 'Zona Wi-Fi' => 180.0,
+    'Datos móviles' => 200.0,
+    'Modo avión' => 25.0,
+    'Ubicación' => 8.0,
+    'Ahorro de batería' => 95.0,
+    'Girar pantalla' || 'Rotación' || 'Girar' => 140.0,
+    'Sonido' || 'Vibrar' || 'Silencio' => 320.0,
+    _ => 210.0,
+  };
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  HSLColor c(double sat, double l) => HSLColor.fromAHSL(1, h, sat, l);
+  return dark
+      ? (c(.45, .30).toColor(), Colors.white, c(.65, .55).toColor())
+      : (c(.75, .89).toColor(), c(.55, .22).toColor(), c(.65, .48).toColor());
+}
+
 /// A quick-settings tile: small icon and name; on (filled), off, or not available. The tooltip says why.
-class _Tile extends StatelessWidget {
+/// Turning on, its color grows from the point you touched (as on Alero Island) and the tile rounds a little more;
+/// turning off, it shrinks back to that point.
+class _Tile extends StatefulWidget {
   const _Tile({
     required this.icon,
     required this.label,
@@ -686,15 +713,24 @@ class _Tile extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
+  State<_Tile> createState() => _TileState();
+}
+
+class _TileState extends State<_Tile> {
+  Offset? _at;
+
+  @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final on = widget.on, label = widget.label, onTap = widget.onTap;
     final active = on == true;
+    final (fill, ink, bubble) = controlTone(context, label);
     final state = on == null ? null : (active ? 'activado' : 'desactivado');
     final tip = [
       label,
       ?state,
-      ?hint,
+      ?widget.hint,
       'Mantén presionado para cambiar su tamaño',
     ].map(tx).join(' · ');
     return Tooltip(
@@ -704,85 +740,116 @@ class _Tile extends StatelessWidget {
         toggled: on,
         enabled: onTap != null,
         label: tip,
-        child: Material(
-          color: active ? s.primary : s.surfaceContainer,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Radii.tile),
-            side: BorderSide(color: active ? s.primary : s.outlineVariant),
-          ),
-          child: AleroPress(
-            radius: Radii.tile,
-            onTap: onTap,
-            child: AnimatedOpacity(
-              opacity: onTap == null ? 0.45 : 1,
-              duration: AleroMotion.micro(context, Fluent.d167),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                // One 0..1 value drives every color so the tile eases between off and on.
-                child: TweenValue(
-                  active ? 1 : 0,
-                  builder: (_, v) {
-                    Color mix(Color off, Color on) => Color.lerp(off, on, v)!;
-                    final fg = mix(s.onSurface, s.onPrimary);
-                    return Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: mix(
-                              s.surfaceContainerHighest,
-                              s.onPrimary.withValues(alpha: .16),
-                            ),
-                          ),
-                          child: Icon(
-                            icon,
-                            size: 18,
-                            fill: active ? 1 : 0,
-                            color: fg,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: text.labelLarge?.copyWith(color: fg),
+        child: Listener(
+          onPointerDown: (e) => _at = e.localPosition,
+          // One 0..1 value drives every color, the fill's reach and the corners, so the tile eases between off and on.
+          child: TweenValue(
+            active ? 1 : 0,
+            builder: (_, v) {
+              Color mix(Color off, Color on) => Color.lerp(off, on, v)!;
+              final fg = mix(s.onSurface, ink);
+              final shape = RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(Radii.tile + 8 * v),
+                side: BorderSide(
+                  color: Color.lerp(s.outlineVariant, Colors.transparent, v)!,
+                ),
+              );
+              return Material(
+                color: s.surfaceContainer,
+                shape: shape,
+                clipBehavior: Clip.antiAlias,
+                child: CustomPaint(
+                  painter: _FillFrom(_at, v, fill),
+                  child: AleroPress(
+                    radius: Radii.tile + 8 * v,
+                    onTap: onTap,
+                    child: AnimatedOpacity(
+                      opacity: onTap == null ? 0.45 : 1,
+                      duration: AleroMotion.micro(context, Fluent.d167),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: mix(s.surfaceContainerHighest, bubble),
                               ),
-                              if (on != null)
-                                MotionFade(
-                                  child: Text(
-                                    active ? 'Activado' : 'Desactivado',
-                                    key: ValueKey(active),
+                              child: Icon(
+                                widget.icon,
+                                size: 18,
+                                fill: active ? 1 : 0,
+                                color: mix(s.onSurface, Colors.white),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    label,
                                     maxLines: 1,
-                                    style: text.labelSmall?.copyWith(
-                                      color: mix(
-                                        s.onSurfaceVariant,
-                                        s.onPrimary.withValues(alpha: .8),
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.labelLarge?.copyWith(color: fg),
+                                  ),
+                                  if (on != null)
+                                    MotionFade(
+                                      child: Text(
+                                        active ? 'Activado' : 'Desactivado',
+                                        key: ValueKey(active),
+                                        maxLines: 1,
+                                        style: text.labelSmall?.copyWith(
+                                          color: mix(
+                                            s.onSurfaceVariant,
+                                            ink.withValues(alpha: .8),
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    );
-                  },
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+/// A circle of [color] from [at] (the tile's center when unknown) that covers the whole tile at [t] = 1.
+class _FillFrom extends CustomPainter {
+  _FillFrom(this.at, this.t, this.color);
+  final Offset? at;
+  final double t;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (t <= 0) return;
+    final c = at ?? size.center(Offset.zero);
+    final far = [
+      Offset.zero,
+      Offset(size.width, 0),
+      Offset(0, size.height),
+      Offset(size.width, size.height),
+    ].map((p) => (p - c).distance).reduce(math.max);
+    canvas.drawCircle(c, far * t.clamp(0, 1), Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_FillFrom o) => o.t != t || o.at != at || o.color != color;
 }
 
 /// Square action buttons in equal columns: five when they fit at 84 px or more, else four.
@@ -855,9 +922,10 @@ class _Square extends StatelessWidget {
                         height: 34,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
+                          // On: the control's own color (torch amber, rotation green…), not the accent.
                           color: Color.lerp(
                             s.surfaceContainerHighest,
-                            s.onSurface,
+                            controlTone(context, x.label).$3,
                             v,
                           ),
                         ),
@@ -865,7 +933,7 @@ class _Square extends StatelessWidget {
                           x.icon,
                           size: 18,
                           fill: on ? 1 : 0,
-                          color: Color.lerp(s.onSurface, s.surface, v),
+                          color: Color.lerp(s.onSurface, Colors.white, v),
                         ),
                       ),
                     ),
