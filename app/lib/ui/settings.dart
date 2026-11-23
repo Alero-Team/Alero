@@ -15,6 +15,7 @@ import 'island_panel.dart';
 import '../l10n.dart';
 import 'expressive.dart';
 import 'alero_motion.dart';
+import 'update.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
 String _mediaStatus(Hub hub) {
@@ -845,6 +846,27 @@ class SettingsScreen extends StatelessWidget {
             style: t.bodySmall?.copyWith(color: s.onSurfaceVariant),
           ),
           const SizedBox(height: Gap.s),
+          SettingTile(
+            title: 'Buscar actualizaciones al abrir',
+            subtitle:
+                'Consulta las versiones publicadas en GitHub (Alero-Team/Alero) sin enviar datos tuyos.',
+            trailing: AleroSwitch(
+              value: hub.checkUpdates,
+              onChanged: hub.setCheckUpdates,
+              label: tx('Buscar actualizaciones al abrir'),
+            ),
+            onTap: () => hub.setCheckUpdates(!hub.checkUpdates),
+          ),
+          SettingTile(
+            title: 'Buscar actualizaciones',
+            subtitle: tr('Versión instalada: {}', [aleroVersion]),
+            trailing: Icon(
+              FluentIcons.arrow_sync_24_regular,
+              size: 20,
+              color: s.onSurfaceVariant,
+            ),
+            onTap: () => checkUpdatesNow(context),
+          ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(

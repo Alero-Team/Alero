@@ -118,10 +118,10 @@ pub struct Media {
 }
 
 impl Media {
-    /// Position now, extrapolated from the last report while it plays.
+    /// Position now, extrapolated from the last report while it plays (reports come only on change: no cap on its age).
     pub fn position_now(&self) -> i64 {
         let extra = match (self.playing, self.at) {
-            (true, Some(t)) => (t.elapsed().as_millis().min(15_000) as f64 * self.speed.max(0.0)) as i64,
+            (true, Some(t)) => (t.elapsed().as_millis() as f64 * self.speed.max(0.0)) as i64,
             _ => 0,
         };
         let p = self.position_ms + extra;
@@ -150,6 +150,8 @@ pub enum Notice {
     Peers,
     /// The phone answered a reply sent from the island: sent or not.
     Replied(bool),
+    /// A paired device connected (true) or disconnected: (peer id, name, up). Debounced by `link`.
+    Link(String, String, bool),
 }
 
 #[derive(Default)]
@@ -188,6 +190,11 @@ pub fn load_devices(json: &str) -> HashMap<String, Image> {
             Some((id.clone(), decode_image(&bytes)?))
         })
         .collect()
+}
+
+/// A paired device that is connected: the only kind the connect / disconnect alerts are about.
+fn linked(p: &PeerView) -> bool {
+    p.trusted && p.state == PeerState::Connected
 }
 
 fn s(v: &Value, k: &str) -> String {
@@ -258,6 +265,7 @@ impl Model {
         let mut out = Vec::new();
         match e {
             Event::PeerChanged { peer } => {
+                let was = self.peers.iter().any(|p| p.id == peer.id && linked(p));
                 match self.peers.iter_mut().find(|p| p.id == peer.id) {
                     Some(p) => *p = peer.clone(),
                     None => self.peers.push(peer.clone()),
@@ -266,11 +274,18 @@ impl Model {
                     self.forget(&peer.id);
                 }
                 out.push(Notice::Peers);
+                if was != linked(peer) {
+                    out.push(Notice::Link(peer.id.clone(), peer.name.clone(), !was));
+                }
             }
             Event::PeerGone { id } => {
+                let gone = self.peers.iter().find(|p| &p.id == id && linked(p)).map(|p| p.name.clone());
                 self.peers.retain(|p| &p.id != id);
                 self.forget(id);
                 out.push(Notice::Peers);
+                if let Some(name) = gone {
+                    out.push(Notice::Link(id.clone(), name, false));
+                }
             }
             Event::TransferOffer { id, peer_id, peer_name, name, size } => {
                 self.offers.retain(|o| &o.id != id);
@@ -531,6 +546,36 @@ mod tests {
         assert_eq!(m.notifs[0].text, "otra vez");
         m.feed(&msg("a", "pb.x.notif.removed", json!({"key":"k19"})));
         assert_eq!(m.notifs.len(), 11);
+    }
+
+    #[test]
+    fn only_real_transitions_of_paired_devices_make_a_link_notice() {
+        let link = |n: Vec<Notice>| n.into_iter().filter(|n| matches!(n, Notice::Link(..))).collect::<Vec<_>>();
+        let mut m = Model::default();
+        m.set_peers(vec![peer("a", true)]);
+        // Already connected when the island started, and a refresh of the same state: nothing.
+        assert!(link(m.feed(&Event::PeerChanged { peer: peer("a", true) })).is_empty());
+        assert_eq!(link(m.feed(&Event::PeerChanged { peer: peer("a", false) })), vec![Notice::Link("a".into(), "Phone a".into(), false)]);
+        assert!(link(m.feed(&Event::PeerChanged { peer: peer("a", false) })).is_empty());
+        assert_eq!(link(m.feed(&Event::PeerChanged { peer: peer("a", true) })), vec![Notice::Link("a".into(), "Phone a".into(), true)]);
+        // A device never seen before that connects.
+        assert_eq!(link(m.feed(&Event::PeerChanged { peer: peer("b", true) })).len(), 1);
+        // Not paired: not announced. Disappearing while connected is a disconnection.
+        let stranger = PeerView { trusted: false, ..peer("c", true) };
+        assert!(link(m.feed(&Event::PeerChanged { peer: stranger })).is_empty());
+        assert_eq!(link(m.feed(&Event::PeerGone { id: "b".into() })), vec![Notice::Link("b".into(), "Phone b".into(), false)]);
+        assert!(link(m.feed(&Event::PeerGone { id: "c".into() })).is_empty());
+    }
+
+    #[test]
+    fn position_keeps_running_long_after_the_report() {
+        let at = Instant::now() - Duration::from_secs(60);
+        let md = Media { playing: true, position_ms: 1000, duration_ms: 200_000, speed: 1.0, at: Some(at), ..Default::default() };
+        assert!((60_900..62_500).contains(&md.position_now()));
+        let paused = Media { playing: false, ..md.clone() };
+        assert_eq!(paused.position_now(), 1000);
+        let end = Media { position_ms: 199_000, ..md };
+        assert_eq!(end.position_now(), 200_000);
     }
 
     #[test]

@@ -68,6 +68,10 @@ const _moduleNames = <String, (String, IconData)>{
   'clipboard': ('Portapapeles', FluentIcons.clipboard_paste_24_regular),
   'controls': ('Controles rápidos', FluentIcons.options_24_regular),
   'status': ('Estado y batería del teléfono', FluentIcons.phone_24_regular),
+  'link': (
+    'Conexión y desconexión de dispositivos',
+    FluentIcons.plug_connected_24_regular,
+  ),
 };
 
 Color _hex(String s) {

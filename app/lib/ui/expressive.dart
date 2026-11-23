@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
@@ -69,6 +70,14 @@ class Spring extends Curve {
 /// normal speed). Kept as one knob so every spatial duration can be retuned in one place.
 const motionScale = 1.0;
 
+/// Low-end machine (4 cores or fewer): decorative motion (staggered entrances, scroll reveals, waves) is skipped,
+/// functional motion (page changes, press feedback, switches) stays. Settable so tests can pin either case.
+bool lowEndDevice = Platform.numberOfProcessors <= 4;
+
+/// True when decorative animations should not play: reduced motion asked by the system, or a low-end machine.
+bool calm(BuildContext c) =>
+    lowEndDevice || MediaQuery.of(c).disableAnimations;
+
 /// Animation length, or zero when the system asks for reduced motion.
 Duration motion(BuildContext c, Duration d) =>
     MediaQuery.of(c).disableAnimations ? Duration.zero : d * motionScale;
@@ -96,7 +105,7 @@ class _EntranceState extends State<Entrance> {
   // The same tree either way (only where it starts): switching structure later would remount the child.
   late final double _from =
       Entrance.quiet ||
-          MediaQuery.of(context).disableAnimations ||
+          calm(context) ||
           ScrollReveal.inside(context)
       ? 1
       : 0;
@@ -967,7 +976,7 @@ class _WavePhaseState extends State<WavePhase>
   );
 
   void _sync() {
-    final run = widget.active && motion(context, Spring.fast.settle) != Duration.zero;
+    final run = widget.active && !calm(context);
     if (run && !_c.isAnimating) _c.repeat();
     if (!run && _c.isAnimating) _c.stop();
   }

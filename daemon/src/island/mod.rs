@@ -7,6 +7,7 @@ pub mod adb;
 pub mod config;
 pub mod fluent;
 pub mod gfx;
+pub mod link;
 pub mod model;
 pub mod motion;
 pub mod run;

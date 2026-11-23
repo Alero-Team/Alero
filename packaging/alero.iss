@@ -66,6 +66,8 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Alero"""; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Alero"" dir=in action=allow program=""{app}\alero_daemon.exe"" profile=any enable=yes"; Verb: runas; Flags: runhidden shellexec waituntilterminated; Tasks: firewall; StatusMsg: "Configurando el Firewall de Windows..."
 Filename: "{app}\alero.exe"; Description: "Abrir Alero"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+; The in-app updater runs this setup silently with /ReopenAlero=1 and expects Alero back afterwards.
+Filename: "{app}\alero.exe"; WorkingDir: "{app}"; Flags: nowait; Check: ReopenAlero
 
 [Code]
 { Alero's window, its tray daemon, scrcpy and the bundled adb keep files open, so an update or uninstall used to
@@ -82,6 +84,11 @@ begin
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith(''' + Dir + '\'', [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force"',
     '', SW_HIDE, ewWaitUntilTerminated, Code);
   Sleep(800);
+end;
+
+function ReopenAlero(): Boolean;
+begin
+  Result := ExpandConstant('{param:ReopenAlero|0}') = '1';
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

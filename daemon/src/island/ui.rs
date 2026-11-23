@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use tiny_skia::Pixmap;
 
 use super::config::{luma, IslandConfig};
+use super::link::{Alert, LinkAlerts};
 use super::gfx::{color, icon, icon_filled, mix, Canvas, Fonts, Icon, Image, Rgb, Weight, R};
 use super::model::{Model, Notice, XState};
 use super::motion::{Motion, Spring, Style};
@@ -27,6 +28,10 @@ const PAD: f32 = 18.0;
 /// The notch at rest: a slim tab on the top edge that says where the island is.
 const PEEK: (f32, f32) = (132.0, 6.0);
 const MAX_RADIUS: f32 = 32.0;
+/// How long a device alert stays open, in seconds.
+const LINK_SECS: f32 = 2.8;
+/// `note_age` once the entrance of a device alert has finished.
+const NOTE_AGE_DONE: f32 = 1.5;
 const SHADOW_DIV: f32 = 4.0;
 /// The notch while something lives in it (music, charging): the iPhone's compact island.
 const LIVE: (f32, f32) = (320.0, 40.0);
@@ -220,6 +225,8 @@ struct Ui {
     land: Option<f32>,
     after_land: Option<(View, Option<f32>)>,
     squash: Spring,
+    /// Seconds since a device alert was shown (the stagger of its icon, badge and text); NOTE_AGE_DONE: finished.
+    note_age: f32,
 }
 
 impl Ui {
@@ -252,6 +259,7 @@ impl Ui {
             land: None,
             after_land: None,
             squash: Spring::new(1.0, 0.40, 0.42),
+            note_age: NOTE_AGE_DONE,
         }
     }
 }
@@ -283,6 +291,8 @@ pub struct Note {
     pub w: f32,
     /// The app's own icon (a notification), drawn instead of [`Note::icon`].
     pub img: Option<Image>,
+    /// A device alert: Some(true) connected, Some(false) disconnected. Draws the status badge and the staggered entrance.
+    pub badge: Option<bool>,
 }
 
 pub struct Hit {
@@ -353,6 +363,8 @@ pub struct Island {
     /// The phone already asked for its media (an island started after the phone connected missed its first state).
     asked_media: Option<String>,
     ui: Ui,
+    /// Connect / disconnect alerts waiting to be shown (debounced, see `link`).
+    links: LinkAlerts,
     /// The rectangle of the last button activated and where in it the pointer was.
     last_hit: Option<(R, (f32, f32))>,
 }
@@ -420,6 +432,7 @@ impl Island {
             clock: 0.0,
             reduce_motion: false,
             ui: Ui::new(),
+            links: LinkAlerts::default(),
             last_hit: None,
         };
         me.retune_motion();
@@ -432,7 +445,26 @@ impl Island {
         if !self.cfg.enabled {
             self.snap_closed();
         }
+        if !self.link_on() {
+            self.links.drop_pending();
+        }
         self.dirty = true;
+    }
+
+    fn link_on(&self) -> bool {
+        self.cfg.enabled && self.cfg.modules.link
+    }
+
+    /// The devices connected when the island starts: their state is not news.
+    pub fn seed_links(&mut self) {
+        for p in self.model.peers.iter().filter(|p| p.trusted) {
+            self.links.seed(&p.id, p.state == pb_core::engine::PeerState::Connected);
+        }
+    }
+
+    /// A made-up connection or disconnection (`ALERO_ISLAND_SIM`), through the same debounce as a real one.
+    pub fn simulate_link(&mut self, a: Alert) {
+        self.links.push_now(self.clock, a);
     }
 
     /// The system asks for less motion (Windows: animations off): the springs become instantaneous.
@@ -657,6 +689,10 @@ impl Island {
         }
         self.ui.vol.step(dt);
         busy |= !self.ui.vol.settled(0.002);
+        if self.ui.note_age < NOTE_AGE_DONE {
+            self.ui.note_age += dt;
+            busy = true;
+        }
         // Touch ripples.
         if !self.ui.ripples.is_empty() {
             self.ui.ripples.iter_mut().for_each(|r| r.t += dt);
@@ -791,7 +827,7 @@ impl Island {
             return;
         }
         if self.model.target().is_none() {
-            self.show_note(Note { icon: Some(Icon::Phone), title: t("Sin teléfono conectado", "No phone connected").into(), text: t("Conecta un teléfono para enviar archivos.", "Connect a phone to send files.").into(), good: false, w: 0.0, img: None });
+            self.show_note(Note { icon: Some(Icon::Phone), title: t("Sin teléfono conectado", "No phone connected").into(), text: t("Conecta un teléfono para enviar archivos.", "Connect a phone to send files.").into(), good: false, w: 0.0, img: None, badge: None });
             return;
         }
         self.cmds.push(Cmd::SendFiles(files));
@@ -1219,19 +1255,38 @@ impl Island {
                 }
                 Notice::Notif(key) if m.notifications => {
                     if let Some(n) = self.model.notifs.iter().find(|n| n.key == key) {
-                        let note = Note { icon: Some(Icon::Bell), title: [n.app.as_str(), n.title.as_str()].iter().filter(|p| !p.is_empty()).copied().collect::<Vec<_>>().join(" · "), text: n.text.clone(), good: false, w: 0.0, img: self.model.icon(&n.pkg).cloned() };
+                        let note = Note { icon: Some(Icon::Bell), title: [n.app.as_str(), n.title.as_str()].iter().filter(|p| !p.is_empty()).copied().collect::<Vec<_>>().join(" · "), text: n.text.clone(), good: false, w: 0.0, img: self.model.icon(&n.pkg).cloned(), badge: None };
                         self.show_note_for(note, self.cfg.event_secs as f32);
                     }
                 }
+                Notice::Link(id, name, up) => self.links.push(self.clock, Alert { id, name, up }),
                 Notice::Replied(false) => self.flash(false, t("No se pudo enviar la respuesta", "Could not send the reply").into(), t("Responde desde el teléfono.", "Reply from the phone.").into()),
                 Notice::Clip if m.clipboard => {
                     let from = self.model.clips.front().map(|c| c.from.clone()).unwrap_or_default();
-                    self.show_note(Note { icon: Some(Icon::Clipboard), title: t("Portapapeles recibido", "Clipboard received").into(), text: from, good: true, w: 0.0, img: None });
+                    self.show_note(Note { icon: Some(Icon::Clipboard), title: t("Portapapeles recibido", "Clipboard received").into(), text: from, good: true, w: 0.0, img: None, badge: None });
                 }
                 _ => {}
             }
         }
+        if !self.link_on() {
+            self.links.drop_pending();
+        }
         self.dirty = true;
+    }
+
+    /// Announces a device connecting or disconnecting. Decision: it is shown only when the island is closed and
+    /// nothing is about to open it (pointer in the zone, a file being carried). An island the user opened, or one
+    /// busy with a call, an offer, a transfer or a notification, is never cut or replaced: the alert waits (its turn
+    /// comes when the island closes, and it is dropped after `link::TTL` seconds, because Inicio already shows the
+    /// state). So there is nothing to restore afterwards. Obeys "open by itself" (`auto_expand`).
+    fn show_links(&mut self) {
+        let free = self.link_on() && self.cfg.auto_expand && self.rest && self.phase == Phase::Closed && !self.hot && self.ui.near.value < 0.05 && self.ui.land.is_none();
+        let Some(a) = self.links.poll(self.clock, free) else { return };
+        let title = if a.name.is_empty() { t("Dispositivo", "Device").to_string() } else { a.name };
+        let text = if a.up { t("Conectado", "Connected") } else { t("Desconectado", "Disconnected") };
+        let note = Note { icon: Some(Icon::Phone), title, text: text.into(), good: a.up, w: 0.0, img: None, badge: Some(a.up) };
+        self.show_note_for(note, LINK_SECS);
+        self.ui.note_age = if self.motion.style == Style::Off { NOTE_AGE_DONE } else { 0.0 };
     }
 
     fn show_note(&mut self, note: Note) {
@@ -1437,6 +1492,7 @@ impl Island {
             self.dirty = true;
         }
         self.watch_media();
+        self.show_links();
         self.update_ui(dt);
         if self.phase == Phase::Closed {
             if !self.cfg.enabled || !self.rest {
@@ -1639,7 +1695,7 @@ impl Island {
 
     /// A short message from the executor (a file that could not be sent, say).
     pub fn flash(&mut self, good: bool, title: String, text: String) {
-        let note = Note { icon: Some(if good { Icon::Check } else { Icon::Close }), title, text, good, w: 0.0, img: None };
+        let note = Note { icon: Some(if good { Icon::Check } else { Icon::Close }), title, text, good, w: 0.0, img: None, badge: None };
         // Even with automatic opening off, the answer to something the user just did is shown.
         let keep = self.cfg.auto_expand;
         self.cfg.auto_expand = true;
@@ -1784,7 +1840,7 @@ impl Island {
             View::Call => draw_call(&mut d, &self.model, body),
             View::Offer => draw_offer(&mut d, &self.model, body),
             View::Transfer(id) => draw_transfer(&mut d, &self.model, body, id),
-            View::Note => draw_note(&mut d, &self.note, body),
+            View::Note => draw_note(&mut d, &self.note, body, self.ui.note_age),
             View::Drop => draw_drop(&mut d, &self.model, body, self.drag_over, self.ui.land, self.clock),
         }
         // Ink from the finger: grows from where it touched and fades, inside the shape that was touched.
@@ -2666,11 +2722,27 @@ fn draw_controls(d: &mut Draw, m: &Model, list: &str, body: R, wifi_confirm: boo
 }
 
 /// The closed island while something lives in it: left, what it is; right, its state. `a`: how much is shown.
+/// The closed island's picture of what plays: the cover (decoded once per song, see `run.rs`) with the source app's
+/// icon on its corner; no cover: the app's icon alone; neither: a music note.
+fn draw_cover(d: &mut Draw, md: Option<&super::model::Media>, left: R, a: f32) {
+    match (md.and_then(|x| x.art.as_ref()), md.and_then(|x| x.icon.as_ref())) {
+        (Some(art), app) => {
+            d.cv.image(art, left, 7.0, a, None);
+            if let Some(app) = app {
+                d.cv.squircle(R::new(left.right() - 11.5, left.bottom() - 11.5, 17.0, 17.0), 4.5, color(d.pal.bg, a), None);
+                d.cv.image(app, R::new(left.right() - 10.0, left.bottom() - 10.0, 14.0, 14.0), 3.0, a, None);
+            }
+        }
+        (None, Some(app)) => d.cv.image(app, left, 6.0, a, None),
+        (None, None) => icon(d.cv, Icon::Music, left.cx(), left.cy(), 18.0, color(d.pal.fg, a), None),
+    }
+}
+
 fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f32, clock: f64, lyric: &(String, String, f32)) {
     let cy = pill.cy();
     match l {
         Live::Lyric => {
-            icon(d.cv, Icon::Music, pill.x + 27.0, cy, 18.0, color(d.pal.accent, a), None);
+            draw_cover(d, pick_media(m, pref).map(|(md, _)| md), R::new(pill.x + 10.0, cy - 13.0, 26.0, 26.0), a);
             let (now, before, e) = (&lyric.0, &lyric.1, lyric.2);
             let (x, max) = (pill.x + 48.0, pill.w - 48.0 - 18.0);
             // The old line leaves upwards while the new one rises into place.
@@ -2684,18 +2756,7 @@ fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f
         Live::Media => {
             let left = R::new(pill.x + 10.0, cy - 13.0, 26.0, 26.0);
             let md = pick_media(m, pref).map(|(md, _)| md);
-            match (md.and_then(|x| x.art.as_ref()), md.and_then(|x| x.icon.as_ref())) {
-                (Some(art), app) => {
-                    d.cv.image(art, left, 7.0, a, None);
-                    // Which app plays it, as a badge on the cover's corner.
-                    if let Some(app) = app {
-                        d.cv.squircle(R::new(left.right() - 11.5, left.bottom() - 11.5, 17.0, 17.0), 4.5, color(d.pal.bg, a), None);
-                        d.cv.image(app, R::new(left.right() - 10.0, left.bottom() - 10.0, 14.0, 14.0), 3.0, a, None);
-                    }
-                }
-                (None, Some(app)) => d.cv.image(app, left, 6.0, a, None),
-                (None, None) => icon(d.cv, Icon::Music, left.cx(), left.cy(), 18.0, color(d.pal.fg, a), None),
-            }
+            draw_cover(d, md, left, a);
             if let Some(md) = md {
                 let title = if md.title.is_empty() { &md.artist } else { &md.title };
                 let x = left.right() + 12.0;
@@ -2789,24 +2850,42 @@ fn draw_transfer(d: &mut Draw, m: &Model, body: R, id: &str) {
     }
 }
 
-fn draw_note(d: &mut Draw, n: &Note, body: R) {
+fn draw_note(d: &mut Draw, n: &Note, body: R, age: f32) {
+    // A device alert comes in by parts (the island's own content fade already runs over all of it): the phone pops,
+    // the text slides in a beat later, the status badge pops last. Monochrome: white on the island's black.
+    let alert = n.badge.is_some();
+    let step = |from: f32, len: f32| if alert { ((age - from) / len).clamp(0.0, 1.0) } else { 1.0 };
+    let (pop, text_in, badge_in) = (back_out(step(0.06, 0.34)).max(0.0), smooth(step(0.16, 0.30)), back_out(step(0.34, 0.30)).max(0.0));
     match &n.img {
         Some(img) => d.cv.image(img, R::new(body.x + PAD, body.cy() - 20.0, 40.0, 40.0), 11.0, 1.0, None),
         None => {
-            d.cv.circle(body.x + PAD + 20.0, body.cy(), 20.0, color(d.pal.chip, 1.0), None);
+            let (cx, cy) = (body.x + PAD + 20.0, body.cy());
+            d.cv.circle(cx, cy, 20.0 * pop, color(d.pal.chip, 1.0), None);
             if let Some(ic) = n.icon {
-                icon(d.cv, ic, body.x + PAD + 20.0, body.cy(), 20.0, color(if n.good { SUCCESS } else { d.pal.fg }, 1.0), None);
+                let (fg, a) = match n.badge {
+                    Some(up) => (d.pal.fg, if up { 1.0 } else { 0.55 }),
+                    None => (if n.good { SUCCESS } else { d.pal.fg }, 1.0),
+                };
+                icon(d.cv, ic, cx, cy, 20.0 * pop, color(fg, a), None);
+            }
+            if let Some(up) = n.badge {
+                // Ringed in the island's colour so it reads over the chip.
+                let (bx, by, r) = (cx + 14.0, cy + 14.0, 9.0 * badge_in);
+                d.cv.circle(bx, by, r + 2.0, color(d.pal.bg, 1.0), None);
+                d.cv.circle(bx, by, r, color(if up { d.pal.fg } else { d.pal.chip_hi }, 1.0), None);
+                icon(d.cv, if up { Icon::Check } else { Icon::Close }, bx, by, 11.0 * badge_in, color(if up { d.pal.bg } else { d.pal.fg }, 1.0), None);
             }
         }
     }
-    let tx = body.x + PAD + 52.0;
+    let (tx_alpha, slide) = (text_in, (1.0 - text_in) * 10.0);
+    let tx = body.x + PAD + 52.0 + slide;
     let tw = body.w - PAD - tx + body.x;
     // Baselines that put the two lines (cap height to descender) on the icon's centre line.
     if n.text.is_empty() {
-        d.text_in(&n.title, tx, body.cy() + 5.0, tw, 14.0, Weight::Bold, 1.0);
+        d.text_in(&n.title, tx, body.cy() + 5.0, tw, 14.0, Weight::Bold, tx_alpha);
     } else {
-        d.text_in(&n.title, tx, body.cy() - 4.5, tw, 14.0, Weight::Bold, 1.0);
-        d.text_in(&n.text, tx, body.cy() + 13.5, tw, 12.5, Weight::Regular, 0.65);
+        d.text_in(&n.title, tx, body.cy() - 4.5, tw, 14.0, Weight::Bold, tx_alpha);
+        d.text_in(&n.text, tx, body.cy() + 13.5, tw, 12.5, Weight::Regular, 0.65 * tx_alpha);
     }
 }
 
@@ -3126,6 +3205,89 @@ mod tests {
         assert!(!i.is_open());
     }
 
+    fn peer_event(id: &str, up: bool) -> Event {
+        Event::PeerChanged { peer: PeerView { id: id.into(), name: format!("Phone {id}"), addr: String::new(), state: if up { PeerState::Connected } else { PeerState::Disconnected }, trusted: true, detail: String::new() } }
+    }
+
+    fn feed(i: &mut Island, e: Event) {
+        let n = i.model.feed(&e);
+        i.notices(n);
+    }
+
+    #[test]
+    fn a_connection_after_start_opens_a_note_that_closes_by_itself() {
+        let mut i = island();
+        run(&mut i, 7.0);
+        feed(&mut i, peer_event("a", true));
+        run(&mut i, 0.5);
+        assert!(!i.is_open(), "it settles first");
+        run(&mut i, 1.0);
+        assert!(i.is_open() && i.shown == View::Note);
+        assert_eq!((i.note.title.as_str(), i.note.badge), ("Phone a", Some(true)));
+        run(&mut i, LINK_SECS + 2.0);
+        assert!(!i.is_open());
+        feed(&mut i, peer_event("a", false));
+        run(&mut i, 1.6);
+        assert_eq!(i.note.badge, Some(false));
+        assert!(i.is_open());
+    }
+
+    #[test]
+    fn nothing_opens_at_start_with_a_device_already_there_or_with_the_alerts_off() {
+        let mut i = island();
+        i.model.set_peers(vec![PeerView { id: "a".into(), name: "A".into(), addr: String::new(), state: PeerState::Connected, trusted: true, detail: String::new() }]);
+        i.seed_links();
+        // The engine's handshake finishing right after start, and a refresh later.
+        feed(&mut i, peer_event("a", true));
+        run(&mut i, 2.0);
+        feed(&mut i, peer_event("a", true));
+        run(&mut i, 4.0);
+        assert!(!i.is_open());
+        let mut cfg = i.cfg.clone();
+        cfg.modules.link = false;
+        i.set_config(cfg);
+        run(&mut i, 7.0);
+        feed(&mut i, peer_event("a", false));
+        run(&mut i, 3.0);
+        assert!(!i.is_open(), "alerts off");
+    }
+
+    #[test]
+    fn an_open_island_is_not_interrupted_and_the_alert_waits_its_turn() {
+        let mut i = island();
+        run(&mut i, 7.0);
+        i.hotkey();
+        run(&mut i, 1.0);
+        assert!(i.is_open() && i.shown == View::Page(Page::Home));
+        feed(&mut i, peer_event("a", true));
+        run(&mut i, 3.0);
+        assert!(i.shown == View::Page(Page::Home), "the page the user opened stays");
+        i.close();
+        run(&mut i, 1.5);
+        assert!(i.is_open() && i.shown == View::Note, "its turn comes when the island is free");
+    }
+
+    /// The cover with the app's icon on its corner; without a cover the app's icon; with neither, the note.
+    #[test]
+    fn the_closed_pills_picture_falls_back_from_cover_to_app_icon_to_note() {
+        use super::super::model::Media;
+        let mut i = island();
+        let pal = i.palette();
+        let img = |c: u8| Image::from_rgba(8, 8, vec![c; 8 * 8 * 4]).unwrap();
+        let mut draw = |md: Option<&Media>| {
+            let mut cv = Canvas::new(CANVAS_W, CANVAS_H, 1.0);
+            let mut hits = Vec::new();
+            let mut d = Draw { cv: &mut cv, fonts: &mut i.fonts, hits: &mut hits, pal: &pal, pointer: None, pressed: None };
+            draw_cover(&mut d, md, R::new(10.0, 10.0, 26.0, 26.0), 1.0);
+            cv.pm.data().to_vec()
+        };
+        let m = |art: bool, app: bool| Media { art: art.then(|| img(200)), icon: app.then(|| img(90)), ..Default::default() };
+        let note = draw(None);
+        let (cover, both, app_only) = (draw(Some(&m(true, false))), draw(Some(&m(true, true))), draw(Some(&m(false, true))));
+        assert_eq!(note, draw(Some(&m(false, false))), "nothing to show: the note");
+        assert!(note != cover && cover != both && app_only != note && app_only != cover);
+    }
+
     #[test]
     fn modules_can_be_turned_off() {
         let mut i = island();
@@ -3323,7 +3485,7 @@ mod tests {
                 i.model.feed(&Event::TransferStarted { id: "x1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "informe-final.pdf".into(), size: 8_000_000, incoming: false });
                 i.model.feed(&Event::TransferProgress { id: "x1".into(), done: 5_200_000, total: 8_000_000, bytes_per_sec: 3_400_000 });
                 i.model.adb.insert("p".into(), super::super::adb::Radios { wifi: true, bt: true, rotate: false });
-                i.note = Note { icon: Some(Icon::Bell), title: "WhatsApp · Ana".into(), text: "¿Vienes a cenar hoy?".into(), good: false, w: 0.0, img: None };
+                i.note = Note { icon: Some(Icon::Bell), title: "WhatsApp · Ana".into(), text: "¿Vienes a cenar hoy?".into(), good: false, w: 0.0, img: None, badge: None };
                 i.open(view.clone(), Reason::Hover);
                 i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
                 run(&mut i, 0.8);

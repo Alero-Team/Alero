@@ -16,6 +16,7 @@ import 'ui/setup.dart';
 import 'ui/app_lock.dart';
 import 'ui/icon.dart';
 import 'ui/theme.dart';
+import 'ui/update.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -179,6 +180,17 @@ class _ReadyHome extends StatefulWidget {
 
 class _ReadyHomeState extends State<_ReadyHome> {
   Section _initial = Section.home;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.hub.checkUpdates) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) checkUpdatesOnOpen(context);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.hub,

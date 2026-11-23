@@ -61,6 +61,10 @@ class Native {
   static Future<void> requestInstallPermission() async =>
       _ch.invokeMethod('requestInstallPermission');
 
+  /// Android: installs a downloaded APK of Alero itself through a PackageInstaller session.
+  static Future<void> installApk(String path) async =>
+      _ch.invokeMethod('installApk', path);
+
   /// Windows and Linux: the computers that can run the remote controls, the daemon's file sharing and autostart.
   static final pc = Platform.isWindows || Platform.isLinux;
 

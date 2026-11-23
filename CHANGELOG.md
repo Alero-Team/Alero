@@ -1,5 +1,25 @@
 # Cambios
 
+## Beta 2.6 (2.6.0) — 2026-11-23
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Everywhere
+
+- **Updates inside Alero:** on opening, Alero checks the latest public release and offers "Actualizar ahora". The download shows its progress and is checked against the SHA-256 that GitHub publishes before anything is installed. Android hands the APK to the system installer; Windows runs the setup silently and opens Alero again; Linux replaces the AppImage, or opens the .deb/.rpm in the system installer. Settings › About has a switch to check on opening (on by default) and a "Buscar actualizaciones" button.
+- **Lighter motion on modest hardware:** on machines with four cores or fewer, and whenever the system asks for reduced motion, the decorative movements (staggered entrances, sections fading up, the player's wave) are skipped; page changes, presses and switches still animate. Nothing changes on faster devices.
+
+### Android
+
+- **Fluent icons, as on the computer:** the phone uses the same Fluent UI System Icons as Windows and Linux again (outlined at rest, filled when selected), instead of Material ones.
+- **No pinned header:** the page title scrolls away with the content; the compact title bar that stayed at the top, and the line under it, are gone.
+
+### Alero Island (Windows and Linux)
+
+- **Connect and disconnect alerts:** when a paired device connects or disconnects, the island opens briefly with the phone icon, its name and "Conectado" or "Desconectado", then closes by itself. Quick reconnections show only the final state, alerts of several devices wait their turn, nothing is announced for the devices that connect as Alero starts, and an island you are using is not interrupted. It can be turned off in the island's settings ("Conexión y desconexión de dispositivos").
+- **Cover in the closed island:** the music line (and its lyrics) shows the album cover with the playing app's icon on its corner instead of a music note.
+- **Lyrics and progress keep moving:** the player's progress bar no longer stops at 0:15 and synced lyrics follow the song again, for music on the computer and on the phone.
+
 ## Beta 2.5.1 (2.5.1) — 2026-11-23
 
 Install the Android APK and the Windows or Linux package from this version together.

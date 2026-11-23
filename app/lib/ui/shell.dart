@@ -1239,8 +1239,8 @@ Future<bool> confirm(
     false;
 
 /// Page scaffold shared by the screens: title, max width, padding that clears the floating bar.
-/// On the phone the title collapses as the page scrolls: the large one fades out with the content and a compact
-/// one fades into a pinned bar, and each section fades up as it scrolls into view ([ScrollReveal]).
+/// The title scrolls with the content (nothing stays pinned at the top), and on the phone each section fades up as
+/// it scrolls into view ([ScrollReveal]).
 class ScreenFrame extends StatefulWidget {
   const ScreenFrame({
     super.key,
@@ -1260,26 +1260,18 @@ class ScreenFrame extends StatefulWidget {
   /// Off when the screen reveals its own pieces (Home on the phone wraps each tile), so nothing moves twice.
   final bool revealEach;
 
-  /// Height of the phone's pinned title bar; the large title sits in a row of the same height under it.
-  static const barHeight = 64.0;
+  /// Height of the phone's title row.
+  static const titleHeight = 56.0;
 
   @override
   State<ScreenFrame> createState() => _ScreenFrameState();
 }
 
 class _ScreenFrameState extends State<ScreenFrame> {
-  final _scroll = ScrollController();
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= wideLayout;
-    final collapsing = isPhone && !wide;
+    final phone = isPhone && !wide;
     final side = wide ? Gap.xxl : Gap.l;
     final style = wide
         ? Theme.of(context).textTheme.headlineMedium
@@ -1289,19 +1281,18 @@ class _ScreenFrameState extends State<ScreenFrame> {
       child: Text(widget.title, style: style),
     );
     // Sections fade up as they scroll into view on the phone and, since Beta 2.5, on the computer too (no pinned
-    // bar or floating navigation there, so nothing to clear at the edges). Narrow windows keep the list reveal.
+    // bar there, so nothing to clear at the top). Narrow windows keep the list reveal.
     Widget reveal(int i, Widget c) => !widget.revealEach
         ? c
-        : collapsing
-        ? ScrollReveal(child: c)
+        : phone
+        ? ScrollReveal(topInset: 0, child: c)
         : wide && !isPhone
         ? ScrollReveal(topInset: 0, bottomInset: 0, child: c)
         : Reveal(index: i, child: c);
     final list = ListView(
-      controller: _scroll,
       padding: EdgeInsets.fromLTRB(
         side,
-        collapsing ? 0 : Gap.xl,
+        phone ? Gap.s : Gap.xl,
         side,
         wide ? Gap.xxl : 112,
       ),
@@ -1313,28 +1304,17 @@ class _ScreenFrameState extends State<ScreenFrame> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (collapsing)
-                  // Leaves room on the right for the bar's button, which stays pinned above this row.
-                  SizedBox(
-                    height: ScreenFrame.barHeight,
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        right: widget.trailing == null ? 0 : 56,
-                      ),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _LargeTitle(_scroll, child: title),
-                      ),
-                    ),
-                  )
-                else
-                  Row(
+                // The title scrolls away with the page: no pinned header on any screen.
+                SizedBox(
+                  height: phone ? ScreenFrame.titleHeight : null,
+                  child: Row(
                     children: [
                       Expanded(child: title),
                       ?widget.trailing,
                     ],
                   ),
-                SizedBox(height: collapsing ? Gap.s : Gap.l),
+                ),
+                SizedBox(height: phone ? Gap.s : Gap.l),
                 for (final (i, c) in widget.children.indexed) reveal(i, c),
               ],
             ),
@@ -1342,187 +1322,11 @@ class _ScreenFrameState extends State<ScreenFrame> {
         ),
       ],
     );
-    final body = widget.onRefresh == null || !isPhone
-        ? list
-        : RefreshIndicator(
-            onRefresh: widget.onRefresh!,
-            // Below the pinned bar, not under it.
-            edgeOffset: collapsing ? ScreenFrame.barHeight : 0,
-            child: list,
-          );
     return SafeArea(
       bottom: false,
-      child: !collapsing
-          ? body
-          : Stack(
-              children: [
-                body,
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: _CollapsingBar(
-                    _scroll,
-                    title: widget.title,
-                    trailing: widget.trailing,
-                    side: side,
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-/// How far the page has scrolled past the large title, 0 to 1 over 28 px, smoothstepped so it starts and ends soft;
-/// nearly done (0.94) by [_ShellState.compactOn], where the compact title takes over.
-double _collapse(ScrollController c) {
-  final y = c.hasClients ? math.max(0.0, c.offset) : 0.0;
-  final p = math.min(1.0, y / 28);
-  return p * p * (3 - 2 * p);
-}
-
-/// The large title: follows the content up and fades out, shrinking slightly, as it reaches the pinned bar.
-class _LargeTitle extends StatelessWidget {
-  const _LargeTitle(this.scroll, {required this.child});
-  final ScrollController scroll;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: scroll,
-    child: child,
-    builder: (_, c) {
-      final e = _collapse(scroll);
-      return Opacity(
-        opacity: 1 - e,
-        child: Transform.scale(
-          scale: 1 - .04 * e,
-          alignment: Alignment.centerLeft,
-          child: c,
-        ),
-      );
-    },
-  );
-}
-
-/// The phone's pinned bar: see-through at rest so the large title shows under it; its surface fades in with the
-/// scroll, and once the large title is gone a compact one slides in, with a hairline under the bar. It goes compact
-/// at the same offsets as the bottom bar, so the two change together.
-class _CollapsingBar extends StatefulWidget {
-  const _CollapsingBar(
-    this.scroll, {
-    required this.title,
-    required this.trailing,
-    required this.side,
-  });
-  final ScrollController scroll;
-  final String title;
-  final Widget? trailing;
-  final double side;
-
-  @override
-  State<_CollapsingBar> createState() => _CollapsingBarState();
-}
-
-class _CollapsingBarState extends State<_CollapsingBar> {
-  bool _collapsed = false;
-
-  // Easing.emphasizedDecelerate's lighter sibling (M3 "standard decelerate"): quick in, soft stop.
-  static const Curve _in = Cubic(.2, 0, 0, 1);
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = Theme.of(context).scaffoldBackgroundColor;
-    final line = Theme.of(context).colorScheme.outlineVariant;
-    final d = AleroMotion.micro(context, const Duration(milliseconds: 300));
-    return AnimatedBuilder(
-      animation: widget.scroll,
-      builder: (_, _) {
-        final scroll = widget.scroll, side = widget.side;
-        final trailing = widget.trailing;
-        final e = _collapse(scroll);
-        final y = scroll.hasClients ? scroll.offset : 0.0;
-        if (y > _ShellState.compactOn) {
-          _collapsed = true;
-        } else if (y < _ShellState.compactOff) {
-          _collapsed = false;
-        }
-        final collapsed = _collapsed;
-        // Only the button takes touches: a drag that starts on the bar still scrolls the page under it.
-        return SizedBox(
-          height: ScreenFrame.barHeight,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: ColoredBox(
-                    color: bg.withValues(alpha: e),
-                    child: Stack(
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(
-                            left: side,
-                            right: side + (trailing == null ? 0 : 56),
-                          ),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            // The large title is the heading for screen readers; this copy is only visual.
-                            child: ExcludeSemantics(
-                              child: AnimatedSlide(
-                                offset: collapsed
-                                    ? Offset.zero
-                                    : const Offset(0, .3),
-                                duration: d,
-                                curve: _in,
-                                child: AnimatedOpacity(
-                                  opacity: collapsed ? 1 : 0,
-                                  duration: d,
-                                  curve: _in,
-                                  child: Text(
-                                    widget.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: AnimatedOpacity(
-                            opacity: collapsed ? 1 : 0,
-                            duration: d,
-                            curve: _in,
-                            child: SizedBox(
-                              height: 1,
-                              child: ColoredBox(color: line),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (trailing != null)
-                Positioned(
-                  right: side,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(child: trailing),
-                ),
-            ],
-          ),
-        );
-      },
+      child: widget.onRefresh == null || !isPhone
+          ? list
+          : RefreshIndicator(onRefresh: widget.onRefresh!, child: list),
     );
   }
 }

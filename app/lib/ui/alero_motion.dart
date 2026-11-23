@@ -94,7 +94,7 @@ class AleroMotion {
   /// Card entrance: initial rows reveal with +24 px and 40 ms stagger.
   static Widget reveal(BuildContext context, int index, Widget child) {
     // Inside a ScrollReveal the scroll entrance already moves it; a second slide would double the motion.
-    if (MediaQuery.of(context).disableAnimations ||
+    if (calm(context) ||
         index > 8 ||
         ScrollReveal.inside(context)) {
       return child;
@@ -177,7 +177,7 @@ class _ScrollRevealState extends State<ScrollReveal>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _still = MediaQuery.of(context).disableAnimations;
+    _still = calm(context);
     if (_still) {
       _wait?.cancel();
       _c.value = 1;

@@ -57,6 +57,7 @@ class Hub extends ChangeNotifier {
   pb.Event_TransferOffer? offer;
   String myId = '', name = '', downloads = '', startError = '';
   bool autoAccept = true;
+  bool checkUpdates = true;
   final messages = StreamController<String>.broadcast();
   // Network diagnostics are needed by the QR screen, not by Android's
   // background transfer/notification service.
@@ -278,6 +279,7 @@ class Hub extends ChangeNotifier {
     final s = _readSettings();
     name = s['name'] as String? ?? await Native.deviceName();
     autoAccept = s['autoAccept'] as bool? ?? true;
+    checkUpdates = s['checkUpdates'] as bool? ?? true;
     setupDone = s['setupDone'] == true;
     themeMode.value = s['theme'] as String? ?? 'dark';
     L10n.instance.set(s['language'] as String? ?? 'system');
@@ -442,6 +444,7 @@ class Hub extends ChangeNotifier {
         'setupDone': setupDone,
         'name': name,
         'autoAccept': autoAccept,
+        'checkUpdates': checkUpdates,
         'theme': theme,
         'language': L10n.instance.pref,
         'amoled': amoled.value,
@@ -1572,6 +1575,12 @@ class Hub extends ChangeNotifier {
     if (clean.isEmpty) return;
     name = clean.length > 64 ? clean.substring(0, 64) : clean;
     await _run(() => pb.setName(name: name));
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setCheckUpdates(bool on) {
+    checkUpdates = on;
     _saveSettings();
     notifyListeners();
   }

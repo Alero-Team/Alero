@@ -19,11 +19,13 @@ pub struct Modules {
     pub clipboard: bool,
     pub controls: bool,
     pub status: bool,
+    /// A paired device connecting or disconnecting.
+    pub link: bool,
 }
 
 impl Default for Modules {
     fn default() -> Self {
-        Self { player: true, send: true, incoming: true, notifications: true, call: true, clipboard: true, controls: true, status: true }
+        Self { player: true, send: true, incoming: true, notifications: true, call: true, clipboard: true, controls: true, status: true, link: true }
     }
 }
 

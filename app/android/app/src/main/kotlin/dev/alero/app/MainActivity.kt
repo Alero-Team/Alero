@@ -3,7 +3,13 @@ package dev.alero.app
 import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.ClipData
+import android.content.Context
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
+import androidx.core.content.ContextCompat
 import android.widget.Toast
 import android.content.ContentValues
 import android.content.Intent
@@ -73,6 +79,54 @@ class MainActivity : FlutterActivity() {
         try { startActivity(open) }
         catch (_: ActivityNotFoundException) { Toast.makeText(this, Tr.t("No hay un instalador de paquetes disponible.", "No package installer is available."), Toast.LENGTH_LONG).show() }
         catch (_: Exception) { Toast.makeText(this, Tr.t("El archivo ya no está disponible para el instalador.", "The file is no longer available to the installer."), Toast.LENGTH_LONG).show() }
+    }
+
+    /** Alero's own update: streams the verified APK into a PackageInstaller session; Android asks the user to confirm. */
+    private fun installApk(path: String, result: MethodChannel.Result) {
+        if (!packageManager.canRequestPackageInstalls()) {
+            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            result.error("install_permission", Tr.t("Permite instalar apps desde Alero y vuelve a pulsar Actualizar.", "Allow installing apps from Alero, then tap Update again."), null)
+            return
+        }
+        val action = "$packageName.UPDATE_STATUS"
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                val status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+                if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    @Suppress("DEPRECATION")
+                    val confirm = if (Build.VERSION.SDK_INT >= 33) i.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java) else i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                    if (confirm != null) startActivity(confirm)
+                    return
+                }
+                try { unregisterReceiver(this) } catch (_: Exception) {}
+                if (status != PackageInstaller.STATUS_SUCCESS)
+                    Toast.makeText(c, i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: Tr.t("No se pudo instalar la actualización.", "Couldn't install the update."), Toast.LENGTH_LONG).show()
+            }
+        }
+        Thread {
+            try {
+                val installer = packageManager.packageInstaller
+                val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                val id = installer.createSession(params)
+                installer.openSession(id).use { session ->
+                    val file = File(path)
+                    file.inputStream().use { input ->
+                        session.openWrite("alero.apk", 0, file.length()).use { out ->
+                            input.copyTo(out)
+                            session.fsync(out)
+                        }
+                    }
+                    // Commit before use{} closes the session (a closed session can't be committed).
+                    ContextCompat.registerReceiver(this, receiver, IntentFilter(action), ContextCompat.RECEIVER_NOT_EXPORTED)
+                    val sent = PendingIntent.getBroadcast(this, id, Intent(action).setPackage(packageName), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+                    session.commit(sent.intentSender)
+                }
+                runOnUiThread { result.success(null) }
+            } catch (_: Exception) {
+                try { unregisterReceiver(receiver) } catch (_: Exception) {}
+                runOnUiThread { result.error("install_failed", Tr.t("No se pudo instalar la actualización.", "Couldn't install the update."), null) }
+            }
+        }.start()
     }
 
     override fun onTrimMemory(level: Int) {
@@ -151,6 +205,7 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
                     result.success(null)
                 }
+                "installApk" -> installApk(call.arguments as String, result)
                 "requestNotifications" -> {
                     if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
                     result.success(null)

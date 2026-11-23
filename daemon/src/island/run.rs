@@ -219,6 +219,10 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let mut cfg: IslandConfig = watcher.current.clone();
     let mut island = Island::new(cfg.clone());
     island.model.set_peers(exec.peers());
+    island.seed_links();
+    // Debug: `ALERO_ISLAND_SIM=demo` (or a script, see `link::parse_sim`) fakes device connections and disconnections.
+    let mut sim = std::env::var("ALERO_ISLAND_SIM").map(|v| super::link::parse_sim(&v)).unwrap_or_default().into_iter().peekable();
+    let sim_start = Instant::now();
     // Lyrics on or off is the island's own choice (its player button), kept apart from the app's settings file.
     let lyrics_file = data.join("island-lyrics");
     island.set_lyrics_pref(std::fs::read_to_string(&lyrics_file).is_ok_and(|s| s.trim() == "on"));
@@ -317,6 +321,9 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         }
         if !notices.is_empty() {
             island.notices(notices);
+        }
+        while let Some((_, a)) = sim.next_if(|(at, _)| sim_start.elapsed().as_secs_f64() >= *at) {
+            island.simulate_link(a);
         }
         if !cfg.enabled {
             // Off: look at the settings now and then, nothing else.

@@ -22,6 +22,7 @@ class IslandPrefs extends ChangeNotifier {
     'clipboard',
     'controls',
     'status',
+    'link',
   ];
 
   static const defaults = <String, Object>{
