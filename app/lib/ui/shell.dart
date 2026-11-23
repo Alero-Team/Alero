@@ -847,8 +847,28 @@ class _PhoneChip extends StatelessWidget {
                       peer == null ? '' : _maker(hub, peer.id),
                       online: peer != null,
                     ),
-                    const Spacer(),
-                    const Icon(FluentIcons.chevron_right_24_regular, size: 20),
+                    const SizedBox(width: Gap.s + 2),
+                    Expanded(
+                      child: Text(
+                        peer == null
+                            ? 'Sin conexión'
+                            : (online.length == 1
+                                  ? name!
+                                  : tr('{} conectados', [online.length])),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: peer == null
+                              ? s.onSurfaceVariant
+                              : s.onSurface,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      FluentIcons.chevron_right_24_regular,
+                      size: 20,
+                      color: s.onSurfaceVariant,
+                    ),
                   ],
                 ),
               ),
@@ -905,31 +925,51 @@ class BrandMark extends StatelessWidget {
       height: size + 2,
       child: Stack(
         children: [
-          Container(
-            width: size,
-            height: size,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: tint ?? s.surfaceContainerHighest,
-            ),
-            child: letter.isEmpty
-                ? Icon(FluentIcons.phone_24_regular, size: size * .55)
-                : Text(
-                    letter,
-                    style: TextStyle(
-                      fontSize: size * .52,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
-                      color: tint == null
-                          ? s.onSurface
-                          : (ThemeData.estimateBrightnessForColor(tint) ==
-                                    Brightness.dark
-                                ? Colors.white
-                                : Colors.black),
-                    ),
+          // Google's phones get the four-color G on white instead of a letter.
+          if (key == 'google')
+            Container(
+              width: size,
+              height: size,
+              padding: EdgeInsets.all(size * .2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: s.shadow.withValues(alpha: .12),
+                    blurRadius: 2,
+                    offset: const Offset(0, .5),
                   ),
-          ),
+                ],
+              ),
+              child: const CustomPaint(painter: _GoogleG()),
+            )
+          else
+            Container(
+              width: size,
+              height: size,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: tint ?? s.surfaceContainerHighest,
+              ),
+              child: letter.isEmpty
+                  ? Icon(FluentIcons.phone_24_regular, size: size * .55)
+                  : Text(
+                      letter,
+                      style: TextStyle(
+                        fontSize: size * .52,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                        color: tint == null
+                            ? s.onSurface
+                            : (ThemeData.estimateBrightnessForColor(tint) ==
+                                      Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black),
+                      ),
+                    ),
+            ),
           Positioned(
             right: 0,
             bottom: 0,
@@ -951,6 +991,47 @@ class BrandMark extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The four-color G of Google, drawn as a thick ring cut open at the upper right, with its blue bar.
+class _GoogleG extends CustomPainter {
+  const _GoogleG();
+
+  static const _blue = Color(0xFF4285F4),
+      _green = Color(0xFF34A853),
+      _yellow = Color(0xFFFBBC05),
+      _red = Color(0xFFEA4335);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final d = math.min(size.width, size.height);
+    final w = d * .22;
+    final c = size.center(Offset.zero);
+    final r = (d - w) / 2;
+    final ring = Rect.fromCircle(center: c, radius: r);
+    double deg(double a) => a * math.pi / 180;
+    Paint p(Color color) => Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w;
+    canvas
+      ..drawArc(ring, deg(-42), deg(-100), false, p(_red))
+      ..drawArc(ring, deg(-142), deg(-76), false, p(_yellow))
+      ..drawArc(ring, deg(142), deg(-100), false, p(_green))
+      ..drawArc(ring, deg(42), deg(-42), false, p(_blue))
+      ..drawRect(
+        Rect.fromLTRB(
+          c.dx - w * .05,
+          c.dy - w / 2,
+          c.dx + r + w / 2,
+          c.dy + w / 2,
+        ),
+        Paint()..color = _blue,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_GoogleG old) => false;
 }
 
 /// Android share menu: pick the paired device that gets the files or text.

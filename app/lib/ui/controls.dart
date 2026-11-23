@@ -750,9 +750,6 @@ class _TileState extends State<_Tile> {
               final fg = mix(s.onSurface, ink);
               final shape = RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(Radii.tile + 8 * v),
-                side: BorderSide(
-                  color: Color.lerp(s.outlineVariant, Colors.transparent, v)!,
-                ),
               );
               return Material(
                 color: s.surfaceContainer,
@@ -863,7 +860,17 @@ class _Squares extends StatelessWidget {
       const gap = Gap.s;
       final cols = box.maxWidth >= 5 * 84 + 4 * gap ? 5 : 4;
       final w = (box.maxWidth - gap * (cols - 1)) / cols;
-      final h = 72 * TileScale.of(context);
+      // Tall enough for what goes inside (padding, icon, one line of label) at this tile size and text scale,
+      // so the content never spills out of the square.
+      final f = TileScale.of(context);
+      final label = TextPainter(
+        text: TextSpan(text: 'Ag', style: Theme.of(context).textTheme.labelSmall),
+        textScaler: MediaQuery.textScalerOf(context),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout();
+      final h = math.max(72 * f, 2 * 8 * f + 34 * f + 4 * f + label.height + 2);
+      label.dispose();
       return Wrap(
         spacing: gap,
         runSpacing: gap,
@@ -884,6 +891,7 @@ class _Square extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
+    final f = TileScale.of(context);
     final on = x.on == true;
     final tip = [
       x.label,
@@ -904,13 +912,12 @@ class _Square extends StatelessWidget {
             opacity: x.onTap == null ? 0.45 : 1,
             duration: AleroMotion.micro(context, Fluent.d167),
             child: Material(
-              color: s.surfaceContainerHigh,
+              color: s.surfaceContainer,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
-                side: BorderSide(color: s.outlineVariant.withValues(alpha: .5)),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 8 * f),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -918,8 +925,8 @@ class _Square extends StatelessWidget {
                       tween: Tween(end: on ? 1 : 0),
                       duration: AleroMotion.micro(context, Fluent.d167),
                       builder: (_, v, _) => Container(
-                        width: 34,
-                        height: 34,
+                        width: 34 * f,
+                        height: 34 * f,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           // On: the control's own color (torch amber, rotation green…), not the accent.
@@ -931,13 +938,13 @@ class _Square extends StatelessWidget {
                         ),
                         child: Icon(
                           x.icon,
-                          size: 18,
+                          size: 18 * f,
                           fill: on ? 1 : 0,
                           color: Color.lerp(s.onSurface, Colors.white, v),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4 * f),
                     Text(
                       x.label,
                       maxLines: 1,

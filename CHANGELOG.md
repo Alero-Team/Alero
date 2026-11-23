@@ -1,5 +1,22 @@
 # Cambios
 
+## Beta 2.5.1 (2.5.1) — 2026-11-23
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Everywhere
+
+- **No more outlines on cards:** cards, chips, filters, the sound selector, outlined buttons, dialogs and the floating navigation pill no longer draw a border, in every theme (light, dark, AMOLED and Material 3 Expressive). Surfaces now stand apart by tone alone; in AMOLED the cards and their buttons are one step lighter so they still read against pure black. Borders that mark a selection or keyboard focus stay.
+
+### Android
+
+- **Devices › IP address:** the "Emparejar" button now sits level with the address field and matches its height; the hint moved under both.
+
+### Windows and Linux
+
+- **Phone card in the side menu:** Google phones show the four-color Google G instead of a plain blue letter, and the card shows the phone's name next to the logo in the theme's text color, readable in light and dark.
+- **Quick controls:** the flashlight, lock, rear camera and front camera squares grow to fit their icon and label at every tile size and text scale, so nothing spills out of the square any more (it did with compact tiles).
+
 ## Beta 2.5 (2.5.0) — 2026-11-22
 
 Install the Android APK and the Windows or Linux package from this version together.

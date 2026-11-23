@@ -410,7 +410,6 @@ class SolidSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: s.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: s.outlineVariant),
       ),
       child: child,
     );

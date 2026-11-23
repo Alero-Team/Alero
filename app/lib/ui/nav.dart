@@ -131,7 +131,6 @@ class _AleroNavBarState extends State<AleroNavBar>
       decoration: BoxDecoration(
         color: s.surfaceContainer,
         borderRadius: BorderRadius.circular(Radii.pill),
-        border: Border.all(color: s.outlineVariant),
       ),
       child: LayoutBuilder(
         builder: (context, box) {

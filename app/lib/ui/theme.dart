@@ -163,9 +163,9 @@ class Tokens {
   );
   static const amoled = Tokens(
     bg: Color(0xFF000000),
-    surface: Color(0xFF0F0F0F),
-    elevated: Color(0xFF1A1A1A),
-    secondary: Color(0xFF181818),
+    surface: Color(0xFF141414),
+    elevated: Color(0xFF222222),
+    secondary: Color(0xFF1F1F1F),
     border: Color(0xFF242424),
     borderStrong: Color(0xFF3A3A3A),
     text: Color(0xFFFFFFFF),
@@ -244,11 +244,11 @@ ColorScheme expressiveScheme(Color seed, Brightness b, {bool amoled = false}) {
     surface: black,
     surfaceDim: black,
     surfaceContainerLowest: black,
-    surfaceContainerLow: step(.06),
-    surfaceContainer: step(.09),
-    surfaceContainerHigh: step(.12),
-    surfaceContainerHighest: step(.16),
-    surfaceBright: step(.18),
+    surfaceContainerLow: step(.08),
+    surfaceContainer: step(.14),
+    surfaceContainerHigh: step(.17),
+    surfaceContainerHighest: step(.21),
+    surfaceBright: step(.23),
     surfaceTint: Colors.transparent,
   );
 }
@@ -313,10 +313,9 @@ ThemeData buildTheme(
       color: p.surface,
       elevation: 0,
       margin: EdgeInsets.zero,
-      // A discreet border keeps cards readable on any surface, black included.
+      // No border: the card stands out from the background by tone alone.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Radii.card),
-        side: BorderSide(color: p.line),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -335,7 +334,8 @@ ThemeData buildTheme(
         padding: const EdgeInsets.symmetric(horizontal: Gap.l + 4),
         shape: corner,
         foregroundColor: p.ink,
-        side: BorderSide(color: p.line),
+        backgroundColor: scheme.surfaceContainer,
+        side: BorderSide.none,
         textStyle: text.labelLarge,
       ),
     ),
@@ -384,7 +384,6 @@ ThemeData buildTheme(
     dialogTheme: DialogThemeData(
       backgroundColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(
-        side: BorderSide(color: scheme.outline),
         borderRadius: BorderRadius.circular(Radii.dialog),
       ),
     ),
@@ -402,6 +401,22 @@ ThemeData buildTheme(
     tooltipTheme: TooltipThemeData(
       waitDuration: const Duration(milliseconds: 500),
       textStyle: text.bodySmall?.copyWith(color: scheme.onInverseSurface),
+    ),
+    chipTheme: ChipThemeData(
+      side: BorderSide.none,
+      backgroundColor: scheme.surfaceContainer,
+      selectedColor: scheme.secondaryContainer,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.chip)),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        side: const WidgetStatePropertyAll(BorderSide.none),
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (st) => st.contains(WidgetState.selected)
+              ? scheme.secondaryContainer
+              : scheme.surfaceContainer,
+        ),
+      ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: Colors.transparent,

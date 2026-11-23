@@ -135,9 +135,7 @@ class _Small extends StatelessWidget {
           color: primary ? s.primary : s.surfaceContainer,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(Radii.tile),
-            side: primary
-                ? BorderSide.none
-                : BorderSide(color: s.outlineVariant),
+
           ),
           child: AleroPress(
             radius: Radii.tile,
@@ -226,7 +224,6 @@ class RemoteCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: s.surfaceContainer,
                   borderRadius: BorderRadius.circular(Radii.chip),
-                  border: Border.all(color: s.outlineVariant),
                 ),
                 child: const Icon(FluentIcons.folder_24_regular, size: 18),
               ),

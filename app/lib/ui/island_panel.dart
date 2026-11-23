@@ -480,7 +480,7 @@ class _SwatchesState extends State<_Swatches> {
                                 border: Border.all(
                                   color: cur == hex
                                       ? s.primary
-                                      : s.outlineVariant,
+                                      : Colors.transparent,
                                   width: cur == hex ? 2.5 : 1,
                                 ),
                               ),

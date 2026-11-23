@@ -259,7 +259,7 @@ class _TouchpadState extends State<Touchpad> with WidgetsBindingObserver {
             color: s.surfaceContainerLow,
             borderRadius: BorderRadius.circular(Radii.tile + 4),
             border: Border.all(
-              color: _active ? s.outline : s.outlineVariant,
+              color: _active ? s.outline : Colors.transparent,
               width: _active ? 1.5 : 1,
             ),
           ),

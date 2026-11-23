@@ -175,29 +175,47 @@ class _DevicesScreenState extends State<DevicesScreen> {
     final ipPanel = Panel(
       title: 'Dirección IP',
       icon: FluentIcons.organization_24_regular,
-      child: Row(
+      // The button is as tall as the field and level with it; the hint goes under both.
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextField(
-              controller: _addr,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: InputDecoration(
-                labelText: tx('Dirección IP del otro dispositivo'),
-                hintText: '192.168.1.20',
-                helperText: tx('Está en Ajustes del otro dispositivo.'),
-              ),
-              onSubmitted: hub.pairAddr,
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _addr,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: tx('Dirección IP del otro dispositivo'),
+                      hintText: '192.168.1.20',
+                    ),
+                    onSubmitted: hub.pairAddr,
+                  ),
+                ),
+                const SizedBox(width: Gap.s),
+                FilledButton.tonal(
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(Radii.tile),
+                    ),
+                  ),
+                  onPressed: () => hub.pairAddr(_addr.text),
+                  child: const Text('Emparejar'),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: Gap.s),
           Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: FilledButton.tonal(
-              onPressed: () => hub.pairAddr(_addr.text),
-              child: const Text('Emparejar'),
+            padding: const EdgeInsets.fromLTRB(Gap.l, 6, 0, 0),
+            child: Text(
+              'Está en Ajustes del otro dispositivo.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],

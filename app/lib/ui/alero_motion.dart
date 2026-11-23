@@ -313,7 +313,6 @@ class _AleroPressState extends State<AleroPress> {
             foregroundDecoration: BoxDecoration(
               borderRadius: r,
               color: ink.withValues(alpha: lit ? .06 : 0),
-              border: Border.all(color: ink.withValues(alpha: lit ? .10 : 0)),
             ),
             child: widget.child,
           ),

@@ -482,9 +482,8 @@ class _Hero extends StatelessWidget {
     Widget property(IconData icon, String value) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHigh,
+        color: colors.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.outlineVariant),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

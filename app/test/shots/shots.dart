@@ -401,7 +401,8 @@ ShotHub phoneDemo() {
 }
 
 ThemeData look(Brightness b, {bool amoled = false}) =>
-    buildTheme(const Color(0xFF3F6FD8), DynamicSchemeVariant.tonalSpot, b, amoled: amoled);
+    buildTheme(const Color(0xFF3F6FD8), DynamicSchemeVariant.tonalSpot, b, amoled: amoled,
+        expressive: Platform.environment['SHOT_EXPRESSIVE'] == '1');
 
 Future<void> loadFonts() async {
   Future<void> load(String family, String path) async {
