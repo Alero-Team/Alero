@@ -13,3 +13,7 @@ strip = true
 opt-level = 3
 [profile.release.package.tiny-skia-path]
 opt-level = 3
+
+# The software compositor and pixel conversion need speed, as well as the rasterizer.
+[profile.release.package.pb-daemon]
+opt-level = 3

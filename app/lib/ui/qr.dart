@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qr/qr.dart';
 
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 
 /// QR code drawn from modules. Always dark on white with a quiet zone, whatever the theme, so cameras read it.
 class QrView extends StatelessWidget {

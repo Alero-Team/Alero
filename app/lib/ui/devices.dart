@@ -8,7 +8,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'adb_connection.dart';
 import 'connect_help.dart';
 import 'pc_details.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'qr.dart';
 import 'shell.dart';
 import 'theme.dart';
@@ -308,7 +308,7 @@ class _Paired extends StatelessWidget {
     ].where((x) => x.isNotEmpty).join(' · ');
 
     final actions = <Widget>[
-      if (connected)
+      if (connected && !isPhone)
         IconButton.filledTonal(
           tooltip: tr('Enviar archivos a {}', [p.name]),
           onPressed: () => hub.send(p.id),

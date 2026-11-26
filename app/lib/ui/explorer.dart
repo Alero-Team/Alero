@@ -1,4 +1,4 @@
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -101,6 +101,14 @@ Future<void> _menu(
       size.height - at.dy,
     ),
     items: [
+      if (!e.dir)
+        const PopupMenuItem(
+          value: 'peek',
+          child: ListTile(
+            leading: Icon(FluentIcons.eye_24_regular),
+            title: Text('Vista previa'),
+          ),
+        ),
       PopupMenuItem(
         value: 'open',
         child: ListTile(
@@ -148,8 +156,13 @@ Future<void> _menu(
       ),
     ],
   );
-  if (!context.mounted) return;
+  if (context.mounted) await _act(context, fs, e, pick);
+}
+
+Future<void> _act(BuildContext context, FsClient fs, FsEntry e, String? pick) async {
   switch (pick) {
+    case 'peek':
+      await _peek(context, fs, e);
     case 'open':
       e.dir ? fs.enter(e) : fs.download([e], openWhenDone: true);
     case 'download':
@@ -163,7 +176,91 @@ Future<void> _menu(
   }
 }
 
-/// The phone's files, on the computer. It lists what the phone chooses to show (photos, videos, music,
+bool _media(FsClient fs, FsEntry e) =>
+    !e.dir &&
+    (fileKind(e.name) == FileKind.image ||
+        fileKind(e.name) == FileKind.video ||
+        fs.root == 'images' ||
+        fs.root == 'video');
+
+/// Double click on a file: look at it first (photos and videos big, the rest by its icon and details), then choose.
+Future<void> _peek(BuildContext context, FsClient fs, FsEntry e) async {
+  final media = _media(fs, e);
+  if (media) fs.wantBig(e);
+  final s = Theme.of(context).colorScheme;
+  final t = Theme.of(context).textTheme;
+  final pick = await showAleroDialog<String>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: Text(e.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(Radii.tile),
+              child: SizedBox(
+                height: media ? 420 : 180,
+                child: ListenableBuilder(
+                  listenable: fs,
+                  builder: (_, _) {
+                    final big = fs.big(e);
+                    return MotionFade(
+                      child: big == null
+                          ? _Preview(fs, e, size: 180, key: const ValueKey('small'))
+                          : ColoredBox(
+                              key: const ValueKey('big'),
+                              color: s.surfaceContainerHighest,
+                              child: Image.memory(
+                                big,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                                semanticLabel: tr('Vista previa de {}', [e.name]),
+                              ),
+                            ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: Gap.m),
+            Text(
+              [
+                if (_ext(e.name).isNotEmpty) _ext(e.name),
+                size(e.size),
+                if (e.mtime.millisecondsSinceEpoch > 0) _date(e.mtime),
+              ].join(' · '),
+              style: t.bodyMedium?.copyWith(color: s.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(d, 'delete'),
+          child: Text('Eliminar', style: TextStyle(color: s.error)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(d, 'rename'),
+          child: const Text('Renombrar'),
+        ),
+        FilledButton.tonal(
+          onPressed: () => Navigator.pop(d, 'download'),
+          child: const Text('Descargar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(d, 'open'),
+          child: const Text('Abrir en el ordenador'),
+        ),
+      ],
+    ),
+  );
+  if (context.mounted && pick != null) await _act(context, fs, e, pick);
+}
+
+/// The phone's files, on the computer (ADR-0011). It lists what the phone chooses to show (photos, videos, music,
 /// Alero's received files and the folders its owner added) and asks it to send files; downloads and uploads are
 /// the app's normal transfers, so they appear with progress, errors and retry in Archivos and under the list.
 class ExplorerScreen extends StatefulWidget {
@@ -551,7 +648,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                               childAspectRatio: 0.82,
                             ),
                         itemCount: list.length,
-                        itemBuilder: (_, i) => AleroMotion.reveal(
+                        itemBuilder: (_, i) => QollqeMotion.reveal(
                           context,
                           i,
                           _GridTile(fs, list[i]),
@@ -567,7 +664,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                         ),
                         itemCount: list.length,
                         itemBuilder: (_, i) =>
-                            AleroMotion.reveal(context, i, _Row(fs, list[i])),
+                            QollqeMotion.reveal(context, i, _Row(fs, list[i])),
                       ),
                     ),
             ),
@@ -582,7 +679,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
                   ),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: AleroMotion.number(
+                    child: QollqeMotion.number(
                       tr('{} elementos{}', [
                         fs.total,
                         fs.selected.isEmpty
@@ -628,7 +725,7 @@ class _RootItem extends StatelessWidget {
             ]),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 2),
-        child: AleroPress(
+        child: QollqePress(
           radius: Radii.pill,
           onTap: onTap,
           child: Padding(
@@ -683,7 +780,7 @@ class _RootItem extends StatelessWidget {
 
 /// The picture of an entry: its thumbnail if the phone sent one, else an icon for its type.
 class _Preview extends StatelessWidget {
-  const _Preview(this.fs, this.e, {this.size = 56});
+  const _Preview(this.fs, this.e, {this.size = 56, super.key});
   final FsClient fs;
   final FsEntry e;
   final double size;
@@ -692,12 +789,7 @@ class _Preview extends StatelessWidget {
   Widget build(BuildContext context) {
     final kind = fileKind(e.name);
     final c = kindColors(context, kind);
-    final wantsThumb =
-        !e.dir &&
-        (kind == FileKind.image ||
-            kind == FileKind.video ||
-            fs.root == 'images' ||
-            fs.root == 'video');
+    final wantsThumb = _media(fs, e);
     if (wantsThumb) fs.wantThumb(e);
     final bytes = wantsThumb ? fs.thumb('${fs.root}|${e.id}') : null;
     if (bytes != null) {
@@ -740,10 +832,10 @@ class _GridTile extends StatelessWidget {
       label: '${e.name}${e.dir ? ', carpeta' : ''}',
       // The press tints and shrinks; double tap, right click and long press stay on the outer detector.
       child: GestureDetector(
-        onDoubleTap: e.dir ? null : () => fs.download([e], openWhenDone: true),
+        onDoubleTap: e.dir ? null : () => _peek(context, fs, e),
         onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
         onLongPressStart: (d) => _menu(context, fs, e, d.globalPosition),
-        child: AleroPress(
+        child: QollqePress(
           radius: Radii.tile,
           onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
           child: AnimatedContainer(
@@ -775,7 +867,7 @@ class _GridTile extends StatelessWidget {
                           right: 6,
                           child: AnimatedScale(
                             scale: sel ? 1 : 0,
-                            duration: AleroMotion.micro(context, Fluent.d167),
+                            duration: QollqeMotion.micro(context, Fluent.d167),
                             curve: Fluent.enter,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
@@ -836,9 +928,9 @@ class _Row extends StatelessWidget {
           : Colors.transparent,
       borderRadius: BorderRadius.circular(Radii.tile),
       child: GestureDetector(
-        onDoubleTap: e.dir ? null : () => fs.download([e], openWhenDone: true),
+        onDoubleTap: e.dir ? null : () => _peek(context, fs, e),
         onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
-        child: AleroPress(
+        child: QollqePress(
           radius: Radii.tile,
           onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
           child: Padding(
@@ -952,7 +1044,7 @@ class _ScrolledState extends State<_Scrolled> {
 }
 
 /// "Fotos": the phone's photos (or videos), newest first, as a big grid. Same session, thumbnails and actions
-/// as the explorer; click selects, double click opens on the computer, right click for more.
+/// as the explorer; click selects, double click previews it, right click for more.
 class PhotosScreen extends StatefulWidget {
   const PhotosScreen(this.hub, {super.key});
   final Hub hub;
@@ -1127,7 +1219,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                                   childAspectRatio: 0.85,
                                 ),
                             itemCount: list.length,
-                            itemBuilder: (_, i) => AleroMotion.reveal(
+                            itemBuilder: (_, i) => QollqeMotion.reveal(
                               context,
                               i,
                               _GridTile(fs, list[i]),
@@ -1139,7 +1231,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
                         padding: const EdgeInsets.only(top: Gap.s),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: AleroMotion.number(
+                          child: QollqeMotion.number(
                             tr('{} elementos{}', [
                               fs.total,
                               fs.selected.isEmpty

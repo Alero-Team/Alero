@@ -126,7 +126,7 @@ fn enc(s: &str) -> String {
 /// GET `url` with curl; the body on a 2xx answer.
 fn get(url: &str) -> Option<String> {
     let mut cmd = Command::new(if cfg!(windows) { "curl.exe" } else { "curl" });
-    cmd.args(["-sfL", "--max-time", "8", "--max-filesize", "400000", "-A", "Alero (https://github.com/Alero-Team/Alero)", "--", url])
+    cmd.args(["-sfL", "--max-time", "8", "--max-filesize", "400000", "-A", "Alero (https://github.com/k0op4/Alero)", "--", url])
         .stdin(Stdio::null())
         .stderr(Stdio::null());
     #[cfg(windows)]

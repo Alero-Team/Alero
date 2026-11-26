@@ -12,7 +12,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import '../device_image.dart';
 import '../remote.dart';
 import 'theme.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'icon.dart';
 import '../l10n.dart' show tr, tx;
 
@@ -198,7 +198,7 @@ Future<T?> showAleroDialog<T>({
   ),
 );
 
-/// The press used by Orion Store's navigation: [AleroPress] (hover tint, 0.97 press) with a pill radius.
+/// The press used by Orion Store's navigation: [QollqePress] (hover tint, 0.97 press) with a pill radius.
 class OrionPress extends StatelessWidget {
   const OrionPress({
     super.key,
@@ -213,7 +213,7 @@ class OrionPress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      AleroPress(onTap: onTap, radius: radius, child: child);
+      QollqePress(onTap: onTap, radius: radius, child: child);
 }
 
 /// Orion Store's destination motion: the new page rises from 98% scale
@@ -325,7 +325,7 @@ class _WavyProgressState extends State<WavyProgress>
           // The value glides to each new reading; indeterminate (null) passes straight through.
           child: TweenAnimationBuilder<double>(
             tween: Tween(end: v ?? 0),
-            duration: AleroMotion.micro(context, Fluent.d333),
+            duration: QollqeMotion.micro(context, Fluent.d333),
             curve: Fluent.enter,
             builder: (_, t, _) => CustomPaint(
               painter: _Wave(v == null ? null : t, _c, p.signal, p.alt),

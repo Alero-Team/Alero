@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -9,11 +10,26 @@ import '../hub.dart';
 import '../remote.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
+
+/// Read the cover dimensions without decoding another full bitmap just for its aspect ratio.
+Future<double> mediaAspectRatio(Uint8List bytes) async {
+  final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+  try {
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    try {
+      return descriptor.width / descriptor.height.clamp(1, 1 << 20);
+    } finally {
+      descriptor.dispose();
+    }
+  } finally {
+    buffer.dispose();
+  }
+}
 
 String _clock(int ms) {
   final s = ms ~/ 1000;
@@ -54,25 +70,31 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
   Brightness? _schemeFor;
 
   void _inspect(Uint8List? art, Brightness b, bool expressive) {
-    if (art == null) return;
+    if (art == null) {
+      _artOf = _schemeOf = null;
+      _ratio = null;
+      _artScheme = null;
+      return;
+    }
     if (!identical(art, _artOf)) {
       _artOf = art;
       _ratio = null;
-      decodeImageFromList(art).then((img) {
+      mediaAspectRatio(art).then((ratio) {
         if (!mounted || !identical(art, _artOf)) return;
-        setState(() => _ratio = img.width / img.height.clamp(1, 1 << 20));
-        img.dispose();
+        setState(() => _ratio = ratio);
       }, onError: (_) {});
     }
     if (expressive && (!identical(art, _schemeOf) || b != _schemeFor)) {
       _schemeOf = art;
       _schemeFor = b;
-      ColorScheme.fromImageProvider(provider: MemoryImage(art), brightness: b)
-          .then((cs) {
-            if (mounted && identical(art, _schemeOf)) {
-              setState(() => _artScheme = cs);
-            }
-          }, onError: (_) {});
+      ColorScheme.fromImageProvider(
+        provider: MemoryImage(art),
+        brightness: b,
+      ).then((cs) {
+        if (mounted && identical(art, _schemeOf) && b == _schemeFor) {
+          setState(() => _artScheme = cs);
+        }
+      }, onError: (_) {});
     }
   }
 
@@ -103,6 +125,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
       child: child,
     );
   }
+
   @override
   void initState() {
     super.initState();
@@ -196,7 +219,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
   }) => _Glide(
     value: value,
     dragging: dragging,
-    over: AleroMotion.micro(context, over),
+    over: QollqeMotion.micro(context, over),
     jump: jump,
     builder: (v) => build(v.clamp(0, max)),
   );
@@ -268,7 +291,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                     _Art(
                       cm,
                       size: 64,
-                      appIcon: hub.appIcons[cm.pkg],
+                      appIcon: cm.icon ?? hub.appIcons[cm.pkg],
                       computer: widget.computer,
                     ),
                     const SizedBox(width: 12),
@@ -332,7 +355,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 ),
                 Row(
                   children: [
-                    AleroMotion.number(_clock(cm.positionNow), t.labelSmall),
+                    QollqeMotion.number(_clock(cm.positionNow), t.labelSmall),
                     const Spacer(),
                     Text(_clock(cm.duration), style: t.labelSmall),
                   ],
@@ -572,7 +595,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
                 const SizedBox(height: Gap.xs),
                 Row(
                   children: [
-                    AleroMotion.number(
+                    QollqeMotion.number(
                       _clock(pos),
                       t.labelSmall?.copyWith(fontFeatures: tabular),
                     ),
@@ -636,7 +659,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
           final art = _Art(
             m,
             size: w < 480 ? 84.0 : (w * 0.2).clamp(88.0, 128.0),
-            appIcon: hub.appIcons[m.pkg],
+            appIcon: m.icon ?? hub.appIcons[m.pkg],
             computer: widget.computer,
           );
           // A video (YouTube in the browser, VLC…) sends a wide thumbnail: it is shown whole, 16:9, above the
@@ -645,7 +668,7 @@ class _MediaPanelState extends State<MediaPanel> with WidgetsBindingObserver {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _WideArt(m, appIcon: hub.appIcons[m.pkg], computer: widget.computer),
+                _WideArt(m, appIcon: m.icon ?? hub.appIcons[m.pkg], computer: widget.computer),
                 const SizedBox(height: Gap.m),
                 info(center: false),
                 const SizedBox(height: Gap.m),
@@ -1051,7 +1074,7 @@ class _VolumePillState extends State<VolumePill> {
             Expanded(
               child: AnimatedOpacity(
                 opacity: _open ? 1 : 0,
-                duration: AleroMotion.micro(context, Fluent.d167),
+                duration: QollqeMotion.micro(context, Fluent.d167),
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: _drag ? 10 : 6,

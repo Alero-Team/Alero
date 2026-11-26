@@ -1,4 +1,4 @@
-//! 2D drawing for the island: squircle shapes, text, icons, images and a box blur, all on the CPU.
+//! 2D drawing for the island: squircle shapes, text, icons and images, all on the CPU.
 //!
 //! Everything is expressed in *logical* units; the canvas multiplies them by `k` (display scale × the user's size
 //! setting) when it touches pixels. The pixel format is tiny-skia's: premultiplied RGBA8.
@@ -8,7 +8,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 
 use ab_glyph::{Font, FontRef, FontVec, GlyphId, PxScale, ScaleFont};
 use tiny_skia::{
-    BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Mask, Paint, Path, PathBuilder, Pattern, Pixmap, PixmapPaint, SpreadMode,
+    BlendMode, Color, FillRule, FilterQuality, LineCap, LineJoin, Mask, Paint, Path, PathBuilder, Pattern, Pixmap, SpreadMode,
     Stroke, Transform,
 };
 
@@ -190,6 +190,16 @@ const MAX_PIXELS: u64 = 4_000_000;
 
 /// PNG or JPEG bytes (a cover, an app icon) to an image.
 pub fn decode_image(bytes: &[u8]) -> Option<Image> {
+    decode(bytes, None)
+}
+
+/// A photo straight from a phone camera (12 to 50 MP) as a preview: JPEG is decoded at 1/2 to 1/8 of its size, which
+/// is cheap and stays under MAX_PIXELS; PNG only when it is small enough already.
+pub fn thumbnail(bytes: &[u8]) -> Option<Image> {
+    decode(bytes, Some(192))
+}
+
+fn decode(bytes: &[u8], side: Option<u16>) -> Option<Image> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
         let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
         dec.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
@@ -211,18 +221,24 @@ pub fn decode_image(bytes: &[u8]) -> Option<Image> {
     }
     if bytes.starts_with(&[0xFF, 0xD8]) {
         let mut dec = jpeg_decoder::Decoder::new(std::io::Cursor::new(bytes));
-        dec.read_info().ok()?;
-        let info = dec.info()?;
-        if info.width as u64 * info.height as u64 > MAX_PIXELS {
+        // The smallest DCT scale (1/1 .. 1/8) at least `side` big: the full photo is never decoded.
+        let (w, h) = match side {
+            Some(s) => dec.scale(s, s).ok()?,
+            None => {
+                dec.read_info().ok()?;
+                dec.info().map(|i| (i.width, i.height))?
+            }
+        };
+        if w as u64 * h as u64 > MAX_PIXELS {
             return None;
         }
         let px = dec.decode().ok()?;
-        let rgba: Vec<u8> = match info.pixel_format {
+        let rgba: Vec<u8> = match dec.info()?.pixel_format {
             jpeg_decoder::PixelFormat::RGB24 => px.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
             jpeg_decoder::PixelFormat::L8 => px.iter().flat_map(|&g| [g, g, g, 255]).collect(),
             _ => return None,
         };
-        return Image::from_rgba(info.width as u32, info.height as u32, rgba);
+        return Image::from_rgba(w as u32, h as u32, rgba);
     }
     None
 }
@@ -243,23 +259,24 @@ pub enum Weight {
     Bold,
 }
 
+// Common symbols must not load large CJK collections before reaching the emoji font.
 fn fallback_paths() -> Vec<String> {
     let mut paths: Vec<String> = Vec::new();
     #[cfg(windows)]
     {
         let dir = std::env::var("WINDIR").unwrap_or_else(|_| "C:\\Windows".into());
-        for f in ["segoeui.ttf", "YuGothM.ttc", "msyh.ttc", "malgun.ttf", "seguisym.ttf", "seguiemj.ttf"] {
+        for f in ["segoeui.ttf", "seguisym.ttf", "seguiemj.ttf", "YuGothM.ttc", "msyh.ttc", "malgun.ttf"] {
             paths.push(format!("{dir}\\Fonts\\{f}"));
         }
     }
     #[cfg(not(windows))]
     for f in [
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
     ] {
         paths.push(f.into());
     }
@@ -552,128 +569,41 @@ impl Canvas {
         let mut paint = Paint::default();
         paint.shader = Pattern::new(src, SpreadMode::Pad, FilterQuality::Bilinear, alpha.clamp(0.0, 1.0), local);
         paint.anti_alias = true;
-        if let Some(p) = squircle(r, radius, squircle_n(radius, r.h)) {
+        // A radius of half the side is a true circle (a contact's photo), not the squircle's rounded square.
+        let shape = if radius * 2.0 >= r.w.min(r.h) { PathBuilder::from_circle(r.cx(), r.cy(), r.w.min(r.h) / 2.0) } else { squircle(r, radius, squircle_n(radius, r.h)) };
+        if let Some(p) = shape {
             let tf = self.tf();
             self.pm.fill_path(&p, &paint, FillRule::Winding, tf, mask);
         }
     }
 
     /// Draws another canvas's pixels over this one, scaled around `(cx, cy)` (logical) and clipped by `mask`.
+    #[cfg(test)]
     pub fn blit(&mut self, layer: &Pixmap, opacity: f32, scale: f32, cx: f32, cy: f32, mask: Option<&Mask>) {
+        let area = R::new(0.0, 0.0, layer.width() as f32 / self.k, layer.height() as f32 / self.k);
+        self.blit_area(layer, area, opacity, scale, cx, cy, mask);
+    }
+
+    /// Transform only the content bounds, not the transparent remainder of the backing canvas.
+    pub fn blit_area(&mut self, layer: &Pixmap, area: R, opacity: f32, scale: f32, cx: f32, cy: f32, mask: Option<&Mask>) {
+        let x = (area.x * self.k).max(0.0);
+        let y = (area.y * self.k).max(0.0);
+        let right = (area.right() * self.k).min(layer.width() as f32);
+        let bottom = (area.bottom() * self.k).min(layer.height() as f32);
+        let Some(rect) = tiny_skia::Rect::from_xywh(x, y, right - x, bottom - y) else { return };
         let (px, py) = (cx * self.k, cy * self.k);
         let tf = Transform::from_translate(-px, -py).post_scale(scale, scale).post_translate(px, py);
-        let paint = PixmapPaint { opacity: opacity.clamp(0.0, 1.0), blend_mode: BlendMode::SourceOver, quality: if (scale - 1.0).abs() < 0.002 { FilterQuality::Nearest } else { FilterQuality::Bilinear } };
-        self.pm.draw_pixmap(0, 0, layer.as_ref(), &paint, tf, mask);
+        let paint = Paint {
+            shader: Pattern::new(layer.as_ref(), SpreadMode::Pad,
+                if (scale - 1.0).abs() < 0.002 { FilterQuality::Nearest } else { FilterQuality::Bilinear },
+                opacity.clamp(0.0, 1.0), Transform::identity()),
+            blend_mode: BlendMode::SourceOver,
+            anti_alias: false,
+            ..Paint::default()
+        };
+        self.pm.fill_rect(rect, &paint, tf, mask);
     }
 
-    /// Writes a black shadow whose alpha is `small` (made at 1/`s` of this resolution) stretched back, inside `r`
-    /// (logical). Only for a cleared canvas: the pixels are set, not blended, which is what makes it cheap.
-    pub fn shadow_from(&mut self, small: &Pixmap, s: f32, r: R) {
-        let (w, h) = (self.pm.width() as usize, self.pm.height() as usize);
-        let (sw, sh) = (small.width() as usize, small.height() as usize);
-        let x0 = ((r.x * self.k).floor().max(0.0) as usize).min(w);
-        let y0 = ((r.y * self.k).floor().max(0.0) as usize).min(h);
-        let x1 = ((r.right() * self.k).ceil().max(0.0) as usize).min(w);
-        let y1 = ((r.bottom() * self.k).ceil().max(0.0) as usize).min(h);
-        let src = small.data();
-        let a = |x: usize, y: usize| src[(y.min(sh - 1) * sw + x.min(sw - 1)) * 4 + 3] as f32;
-        let dst = self.pm.data_mut();
-        for y in y0..y1 {
-            let fy = ((y as f32 + 0.5) / s - 0.5).max(0.0);
-            let (iy, ty) = (fy as usize, fy.fract());
-            for x in x0..x1 {
-                let fx = ((x as f32 + 0.5) / s - 0.5).max(0.0);
-                let (ix, tx) = (fx as usize, fx.fract());
-                let top = a(ix, iy) + (a(ix + 1, iy) - a(ix, iy)) * tx;
-                let bot = a(ix, iy + 1) + (a(ix + 1, iy + 1) - a(ix, iy + 1)) * tx;
-                dst[(y * w + x) * 4 + 3] = (top + (bot - top) * ty + 0.5) as u8;
-            }
-        }
-    }
-
-    /// Gaussian-like blur (three box passes) of the pixels inside `r` (logical), radius in logical units.
-    pub fn blur(&mut self, r: R, radius: f32) {
-        let rad = (radius * self.k * 0.55).round() as usize;
-        if rad == 0 {
-            return;
-        }
-        let (w, h) = (self.pm.width() as usize, self.pm.height() as usize);
-        let x0 = ((r.x * self.k).floor().max(0.0) as usize).min(w);
-        let y0 = ((r.y * self.k).floor().max(0.0) as usize).min(h);
-        let x1 = (((r.right() * self.k).ceil().max(0.0)) as usize).min(w);
-        let y1 = (((r.bottom() * self.k).ceil().max(0.0)) as usize).min(h);
-        if x1 <= x0 || y1 <= y0 {
-            return;
-        }
-        box_blur(self.pm.data_mut(), w, (x0, y0, x1, y1), rad);
-    }
-}
-
-/// Three separable box passes over the rectangle, with transparent pixels outside it.
-fn box_blur(data: &mut [u8], stride: usize, (x0, y0, x1, y1): (usize, usize, usize, usize), rad: usize) {
-    let (w, h) = (x1 - x0, y1 - y0);
-    let mut line = vec![0u32; w.max(h) * 4];
-    let mut out = vec![0u32; w.max(h) * 4];
-    for _ in 0..3 {
-        for y in y0..y1 {
-            for x in 0..w {
-                let i = ((y * stride) + x0 + x) * 4;
-                for c in 0..4 {
-                    line[x * 4 + c] = data[i + c] as u32;
-                }
-            }
-            slide(&line, &mut out, w, rad);
-            for x in 0..w {
-                let i = ((y * stride) + x0 + x) * 4;
-                for c in 0..4 {
-                    data[i + c] = out[x * 4 + c] as u8;
-                }
-            }
-        }
-        for x in x0..x1 {
-            for y in 0..h {
-                let i = (((y0 + y) * stride) + x) * 4;
-                for c in 0..4 {
-                    line[y * 4 + c] = data[i + c] as u32;
-                }
-            }
-            slide(&line, &mut out, h, rad);
-            for y in 0..h {
-                let i = (((y0 + y) * stride) + x) * 4;
-                for c in 0..4 {
-                    data[i + c] = out[y * 4 + c] as u8;
-                }
-            }
-        }
-    }
-}
-
-/// Moving average over `n` pixels (4 channels each) with a window of `2 * rad + 1`.
-fn slide(src: &[u32], dst: &mut [u32], n: usize, rad: usize) {
-    let win = (2 * rad + 1) as u32;
-    let mut acc = [0u32; 4];
-    for i in 0..=rad.min(n.saturating_sub(1)) {
-        for c in 0..4 {
-            acc[c] += src[i * 4 + c];
-        }
-    }
-    for i in 0..n {
-        for c in 0..4 {
-            dst[i * 4 + c] = acc[c] / win;
-        }
-        let add = i + rad + 1;
-        if add < n {
-            for c in 0..4 {
-                acc[c] += src[add * 4 + c];
-            }
-        }
-        if i >= rad {
-            let sub = i - rad;
-            for c in 0..4 {
-                acc[c] -= src[sub * 4 + c];
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -720,6 +650,7 @@ pub enum Icon {
     Reply,
     SpeakerLow,
     MailRead,
+    MicOff,
 }
 
 /// Draws `ic` from Fluent UI System Icons (the app's icon set): regular (outline), except media keys, call buttons and the
@@ -797,6 +728,7 @@ fn glyph(ic: Icon, filled: bool) -> &'static [f32] {
         Icon::Reply => (REPLY_REGULAR, REPLY_FILLED),
         Icon::SpeakerLow => (SPEAKER_LOW_REGULAR, SPEAKER_LOW_FILLED),
         Icon::MailRead => (MAIL_READ_REGULAR, MAIL_READ_FILLED),
+        Icon::MicOff => (MIC_OFF_REGULAR, MIC_OFF_FILLED),
     };
     if filled { f } else { r }
 }
@@ -804,6 +736,40 @@ fn glyph(ic: Icon, filled: bool) -> &'static [f32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_camera_photo_too_big_to_decode_still_gives_a_small_preview() {
+        let (w, h) = (2400u16, 2000u16);
+        let rgb: Vec<u8> = (0..w as usize * h as usize).flat_map(|i| [(i % 251) as u8, 90, 160]).collect();
+        let mut jpg = Vec::new();
+        jpeg_encoder::Encoder::new(&mut jpg, 80).encode(&rgb, w, h, jpeg_encoder::ColorType::Rgb).unwrap();
+        assert!(decode_image(&jpg).is_none(), "4.8 MP is over MAX_PIXELS");
+        let t = thumbnail(&jpg).expect("preview");
+        assert_eq!((t.w, t.h), (300, 250), "1/8 is enough for the island's 192 px");
+    }
+
+    #[test]
+    fn bounded_composition_matches_the_full_canvas_at_every_scale() {
+        for k in [1.0, 1.25, 2.0] {
+            let area = R::new(60.0, 0.0, 180.0, 130.0);
+            let mut layer = Canvas::new(300.0, 180.0, k);
+            layer.squircle(area.inset(8.0, 8.0, 8.0, 8.0), 12.0, color([200, 80, 40], 0.7), None);
+            layer.circle(area.cx(), 55.0, 30.0, Color::WHITE, None);
+            for scale in [0.90, 0.97, 1.0, 1.04] {
+                for opacity in [0.2, 1.0] {
+                    let mut actual = Canvas::new(300.0, 180.0, k);
+                    let mut expected = Canvas::new(300.0, 180.0, k);
+                    let mask = actual.mask_path(&notch(area, 24.0, 10.0).unwrap()).unwrap();
+                    actual.blit_area(&layer.pm, area.inflate(2.0), opacity, scale, area.cx(), area.cy(), Some(&mask));
+                    let (px, py) = (area.cx() * k, area.cy() * k);
+                    let tf = Transform::from_translate(-px, -py).post_scale(scale, scale).post_translate(px, py);
+                    let paint = tiny_skia::PixmapPaint { opacity, quality: if (scale - 1.0).abs() < 0.002 { FilterQuality::Nearest } else { FilterQuality::Bilinear }, ..Default::default() };
+                    expected.pm.draw_pixmap(0, 0, layer.pm.as_ref(), &paint, tf, Some(&mask));
+                    assert_eq!(actual.pm.data(), expected.pm.data(), "k={k} scale={scale} opacity={opacity}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn squircle_stays_inside_its_rectangle() {
@@ -814,16 +780,13 @@ mod tests {
         assert!((b.top() - 20.0).abs() < 0.01 && (b.bottom() - 60.0).abs() < 0.01);
     }
 
+    #[cfg(windows)]
     #[test]
-    fn blur_spreads_a_dot_and_keeps_the_energy_inside() {
-        let mut cv = Canvas::new(40.0, 40.0, 1.0);
-        cv.circle(20.0, 20.0, 3.0, Color::WHITE, None);
-        let before: u32 = cv.pm.data().chunks_exact(4).map(|p| p[3] as u32).sum();
-        cv.blur(R::new(0.0, 0.0, 40.0, 40.0), 8.0);
-        let after: u32 = cv.pm.data().chunks_exact(4).map(|p| p[3] as u32).sum();
-        let centre = cv.pm.data()[((20 * 40 + 20) * 4 + 3) as usize];
-        assert!(centre < 200, "the dot should fade: {centre}");
-        assert!((after as f32 - before as f32).abs() / before as f32 > -1.0 && after > before / 2, "{before} {after}");
+    fn common_symbols_do_not_load_large_language_collections() {
+        let mut fonts = Fonts::new();
+        let (_, glyph) = fonts.pick('🎧', Weight::Regular);
+        assert_ne!(glyph.0, 0, "the emoji remains supported");
+        assert!(fonts.pending.iter().any(|p| p.ends_with("YuGothM.ttc")), "unrelated CJK collections must remain unloaded");
     }
 
     #[test]

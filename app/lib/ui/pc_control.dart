@@ -1,4 +1,4 @@
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 
 import 'package:flutter/material.dart' hide Icon, Text;
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';

@@ -19,7 +19,7 @@ use super::motion::{Motion, Spring, Style};
 use crate::lang::t;
 
 /// Logical size of the drawing surface (the window is this big times the scale). The largest screen plus the
-/// room the spring overshoots into and the shadow.
+/// room the spring overshoots into.
 /// Wide enough for the player with lyrics (660) and its spring; the window is cut to the island while it is drawn,
 /// so the width costs nothing when the island is smaller.
 pub const CANVAS_W: f32 = 720.0;
@@ -32,11 +32,10 @@ const MAX_RADIUS: f32 = 32.0;
 const LINK_SECS: f32 = 2.8;
 /// `note_age` once the entrance of a device alert has finished.
 const NOTE_AGE_DONE: f32 = 1.5;
-const SHADOW_DIV: f32 = 4.0;
 /// The notch while something lives in it (music, charging): the iPhone's compact island.
 const LIVE: (f32, f32) = (320.0, 40.0);
 /// Logical size of the window while the island is closed: the widest closed notch (LIVE swollen under the pointer),
-/// its shadow (26 around it) and room for the spring's overshoot. See `rest_box`.
+/// its ears and room for the spring's overshoot. See `rest_box`.
 const REST_BOX: (f32, f32) = (620.0, 84.0);
 
 /// What the closed island shows, like the iPhone's Dynamic Island.
@@ -48,7 +47,12 @@ enum Live {
     Media,
     /// Lyrics are on: the line being sung, for as long as it plays.
     Lyric,
+    /// A call on the phone: who, and how long it has lasted (the card folds into this once answered).
+    Call,
+    /// The call just ended (for a moment): how long it lasted in seconds, -1 if it was never answered.
+    CallEnded(i64),
 }
+
 /// The colour of a file landing on the island (the drop target, its rim and the landing rings).
 const DROP: Rgb = [138, 180, 248];
 const DANGER: Rgb = [255, 69, 58];
@@ -124,6 +128,10 @@ pub enum Act {
     NotifReply(String),
     QuickReply(String, usize),
     SendReply(String),
+    /// A received photo (transfer id): open, show in its folder, discard.
+    OpenFile(String),
+    ShowFile(String),
+    Discard(String),
 }
 
 /// What the host has to carry out (the island has no engine of its own).
@@ -158,6 +166,12 @@ pub enum Cmd {
     NotifReply { key: String, text: String },
     /// The window takes the keyboard (a reply is being written) or gives it back.
     Keyboard(bool),
+    /// Decode a received photo's preview (answered with [`Island::set_thumb`]).
+    Thumb { id: String, path: PathBuf },
+    /// A received file: open it with its app, show it in its folder, or delete the computer's copy.
+    OpenFile(PathBuf),
+    ShowFile(PathBuf),
+    Discard(PathBuf),
 }
 
 /// Quick answers offered under a chat notification.
@@ -169,15 +183,6 @@ pub enum Key {
     Back,
     Enter,
     Escape,
-}
-
-/// A touch answering where it landed: an ink circle that grows from the pointer and fades (0.55 s).
-#[derive(Clone, Copy)]
-struct Ripple {
-    r: R,
-    x: f32,
-    y: f32,
-    t: f32,
 }
 
 /// A control tile switching on or off: its colour grows from (or shrinks to) the point that was touched.
@@ -208,7 +213,6 @@ struct Ui {
     vol_until: f64,
     pc_volume: Option<f32>,
     seek: Option<f32>,
-    ripples: Vec<Ripple>,
     tiles: HashMap<&'static str, TileFx>,
     read: HashSet<String>,
     /// Notifications on their way out (0..1), and where each row is (they glide when one leaves).
@@ -227,6 +231,9 @@ struct Ui {
     squash: Spring,
     /// Seconds since a device alert was shown (the stagger of its icon, badge and text); NOTE_AGE_DONE: finished.
     note_age: f32,
+    /// How much of the compact island's content shows (0..1), and the last thing it showed: it fades out with it.
+    live_a: f32,
+    live_last: Option<Live>,
 }
 
 impl Ui {
@@ -245,7 +252,6 @@ impl Ui {
             vol_until: 0.0,
             pc_volume: None,
             seek: None,
-            ripples: Vec::new(),
             tiles: HashMap::new(),
             read: HashSet::new(),
             gone: HashMap::new(),
@@ -260,6 +266,8 @@ impl Ui {
             after_land: None,
             squash: Spring::new(1.0, 0.40, 0.42),
             note_age: NOTE_AGE_DONE,
+            live_a: 0.0,
+            live_last: None,
         }
     }
 }
@@ -293,6 +301,10 @@ pub struct Note {
     pub img: Option<Image>,
     /// A device alert: Some(true) connected, Some(false) disconnected. Draws the status badge and the staggered entrance.
     pub badge: Option<bool>,
+    /// The sender's picture (a chat): drawn round, with `img` (the app) on its corner.
+    pub avatar: Option<Image>,
+    /// A phone notification: going to it opens the island on the notifications at once.
+    pub notif: bool,
 }
 
 pub struct Hit {
@@ -347,8 +359,8 @@ pub struct Island {
     cmds: Vec<Cmd>,
     dirty: bool,
     layer: Option<Canvas>,
-    /// The shadow, drawn at a quarter of the resolution: blurring it is the costliest step of a frame.
-    shadow: Option<Canvas>,
+    #[cfg(test)]
+    profile: [f64; 4],
     clock: f64,
     reduce_motion: bool,
     /// The resting notch is drawn (not over a full-screen game or video).
@@ -360,6 +372,12 @@ pub struct Island {
     /// Clock time until which the closed island shows what is playing, and what it last saw playing.
     media_until: f64,
     media_seen: Option<String>,
+    /// Clock time the player stopped playing (None while it plays).
+    media_off: Option<f64>,
+    /// Until when the closed island says the call ended, and how long it lasted (see `Live::CallEnded`).
+    call_end: (f64, i64),
+    /// An answered call's card folds into the compact island at this clock time.
+    collapse_at: Option<f64>,
     /// The phone already asked for its media (an island started after the phone connected missed its first state).
     asked_media: Option<String>,
     ui: Ui,
@@ -419,6 +437,9 @@ impl Island {
             charge_until: 0.0,
             media_until: 0.0,
             media_seen: None,
+            media_off: None,
+            call_end: (0.0, -1),
+            collapse_at: None,
             asked_media: None,
             slide_unsent: None,
             wheel_acc: 0.0,
@@ -428,7 +449,8 @@ impl Island {
             cmds: Vec::new(),
             dirty: true,
             layer: None,
-            shadow: None,
+            #[cfg(test)]
+            profile: [0.0; 4],
             clock: 0.0,
             reduce_motion: false,
             ui: Ui::new(),
@@ -513,6 +535,14 @@ impl Island {
     }
 
     fn live(&self) -> Option<Live> {
+        if self.cfg.modules.call {
+            if self.model.call().is_some() {
+                return Some(Live::Call);
+            }
+            if self.clock < self.call_end.0 {
+                return Some(Live::CallEnded(self.call_end.1));
+            }
+        }
         if self.lyric_live() {
             return Some(Live::Lyric);
         }
@@ -527,13 +557,18 @@ impl Island {
     /// Playing started or the song changed: the closed island shows it for a moment, then steps back.
     fn watch_media(&mut self) {
         let now = self.media_line().filter(|(m, _)| m.playing).map(|(m, _)| format!("{} | {}", m.title, m.artist));
-        if now != self.media_seen {
-            if now.is_some() {
-                self.media_until = self.clock + 4.0;
-                self.dirty = true;
-            }
-            self.media_seen = now;
+        let Some(k) = now else {
+            self.media_off.get_or_insert(self.clock);
+            return;
+        };
+        // A player that blinks off and on with the same song (Spotify re-announces itself) is not news, or the
+        // compact island would be re-armed forever: a new song is, and so is playing again after a real pause.
+        let back = self.media_off.take().is_some_and(|t| self.clock - t > 3.0);
+        if self.media_seen.as_ref() != Some(&k) || back {
+            self.media_until = self.clock + 4.0;
+            self.dirty = true;
         }
+        self.media_seen = Some(k);
     }
 
     // ------------------------------------------------------------------------------------------------ player
@@ -581,6 +616,17 @@ impl Island {
     pub fn set_lyrics(&mut self, key: String, lines: Option<crate::lyrics::Lines>) {
         self.ui.lyrics = Some((key, lines));
         self.ui.lyric_idx = None;
+        self.dirty = true;
+    }
+
+    /// The answer to [`Cmd::Thumb`]. The card of that photo stays long enough to decide what to do with it.
+    pub fn set_thumb(&mut self, id: &str, img: Option<Image>) {
+        let Some(x) = self.model.xfers.iter_mut().find(|x| x.id == id) else { return };
+        x.thumb = img;
+        if x.thumb.is_some() && self.phase == Phase::Open && self.want == View::Transfer(id.to_string()) {
+            self.life = self.life.max(self.cfg.event_secs as f32);
+            self.reason = Reason::Event(Some(self.life));
+        }
         self.dirty = true;
     }
 
@@ -693,12 +739,6 @@ impl Island {
             self.ui.note_age += dt;
             busy = true;
         }
-        // Touch ripples.
-        if !self.ui.ripples.is_empty() {
-            self.ui.ripples.iter_mut().for_each(|r| r.t += dt);
-            self.ui.ripples.retain(|r| r.t < 0.55);
-            busy = true;
-        }
         // Control tiles switching.
         for f in self.ui.tiles.values_mut() {
             f.v.step(dt);
@@ -781,7 +821,7 @@ impl Island {
             self.hot_for += dt;
             if self.hot_for * 1000.0 >= self.cfg.open_delay_ms as f32 {
                 self.hot_for = 0.0;
-                self.open(View::Page(Page::Home), Reason::Hover);
+                self.open(self.home_view(), Reason::Hover);
             }
         } else if !self.hot {
             self.hot_for = 0.0;
@@ -827,7 +867,7 @@ impl Island {
             return;
         }
         if self.model.target().is_none() {
-            self.show_note(Note { icon: Some(Icon::Phone), title: t("Sin teléfono conectado", "No phone connected").into(), text: t("Conecta un teléfono para enviar archivos.", "Connect a phone to send files.").into(), good: false, w: 0.0, img: None, badge: None });
+            self.show_note(Note { icon: Some(Icon::Phone), title: t("Sin teléfono conectado", "No phone connected").into(), text: t("Conecta un teléfono para enviar archivos.", "Connect a phone to send files.").into(), good: false, w: 0.0, img: None, badge: None, avatar: None, notif: false });
             return;
         }
         self.cmds.push(Cmd::SendFiles(files));
@@ -847,7 +887,7 @@ impl Island {
         if self.phase == Phase::Open {
             self.close();
         } else if self.cfg.enabled {
-            self.open(View::Page(Page::Home), Reason::Key);
+            self.open(self.home_view(), Reason::Key);
         }
     }
 
@@ -861,8 +901,7 @@ impl Island {
                 Act::Seek => self.ui.seek = Some(((x - r.x) / r.w).clamp(0.0, 1.0)),
                 Act::PlayerVolume => self.set_player_volume((x - r.x) / r.w, true),
                 Act::NotifRow(key) => self.ui.swipe = Some((key, x, 0.0)),
-                // Everything else answers where it was touched.
-                _ => self.ui.ripples.push(Ripple { r, x, y, t: 0.0 }),
+                _ => {},
             }
         }
         self.dirty = true;
@@ -1057,6 +1096,28 @@ impl Island {
         }
     }
 
+    /// How long a finished transfer's card stays: a received file waits for a choice, a failure for a read.
+    fn xfer_life(&self, id: &str) -> f32 {
+        match self.model.xfers.iter().find(|x| x.id == id) {
+            Some(x) if x.saved().is_some() => self.cfg.event_secs as f32,
+            Some(x) if matches!(x.state, XState::Failed(_)) => 4.0,
+            _ => 2.4,
+        }
+    }
+
+    /// A choice on a received file: the command with its saved path, then the card goes.
+    fn file_cmd(&mut self, id: &str, make: fn(PathBuf) -> Cmd) {
+        if let Some(p) = self.model.xfers.iter().find(|x| x.id == id).and_then(|x| x.path.clone()) {
+            self.cmds.push(make(p));
+        }
+        self.close();
+    }
+
+    /// What hovering the top edge (or the hotkey) opens: the call card while there is a call, else Inicio.
+    fn home_view(&self) -> View {
+        if self.cfg.modules.call && self.model.call().is_some() { View::Call } else { View::Page(Page::Home) }
+    }
+
     fn act(&mut self, a: Act) {
         match a {
             Act::Go(p) => {
@@ -1081,7 +1142,13 @@ impl Island {
                 self.cmds.push(Cmd::Cancel(id));
                 self.close();
             }
-            Act::Call(k) => self.cmds.push(Cmd::CallAction(k)),
+            Act::Call(k) => {
+                // Mute shows its new state at once; the phone's next call state confirms it.
+                if let (Some(c), "mute" | "unmute") = (self.model.calls.values_mut().next(), k) {
+                    c.muted = k == "mute";
+                }
+                self.cmds.push(Cmd::CallAction(k));
+            }
             Act::Toggle(what) => {
                 let id = self.model.target_id().unwrap_or_default();
                 let cur = self.model.phone.get(&id).map(|p| match what {
@@ -1208,6 +1275,12 @@ impl Island {
                 self.cmds.push(Cmd::Adb { what, on: !cur });
             }
             Act::Device => self.model.cycle_target(),
+            Act::OpenFile(id) => self.file_cmd(&id, Cmd::OpenFile),
+            Act::ShowFile(id) => self.file_cmd(&id, Cmd::ShowFile),
+            Act::Discard(id) => {
+                self.file_cmd(&id, Cmd::Discard);
+                self.model.xfers.retain(|x| x.id != id);
+            }
         }
         self.dirty = true;
     }
@@ -1228,18 +1301,30 @@ impl Island {
                 self.dirty = true;
             }
             match n {
-                Notice::Call if m.call => {
-                    if self.model.call().is_some() {
+                // Like the iPhone: a ringing call opens the card; once answered it folds into the compact island
+                // (green phone and timer) and hovering opens it again; hanging up shows "ended" there for a moment.
+                Notice::Call if m.call => match self.model.call().map(|(_, c)| c.ringing) {
+                    Some(true) => {
                         self.open_event(View::Call, None);
-                        if self.cfg.sound && self.model.call().is_some_and(|c| c.1.ringing) {
+                        if self.cfg.sound {
                             self.cmds.push(Cmd::Beep);
                         }
-                    } else if self.shown == View::Call {
-                        // The call is over: let it go in a moment.
-                        self.life = 1.2;
-                        self.reason = Reason::Event(Some(1.2));
                     }
-                }
+                    Some(false) => {
+                        if self.phase == Phase::Open && self.want == View::Call {
+                            self.collapse_at = Some(self.clock + 0.9);
+                        }
+                    }
+                    None => {
+                        let secs = self.model.ended.take().and_then(|c| c.since).map_or(-1, |s| s.elapsed().as_secs() as i64);
+                        self.call_end = (self.clock + 2.4, secs);
+                        self.collapse_at = None;
+                        // An offer held back by the call takes its place (see `validate`); else the card folds away.
+                        if self.phase == Phase::Open && self.want == View::Call && (self.model.offers.is_empty() || !self.cfg.modules.incoming) {
+                            self.close();
+                        }
+                    }
+                },
                 Notice::Offer(_) if m.incoming => {
                     self.open_event(View::Offer, None);
                     if self.cfg.sound {
@@ -1247,15 +1332,19 @@ impl Island {
                     }
                 }
                 Notice::XferStarted(id) if m.send || m.incoming => self.open_event(View::Transfer(id), None),
-                Notice::XferDone(id, ok) => {
-                    if self.shown == View::Transfer(id) {
-                        self.life = if ok { 2.4 } else { 4.0 };
+                Notice::XferDone(id, _) => {
+                    // A received photo gets a preview: decoded off this thread, the card grows to it when ready.
+                    if let Some(p) = self.model.xfers.iter().find(|x| x.id == id).and_then(|x| x.photo()) {
+                        self.cmds.push(Cmd::Thumb { id: id.clone(), path: p.to_path_buf() });
+                    }
+                    if self.shown == View::Transfer(id.clone()) {
+                        self.life = self.xfer_life(&id);
                         self.reason = Reason::Event(Some(self.life));
                     }
                 }
                 Notice::Notif(key) if m.notifications => {
                     if let Some(n) = self.model.notifs.iter().find(|n| n.key == key) {
-                        let note = Note { icon: Some(Icon::Bell), title: [n.app.as_str(), n.title.as_str()].iter().filter(|p| !p.is_empty()).copied().collect::<Vec<_>>().join(" · "), text: n.text.clone(), good: false, w: 0.0, img: self.model.icon(&n.pkg).cloned(), badge: None };
+                        let note = Note { icon: Some(Icon::Bell), title: [n.app.as_str(), n.title.as_str()].iter().filter(|p| !p.is_empty()).copied().collect::<Vec<_>>().join(" · "), text: n.text.clone(), good: false, w: 0.0, img: self.model.icon(&n.pkg).cloned(), badge: None, avatar: n.avatar.clone(), notif: true };
                         self.show_note_for(note, self.cfg.event_secs as f32);
                     }
                 }
@@ -1263,7 +1352,7 @@ impl Island {
                 Notice::Replied(false) => self.flash(false, t("No se pudo enviar la respuesta", "Could not send the reply").into(), t("Responde desde el teléfono.", "Reply from the phone.").into()),
                 Notice::Clip if m.clipboard => {
                     let from = self.model.clips.front().map(|c| c.from.clone()).unwrap_or_default();
-                    self.show_note(Note { icon: Some(Icon::Clipboard), title: t("Portapapeles recibido", "Clipboard received").into(), text: from, good: true, w: 0.0, img: None, badge: None });
+                    self.show_note(Note { icon: Some(Icon::Clipboard), title: t("Portapapeles recibido", "Clipboard received").into(), text: from, good: true, w: 0.0, img: None, badge: None, avatar: None, notif: false });
                 }
                 _ => {}
             }
@@ -1284,7 +1373,7 @@ impl Island {
         let Some(a) = self.links.poll(self.clock, free) else { return };
         let title = if a.name.is_empty() { t("Dispositivo", "Device").to_string() } else { a.name };
         let text = if a.up { t("Conectado", "Connected") } else { t("Desconectado", "Disconnected") };
-        let note = Note { icon: Some(Icon::Phone), title, text: text.into(), good: a.up, w: 0.0, img: None, badge: Some(a.up) };
+        let note = Note { icon: Some(Icon::Phone), title, text: text.into(), good: a.up, w: 0.0, img: None, badge: Some(a.up), avatar: None, notif: false };
         self.show_note_for(note, LINK_SECS);
         self.ui.note_age = if self.motion.style == Style::Off { NOTE_AGE_DONE } else { 0.0 };
     }
@@ -1332,10 +1421,34 @@ impl Island {
 
     // ------------------------------------------------------------------------------------------------ state
 
+    /// The closed notch's size: what lives in it, swollen a little under the pointer (the place that opens it
+    /// answers), reaching out to a file on its way.
+    fn rest_size(&mut self) -> (f32, f32) {
+        let swell = |hot: bool, w: f32| (w + if hot { 14.0 } else { 0.0 }, LIVE.1 + if hot { 2.0 } else { 0.0 });
+        let (mut tw, mut th) = match (self.live(), self.hot) {
+            // The sung line: the notch hugs it.
+            (Some(Live::Lyric), hot) => {
+                let line = self.lyric_text();
+                swell(hot, (self.fonts.measure(&line, 15.0, Weight::Medium) + 74.0).clamp(200.0, 560.0))
+            }
+            (Some(_), hot) => swell(hot, LIVE.0),
+            (None, true) => (PEEK.0 + 20.0, PEEK.1 + 4.0),
+            (None, false) => PEEK,
+        };
+        let n = self.ui.near.value.clamp(0.0, 1.0);
+        if n > 0.001 {
+            tw = tw.max(tw + (340.0 - tw) * n);
+            th = th.max(th + (44.0 - th) * n);
+        }
+        (tw, th)
+    }
+
     fn snap_closed(&mut self) {
         self.phase = Phase::Closed;
-        self.w.snap(PEEK.0);
-        self.h.snap(PEEK.1);
+        // Where closing took it (the compact island, or the bare notch): no jump.
+        let (w, h) = self.rest_size();
+        self.w.snap(w);
+        self.h.snap(h);
         self.content.snap(0.0);
         self.swap = false;
         self.pressed = None;
@@ -1351,7 +1464,7 @@ impl Island {
             return;
         }
         if self.phase == Phase::Closed {
-            // It grows from the resting notch, wherever its swell left it.
+            // It grows from the resting notch, wherever its swell left it; the compact content fades under it.
             self.content.snap(0.0);
         }
         self.phase = Phase::Open;
@@ -1402,8 +1515,14 @@ impl Island {
         self.phase = Phase::Closing;
         self.w.tune(self.motion.collapse.0, self.motion.collapse.1);
         self.h.tune(self.motion.collapse.0, self.motion.collapse.1);
-        self.w.to(PEEK.0);
-        self.h.to(PEEK.1);
+        // Straight into the compact island when something lives in it (a call that was answered), like the iPhone.
+        let (tw, th) = self.rest_size();
+        self.w.to(tw);
+        self.h.to(th);
+        // Nothing to come back to: the compact content that was there when it opened must not flash on the way down.
+        if self.live().is_none() {
+            self.ui.live_a = 0.0;
+        }
         self.content.to(0.0);
         self.swap = false;
         self.pressed = None;
@@ -1427,7 +1546,7 @@ impl Island {
                 (400.0, h)
             }
             // With lyrics, a second column holds them.
-            View::Page(Page::Player) => if self.lyrics_now() { (660.0, 190.0) } else { (480.0, 180.0) },
+            View::Page(Page::Player) => if self.lyrics_now() { (660.0, 200.0) } else { (480.0, 200.0) },
             View::Page(Page::Files) => (404.0, 140.0 + 40.0 * m.xfers.len().min(3) as f32),
             View::Page(Page::Notifs) => (
                 424.0,
@@ -1445,7 +1564,11 @@ impl Island {
             }
             View::Call => (384.0, 92.0),
             View::Offer => (384.0, 136.0),
-            View::Transfer(_) => (384.0, 92.0),
+            View::Transfer(id) => match m.xfers.iter().find(|x| &x.id == id) {
+                Some(x) if x.thumb.is_some() && x.photo().is_some() => (440.0, 156.0),
+                Some(x) if x.saved().is_some() => (440.0, 120.0),
+                _ => (384.0, 92.0),
+            },
             View::Note => (if self.note.w > 0.0 { self.note.w } else { 372.0 }, 76.0),
             // A file over it: the target swells to meet it.
             View::Drop => if self.drag_over || self.ui.land.is_some() { (392.0, 138.0) } else { (364.0, 128.0) },
@@ -1498,36 +1621,26 @@ impl Island {
             if !self.cfg.enabled || !self.rest {
                 return Status { visible: false, animating: false };
             }
-            // Under the pointer the notch swells a little: the place that opens it answers.
             let live = self.live();
-            let (mut tw, mut th) = match (live, self.hot) {
-                // The sung line: the notch hugs it.
-                (Some(Live::Lyric), hot) => {
-                    let line = self.lyric_text();
-                    let w = (self.fonts.measure(&line, 15.0, Weight::Medium) + 74.0).clamp(200.0, 560.0);
-                    (w + if hot { 14.0 } else { 0.0 }, LIVE.1 + if hot { 2.0 } else { 0.0 })
-                }
-                (Some(_), hot) => (LIVE.0 + if hot { 14.0 } else { 0.0 }, LIVE.1 + if hot { 2.0 } else { 0.0 }),
-                (None, true) => (PEEK.0 + 20.0, PEEK.1 + 4.0),
-                (None, false) => PEEK,
-            };
-            // A file on its way: the notch reaches out to it.
-            let n = self.ui.near.value.clamp(0.0, 1.0);
-            if n > 0.001 {
-                tw = tw.max(tw + (340.0 - tw) * n);
-                th = th.max(th + (44.0 - th) * n);
-            }
+            let (tw, th) = self.rest_size();
             self.w.to(tw);
             self.h.to(th);
             self.w.step(dt);
             self.h.step(dt);
             let moving = !self.w.settled(0.05) || !self.h.settled(0.05);
-            // The equalizer moves at 15 frames a second: alive, and cheap while the island is closed.
-            if live == Some(Live::Media) && (self.clock * 15.0).floor() != ((self.clock - dt as f64) * 15.0).floor() {
+            // The compact content fades in, and out with the last thing it showed while the notch shrinks.
+            if live.is_some() {
+                self.ui.live_last = live;
+            }
+            let goal = if live.is_some() { 1.0 } else { 0.0 };
+            if self.ui.live_a != goal {
+                let step = if self.motion.style == Style::Off { 1.0 } else { dt / 0.28 };
+                self.ui.live_a = if goal > self.ui.live_a { (self.ui.live_a + step).min(1.0) } else { (self.ui.live_a - step).max(0.0) };
                 self.dirty = true;
             }
-            // A new sung line widens or narrows the notch.
-            if live == Some(Live::Lyric) && (self.w.target - tw).abs() > 0.5 {
+            // The equalizer and a call's pulse run every frame: skipping frames lets the loop sleep 100 ms between
+            // them (measured: ~9 fps). About 2 % of a core while they show.
+            if matches!(live, Some(Live::Media | Live::Call)) {
                 self.dirty = true;
             }
             return Status { visible: true, animating: moving || self.dirty };
@@ -1539,6 +1652,14 @@ impl Island {
         self.model.tidy(Instant::now());
         // The screen that was showing something that no longer exists gives way.
         self.validate();
+        // Answered: the card folds into the compact island, even under the pointer (hovering brings it back).
+        // Not while a button is held.
+        if self.collapse_at.is_some_and(|t| self.clock >= t) {
+            self.collapse_at = None;
+            if self.phase == Phase::Open && self.want == View::Call && self.pressed.is_none() {
+                self.close();
+            }
+        }
         // Closing rules. Writing a reply keeps it open wherever the pointer goes.
         if self.phase == Phase::Open {
             let near = self.pointer_near() || self.ui.replying.is_some() || self.ui.seek.is_some();
@@ -1556,10 +1677,14 @@ impl Island {
                 }
                 Reason::Event(secs) => {
                     if near {
-                        // Looking at it: it stays, and from now on it behaves like a hover.
+                        // Looking at it: it stays, and from now on it behaves like a hover. A notification opens the
+                        // island on the notifications straight away (its reply and the rest are there), not after it.
                         self.away_for = 0.0;
                         if matches!(self.shown, View::Page(_) | View::Note) {
                             self.reason = Reason::Hover;
+                        }
+                        if self.want == View::Note && self.note.notif && self.cfg.modules.notifications {
+                            self.go(View::Page(Page::Notifs));
                         }
                     } else if secs.is_some() {
                         self.life -= dt;
@@ -1634,9 +1759,8 @@ impl Island {
         }
         // A transfer that ended while another view was on screen leaves the card without an end: let it go.
         if let (Phase::Open, View::Transfer(id), Reason::Event(None)) = (self.phase, &self.shown, self.reason) {
-            let x = self.model.xfers.iter().find(|x| &x.id == id);
-            if !x.is_some_and(|x| x.state == XState::Running) {
-                self.life = if x.is_some_and(|x| matches!(x.state, XState::Failed(_))) { 4.0 } else { 2.4 };
+            if !self.model.xfers.iter().any(|x| &x.id == id && x.state == XState::Running) {
+                self.life = self.xfer_life(id);
                 self.reason = Reason::Event(Some(self.life));
             }
         }
@@ -1663,7 +1787,7 @@ impl Island {
     }
 
     /// Gives back the memory of the drawing layer (the island has been closed for a while).
-    /// While closed, the only part of the canvas that can hold pixels (the notch, its ears and its shadow, with room
+    /// While closed, the only part of the canvas that can hold pixels (the notch and its ears, with room
     /// for the spring's overshoot): the window shrinks to it, so the compositor carries ~85 % fewer pixels over
     /// whatever is below. One fixed size for every closed state, so the window is not remade while the notch swells.
     /// None while open, or if the notch ever outgrows it (then the whole canvas is shown, as before).
@@ -1676,7 +1800,7 @@ impl Island {
         (need.x >= b.x && need.right() <= b.right() && need.bottom() <= b.bottom()).then_some(b)
     }
 
-    /// The part of the canvas the window carries: closed, the fixed notch box; open, the island with its shadow and
+    /// The part of the canvas the window carries: closed, the fixed notch box; open, the island with its ears and
     /// the margin a carried file is caught in. Everything else is transparent, so it never goes to the compositor.
     pub fn crop_box(&self) -> Option<R> {
         if self.phase == Phase::Closed {
@@ -1690,12 +1814,11 @@ impl Island {
 
     pub fn release_buffers(&mut self) {
         self.layer = None;
-        self.shadow = None;
     }
 
     /// A short message from the executor (a file that could not be sent, say).
     pub fn flash(&mut self, good: bool, title: String, text: String) {
-        let note = Note { icon: Some(if good { Icon::Check } else { Icon::Close }), title, text, good, w: 0.0, img: None, badge: None };
+        let note = Note { icon: Some(if good { Icon::Check } else { Icon::Close }), title, text, good, w: 0.0, img: None, badge: None, avatar: None, notif: false };
         // Even with automatic opening off, the answer to something the user just did is shown.
         let keep = self.cfg.auto_expand;
         self.cfg.auto_expand = true;
@@ -1727,7 +1850,7 @@ impl Island {
         let fg: Rgb = if light { [24, 24, 28] } else { [255, 255, 255] };
         // Text on the accent colour: dark on light accents, white on dark ones.
         let on_accent: Rgb = if luma(accent) > 0.6 { [10, 10, 12] } else { [255, 255, 255] };
-        Pal { bg, bg2, fg, accent, on_accent, chip: mix(bg, fg, 0.11), chip_hi: mix(bg, fg, 0.20), light }
+        Pal { bg, bg2, fg, accent, on_accent, chip: mix(bg, fg, 0.11), chip_hi: mix(bg, fg, 0.20) }
     }
 
     #[cfg(test)]
@@ -1737,7 +1860,12 @@ impl Island {
 
     /// Draws the current frame into `cv` (cleared first).
     pub fn render(&mut self, cv: &mut Canvas) {
+        #[cfg(test)]
+        let mut profile_at = Instant::now();
+        #[cfg(test)]
+        { self.profile = [0.0; 4]; }
         cv.clear();
+        let pressed = self.pressed.and_then(|i| self.hits.get(i)).map(|h| h.r);
         self.hits.clear();
         if self.phase == Phase::Closed && !self.rest {
             return;
@@ -1747,22 +1875,8 @@ impl Island {
         // Bottom corners grow with the island (14 on a slim bar, 32 on a full card); the ears follow them.
         let radius = (pill.h / 2.0).min(10.0 + pill.h * 0.16).min(MAX_RADIUS);
         let shape = super::gfx::notch(pill, radius, radius * 0.68);
-        let mut layer = match self.layer.take() {
-            Some(l) if l.width_px() == cv.width_px() && l.height_px() == cv.height_px() => l,
-            _ => Canvas { pm: Pixmap::new(cv.width_px(), cv.height_px()).expect("layer"), k: cv.k },
-        };
-        // Shadow: a blurred copy of the shape, a little lower than the island. Made at 1/4 scale (16x fewer pixels to
-        // blur, and a soft shadow loses nothing) and stretched back.
-        let sk = cv.k / SHADOW_DIV;
-        let mut shadow = match self.shadow.take() {
-            Some(s) if (s.k - sk).abs() < 1e-4 => s,
-            _ => Canvas::new(CANVAS_W, CANVAS_H, sk),
-        };
-        shadow.clear();
-        shadow.squircle(R::new(pill.x + 2.0, pill.y + 7.0, pill.w - 4.0, pill.h - 2.0), radius, color([0, 0, 0], if pal.light { 0.30 } else { 0.55 }), None);
-        shadow.blur(pill.inflate(26.0), 16.0);
-        cv.shadow_from(&shadow.pm, SHADOW_DIV, pill.inflate(26.0));
-        self.shadow = Some(shadow);
+        #[cfg(test)]
+        { self.profile[0] = profile_at.elapsed().as_secs_f64() * 1000.0; profile_at = Instant::now(); }
         // While a file is being carried, the pixels above and around the island are made (all but) invisible but
         // solid for hit testing, so the system's drag-and-drop reaches the window even at the very edge of the screen.
         if matches!(self.want, View::Drop) {
@@ -1778,49 +1892,71 @@ impl Island {
             }
             cv.stroke_path(p, color(pal.fg, 0.10), 0.9, None);
         }
+        #[cfg(test)]
+        { self.profile[1] = profile_at.elapsed().as_secs_f64() * 1000.0; profile_at = Instant::now(); }
         if self.phase == Phase::Closed {
             // The compact island's content appears as the notch reaches its width.
             let n = self.ui.near.value.clamp(0.0, 1.0);
             if n > 0.25 {
                 // A file on its way: only the upload arrow, so a button held for something else says nothing more.
                 icon(cv, Icon::Send, pill.cx(), pill.cy(), 18.0, color(DROP, ((n - 0.25) / 0.5).clamp(0.0, 1.0)), None);
-            } else if let Some(l) = self.live() {
+            } else if let Some(l) = self.live().or(self.ui.live_last).filter(|_| self.ui.live_a > 0.0) {
                 let full = if l == Live::Lyric { 200.0 } else { LIVE.0 };
-                let a = ((pill.w - PEEK.0) / (full - PEEK.0)).clamp(0.0, 1.0).powi(2) * (1.0 - n * 4.0).clamp(0.0, 1.0);
+                let a = ((pill.w - PEEK.0) / (full - PEEK.0)).clamp(0.0, 1.0).powi(2) * (1.0 - n * 4.0).clamp(0.0, 1.0) * smooth(self.ui.live_a);
                 if a > 0.02 {
                     let lyric = (self.lyric_text(), self.ui.lyric_prev.clone(), smooth(self.ui.lyric_t));
                     let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal: &pal, pointer: None, pressed: None };
                     draw_live(&mut d, &self.model, self.player_pc, l, pill, a, self.clock, &lyric);
                 }
             }
-            self.layer = Some(layer);
             return;
         }
         // Content, laid out at the final size and revealed by the clip.
         let p = self.content.value.clamp(0.0, 1.0);
+        // The compact content does not vanish when a card opens over it (an empty black pill for a few frames): it
+        // fades as the card grows, and back in under a closing card when it is still live.
+        let under = if self.phase == Phase::Open { self.ui.live_last } else { self.live() };
+        if let Some(l) = under.filter(|_| self.ui.live_a > 0.0) {
+            let a = smooth(self.ui.live_a) * (1.0 - p * 3.0).clamp(0.0, 1.0);
+            if a > 0.02 {
+                let lyric = (self.lyric_text(), self.ui.lyric_prev.clone(), smooth(self.ui.lyric_t));
+                let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal: &pal, pointer: None, pressed: None };
+                draw_live(&mut d, &self.model, self.player_pc, l, pill, a, self.clock, &lyric);
+                self.hits.clear();
+            }
+        }
         let view = self.shown.clone();
         let (vw, vh) = self.size_of(&view);
         if p >= 0.999 && (pill.w - vw).abs() < 0.5 && (pill.h - vh).abs() < 0.5 {
             // At rest (hover, a clock tick) the content is drawn straight in: no layer to clear, mask and copy.
-            self.draw_view(cv, &pal, &view, ((CANVAS_W - vw) / 2.0, 0.0));
+            self.draw_view(cv, &pal, &view, ((CANVAS_W - vw) / 2.0, 0.0), pressed);
+            #[cfg(test)]
+            { self.profile[2] = profile_at.elapsed().as_secs_f64() * 1000.0; }
         } else if p > 0.004 {
+            let mut layer = match self.layer.take() {
+                Some(l) if l.width_px() == cv.width_px() && l.height_px() == cv.height_px() => l,
+                _ => Canvas { pm: Pixmap::new(cv.width_px(), cv.height_px()).expect("layer"), k: cv.k },
+            };
             layer.clear();
             let origin = ((CANVAS_W - vw) / 2.0, 0.0);
-            self.draw_view(&mut layer, &pal, &view, origin);
-            let scale = self.motion.content_scale + (1.0 - self.motion.content_scale) * p;
+            self.draw_view(&mut layer, &pal, &view, origin, pressed);
+            #[cfg(test)]
+            { self.profile[2] = profile_at.elapsed().as_secs_f64() * 1000.0; profile_at = Instant::now(); }
             let mask = shape.as_ref().and_then(|p| cv.mask_path(p));
             // The content reaches full opacity before the island finishes growing.
             let alpha = (p * 1.35 - 0.1).clamp(0.0, 1.0);
-            cv.blit(&layer.pm, alpha, scale, pill.cx(), origin.1 + vh / 2.0, mask.as_ref());
+            cv.blit_area(&layer.pm, R::new(origin.0, origin.1, vw, vh).inflate(2.0), alpha, 1.0, pill.cx(), origin.1 + vh / 2.0, mask.as_ref());
+            self.layer = Some(layer);
+            #[cfg(test)]
+            { self.profile[3] = profile_at.elapsed().as_secs_f64() * 1000.0; }
         }
-        self.layer = Some(layer);
     }
 
-    fn draw_view(&mut self, cv: &mut Canvas, pal: &Pal, view: &View, o: (f32, f32)) {
+    fn draw_view(&mut self, cv: &mut Canvas, pal: &Pal, view: &View, o: (f32, f32), pressed: Option<R>) {
         let (vw, vh) = self.size_of(view);
         let body = R::new(o.0, o.1, vw, vh);
         let media = pick_media(&self.model, self.player_pc);
-        let sources = (self.model.pc_media.as_ref().is_some_and(|m| !m.is_empty()), self.model.phone_media.as_ref().is_some_and(|m| !m.is_empty()));
+        let sources = (self.model.pc_media.as_ref().is_some_and(|m| m.island_allowed()), self.model.phone_media.as_ref().is_some_and(|m| m.island_allowed()));
         let key = self.song_key();
         let pv = PlayerView {
             ui: &self.ui,
@@ -1829,7 +1965,7 @@ impl Island {
             lines: self.ui.lyrics.as_ref().filter(|(k, _)| Some(k) == key.as_ref()).map(|(_, l)| l.as_ref()),
             volume: self.player_volume(),
         };
-        let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal, pointer: self.pointer, pressed: self.pressed };
+        let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal, pointer: self.pointer, pressed };
         match view {
             View::Page(Page::Home) => draw_home(&mut d, &self.model, &self.cfg, body, media, self.seen_notifs),
             View::Page(Page::Player) => draw_player(&mut d, body, media, sources, &pv),
@@ -1843,18 +1979,7 @@ impl Island {
             View::Note => draw_note(&mut d, &self.note, body, self.ui.note_age),
             View::Drop => draw_drop(&mut d, &self.model, body, self.drag_over, self.ui.land, self.clock),
         }
-        // Ink from the finger: grows from where it touched and fades, inside the shape that was touched.
-        for rp in &self.ui.ripples {
-            let k = rp.t / 0.55;
-            let far = [(rp.r.x, rp.r.y), (rp.r.right(), rp.r.y), (rp.r.x, rp.r.bottom()), (rp.r.right(), rp.r.bottom())]
-                .iter()
-                .map(|(x, y)| ((x - rp.x).powi(2) + (y - rp.y).powi(2)).sqrt())
-                .fold(0.0f32, f32::max);
-            let rad = (rp.r.w.min(rp.r.h) / 2.0).min(20.0);
-            let Some(path) = super::gfx::squircle(rp.r, rad, super::gfx::squircle_n(rad, rp.r.h)) else { continue };
-            let mask = d.cv.mask_path(&path);
-            d.cv.circle(rp.x, rp.y, far * (1.0 - (1.0 - k).powi(3)), color(pal.fg, 0.20 * (1.0 - k)), mask.as_ref());
-        }
+
     }
 }
 
@@ -1863,8 +1988,8 @@ fn pick_pc(m: &Model, pref: Option<bool>) -> bool {
     if let Some(v) = pref {
         return v;
     }
-    let pc = m.pc_media.as_ref().filter(|x| !x.is_empty());
-    let ph = m.phone_media.as_ref().filter(|x| !x.is_empty());
+    let pc = m.pc_media.as_ref().filter(|x| x.island_allowed());
+    let ph = m.phone_media.as_ref().filter(|x| x.island_allowed());
     match (pc, ph) {
         (Some(p), Some(f)) => p.playing || !f.playing,
         (Some(_), None) => true,
@@ -1873,8 +1998,8 @@ fn pick_pc(m: &Model, pref: Option<bool>) -> bool {
 }
 
 fn pick_media(m: &Model, pref: Option<bool>) -> Option<(&super::model::Media, bool)> {
-    let pc = m.pc_media.as_ref().filter(|x| !x.is_empty());
-    let ph = m.phone_media.as_ref().filter(|x| !x.is_empty());
+    let pc = m.pc_media.as_ref().filter(|x| x.island_allowed());
+    let ph = m.phone_media.as_ref().filter(|x| x.island_allowed());
     if pick_pc(m, pref) {
         pc.map(|x| (x, true)).or(ph.map(|x| (x, false)))
     } else {
@@ -1894,7 +2019,6 @@ struct Pal {
     on_accent: Rgb,
     chip: Rgb,
     chip_hi: Rgb,
-    light: bool,
 }
 
 struct Draw<'a> {
@@ -1903,7 +2027,7 @@ struct Draw<'a> {
     hits: &'a mut Vec<Hit>,
     pal: &'a Pal,
     pointer: Option<(f32, f32)>,
-    pressed: Option<usize>,
+    pressed: Option<R>,
 }
 
 impl Draw<'_> {
@@ -1922,7 +2046,7 @@ impl Draw<'_> {
     }
 
     fn is_down(&self, r: R) -> bool {
-        self.pressed.and_then(|i| self.hits.get(i)).is_some_and(|h| h.r == r)
+        self.pressed == Some(r)
     }
 
     fn add(&mut self, r: R, act: Act) {
@@ -2222,7 +2346,8 @@ fn draw_player(d: &mut Draw, body: R, media: Option<(&super::model::Media, bool)
         d.add(grab, Act::Seek);
     }
     // Controls: lyrics on the left, the transport in the middle, the volume on the right.
-    let cy = if ly { body.y + 155.0 } else { body.y + 158.0 };
+    // Keep the transport and volume above the rounded bottom corners in both layouts.
+    let cy = body.bottom() - 36.0;
     let v = pv.ui.vol.value.clamp(0.0, 1.2);
     if pv.lyrics_app {
         let bg = if pv.ui.lyrics_on { mix(d.pal.chip_hi, d.pal.accent, 0.35) } else { d.pal.chip };
@@ -2444,9 +2569,10 @@ fn draw_notifs(d: &mut Draw, m: &Model, body: R, ui: &Ui, clock: f64) {
             d.cv.circle(r.x + 7.0, r.y + 25.0, 3.5, color(d.pal.accent, a), None);
         }
         let c = (r.x + 30.0, r.y + 25.0);
-        match m.icon(&n.pkg) {
-            Some(img) => d.cv.image(img, R::new(c.0 - 16.0, c.1 - 16.0, 32.0, 32.0), 9.0, a, None),
-            None => d.avatar(c, 32.0, &n.app),
+        match (&n.avatar, m.icon(&n.pkg)) {
+            (Some(av), app) => badged(d, av, 16.0, app, R::new(c.0 - 16.0, c.1 - 16.0, 32.0, 32.0), a),
+            (None, Some(img)) => d.cv.image(img, R::new(c.0 - 16.0, c.1 - 16.0, 32.0, 32.0), 9.0, a, None),
+            (None, None) => d.avatar(c, 32.0, &n.app),
         }
         // Actions on hover, right to left: dismiss, mark as read, reply.
         let mut right = r.right() - 8.0;
@@ -2726,15 +2852,20 @@ fn draw_controls(d: &mut Draw, m: &Model, list: &str, body: R, wifi_confirm: boo
 /// icon on its corner; no cover: the app's icon alone; neither: a music note.
 fn draw_cover(d: &mut Draw, md: Option<&super::model::Media>, left: R, a: f32) {
     match (md.and_then(|x| x.art.as_ref()), md.and_then(|x| x.icon.as_ref())) {
-        (Some(art), app) => {
-            d.cv.image(art, left, 7.0, a, None);
-            if let Some(app) = app {
-                d.cv.squircle(R::new(left.right() - 11.5, left.bottom() - 11.5, 17.0, 17.0), 4.5, color(d.pal.bg, a), None);
-                d.cv.image(app, R::new(left.right() - 10.0, left.bottom() - 10.0, 14.0, 14.0), 3.0, a, None);
-            }
-        }
+        (Some(art), app) => badged(d, art, 7.0, app, left, a),
         (None, Some(app)) => d.cv.image(app, left, 6.0, a, None),
         (None, None) => icon(d.cv, Icon::Music, left.cx(), left.cy(), 18.0, color(d.pal.fg, a), None),
+    }
+}
+
+/// A picture (a cover, a contact's photo) with the app's icon on its bottom-right corner, ringed in the island's colour.
+fn badged(d: &mut Draw, pic: &Image, radius: f32, app: Option<&Image>, r: R, a: f32) {
+    d.cv.image(pic, r, radius, a, None);
+    if let Some(app) = app {
+        let s = (r.w * 0.5).round().max(14.0);
+        let b = R::new(r.right() - s + 4.0, r.bottom() - s + 4.0, s, s);
+        d.cv.squircle(b.inflate(1.5), s * 0.32, color(d.pal.bg, a), None);
+        d.cv.image(app, b, s * 0.21, a, None);
     }
 }
 
@@ -2764,12 +2895,51 @@ fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f
                 let line = d.fonts.fit(title, 15.0, Weight::Medium, max);
                 d.cv.text(d.fonts, &line, x, cy + 5.2, 15.0, Weight::Medium, d.pal.fg, a);
             }
-            // Four bars that dance, each at its own pace.
+            // Four bars that dance, each at its own pace: two waves per bar so they never look like a loop.
+            // On whole device pixels: a 3 px bar on a half pixel blurs thinner than its neighbours and shimmers.
+            let px = d.cv.k;
+            let snap = |v: f32| (v * px).round() / px;
+            let w = snap(3.0).max(1.0 / px);
             for i in 0..4 {
-                let ph = clock as f32 * (5.0 + i as f32 * 1.3) + i as f32 * 1.7;
-                let h = 5.0 + 11.0 * (0.5 + 0.5 * ph.sin()).powf(1.4);
-                let x = pill.right() - 14.0 - (3 - i) as f32 * 5.5;
-                d.cv.squircle(R::new(x - 1.5, cy - h / 2.0, 3.0, h), 1.5, color(d.pal.accent, a), None);
+                let k = i as f32;
+                let t = clock as f32;
+                let wave = 0.5 + 0.3 * (t * (6.1 + k * 1.3) + k * 1.7).sin() + 0.2 * (t * (9.7 - k * 0.9) + k * 2.9).sin();
+                let h = snap(4.0 + 12.0 * wave.clamp(0.0, 1.0));
+                let x = snap(pill.right() - 14.0 - (3 - i) as f32 * 5.5 - 1.5);
+                d.cv.squircle(R::new(x, snap(cy - h / 2.0), w, h), w / 2.0, color(d.pal.accent, a), None);
+            }
+        }
+        Live::Call => {
+            let Some((_, c)) = m.call() else { return };
+            // The phone in a green dot with a ring that keeps spreading from it: the call goes on.
+            let (cx, k) = (pill.x + 24.0, (clock * 0.8).fract() as f32);
+            d.cv.ring(cx, cy, 11.0 + 6.5 * k, color(SUCCESS, a * 0.7 * (1.0 - k)), 2.0, None);
+            d.cv.circle(cx, cy, 11.0, color(SUCCESS, a), None);
+            icon(d.cv, Icon::Call, cx, cy, 13.0, color([255, 255, 255], a), None);
+            let right = match c.since {
+                Some(s) => fmt_time(s.elapsed().as_millis() as i64),
+                None => t("Entrante", "Incoming").to_string(),
+            };
+            let rw = d.fonts.measure(&right, 15.0, Weight::Bold);
+            d.cv.text(d.fonts, &right, pill.right() - 16.0 - rw, cy + 5.2, 15.0, Weight::Bold, SUCCESS, a);
+            let mut end = pill.right() - 16.0 - rw - 10.0;
+            if c.muted {
+                icon(d.cv, Icon::MicOff, end - 8.0, cy, 15.0, color(DANGER, a), None);
+                end -= 22.0;
+            }
+            let name = if c.name.is_empty() { t("Llamada", "Call").to_string() } else { c.name.clone() };
+            let line = d.fonts.fit(&name, 15.0, Weight::Medium, end - (pill.x + 44.0));
+            d.cv.text(d.fonts, &line, pill.x + 44.0, cy + 5.2, 15.0, Weight::Medium, d.pal.fg, a);
+        }
+        Live::CallEnded(secs) => {
+            let cx = pill.x + 24.0;
+            d.cv.circle(cx, cy, 11.0, color(DANGER, a), None);
+            icon(d.cv, Icon::CallEnd, cx, cy, 13.0, color([255, 255, 255], a), None);
+            d.cv.text(d.fonts, t("Llamada finalizada", "Call ended"), pill.x + 44.0, cy + 5.2, 15.0, Weight::Medium, d.pal.fg, a);
+            if secs >= 0 {
+                let s = fmt_time(secs * 1000);
+                let w = d.fonts.measure(&s, 15.0, Weight::Bold);
+                d.cv.text(d.fonts, &s, pill.right() - 16.0 - w, cy + 5.2, 15.0, Weight::Bold, d.pal.fg, a * 0.6);
             }
         }
         Live::Charging(level) => {
@@ -2788,9 +2958,13 @@ fn draw_call(d: &mut Draw, m: &Model, body: R) {
     let Some((_, c)) = m.call() else { return };
     let name = if c.name.is_empty() { t("Número desconocido", "Unknown number").to_string() } else { c.name.clone() };
     d.avatar((body.x + PAD + 24.0, body.cy()), 48.0, &name);
-    let status = if c.ringing { t("Llamada entrante…", "Incoming call…") } else { t("En llamada", "On a call") };
+    let status = match (c.ringing, c.since) {
+        (true, _) => t("Llamada entrante…", "Incoming call…").to_string(),
+        (false, Some(s)) => format!("{} · {}", t("En llamada", "On a call"), fmt_time(s.elapsed().as_millis() as i64)),
+        (false, None) => t("En llamada", "On a call").to_string(),
+    };
     d.text_in(&name, body.x + PAD + 62.0, body.cy() - 2.0, body.w - 2.0 * PAD - 62.0 - 118.0, 15.5, Weight::Bold, 1.0);
-    d.text(status, body.x + PAD + 62.0, body.cy() + 16.0, 12.5, Weight::Regular, 0.65);
+    d.text_in(&status, body.x + PAD + 62.0, body.cy() + 16.0, body.w - 2.0 * PAD - 62.0 - 118.0, 12.5, Weight::Regular, 0.65);
     let y = body.cy();
     if c.ringing {
         d.round((body.right() - PAD - 76.0, y), 46.0, Icon::CallEnd, Act::Call("decline"), Some(DANGER), [255, 255, 255]);
@@ -2798,6 +2972,9 @@ fn draw_call(d: &mut Draw, m: &Model, body: R) {
             d.round((body.right() - PAD - 22.0, y), 46.0, Icon::Call, Act::Call("answer"), Some(SUCCESS), [255, 255, 255]);
         }
     } else {
+        // Muted: the button lights up (the island's text colour), as the phone's own in-call button does.
+        let (bg, fg) = if c.muted { (d.pal.fg, d.pal.bg) } else { (d.pal.chip, d.pal.fg) };
+        d.round((body.right() - PAD - 76.0, y), 46.0, Icon::MicOff, Act::Call(if c.muted { "unmute" } else { "mute" }), Some(bg), fg);
         d.round((body.right() - PAD - 22.0, y), 46.0, Icon::CallEnd, Act::Call("hangup"), Some(DANGER), [255, 255, 255]);
     }
 }
@@ -2818,6 +2995,36 @@ fn draw_offer(d: &mut Draw, m: &Model, body: R) {
 
 fn draw_transfer(d: &mut Draw, m: &Model, body: R, id: &str) {
     let Some(x) = m.xfers.iter().find(|x| x.id == id) else { return };
+    // A received file: what to do with it, under its preview when it is a photo.
+    if x.saved().is_some() {
+        let (tx, y) = if let (Some(img), Some(_)) = (&x.thumb, x.photo()) {
+            let pic = R::new(body.x + PAD, body.y + 18.0, 120.0, 120.0);
+            d.cv.image(img, pic, 14.0, 1.0, None);
+            let tx = pic.right() + 14.0;
+            let tw = body.right() - PAD - tx;
+            d.text_in(t("Foto recibida", "Photo received"), tx, body.y + 36.0, tw, 12.5, Weight::Regular, 0.62);
+            d.text_in(&x.name, tx, body.y + 56.0, tw, 14.5, Weight::Bold, 1.0);
+            d.text(&fmt_size(x.total), tx, body.y + 74.0, 12.5, Weight::Regular, 0.6);
+            (tx, pic.bottom() - 34.0)
+        } else {
+            let (cx, cy) = (body.x + PAD + 20.0, body.y + 40.0);
+            d.cv.circle(cx, cy, 20.0, color(d.pal.chip, 1.0), None);
+            icon(d.cv, Icon::Check, cx, cy, 20.0, color(SUCCESS, 1.0), None);
+            let tx = body.x + PAD + 52.0;
+            let tw = body.right() - PAD - tx;
+            d.text_in(&x.name, tx, body.y + 34.0, tw, 14.5, Weight::Bold, 1.0);
+            d.text_in(&format!("{} · {}", t("Archivo recibido", "File received"), fmt_size(x.total)), tx, body.y + 52.0, tw, 12.5, Weight::Regular, 0.62);
+            (body.x + PAD, body.bottom() - PAD - 34.0)
+        };
+        let tw = body.right() - PAD - tx;
+        // Discarding deletes only the computer's copy: the phone keeps the original.
+        let (w, y) = ((tw - 16.0) / 3.0, y);
+        let (chip, fg, accent, on) = (d.pal.chip, d.pal.fg, d.pal.accent, d.pal.on_accent);
+        d.pill(R::new(tx, y, w, 34.0), t("Abrir", "Open"), Act::OpenFile(x.id.clone()), accent, on);
+        d.pill(R::new(tx + w + 8.0, y, w, 34.0), t("Carpeta", "Folder"), Act::ShowFile(x.id.clone()), chip, fg);
+        d.pill(R::new(tx + 2.0 * (w + 8.0), y, w, 34.0), t("Descartar", "Discard"), Act::Discard(x.id.clone()), chip, DANGER);
+        return;
+    }
     let ic = match (&x.state, x.incoming) {
         (XState::Done, _) => Icon::Check,
         (XState::Failed(_), _) => Icon::Close,
@@ -2856,9 +3063,11 @@ fn draw_note(d: &mut Draw, n: &Note, body: R, age: f32) {
     let alert = n.badge.is_some();
     let step = |from: f32, len: f32| if alert { ((age - from) / len).clamp(0.0, 1.0) } else { 1.0 };
     let (pop, text_in, badge_in) = (back_out(step(0.06, 0.34)).max(0.0), smooth(step(0.16, 0.30)), back_out(step(0.34, 0.30)).max(0.0));
-    match &n.img {
-        Some(img) => d.cv.image(img, R::new(body.x + PAD, body.cy() - 20.0, 40.0, 40.0), 11.0, 1.0, None),
-        None => {
+    match (&n.avatar, &n.img) {
+        // A chat: the sender's photo, round, with the app's logo on its corner.
+        (Some(av), app) => badged(d, av, 20.0, app.as_ref(), R::new(body.x + PAD, body.cy() - 20.0, 40.0, 40.0), 1.0),
+        (None, Some(img)) => d.cv.image(img, R::new(body.x + PAD, body.cy() - 20.0, 40.0, 40.0), 11.0, 1.0, None),
+        (None, None) => {
             let (cx, cy) = (body.x + PAD + 20.0, body.cy());
             d.cv.circle(cx, cy, 20.0 * pop, color(d.pal.chip, 1.0), None);
             if let Some(ic) = n.icon {
@@ -2970,6 +3179,203 @@ mod tests {
     }
 
     #[test]
+    fn a_button_answers_only_while_held_and_leaves_no_click_afterimage() {
+        let mut i = island();
+        i.model.pc_media = Some(super::super::model::Media {
+            app: "Spotify".into(), title: "Test".into(), playing: true, ..Default::default()
+        });
+        i.open(View::Page(Page::Player), Reason::Key);
+        run(&mut i, 1.0);
+        let mut cv = i.new_canvas(1.0);
+        i.render(&mut cv);
+        let button = i.hits.iter().find(|h| matches!(h.act, Act::PcMedia(_))).unwrap().r;
+        i.set_pointer(Some((button.cx(), button.cy())));
+        i.render(&mut cv);
+        let before = cv.pm.data().to_vec();
+        i.press();
+        i.render(&mut cv);
+        assert_ne!(before, cv.pm.data(), "a held button has immediate feedback");
+        i.release();
+        i.render(&mut cv);
+        assert_eq!(before, cv.pm.data(), "release removes the press feedback in the same frame");
+        assert!(i.take_cmds().iter().any(|c| matches!(c, Cmd::PcMedia(_))));
+        i.take_dirty();
+        assert!(!i.update(1.0 / 60.0).animating, "a click must not schedule decorative frames");
+    }
+
+    #[test]
+    fn cached_frames_survive_buffer_release_and_dpi_changes() {
+        let mut i = island();
+        for k in [1.0, 2.0] {
+            let mut cv = i.new_canvas(k);
+            i.render(&mut cv);
+            assert!(i.layer.is_none(), "a closed notch needs no content layer");
+            let first = cv.pm.data().to_vec();
+            i.render(&mut cv);
+            assert_eq!(first, cv.pm.data(), "repeated frames preserve the pixels");
+            i.release_buffers();
+            i.render(&mut cv);
+            assert_eq!(first, cv.pm.data(), "released buffers are rebuilt correctly");
+        }
+    }
+
+    #[test]
+    fn opening_and_closing_leave_no_shadow_below_the_body() {
+        for k in [1.0, 1.5, 2.0] {
+            let mut i = Island::new(IslandConfig::default());
+            let mut cv = i.new_canvas(k);
+            i.open(View::Page(Page::Home), Reason::Key);
+            for frame in 0..90 {
+                if frame == 45 { i.close(); }
+                i.update(1.0 / 60.0);
+                i.render(&mut cv);
+                // Leave two logical pixels for the antialiased rim.
+                let y = ((i.pill().bottom() + 2.0) * k).ceil() as usize;
+                let start = (y * cv.width_px() as usize * 4).min(cv.pm.data().len());
+                assert!(cv.pm.data()[start..].chunks_exact(4).all(|p| p[3] == 0), "shadow below the body: frame={frame} scale={k}");
+            }
+        }
+    }
+
+    #[test]
+    fn player_controls_keep_a_bottom_margin() {
+        for lyrics in [false, true] {
+            let mut i = island();
+            i.model.pc_media = Some(super::super::model::Media {
+                title: "WhatsApp".into(), app: "Spotify".into(), duration_ms: 8000,
+                ..Default::default()
+            });
+            i.set_lyrics_pref(lyrics);
+            i.open(View::Page(Page::Player), Reason::Key);
+            run(&mut i, 1.0);
+            for k in [1.0, 1.5, 2.0] {
+                let mut cv = i.new_canvas(k);
+                i.render(&mut cv);
+                let bottom = i.pill().bottom() - 18.0;
+                let controls: Vec<_> = i.hits.iter().filter(|h| matches!(h.act, Act::PcMedia(_) | Act::VolButton | Act::Lyrics)).collect();
+                assert!(controls.len() >= 4);
+                for h in controls {
+                    assert!(h.r.bottom() <= bottom + 0.1, "control {:?}: {:?}, bottom {bottom}, lyrics {lyrics}", h.act, h.r);
+                }
+            }
+        }
+    }
+
+    /// Uses the real compositor without moving the pointer or taking keyboard focus.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn transition_profile() {
+        use super::super::run::Host;
+        let load: usize = std::env::var("ISLAND_PROFILE_LOAD").ok().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let workers: Vec<_> = (0..load).map(|_| {
+            let running = running.clone();
+            std::thread::spawn(move || {
+                while running.load(std::sync::atomic::Ordering::Relaxed) {
+                    std::hint::black_box((0..1000).fold(1.0f64, |a, n| (a + n as f64).sqrt()));
+                }
+            })
+        }).collect();
+        println!("cpu_load_workers={load}");
+        let mut host = super::super::win::WinHost::new().expect("desktop window");
+        let mon = host.monitors()[0];
+        let dpi = host.dpi(mon);
+        let k = dpi * ((mon.3 - mon.1) as f32 / dpi / 950.0).clamp(1.0, 1.2);
+        println!("monitor={mon:?} dpi={dpi} render_scale={k}");
+        let mut cfg = IslandConfig::default();
+        cfg.animation = "soft".into();
+        let mut i = Island::new(cfg);
+        i.model.pc_media = Some(super::super::model::Media {
+            app: "Spotify".into(), title: "Transition profile".into(), artist: "Alero".into(),
+            playing: true, duration_ms: 180000, at: Some(Instant::now()), ..Default::default()
+        });
+        let scene = std::env::var("ISLAND_PROFILE_VIEW").unwrap_or_else(|_| "player".into());
+        let view = match scene.as_str() {
+            "home" => View::Page(Page::Home),
+            "notifs" => View::Page(Page::Notifs),
+            "lyrics" => View::Page(Page::Player),
+            _ => View::Page(Page::Player),
+        };
+        if scene == "notifs" {
+            with_phone(&mut i);
+            for n in 0..3 {
+                i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key": format!("{n}"), "app": "WhatsApp", "title": "Ana", "text": "¿Vienes hoy? 🎧", "replyable": true}) });
+            }
+        }
+        if scene == "lyrics" {
+            i.model.pc_media.as_mut().unwrap().art = Some(super::super::gfx::Image::from_rgba(32, 32, [180, 70, 120, 255].repeat(32 * 32)).unwrap());
+            i.set_lyrics_pref(true);
+            i.set_lyrics("Transition profile|Alero".into(), Some(crate::lyrics::parse_lrc("[00:00.00]Una línea para comprobar el movimiento\n[00:01.50]La siguiente línea se desplaza suavemente")));
+        }
+        println!("scene={scene}");
+        let mut cv = i.new_canvas(k);
+        let mut pixels = Vec::new();
+        let mut render = Vec::new();
+        let mut present = Vec::new();
+        let mut intervals = Vec::new();
+        let mut stages = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+        let mut last = Instant::now();
+        for frame in 0..180 {
+            let now = Instant::now();
+            let dt = now.duration_since(last).as_secs_f32();
+            last = now;
+            if frame > 0 { intervals.push(dt as f64 * 1000.0); }
+            if frame == 0 || frame == 100 { i.open(view.clone(), Reason::Key); }
+            if frame == 65 { i.close(); }
+            i.update(dt);
+            let start = Instant::now();
+            i.render(&mut cv);
+            render.push(start.elapsed().as_secs_f64() * 1000.0);
+            for (stage, ms) in stages.iter_mut().zip(i.profile) { stage.push(ms); }
+            let b = i.crop_box().unwrap();
+            let x0 = (b.x * k).floor().max(0.0) as u32;
+            let x1 = (b.right() * k).ceil().min(cv.width_px() as f32) as u32;
+            let h = (b.bottom() * k).ceil().min(cv.height_px() as f32) as u32;
+            pixels.clear();
+            for row in 0..h as usize {
+                let at = (row * cv.width_px() as usize + x0 as usize) * 4;
+                pixels.extend_from_slice(&cv.pm.data()[at..at + (x1 - x0) as usize * 4]);
+            }
+            let start = Instant::now();
+            host.present(Some((&pixels, x1 - x0, h, (mon.0 + mon.2) / 2 - (CANVAS_W * k / 2.0) as i32 + x0 as i32, mon.1)));
+            present.push(start.elapsed().as_secs_f64() * 1000.0);
+            host.pump(0);
+            host.vsync();
+        }
+        host.present(None);
+        running.store(false, std::sync::atomic::Ordering::Relaxed);
+        for worker in workers { worker.join().unwrap(); }
+        for (name, mut samples) in ["setup", "background", "content", "composite"].into_iter().zip(stages) {
+            samples.sort_by(f64::total_cmp);
+            println!("{name}: p95={:.3} max={:.3} ms", samples[samples.len()*95/100], samples.last().unwrap());
+        }
+        for (name, mut samples) in [("render", render), ("present", present), ("frame interval", intervals)] {
+            samples.sort_by(f64::total_cmp);
+            println!("{name}: p50={:.3} p95={:.3} max={:.3} ms", samples[samples.len()/2], samples[samples.len()*95/100], samples.last().unwrap());
+        }
+    }
+
+    /// Run explicitly on the same machine/build to compare CPU rendering; no timing threshold in CI.
+    #[test]
+    #[ignore]
+    fn render_benchmark() {
+        let mut i = island();
+        i.model.pc_media = Some(super::super::model::Media {
+            title: "Test track".into(), app: "Spotify".into(), duration_ms: 8000, ..Default::default()
+        });
+        i.open(View::Page(Page::Player), Reason::Key);
+        run(&mut i, 1.0);
+        for k in [1.0, 1.5, 2.0] {
+            let mut cv = i.new_canvas(k);
+            i.render(&mut cv);
+            let start = Instant::now();
+            for _ in 0..60 { i.render(&mut cv); }
+            println!("player scale={k}: {:.3} ms/frame", start.elapsed().as_secs_f64() * 1000.0 / 60.0);
+        }
+    }
+
+    #[test]
     fn it_opens_after_the_delay_and_not_before() {
         let mut i = island();
         i.set_zone(true, false, 0.05);
@@ -3041,12 +3447,50 @@ mod tests {
     }
 
     #[test]
+    fn incidental_audio_never_wakes_the_island_and_clears_a_previous_track() {
+        let mut i = island();
+        for app in ["WhatsApp.exe", "TikTok", "Chrome", "unknown"] {
+            i.model.pc_media = Some(super::super::model::Media {
+                app: app.into(), title: "YouTube Spotify voice note".into(), playing: true, ..Default::default()
+            });
+            run(&mut i, 0.1);
+            assert_eq!(i.live(), None, "{app}");
+            assert!(i.media_line().is_none(), "{app}");
+        }
+        i.model.pc_media.as_mut().unwrap().app = "Spotify".into();
+        run(&mut i, 0.1);
+        assert_eq!(i.live(), Some(Live::Media));
+        i.model.pc_media.as_mut().unwrap().app = "WhatsApp".into();
+        run(&mut i, 0.1);
+        assert_eq!(i.live(), None, "the previous four-second activity must disappear immediately");
+    }
+
+    #[test]
+    fn an_excluded_source_does_not_hide_streaming_on_the_other_device() {
+        let mut i = island();
+        with_phone(&mut i);
+        i.model.pc_media = Some(super::super::model::Media {
+            app: "WhatsApp.exe".into(), title: "Voice note".into(), playing: true, ..Default::default()
+        });
+        i.model.phone_media = Some(super::super::model::Media {
+            app: "Spotify".into(), pkg: "com.spotify.music".into(), title: "Track".into(), playing: true, ..Default::default()
+        });
+        run(&mut i, 0.1);
+        assert_eq!(i.live(), Some(Live::Media));
+        assert!(!i.media_line().unwrap().1, "show the phone, not WhatsApp on the PC");
+        i.model.phone_media.as_mut().unwrap().pkg = "com.zhiliaoapp.musically".into();
+        run(&mut i, 0.1);
+        assert_eq!(i.live(), None, "the package takes precedence over a display name");
+        assert!(i.media_line().is_none());
+    }
+
+    #[test]
     fn music_and_charging_live_in_the_closed_island() {
         let mut i = island();
         with_phone(&mut i);
         run(&mut i, 0.5);
         assert!((i.w.value - PEEK.0).abs() < 1.0);
-        i.model.pc_media = Some(super::super::model::Media { title: "T".into(), playing: true, speed: 1.0, ..Default::default() });
+        i.model.pc_media = Some(super::super::model::Media { title: "T".into(), app: "Spotify".into(), playing: true, speed: 1.0, ..Default::default() });
         run(&mut i, 1.0);
         assert_eq!(i.live(), Some(Live::Media));
         assert!((i.w.value - LIVE.0).abs() < 1.0);
@@ -3065,7 +3509,7 @@ mod tests {
     }
 
     /// The closed window is cut to `rest_box`: nothing may ever be drawn outside it, in any closed state and on any
-    /// frame of the springs (normal animation, with its overshoot), or the notch or its shadow would be clipped.
+    /// frame of the springs (normal animation, with its overshoot), or the notch would be clipped.
     #[test]
     fn the_closed_island_never_draws_outside_its_box() {
         let mut i = Island::new(IslandConfig::default());
@@ -3103,7 +3547,7 @@ mod tests {
         frame(&mut i, true, 0.8);
         frame(&mut i, false, 0.8);
         // Music: the compact island, then swollen under the pointer.
-        i.model.pc_media = Some(super::super::model::Media { title: "T".into(), artist: "A".into(), playing: true, speed: 1.0, ..Default::default() });
+        i.model.pc_media = Some(super::super::model::Media { title: "T".into(), artist: "A".into(), app: "Spotify".into(), playing: true, speed: 1.0, ..Default::default() });
         frame(&mut i, false, 0.8);
         frame(&mut i, true, 0.8);
         frame(&mut i, false, 4.5);
@@ -3176,6 +3620,144 @@ mod tests {
     }
 
     #[test]
+    fn an_answered_call_folds_into_the_compact_island_and_hanging_up_says_so() {
+        let mut i = island();
+        with_phone(&mut i);
+        let call = |i: &mut Island, body: Value| {
+            let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body });
+            i.notices(n);
+        };
+        call(&mut i, json!({"active":true,"ringing":true,"canAnswer":true,"name":"\u{2068}Tamarindo\u{2069}"}));
+        assert_eq!(i.model.call().unwrap().1.name, "Tamarindo", "bidi isolates are not drawn as boxes");
+        // Answered with the pointer still on the card: it folds anyway.
+        i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
+        call(&mut i, json!({"active":true,"ringing":false,"name":"Tamarindo","muted":true}));
+        run(&mut i, 1.5);
+        assert!(!i.is_open());
+        assert_eq!(i.live(), Some(Live::Call));
+        assert_eq!(i.pill().w, LIVE.0, "the compact island, not the bare notch");
+        assert!(i.ui.live_a > 0.99);
+        // Hovering the top edge brings the call card back, with its controls.
+        i.set_zone(true, false, 1.0);
+        assert_eq!(i.want, View::Call);
+        i.set_zone(false, false, 0.1);
+        i.set_pointer(None);
+        run(&mut i, 3.0);
+        assert!(!i.is_open());
+        call(&mut i, json!({"active":false}));
+        assert!(matches!(i.live(), Some(Live::CallEnded(s)) if s >= 0));
+        run(&mut i, 3.0);
+        assert_eq!(i.live(), None);
+        assert_eq!(i.ui.live_a, 0.0);
+        // A phone connecting says "no call": nothing ended.
+        call(&mut i, json!({"active":false}));
+        assert_eq!(i.live(), None);
+    }
+
+    #[test]
+    fn mute_shows_at_once_beside_hang_up() {
+        let mut i = island();
+        with_phone(&mut i);
+        let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":false,"name":"Ana"}) });
+        i.notices(n);
+        i.take_cmds();
+        i.act(Act::Call("mute"));
+        assert!(i.model.call().unwrap().1.muted);
+        assert_eq!(i.take_cmds(), vec![Cmd::CallAction("mute")]);
+        let mut cv = i.new_canvas(1.0);
+        i.open(View::Call, Reason::Hover);
+        i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
+        run(&mut i, 0.5);
+        i.render(&mut cv);
+        assert!(i.hits.iter().any(|h| h.act == Act::Call("unmute")), "mute shows as on");
+        assert!(i.hits.iter().any(|h| h.act == Act::Call("hangup")));
+    }
+
+    #[test]
+    fn the_compact_player_leaves_after_a_while_and_a_blinking_source_does_not_rearm_it() {
+        let mut i = island();
+        let md = |playing: bool| super::super::model::Media { title: "T".into(), artist: "A".into(), app: "Spotify".into(), playing, speed: 1.0, at: Some(Instant::now()), ..Default::default() };
+        i.model.pc_media = Some(md(true));
+        run(&mut i, 1.0);
+        assert_eq!(i.live(), Some(Live::Media));
+        // Spotify blinking (a stop of a frame or two) every second: it still goes after its four seconds.
+        for _ in 0..5 {
+            i.model.pc_media = Some(md(false));
+            run(&mut i, 0.05);
+            i.model.pc_media = Some(md(true));
+            run(&mut i, 0.95);
+        }
+        assert_eq!(i.live(), None);
+        assert_eq!(i.ui.live_a, 0.0);
+        assert_eq!(i.ui.live_last, Some(Live::Media), "drawn while it fades out");
+        // A real pause, then playing again: shown again.
+        i.model.pc_media = Some(md(false));
+        run(&mut i, 4.0);
+        i.model.pc_media = Some(md(true));
+        run(&mut i, 0.1);
+        assert_eq!(i.live(), Some(Live::Media));
+    }
+
+    #[test]
+    fn a_card_opening_over_the_compact_player_fades_it_instead_of_blanking_it() {
+        let mut i = island();
+        let md = |playing: bool| super::super::model::Media { title: "T".into(), artist: "A".into(), app: "Spotify".into(), playing, speed: 1.0, at: Some(Instant::now()), ..Default::default() };
+        i.model.pc_media = Some(md(true));
+        run(&mut i, 1.0);
+        assert!(i.ui.live_a > 0.99);
+        i.open(View::Note, Reason::Event(Some(1.0)));
+        assert!(i.ui.live_a > 0.99, "still drawn under the growing card");
+        let mut cv = i.new_canvas(1.0);
+        i.render(&mut cv);
+        // The song ends while the card is up: on the way down nothing old flashes back.
+        i.model.pc_media = Some(md(false));
+        run(&mut i, 3.0);
+        assert!(!i.is_open());
+        assert_eq!(i.ui.live_a, 0.0);
+    }
+
+    #[test]
+    fn a_received_photo_shows_its_preview_and_can_be_discarded() {
+        let mut i = island();
+        with_phone(&mut i);
+        let started = i.model.feed(&Event::TransferStarted { id: "x".into(), peer_id: "p".into(), peer_name: "Pixel".into(), name: "PXL_1.jpg".into(), size: 3_000_000, incoming: true });
+        i.notices(started);
+        let done = i.model.feed(&Event::TransferFinished { id: "x".into(), ok: true, code: String::new(), message: String::new(), path: "C:/Descargas/PXL_1.jpg".into() });
+        i.notices(done);
+        assert!(i.take_cmds().contains(&Cmd::Thumb { id: "x".into(), path: "C:/Descargas/PXL_1.jpg".into() }));
+        assert_eq!(i.size_of(&View::Transfer("x".into())), (440.0, 120.0), "the choices come at once, the preview when decoded");
+        i.set_thumb("x", Some(Image { w: 4, h: 3, data: vec![255; 48] }));
+        let (w, h) = i.size_of(&View::Transfer("x".into()));
+        assert!(w * 1.08 <= CANVAS_W && h * 1.08 + 30.0 <= CANVAS_H && h > 92.0);
+        run(&mut i, 2.5);
+        assert!(i.is_open(), "it waits for a decision longer than a plain file");
+        i.act(Act::Discard("x".into()));
+        assert_eq!(i.take_cmds(), vec![Cmd::Discard("C:/Descargas/PXL_1.jpg".into())]);
+        assert!(i.model.xfers.is_empty());
+        assert_ne!(i.phase, Phase::Open, "the card goes once decided");
+    }
+
+    #[test]
+    fn any_received_file_asks_what_to_do_with_it() {
+        let mut i = island();
+        with_phone(&mut i);
+        let started = i.model.feed(&Event::TransferStarted { id: "d".into(), peer_id: "p".into(), peer_name: "Pixel".into(), name: "informe.pdf".into(), size: 80_000, incoming: true });
+        i.notices(started);
+        let done = i.model.feed(&Event::TransferFinished { id: "d".into(), ok: true, code: String::new(), message: String::new(), path: "C:/Descargas/informe.pdf".into() });
+        i.notices(done);
+        assert!(!i.take_cmds().iter().any(|c| matches!(c, Cmd::Thumb { .. })), "only photos get decoded");
+        assert_eq!(i.size_of(&View::Transfer("d".into())), (440.0, 120.0));
+        run(&mut i, 0.6);
+        let mut cv = i.new_canvas(1.0);
+        i.render(&mut cv);
+        assert!(i.hits.iter().any(|h| h.act == Act::Discard("d".into())), "the choices are drawn");
+        run(&mut i, 2.5);
+        assert!(i.is_open(), "it waits for a decision");
+        i.act(Act::OpenFile("d".into()));
+        assert_eq!(i.take_cmds(), vec![Cmd::OpenFile("C:/Descargas/informe.pdf".into())]);
+    }
+
+    #[test]
     fn a_file_offer_waits_for_the_user_and_the_buttons_answer() {
         let mut i = island();
         with_phone(&mut i);
@@ -3192,6 +3774,32 @@ mod tests {
         i.release();
         let cmds: Vec<Cmd> = i.take_cmds().into_iter().filter(|c| *c != Cmd::AskMedia).collect();
         assert_eq!(cmds, vec![Cmd::Respond { id: "t1".into(), accept: true }]);
+    }
+
+    #[test]
+    fn going_to_a_notification_opens_the_island_on_the_notifications_at_once() {
+        let mut i = island();
+        with_phone(&mut i);
+        let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key":"k","app":"WhatsApp","title":"Ana","text":"¿Vienes?"}) });
+        i.notices(n);
+        run(&mut i, 0.5);
+        assert_eq!(i.want, View::Note);
+        let card = i.pill();
+        i.set_pointer(Some((card.cx(), card.cy())));
+        run(&mut i, 0.05);
+        assert_eq!(i.want, View::Page(Page::Notifs), "not after the toast's six seconds");
+        assert!(i.is_open());
+    }
+
+    #[test]
+    fn a_status_note_under_the_pointer_stays_a_note() {
+        let mut i = island();
+        i.show_note(Note { icon: Some(Icon::Check), title: "Archivo descartado".into(), text: String::new(), good: true, w: 0.0, img: None, badge: None, avatar: None, notif: false });
+        run(&mut i, 0.5);
+        let card = i.pill();
+        i.set_pointer(Some((card.cx(), card.cy())));
+        run(&mut i, 0.5);
+        assert_eq!(i.want, View::Note, "the pointer was already there: it clicked what led to it");
     }
 
     #[test]
@@ -3374,7 +3982,9 @@ mod tests {
         i.open(View::Transfer("t".into()), Reason::Event(None));
         i.model.feed(&Event::TransferStarted { id: "t".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "a.zip".into(), size: 10, incoming: true });
         i.model.feed(&Event::TransferFinished { id: "t".into(), ok: true, code: String::new(), message: String::new(), path: "x".into() });
-        run(&mut i, 4.0);
+        // A received file waits for a choice, then goes all the same.
+        let wait = i.cfg.event_secs as f32 + 1.5;
+        run(&mut i, wait);
         assert!(!i.is_open());
     }
 
@@ -3458,8 +4068,15 @@ mod tests {
             ("controls", View::Page(Page::Controls)),
             ("controls-all", View::Page(Page::Controls)),
             ("call", View::Call),
+            ("call-active", View::Call),
+            ("live-call", View::Call),
+            ("live-ended", View::Call),
+            ("live-media", View::Call),
+            ("note-chat", View::Note),
             ("offer", View::Offer),
             ("transfer", View::Transfer("x1".into())),
+            ("photo", View::Transfer("x2".into())),
+            ("file", View::Transfer("x3".into())),
             ("note", View::Note),
             ("drop", View::Drop),
         ];
@@ -3476,17 +4093,46 @@ mod tests {
                 for (n, (app, title, text)) in [("WhatsApp", "Ana", "¿Vienes a cenar hoy? Te guardé un lugar"), ("Gmail", "Banco", "Tu estado de cuenta está listo"), ("Telegram", "Edwin", "ya lo subí al repo 👍")].iter().enumerate() {
                     i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key": format!("k{n}"), "app": app, "title": title, "text": text}) });
                 }
-                for c in ["https://github.com/Alero-Team/Alero", "Reunión mañana 10:00"] {
+                for c in ["https://github.com/k0op4/Alero", "Reunión mañana 10:00"] {
                     i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.clip".into(), body: json!({"text": c}) });
                 }
-                i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), playing: true, position_ms: 83_000, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), art: Some(art.clone()), ..Default::default() });
+                i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), app: "Spotify".into(), playing: true, position_ms: 83_000, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), art: Some(art.clone()), ..Default::default() });
                 i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":true,"canAnswer":true,"name":"Mamá"}) });
                 i.model.feed(&Event::TransferOffer { id: "o1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "Vacaciones-2026.mp4".into(), size: 482_000_000 });
                 i.model.feed(&Event::TransferStarted { id: "x1".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "informe-final.pdf".into(), size: 8_000_000, incoming: false });
                 i.model.feed(&Event::TransferProgress { id: "x1".into(), done: 5_200_000, total: 8_000_000, bytes_per_sec: 3_400_000 });
+                i.model.feed(&Event::TransferStarted { id: "x2".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "PXL_20261125_211502.jpg".into(), size: 3_400_000, incoming: true });
+                i.model.feed(&Event::TransferFinished { id: "x2".into(), ok: true, code: String::new(), message: String::new(), path: "C:/Descargas/PXL_20261125_211502.jpg".into() });
+                i.set_thumb("x2", Some(art.clone()));
+                i.model.feed(&Event::TransferStarted { id: "x3".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "Contrato-alquiler-2026.pdf".into(), size: 1_250_000, incoming: true });
+                i.model.feed(&Event::TransferFinished { id: "x3".into(), ok: true, code: String::new(), message: String::new(), path: "C:/Descargas/Contrato-alquiler-2026.pdf".into() });
                 i.model.adb.insert("p".into(), super::super::adb::Radios { wifi: true, bt: true, rotate: false });
-                i.note = Note { icon: Some(Icon::Bell), title: "WhatsApp · Ana".into(), text: "¿Vienes a cenar hoy?".into(), good: false, w: 0.0, img: None, badge: None };
-                i.open(view.clone(), Reason::Hover);
+                i.note = Note { icon: Some(Icon::Bell), title: "WhatsApp · Ana".into(), text: "¿Vienes a cenar hoy?".into(), good: false, w: 0.0, img: None, badge: None, avatar: None, notif: false };
+                let logo = super::super::gfx::Image { w: 8, h: 8, data: [37u8, 211, 102, 255].repeat(64) };
+                for n in i.model.notifs.iter_mut().take(2) {
+                    n.avatar = Some(art.clone());
+                }
+                if *name == "note-chat" {
+                    i.note.avatar = Some(art.clone());
+                    i.note.img = Some(logo);
+                }
+                if name.starts_with("call-") || name.starts_with("live-") {
+                    let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":false,"name":"\u{2068}Tamarindo 🌰\u{2069}","muted":true}) });
+                    i.notices(n);
+                    if let Some(c) = i.model.calls.get_mut("p") {
+                        c.since = Instant::now().checked_sub(std::time::Duration::from_secs(83));
+                    }
+                }
+                if matches!(*name, "live-ended" | "live-media") {
+                    let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":false}) });
+                    i.notices(n);
+                    if *name == "live-media" {
+                        i.call_end.0 = 0.0;
+                    }
+                }
+                if !name.starts_with("live-") {
+                    i.open(view.clone(), Reason::Hover);
+                }
                 i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
                 run(&mut i, 0.8);
                 if *name == "drop" {
@@ -3494,7 +4140,7 @@ mod tests {
                 }
                 let mut cv = i.new_canvas(k);
                 i.render(&mut cv);
-                // Over a mid-grey "desktop" so the shadow and rim are visible.
+                // Over a mid-grey "desktop" so the silhouette and rim are visible.
                 let mut out = Canvas::new(CANVAS_W, CANVAS_H, k);
                 out.pm.fill(tiny_skia::Color::from_rgba8(70, 78, 92, 255));
                 out.blit(&cv.pm, 1.0, 1.0, 0.0, 0.0, None);
@@ -3554,7 +4200,7 @@ mod tests {
             for (n, (app, title, text, reply)) in [("WhatsApp", "Lucía", "¿Me pasas las fotos de ayer?", true), ("Gmail", "Banco Andino", "Tu estado de cuenta está listo", false)].iter().enumerate() {
                 i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.notif.posted".into(), body: json!({"key": format!("k{n}"), "app": app, "title": title, "text": text, "replyable": reply, "markable": true}) });
             }
-            for c in ["https://github.com/Alero-Team/Alero", "Reunión mañana 10:00"] {
+            for c in ["https://github.com/k0op4/Alero", "Reunión mañana 10:00"] {
                 i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.clip".into(), body: json!({"text": c}) });
             }
             i
@@ -3635,7 +4281,7 @@ mod tests {
         cfg.animation = "normal".into();
         let mut i = Island::new(cfg);
         with_phone(&mut i);
-        i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), playing: true, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), ..Default::default() });
+        i.model.pc_media = Some(super::super::model::Media { title: "Un Verano Sin Ti".into(), artist: "Bad Bunny".into(), app: "Spotify".into(), playing: true, duration_ms: 212_000, speed: 1.0, at: Some(Instant::now()), ..Default::default() });
         i.set_zone(true, false, 0.2);
         i.set_pointer(Some((CANVAS_W / 2.0, 40.0)));
         let mut shots: Vec<(String, f32)> = [0, 30, 60, 90, 120, 160, 220, 320, 450].iter().map(|ms| (format!("open-{ms:03}"), *ms as f32 / 1000.0)).collect();

@@ -11,13 +11,13 @@ import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
 import 'phone_windows.dart';
 import 'controls.dart' show Presence;
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
 
-/// "Acceso remoto": view and drive a phone from this computer with scrcpy, over USB or wireless
+/// "Acceso remoto": view and drive a phone from this computer with scrcpy (ADR-0008), over USB or wireless
 /// debugging. The user authorises it on the phone (adb), a paired phone shows a notice with "Detener", and every
 /// session ends with its window, with "Detener" here or there, or when Alero quits.
 Future<void> openScreen(BuildContext context, Hub hub, pb.Peer phone) =>

@@ -499,6 +499,7 @@ pub fn media_state() -> Option<Media> {
         .unwrap_or_else(|_| name.trim_start_matches("org.mpris.MediaPlayer2.").to_string());
     Some(Media {
         app,
+        source_url: text("xesam:url"),
         title: text("xesam:title"),
         artist,
         playing: prop_cast::<String>(&props, "PlaybackStatus").is_some_and(|s| s == "Playing"),
@@ -514,6 +515,54 @@ pub fn media_state() -> Option<Media> {
 /// hand over huge images turn out to be common.
 /// shortcut: no app icon on Linux (MPRIS gives none directly); look it up via the desktop entry if wanted.
 pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
+    None
+}
+
+/// The picture on the desktop: Plasma's (its desktop config) or GNOME's (gsettings). A Plasma wallpaper package
+/// (a folder) gives its largest image.
+pub fn wallpaper_file() -> Option<std::path::PathBuf> {
+    let home = std::path::PathBuf::from(std::env::var_os("HOME")?);
+    let plasma = std::fs::read_to_string(home.join(".config/plasma-org.kde.plasma.desktop-appletsrc")).ok();
+    let uri = plasma
+        .as_deref()
+        .and_then(|c| c.lines().find_map(|l| l.trim().strip_prefix("Image=").map(str::to_string)))
+        .or_else(|| {
+            let out = Command::new("gsettings").args(["get", "org.gnome.desktop.background", "picture-uri"]).stderr(Stdio::null()).output().ok()?;
+            Some(String::from_utf8_lossy(&out.stdout).trim().trim_matches('\'').to_string())
+        })?;
+    let p = std::path::PathBuf::from(uri.strip_prefix("file://").unwrap_or(uri.as_str()));
+    if p.is_file() {
+        return Some(p);
+    }
+    std::fs::read_dir(p.join("contents/images")).ok()?.flatten().map(|e| e.path()).filter(|f| f.is_file()).max_by_key(|f| f.metadata().map(|m| m.len()).unwrap_or(0))
+}
+
+/// A JPEG or PNG picture as a JPEG whose longest side is at most `max` px.
+pub fn picture_jpeg(path: &Path, max: u32) -> Option<Vec<u8>> {
+    let (w, h, bgra) = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+        decode_png(path)?
+    } else {
+        let mut dec = jpeg_decoder::Decoder::new(std::io::BufReader::new(File::open(path).ok()?));
+        // The smallest DCT scale that still covers `max`: a 4K picture is never decoded whole.
+        let (w, h) = dec.scale(max as u16, max as u16).ok()?;
+        let px = dec.decode().ok()?;
+        let bgra: Vec<u8> = match dec.info()?.pixel_format {
+            jpeg_decoder::PixelFormat::RGB24 => px.chunks_exact(3).flat_map(|p| [p[2], p[1], p[0], 255]).collect(),
+            jpeg_decoder::PixelFormat::L8 => px.iter().flat_map(|&g| [g, g, g, 255]).collect(),
+            _ => return None,
+        };
+        (w as u32, h as u32, bgra)
+    };
+    let k = (max as f32 / w.max(h) as f32).min(1.0);
+    let (dw, dh) = (((w as f32 * k) as usize).max(1), ((h as f32 * k) as usize).max(1));
+    let small = shrink(&bgra, w as usize, h as usize, dw, dh);
+    let mut out = Vec::new();
+    jpeg_encoder::Encoder::new(&mut out, 78).encode(&small, dw as u16, dh as u16, jpeg_encoder::ColorType::Bgra).ok()?;
+    (out.len() <= 150_000).then_some(out)
+}
+
+/// MPRIS already names the player ("Spotify", "Firefox").
+pub fn app_name(_: &str) -> Option<String> {
     None
 }
 

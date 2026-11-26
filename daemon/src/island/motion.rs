@@ -37,9 +37,13 @@ impl Spring {
         self.vel = 0.0;
     }
 
-    /// Advances by `dt` seconds. Fixed sub-steps keep it stable whatever the frame time is.
+    /// Advances by `dt` seconds. A long missed frame settles instead of replaying stale motion.
     pub fn step(&mut self, dt: f32) {
-        let mut left = dt.clamp(0.0, 0.1);
+        if dt >= 0.1 {
+            self.snap(self.target);
+            return;
+        }
+        let mut left = dt.max(0.0);
         while left > 0.0 {
             let h = left.min(1.0 / 480.0);
             let a = -self.omega * self.omega * (self.value - self.target) - 2.0 * self.zeta * self.omega * self.vel;
@@ -88,8 +92,6 @@ pub struct Motion {
     pub content: (f32, f32),
     /// Seconds the content waits for the container to start growing before it appears.
     pub content_delay: f32,
-    /// Scale the content has when it is not shown.
-    pub content_scale: f32,
 }
 
 impl Motion {
@@ -101,13 +103,12 @@ impl Motion {
             page: (0.42, 0.80),
             content: (0.26, 1.0),
             content_delay: 0.07,
-            content_scale: 0.90,
         };
         match style {
             Style::Normal => base,
-            Style::Soft => Self { expand: (0.52, 0.90), collapse: (0.42, 0.95), page: (0.46, 0.92), content_scale: 0.95, ..base },
+            Style::Soft => Self { expand: (0.52, 0.90), collapse: (0.42, 0.95), page: (0.46, 0.92), ..base },
             // The springs are still there but so stiff that they settle at once.
-            Style::Off => Self { expand: (0.04, 1.0), collapse: (0.04, 1.0), page: (0.04, 1.0), content: (0.04, 1.0), content_delay: 0.0, content_scale: 1.0, ..base },
+            Style::Off => Self { style, expand: (0.04, 1.0), collapse: (0.04, 1.0), page: (0.04, 1.0), content: (0.04, 1.0), content_delay: 0.0 },
         }
     }
 }
@@ -146,6 +147,18 @@ mod tests {
         flat.to(100.0);
         let (_, peak) = run(flat, 2.0);
         assert!(peak <= 100.001, "{peak}");
+    }
+
+    #[test]
+    fn a_missed_frame_finishes_motion_instead_of_replaying_it() {
+        let mut s = Spring::new(0.0, 0.46, 0.72);
+        s.to(100.0);
+        s.step(1.0 / 60.0);
+        assert!(s.value > 0.0 && s.value < 100.0);
+        s.step(0.15);
+        assert_eq!(s.value, 100.0);
+        assert_eq!(s.vel, 0.0);
+        assert!(s.settled(0.001));
     }
 
     #[test]

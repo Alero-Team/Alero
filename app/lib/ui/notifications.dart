@@ -8,7 +8,7 @@ import '../hub.dart';
 import '../native.dart';
 import '../remote.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';

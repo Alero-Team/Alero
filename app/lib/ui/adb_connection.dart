@@ -15,7 +15,7 @@ import 'widgets.dart';
 import 'icon.dart';
 import '../l10n.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'settings.dart' show AleroSegments;
 
 /// The ADB controls of Dispositivos.

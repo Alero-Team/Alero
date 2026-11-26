@@ -7,7 +7,7 @@ import '../pc_files.dart';
 import 'icon.dart';
 import '../l10n.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'controls.dart' show Presence;
 
 /// Browse folders the Windows owner explicitly selected, over Alero's
@@ -108,7 +108,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
   Widget _file(FsEntry entry) {
     final date = entry.mtime;
     return Card(
-      child: AleroPress(
+      child: QollqePress(
         onTap: () {
           if (entry.dir) {
             fs.enter(entry);
@@ -198,7 +198,7 @@ class _PcFilesPageState extends State<PcFilesPage> {
             child: Center(child: Text('Carpeta vacía')),
           ),
         for (final (i, entry) in fs.entries.indexed)
-          AleroMotion.reveal(context, i, _file(entry)),
+          QollqeMotion.reveal(context, i, _file(entry)),
         if (fs.total > 0)
           Padding(
             padding: const EdgeInsets.all(12),
@@ -215,11 +215,11 @@ class _PcFilesPageState extends State<PcFilesPage> {
             ),
           ),
         for (final (i, root) in fs.roots.indexed)
-          AleroMotion.reveal(
+          QollqeMotion.reveal(
             context,
             i,
             Card(
-              child: AleroPress(
+              child: QollqePress(
                 onTap: () => fs.selectRoot(root.id),
                 child: ListTile(
                   leading: const Icon(FluentIcons.folder_people_24_regular),

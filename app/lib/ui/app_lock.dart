@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../native.dart';
 import 'icon.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import '../l10n.dart';
 
 /// Above the Navigator so existing dialogs and routes cannot bypass the lock.

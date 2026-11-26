@@ -9,7 +9,7 @@ import 'remote_ui.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import '../l10n.dart';
 
 /// Alero Present uses the existing, authenticated PC input channel.
@@ -272,7 +272,7 @@ class _AleroPresentPageState extends State<AleroPresentPage>
                     children: [
                       Text('Cronómetro de exposición', style: t.titleMedium),
                       const SizedBox(height: Gap.s),
-                      AleroMotion.number(_time, t.displayMedium),
+                      QollqeMotion.number(_time, t.displayMedium),
                       const SizedBox(height: Gap.s),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,

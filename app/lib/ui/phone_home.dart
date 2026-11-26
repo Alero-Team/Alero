@@ -11,7 +11,7 @@ import 'expressive.dart' show Spring, motion;
 import 'pc_control.dart';
 import 'pc_files.dart';
 import 'pc_screen.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'remote_ui.dart';
 import 'theme.dart';
 import 'widgets.dart' show FitLabel;
@@ -137,7 +137,7 @@ class _Small extends StatelessWidget {
             borderRadius: BorderRadius.circular(Radii.tile),
 
           ),
-          child: AleroPress(
+          child: QollqePress(
             radius: Radii.tile,
             onTap: onTap,
             child: SizedBox(
@@ -242,9 +242,10 @@ class RemoteCard extends StatelessWidget {
   }
 }
 
-/// The way into "Control remoto", as a picture of what it is: the computer's screen (its wallpaper) with a
-/// pointer wandering over it. Tapping it opens the touchpad. It is a drawing, not the live screen: watching the
-/// real one always starts from inside, where the computer shows its notice.
+/// The way into "Control remoto", as a picture of what it is: the computer's screen (its wallpaper) drifting
+/// slowly, and a fingertip that taps on it now and then, like on the touchpad. Tapping it opens the touchpad. It
+/// is a drawing, not the live screen: watching the real one always starts from inside, where the computer shows
+/// its notice.
 class _RemotePreview extends StatefulWidget {
   const _RemotePreview({required this.name, this.wallpaper, this.onOpen});
   final String name;
@@ -259,7 +260,7 @@ class _RemotePreviewState extends State<_RemotePreview>
     with SingleTickerProviderStateMixin {
   late final _c = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 7),
+    duration: const Duration(seconds: 16),
   );
 
   @override
@@ -307,31 +308,44 @@ class _RemotePreviewState extends State<_RemotePreview>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                MotionFade(
-                  child: SizedBox.expand(
-                    key: ValueKey(paper == null ? 0 : identityHashCode(paper)),
-                    child: paper != null
-                        ? Image.memory(
-                            paper,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            cacheWidth: 720,
-                            excludeFromSemantics: true,
-                            errorBuilder: (_, _, _) =>
-                                ColoredBox(color: s.primaryContainer),
-                          )
-                        : DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  s.primaryContainer,
-                                  s.tertiaryContainer,
-                                ],
+                // The screen drifts: a slow push in and back, panning a little (one loop, no jump at its seam).
+                AnimatedBuilder(
+                  animation: _c,
+                  builder: (_, child) {
+                    final a = _c.value * 2 * math.pi;
+                    final k = .5 - .5 * math.cos(a);
+                    return Transform.scale(
+                      scale: 1.04 + .08 * k,
+                      alignment: Alignment(-.6 + 1.2 * k, -.2 * math.sin(a)),
+                      child: child,
+                    );
+                  },
+                  child: MotionFade(
+                    child: SizedBox.expand(
+                      key: ValueKey(paper == null ? 0 : identityHashCode(paper)),
+                      child: paper != null
+                          ? Image.memory(
+                              paper,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                              cacheWidth: 720,
+                              excludeFromSemantics: true,
+                              errorBuilder: (_, _, _) =>
+                                  ColoredBox(color: s.primaryContainer),
+                            )
+                          : DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    s.primaryContainer,
+                                    s.tertiaryContainer,
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
+                    ),
                   ),
                 ),
                 // Text stays readable on any wallpaper.
@@ -344,26 +358,11 @@ class _RemotePreviewState extends State<_RemotePreview>
                     ),
                   ),
                 ),
-                // The pointer drifts along a slow figure of eight in the upper part.
+                // A fingertip taps twice every four seconds, in a different spot each time.
                 RepaintBoundary(
-                  child: AnimatedBuilder(
-                    animation: _c,
-                    builder: (_, child) {
-                      final a = _c.value * 2 * math.pi;
-                      return Align(
-                        alignment: Alignment(
-                          .55 * math.sin(a),
-                          -.35 + .3 * math.sin(2 * a),
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: const Icon(
-                      FluentIcons.cursor_24_regular,
-                      size: 22,
-                      fill: 1,
-                      color: Colors.white,
-                    ),
+                  child: CustomPaint(
+                    painter: _Taps(_c, s.primary),
+                    child: const SizedBox.expand(),
                   ),
                 ),
                 Padding(
@@ -405,7 +404,7 @@ class _RemotePreviewState extends State<_RemotePreview>
                   ),
                 ),
                 // One touch target for the whole picture, with its ripple on top.
-                AleroPress(
+                QollqePress(
                   onTap: widget.onOpen,
                   radius: Radii.tile,
                   child: const SizedBox.expand(),
@@ -417,4 +416,59 @@ class _RemotePreviewState extends State<_RemotePreview>
       ),
     );
   }
+}
+
+/// The touches of [_RemotePreview]: a fingertip that comes down, taps twice (a ring spreads from each tap), and
+/// lifts; each of the four taps of a loop lands somewhere else, clear of the text at the bottom.
+class _Taps extends CustomPainter {
+  _Taps(this.c, this.tint) : super(repaint: c);
+  final Animation<double> c;
+  final Color tint;
+
+  static const _spots = [
+    Offset(.68, .30),
+    Offset(.36, .24),
+    Offset(.80, .18),
+    Offset(.52, .38),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = c.value * _spots.length;
+    final spot = _spots[t.floor() % _spots.length];
+    final at = Offset(spot.dx * size.width, spot.dy * size.height);
+    // Where this tap's four seconds are (0..1).
+    final f = t - t.floor();
+    for (final start in const [.10, .22]) {
+      final k = (f - start) / .22;
+      if (k < 0 || k > 1) continue;
+      canvas.drawCircle(
+        at,
+        10 + 22 * Curves.easeOutCubic.transform(k),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = Colors.white.withValues(alpha: .7 * (1 - k)),
+      );
+    }
+    final shown =
+        ((f - .05) / .08).clamp(0.0, 1.0) *
+        (1 - ((f - .40) / .10).clamp(0.0, 1.0));
+    if (shown > 0) {
+      final press = (f > .10 && f < .14) || (f > .22 && f < .26) ? .82 : 1.0;
+      canvas.drawCircle(
+        at,
+        11 * press,
+        Paint()..color = Colors.white.withValues(alpha: .28 * shown),
+      );
+      canvas.drawCircle(
+        at,
+        6 * press,
+        Paint()..color = tint.withValues(alpha: .9 * shown),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Taps old) => old.tint != tint || old.c != c;
 }

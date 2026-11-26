@@ -8,7 +8,7 @@ import '../hub.dart';
 import '../native.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'icon.dart';
 import '../l10n.dart';
@@ -340,7 +340,7 @@ class IconTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     return AnimatedContainer(
-      duration: AleroMotion.micro(context, Fluent.d167),
+      duration: QollqeMotion.micro(context, Fluent.d167),
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -426,7 +426,7 @@ class TransferRow extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(left: 52, right: Gap.s),
-            child: AleroPulse(
+            child: QollqePulse(
               active: x.note.isEmpty,
               child: WavyProgress(
                 value: f,
@@ -752,7 +752,7 @@ class SettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return AleroPress(
+    return QollqePress(
       onTap: onTap,
       radius: Radii.tile,
       child: ConstrainedBox(
@@ -835,7 +835,7 @@ class Reveal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      AleroMotion.reveal(context, index, child);
+      QollqeMotion.reveal(context, index, child);
 }
 
 /// Status color of a battery level, the same in both color styles: green above 50 %, amber from 21 to 50 %,
@@ -884,7 +884,7 @@ class BatteryGlyph extends StatelessWidget {
             tween: ColorTween(
               end: batteryColor(context, level, charging: charging),
             ),
-            duration: AleroMotion.micro(context, Fluent.d333),
+            duration: QollqeMotion.micro(context, Fluent.d333),
             builder: (_, fill, _) => TweenValue(
               level.clamp(0, 100) / 100,
               builder: (_, v) => CustomPaint(

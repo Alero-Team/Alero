@@ -1,9 +1,9 @@
-//! A paired phone controlling and watching this computer. Everything here arrives as `pb.x.*`
+//! A paired phone controlling and watching this computer (ADR-0011). Everything here arrives as `pb.x.*`
 //! app messages from a paired device (the engine already refuses anyone else) and is carried out only while the
 //! user has switched on "Control remoto" in Alero (a file in the data folder, off by default). While a phone
 //! watches the screen or drives the input, a toast says so.
 //!
-//! Messages (all JSON bodies):
+//! Messages (all JSON bodies; Protocol.md §6.2):
 //!   phone -> PC   pb.x.remote.{move,button,click,scroll,key,text,media,power}   pb.x.screen.{start,keepalive,ack,stop}
 //!                 pb.x.shot.request   pb.x.pcmedia.watch
 //!   PC -> phone   pb.x.info (battery, capabilities, allowed)   pb.x.screen.frame   pb.x.pcmedia.state
@@ -50,6 +50,8 @@ pub struct Remote {
     watchers: Mutex<HashMap<String, Instant>>,
     watching: Mutex<bool>,
     pushed: Mutex<HashMap<String, Value>>,
+    /// The desktop picture sent to phones: (its file's name, size and date; base64 JPEG).
+    wall: Mutex<(String, String)>,
     next_gen: Mutex<u64>,
     held: Mutex<HashMap<(String, String), Instant>>,
 }
@@ -82,6 +84,7 @@ impl Remote {
             watchers: Mutex::new(HashMap::new()),
             watching: Mutex::new(false),
             pushed: Mutex::new(HashMap::new()),
+            wall: Mutex::new((String::from("-"), String::new())),
             next_gen: Mutex::new(0),
             held: Mutex::new(HashMap::new()),
         })
@@ -172,23 +175,44 @@ impl Remote {
     }
 
     /// Pushes this computer's info to every connected paired phone whose copy is outdated.
+    /// The wallpaper too: a new desktop picture reaches the phones within the 30 s of the status loop.
     pub fn push_info(&self, engine: &Engine, only: Option<&str>) {
         let info = self.info(engine);
+        let wall = self.wallpaper();
+        let stamp = json!([info, fingerprint(wall.as_bytes())]);
         let mut pushed = self.pushed.lock().unwrap();
         for p in engine.peers() {
             if !p.trusted || p.state != PeerState::Connected || only.is_some_and(|o| o != p.id) {
                 continue;
             }
-            if only.is_none() && pushed.get(&p.id) == Some(&info) {
+            if only.is_none() && pushed.get(&p.id) == Some(&stamp) {
                 continue;
             }
             if engine.send_message(&p.id, "pb.x.info", info.clone()).is_ok() {
-                if let Some(jpeg) = self.device["stockJpeg"].as_str().filter(|s| !s.is_empty()) {
-                    let _ = engine.send_message(&p.id, "pb.x.wallpaper", json!({"jpeg": jpeg}));
+                if !wall.is_empty() {
+                    let _ = engine.send_message(&p.id, "pb.x.wallpaper", json!({"jpeg": wall}));
                 }
-                pushed.insert(p.id, info.clone());
+                pushed.insert(p.id, stamp.clone());
             }
         }
+    }
+
+    /// This computer's desktop picture (base64 JPEG), made again only when its file changes; the stock picture when
+    /// it cannot be read.
+    fn wallpaper(&self) -> String {
+        let file = sys::wallpaper_file();
+        let key = file
+            .as_ref()
+            .and_then(|p| p.metadata().ok().map(|m| format!("{}|{}|{:?}", p.display(), m.len(), m.modified().ok())))
+            .unwrap_or_default();
+        let mut w = self.wall.lock().unwrap();
+        if w.0 != key {
+            // 960 px is sharp on a phone; a busy picture that does not fit a message goes smaller.
+            let jpeg = file.and_then(|p| sys::picture_jpeg(&p, 960).or_else(|| sys::picture_jpeg(&p, 640)));
+            let stock = || self.device["stockJpeg"].as_str().unwrap_or_default().to_string();
+            *w = (key, jpeg.map(|b| STANDARD.encode(b)).unwrap_or_else(stock));
+        }
+        w.1.clone()
     }
 
     /// Every 30 s: battery and the switch may have changed. Cheap (one power query).
@@ -494,6 +518,8 @@ impl Remote {
             let mut sent = Instant::now() - Duration::from_secs(60);
             // The cover is read again only when the song changes (or is still missing), not every poll.
             let (mut art_of, mut art) = (String::new(), String::new());
+            // The player's shop name and logo, looked up once per player.
+            let (mut app_of, mut app_name, mut app_icon) = (None::<String>, String::new(), String::new());
             loop {
                 let peers: Vec<String> = {
                     let mut ws = me.watchers.lock().unwrap();
@@ -512,7 +538,12 @@ impl Remote {
                             art = sys::media_art().map(|b| STANDARD.encode(b)).unwrap_or_default();
                             art_of = song;
                         }
-                        json!({"active": true, "art": art, "app": m.app, "title": m.title, "artist": m.artist, "playing": m.playing,
+                        if app_of.as_deref() != Some(m.app.as_str()) {
+                            app_name = sys::app_name(&m.app).unwrap_or_else(|| short_app(&m.app));
+                            app_icon = sys::app_icon(&m.app).and_then(|(w, h, px)| png_of(w, h, &px)).map(|b| STANDARD.encode(b)).unwrap_or_default();
+                            app_of = Some(m.app.clone());
+                        }
+                        json!({"active": true, "art": art, "app": app_name, "icon": app_icon, "title": m.title, "artist": m.artist, "playing": m.playing,
                         "position": m.position_ms, "duration": m.duration_ms, "actions": m.actions, "speed": m.speed, "at": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)})
                     }
                     None => json!({"active": false}),
@@ -548,6 +579,59 @@ mod stream_tests {
         }
         if let Some((x, y)) = crate::sys::cursor_at(0) {
             assert!((0.0..1.0).contains(&x) && (0.0..1.0).contains(&y));
+        }
+    }
+}
+
+/// A player's raw ID as a name, when the system has none: "SpotifyAB.SpotifyMusic_zpd…!Spotify" → "Spotify",
+/// "Microsoft.ZuneMusic_8wek…!Microsoft.ZuneMusic" → "ZuneMusic", "Spotify.exe" → "Spotify".
+fn short_app(app: &str) -> String {
+    let id = app.rsplit('!').next().unwrap_or(app);
+    let id = if id.eq_ignore_ascii_case("app") { app.split(['_', '!']).next().unwrap_or(app) } else { id };
+    let id = id.len().checked_sub(4).filter(|&i| id.is_char_boundary(i) && id[i..].eq_ignore_ascii_case(".exe")).map_or(id, |i| &id[..i]);
+    id.rsplit('.').next().unwrap_or(id).to_string()
+}
+
+/// Straight RGBA as a PNG, for the phone.
+fn png_of(w: u32, h: u32, rgba: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, w, h);
+    enc.set_color(png::ColorType::Rgba);
+    enc.write_header().ok()?.write_image_data(rgba).ok()?;
+    Some(out)
+}
+
+#[cfg(test)]
+mod app_tests {
+    #[test]
+    fn a_players_raw_id_becomes_a_short_name() {
+        assert_eq!(super::short_app("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"), "Spotify");
+        assert_eq!(super::short_app("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "ZuneMusic");
+        assert_eq!(super::short_app("Spotify.exe"), "Spotify");
+        assert_eq!(super::short_app("Contoso.Player_abc!App"), "Player");
+        assert!(super::png_of(1, 1, &[255, 0, 0, 255]).is_some_and(|b| b.starts_with(b"\x89PNG")));
+    }
+
+    #[test]
+    fn a_desktop_picture_goes_to_the_phone_small() {
+        let (w, h) = (2400u16, 1200u16);
+        // A smooth picture, like a wallpaper (noise would not fit 150 KB at any size worth sending).
+        let rgb: Vec<u8> = (0..w as usize * h as usize).flat_map(|i| [(i % w as usize * 255 / w as usize) as u8, (i / w as usize * 255 / h as usize) as u8, 90]).collect();
+        let path = std::env::temp_dir().join(format!("alero-wall-{}.jpg", std::process::id()));
+        let mut big = Vec::new();
+        jpeg_encoder::Encoder::new(&mut big, 90).encode(&rgb, w, h, jpeg_encoder::ColorType::Rgb).unwrap();
+        std::fs::write(&path, big).unwrap();
+        let small = crate::sys::picture_jpeg(&path, 960);
+        let _ = std::fs::remove_file(&path);
+        let mut dec = jpeg_decoder::Decoder::new(std::io::Cursor::new(small.expect("a JPEG")));
+        dec.read_info().unwrap();
+        let i = dec.info().unwrap();
+        assert_eq!((i.width, i.height), (960, 480));
+        // The real desktop, when there is one: it must fit one message, base64 included.
+        if let Some(p) = crate::sys::wallpaper_file() {
+            let j = crate::sys::picture_jpeg(&p, 960).or_else(|| crate::sys::picture_jpeg(&p, 640)).expect("the desktop picture");
+            eprintln!("desktop picture: {} -> {} bytes", p.display(), j.len());
+            assert!(j.len() * 4 / 3 < 256 * 1024);
         }
     }
 }

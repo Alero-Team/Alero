@@ -1,4 +1,4 @@
-//! Resumable file transfer over any `Read + Write` stream.
+//! Resumable file transfer over any `Read + Write` stream (Protocol.md §7).
 //!
 //! Wire after the TLS handshake:
 //!   S→R frame `pb.transfer.offer {name,size,blockSize}`
@@ -86,7 +86,7 @@ fn proto<T>(msg: &str) -> Result<T, TransferError> {
     Err(TransferError::Protocol(msg.into()))
 }
 
-/// Rejects names that could escape the destination or break on Windows.
+/// Rejects names that could escape the destination or break on Windows (Protocol.md §8).
 /// shortcut: no Unicode normalization, add the `unicode-normalization` crate before 1.0.
 pub fn safe_name(name: &str) -> Result<(), TransferError> {
     const RESERVED: [&str; 22] = [

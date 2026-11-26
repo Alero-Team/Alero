@@ -7,7 +7,7 @@ import 'brand.dart';
 import 'theme.dart';
 import 'icon.dart';
 import 'expressive.dart' show motion;
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import '../l10n.dart';
 
 /// Explanations are visible before any button opens a system permission prompt.
@@ -158,7 +158,7 @@ class _SetupScreenState extends State<SetupScreen> {
             child: ListView(
               padding: const EdgeInsets.all(Gap.xl),
               children: [
-                AleroMotion.reveal(
+                QollqeMotion.reveal(
                   context,
                   0,
                   const Align(
@@ -168,7 +168,7 @@ class _SetupScreenState extends State<SetupScreen> {
                 ),
                 const SizedBox(height: Gap.xl),
                 // The first step enters staggered (logo, then this block); later steps slide sideways.
-                AleroMotion.reveal(
+                QollqeMotion.reveal(
                   context,
                   1,
                   AnimatedSwitcher(

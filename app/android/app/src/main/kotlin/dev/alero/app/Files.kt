@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
- * The phone's files for a paired computer (`pb.x.fs.*`). Only what Android lets an ordinary app see:
+ * The phone's files for a paired computer (`pb.x.fs.*`, ADR-0011). Only what Android lets an ordinary app see:
  *  - photos, videos and music through MediaStore (needs the "Photos and videos" / "Music and audio" permission);
  *  - the files Alero itself received (Download/Alero), no permission;
  *  - folders the user picked with the system folder picker (a persisted grant for that folder only).
@@ -373,10 +373,16 @@ object Files {
         val root = b.optString("root")
         val id = b.optString("id")
         val uri = uriFor(root, id) ?: return
-        val bmp = try { ctx.contentResolver.loadThumbnail(uri, Size(192, 192), null) } catch (_: Exception) { return }
+        // 192 for the grid; the computer's preview asks for a bigger one (`size`).
+        val side = b.optInt("size", 192).coerceIn(64, 1080)
+        val bmp = try { ctx.contentResolver.loadThumbnail(uri, Size(side, side), null) } catch (_: Exception) { return }
         val out = ByteArrayOutputStream()
-        try { bmp.compress(Bitmap.CompressFormat.JPEG, 72, out) } finally { bmp.recycle() }
-        Bridge.sendTo(peer, "pb.x.fs.thumb.data", JSONObject().put("root", root).put("id", id).put("jpeg", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)))
+        // A message body is at most 256 KB and base64 adds a third: lower the quality until it fits.
+        try {
+            for (q in intArrayOf(72, 55, 40)) { out.reset(); bmp.compress(Bitmap.CompressFormat.JPEG, q, out); if (out.size() < 180_000) break }
+        } finally { bmp.recycle() }
+        if (out.size() >= 180_000) return
+        Bridge.sendTo(peer, "pb.x.fs.thumb.data", JSONObject().put("root", root).put("id", id).put("size", side).put("jpeg", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)))
     }
 
     /** Sends the file to the computer as an ordinary transfer (resumable, with progress on both sides). */

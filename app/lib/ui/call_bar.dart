@@ -3,7 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'icon.dart';
 import '../l10n.dart';

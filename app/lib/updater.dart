@@ -9,8 +9,8 @@ import 'app_info.dart';
 import 'l10n.dart' show tx;
 import 'native.dart';
 
-const _api = 'https://api.github.com/repos/Alero-Team/Alero/releases/latest';
-const _releaseBase = 'https://github.com/Alero-Team/Alero/';
+const _api = 'https://api.github.com/repos/k0op4/Alero/releases/latest';
+const _releaseBase = 'https://github.com/k0op4/Alero/';
 
 /// True when [remote] is a higher `X.Y.Z` than [local] (a leading `v` and any `-beta`/`+build` suffix are ignored).
 bool isNewerVersion(String remote, String local) {

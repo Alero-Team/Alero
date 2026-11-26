@@ -1,4 +1,4 @@
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 
 import 'dart:async';
 
@@ -417,7 +417,7 @@ class _MouseActionBarState extends State<MouseActionBar>
         onPointerDown: (_) => _toggle(button),
         onPointerCancel: (_) => _up(button),
         child: AnimatedContainer(
-          duration: AleroMotion.micro(context, Fluent.d167),
+          duration: QollqeMotion.micro(context, Fluent.d167),
           curve: Fluent.enter,
           height: 64,
           decoration: BoxDecoration(
@@ -650,7 +650,7 @@ class _HoldButtonState extends State<HoldButton> {
               scale: _down ? 0.92 : 1,
               duration: motion(context, const Duration(milliseconds: 100)),
               child: AnimatedContainer(
-                duration: AleroMotion.micro(
+                duration: QollqeMotion.micro(
                   context,
                   const Duration(milliseconds: 120),
                 ),

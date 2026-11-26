@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.service.notification.StatusBarNotification
@@ -13,8 +14,8 @@ import org.json.JSONObject
 
 /**
  * Phone calls on a paired computer (`pb.x.call*`). The dialer's call notification says who is calling and,
- * on Android 12+ (CallStyle), carries its own answer / decline / hang-up buttons, which are used first; otherwise
- * TelecomManager does it. Calls are placed with TelecomManager too, so no screen has to open on the phone.
+ * on Android 12+ (CallStyle), carries its own answer / decline / hang-up buttons, used only when TelecomManager
+ * cannot (see `command`). Calls are placed with TelecomManager too, so no screen has to open on the phone.
  * The call's audio stays on the phone (or its headset). Off until the owner turns it on in Settings.
  */
 object Calls {
@@ -56,10 +57,22 @@ object Calls {
             .put("text", (x.getCharSequence(Notification.EXTRA_TEXT) ?: "").toString().take(200))
             .put("canAnswer", ringing && (intent(sbn, Notification.EXTRA_ANSWER_INTENT) != null || has(Manifest.permission.ANSWER_PHONE_CALLS)))
             .put("inCall", try { telecom.isInCall } catch (_: SecurityException) { true })
+            .put("muted", audio().isMicrophoneMute)
     }
+
+    // The microphone mute is AudioManager's: a non-dialer app has nothing else (the loudspeaker route stays the
+    // dialer's on Android 12+; tried on a Pixel 9a, Android 17, it was refused half the time).
+    private fun audio() = ctx.getSystemService(AudioManager::class.java)
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    // Signal (and other apps) swap their call notification for a new one as the call changes: removed, then posted.
+    // Said at once, the computer would end the call and start another, its timer back at 0:00.
+    private val ended = Runnable { if (current == null && allowed()) Bridge.broadcast("pb.x.call", JSONObject().put("active", false)) }
 
     fun posted(sbn: StatusBarNotification) {
         if (!allowed()) return
+        main.removeCallbacks(ended)
         current = sbn
         Bridge.broadcast("pb.x.call", state(sbn))
     }
@@ -67,7 +80,7 @@ object Calls {
     fun removed(sbn: StatusBarNotification) {
         if (current?.key != sbn.key) return
         current = null
-        if (allowed()) Bridge.broadcast("pb.x.call", JSONObject().put("active", false))
+        main.postDelayed(ended, 1500)
     }
 
     /** Sent when a computer connects, so a call already in progress shows up. */
@@ -88,17 +101,28 @@ object Calls {
         Bridge.sendTo(peer, "pb.x.call.result", JSONObject().put("ok", error == null).put("error", error ?: "").put("kind", kind))
     }
 
-    @Suppress("DEPRECATION") // still the only public way for a non-dialer app; CallStyle buttons are tried first
+    /**
+     * TelecomManager first: it answers or ends the ringing call itself (the SIM's, or a VoIP app's that uses Telecom,
+     * like Signal). The notification's own buttons are only the fallback without ANSWER_PHONE_CALLS: Google's dialer
+     * answers through an activity, which Android 14+ blocks when started from the background, so the call kept
+     * ringing (and the dialer left its "incoming" notification behind). Seen on a Pixel 9a, Android 17.
+     */
+    @Suppress("DEPRECATION") // still the only public way for a non-dialer app
     private fun command(action: String): String? {
         val telecom = ctx.getSystemService(TelecomManager::class.java)
         val sbn = current
+        val canTelecom = has(Manifest.permission.ANSWER_PHONE_CALLS)
         fun send(key: String) = intent(sbn, key)?.let { try { it.send(); true } catch (_: PendingIntent.CanceledException) { false } } == true
+        fun end(key: String) = (canTelecom && Build.VERSION.SDK_INT >= 28 && telecom.endCall()) || send(key)
         when (action) {
-            "answer" -> if (!send(Notification.EXTRA_ANSWER_INTENT)) telecom.acceptRingingCall()
-            "decline" -> if (!send(Notification.EXTRA_DECLINE_INTENT) && !(Build.VERSION.SDK_INT >= 28 && telecom.endCall())) return "failed"
-            "hangup" -> if (!send(Notification.EXTRA_HANG_UP_INTENT) && !(Build.VERSION.SDK_INT >= 28 && telecom.endCall())) return "failed"
+            "answer" -> if (canTelecom) telecom.acceptRingingCall() else if (!send(Notification.EXTRA_ANSWER_INTENT)) return "failed"
+            "decline" -> if (!end(Notification.EXTRA_DECLINE_INTENT)) return "failed"
+            "hangup" -> if (!end(Notification.EXTRA_HANG_UP_INTENT)) return "failed"
+            "mute", "unmute" -> audio().isMicrophoneMute = action == "mute"
             else -> return "unknown"
         }
+        // The computer shows the phone's own state (the microphone can also be muted on the phone).
+        if (action == "mute" || action == "unmute") sbn?.let { Bridge.broadcast("pb.x.call", state(it)) }
         return null
     }
 

@@ -92,7 +92,7 @@ Maintainer: Alero Team <noreply@github.com>
 Installed-Size: $(du -sk "$stage" | cut -f1)
 Depends: libc6 (>= 2.35), libgtk-3-0 | libgtk-3-0t64, libayatana-appindicator3-1, libdbus-1-3, libxdo3, xdg-utils, wl-clipboard | xclip
 Recommends: xdotool, pulseaudio-utils, curl, libxtst6, libxrandr2, libgl1, spectacle | kde-spectacle | grim | gnome-screenshot
-Homepage: https://github.com/Alero-Team/Alero
+Homepage: https://github.com/k0op4/Alero
 Description: Android and Linux over your local network or a USB cable
  Transfer files, browse the phone, share the clipboard, mirror notifications and
  control either device from the other, without a cloud account. Includes a tray

@@ -8,13 +8,13 @@ use std::mem::size_of;
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use windows::core::{implement, w, Ref, BOOL};
+use windows::core::{implement, w, Ref, BOOL, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HINSTANCE, HWND, LPARAM, LRESULT, POINT, POINTL, RECT, SIZE, WPARAM};
-use windows::Win32::Graphics::Dwm::{DwmFlush, DwmGetWindowAttribute, DWMWA_CLOAKED};
+use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows::Win32::Graphics::Gdi::{
-    CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, MonitorFromPoint, SelectObject, MONITOR_DEFAULTTONEAREST, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ,
+    CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, EnumDisplaySettingsW, GetMonitorInfoW, MonitorFromPoint, SelectObject, DEVMODEW, ENUM_CURRENT_SETTINGS, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, BLENDFUNCTION, DIB_RGB_COLORS, HBITMAP, HDC, HGDIOBJ,
 };
 use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
 use windows::Win32::System::Diagnostics::Debug::MessageBeep;
@@ -182,6 +182,8 @@ pub struct WinHost {
     top_next: Option<std::time::Instant>,
     /// The window that had the keyboard before a reply was started: it gets it back afterwards.
     prev_focus: Option<HWND>,
+    frame_interval: Duration,
+    last_frame: Instant,
 }
 
 impl WinHost {
@@ -195,20 +197,22 @@ impl WinHost {
             let class = w!("AleroIslandWindow");
             let wc = WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: hinst, lpszClassName: class, ..Default::default() };
             RegisterClassW(&wc);
-            // Starts click-through: the resting notch and the shadow must never cover the window below.
+            // Starts click-through: the resting notch must never intercept input to the window below.
             let hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT, class, w!("Alero Island"), WS_POPUP, 0, 0, 1, 1, None, None, Some(hinst), None).ok()?;
             let target: IDropTarget = Target.into();
             let _ = RegisterDragDrop(hwnd, &target);
             let dc = CreateCompatibleDC(None);
-            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false, top_fights: 0, top_next: None, prev_focus: None })
+            Some(Self { hwnd, dc, bitmap: HBITMAP::default(), bits: ptr::null_mut(), size: (0, 0), shown: false, _target: target, hotkey: false, input: false, top_fights: 0, top_next: None, prev_focus: None, frame_interval: Duration::from_secs_f64(1.0 / 60.0), last_frame: Instant::now() })
         }
     }
 
-    /// A top-down 32-bit surface of this size, ready to hold the frame.
+    /// Reuse a top-down 32-bit surface while the window morphs; allocate only when it outgrows it.
     fn surface(&mut self, w: i32, h: i32) -> bool {
-        if self.size == (w, h) && !self.bits.is_null() {
+        if w <= self.size.0 && h <= self.size.1 && !self.bits.is_null() {
             return true;
         }
+        let w = ((w.max(self.size.0) + 127) / 128) * 128;
+        let h = ((h.max(self.size.1) + 127) / 128) * 128;
         unsafe {
             let info = BITMAPINFO {
                 bmiHeader: BITMAPINFOHEADER { biSize: size_of::<BITMAPINFOHEADER>() as u32, biWidth: w, biHeight: -h, biPlanes: 1, biBitCount: 32, biCompression: BI_RGB.0, ..Default::default() },
@@ -281,6 +285,16 @@ impl Host for WinHost {
 
     fn dpi(&mut self, mon: Rect) -> f32 {
         let centre = POINT { x: (mon.0 + mon.2) / 2, y: (mon.1 + mon.3) / 2 };
+        let mut info = MONITORINFOEXW::default();
+        info.monitorInfo.cbSize = size_of::<MONITORINFOEXW>() as u32;
+        let monitor = unsafe { MonitorFromPoint(centre, MONITOR_DEFAULTTONEAREST) };
+        if unsafe { GetMonitorInfoW(monitor, &mut info.monitorInfo) }.as_bool() {
+            let mut mode = DEVMODEW { dmSize: size_of::<DEVMODEW>() as u16, ..Default::default() };
+            if unsafe { EnumDisplaySettingsW(PCWSTR(info.szDevice.as_ptr()), ENUM_CURRENT_SETTINGS, &mut mode) }.as_bool()
+                && (30..=1000).contains(&mode.dmDisplayFrequency) {
+                self.frame_interval = Duration::from_secs_f64(1.0 / mode.dmDisplayFrequency as f64);
+            }
+        }
         let (mut dx, mut dy) = (0u32, 0u32);
         let ok = unsafe { GetDpiForMonitor(MonitorFromPoint(centre, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &mut dx, &mut dy) }.is_ok();
         let d = if ok && dx > 0 { dx } else { unsafe { GetDpiForSystem() } };
@@ -361,12 +375,14 @@ impl Host for WinHost {
                 return;
             }
             // RGBA to the BGRA the surface wants (both premultiplied).
-            let dst = std::slice::from_raw_parts_mut(self.bits as *mut u8, (w * h * 4) as usize);
-            // Whole pixels as u32 (the compiler vectorizes this): swap the red and blue bytes.
-            for (d, s) in dst.chunks_exact_mut(4).zip(rgba.chunks_exact(4)) {
-                let v = u32::from_le_bytes([s[0], s[1], s[2], s[3]]);
-                let v = (v & 0xFF00_FF00) | ((v & 0xFF) << 16) | ((v >> 16) & 0xFF);
-                d.copy_from_slice(&v.to_le_bytes());
+            let stride = self.size.0 as usize * 4;
+            let dst = std::slice::from_raw_parts_mut(self.bits as *mut u8, stride * h as usize);
+            for (dst_row, src_row) in dst.chunks_exact_mut(stride).zip(rgba.chunks_exact(w as usize * 4)) {
+                for (d, s) in dst_row.chunks_exact_mut(4).zip(src_row.chunks_exact(4)) {
+                    let v = u32::from_le_bytes([s[0], s[1], s[2], s[3]]);
+                    let v = (v & 0xFF00_FF00) | ((v & 0xFF) << 16) | ((v >> 16) & 0xFF);
+                    d.copy_from_slice(&v.to_le_bytes());
+                }
             }
             let at = POINT { x, y };
             let size = SIZE { cx: w as i32, cy: h as i32 };
@@ -398,10 +414,12 @@ impl Host for WinHost {
     }
 
     fn vsync(&mut self) {
-        // Paced by the compositor; where it is off, a short sleep keeps the loop from spinning.
-        if unsafe { DwmFlush() }.is_err() {
-            std::thread::sleep(Duration::from_millis(8));
+        // DwmFlush can block for several refreshes under GPU load; keep our own bounded frame deadline.
+        let remaining = self.frame_interval.saturating_sub(self.last_frame.elapsed());
+        if !remaining.is_zero() {
+            std::thread::sleep(remaining);
         }
+        self.last_frame = Instant::now();
     }
 
     fn beep(&mut self) {
@@ -510,6 +528,28 @@ fn covered(hwnd: HWND) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires a real Windows desktop"]
+    fn growing_surface_preserves_stride_and_reuses_its_bitmap() {
+        let mut host = WinHost::new().expect("desktop window");
+        assert!(host.surface(200, 80));
+        let first = host.bitmap;
+        assert!(host.surface(220, 100));
+        assert_eq!(host.bitmap, first);
+        assert!(host.surface(450, 200));
+        let grown = host.bitmap;
+        assert_ne!(grown, first);
+        let rgba = [10, 20, 30, 255].repeat(210 * 90);
+        host.present(Some((&rgba, 210, 90, 0, 0)));
+        assert_eq!(host.bitmap, grown, "shrinking must reuse the larger surface");
+        let stride = host.size.0 as usize * 4;
+        let pixels = unsafe { std::slice::from_raw_parts(host.bits as *const u8, stride * 90) };
+        for row in pixels.chunks_exact(stride) {
+            assert!(row[..210 * 4].chunks_exact(4).all(|p| p == [30, 20, 10, 255]), "each row uses the backing bitmap stride");
+        }
+        host.present(None);
+    }
 
     #[test]
     fn hotkeys_parse_and_bare_keys_are_refused() {
@@ -632,7 +672,7 @@ mod live {
         crate::sys::init();
         let dir = std::env::temp_dir().join(format!("alero-island-live-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("island.json"), r#"{"monitor":0,"open_delay_ms":0,"hide_fullscreen":false,"hotkey":"ctrl+alt+shift+f9"}"#).unwrap();
+        std::fs::write(dir.join("island.json"), r#"{"screen":0,"open_delay_ms":0,"hide_fullscreen":false,"hotkey":"ctrl+alt+shift+f9"}"#).unwrap();
         let file = dir.join("prueba isla.txt");
         std::fs::write(&file, "hola").unwrap();
 

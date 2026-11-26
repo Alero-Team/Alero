@@ -44,7 +44,7 @@ class FsEntry {
       : tr('{} elementos', [size]);
 }
 
-/// The computer's side of browsing a phone's files. It only asks (`pb.x.fs.*`): the phone decides what
+/// The computer's side of browsing a phone's files (ADR-0011). It only asks (`pb.x.fs.*`): the phone decides what
 /// it shows, and files travel as ordinary transfers, so progress, errors and retries are the app's usual ones.
 class FsClient extends ChangeNotifier {
   FsClient(this.hub);
@@ -73,6 +73,15 @@ class FsClient extends ChangeNotifier {
   Timer? _timeout, _debounce;
 
   Uint8List? thumb(String key) => _thumbs[key];
+
+  /// The preview's bigger picture, once the phone sent it.
+  Uint8List? big(FsEntry e) => _thumbs['$root|${e.id}|big'];
+
+  /// Asks for a picture big enough to look at (the grid's thumbnail stays as it is).
+  void wantBig(FsEntry e) {
+    if (e.dir || peerId == null || big(e) != null) return;
+    hub.sendMessage(peerId!, 'pb.x.fs.thumb', {'root': root, 'id': e.id, 'size': 1080});
+  }
 
   void _clearPreviews() {
     for (final timer in _thumbTimers.values) {
@@ -354,14 +363,18 @@ class FsClient extends ChangeNotifier {
         loading = false;
         if (entries.length < total && page.isNotEmpty) _list(entries.length);
       case 'pb.x.fs.thumb.data':
-        final key = '${b['root']}|${b['id']}';
+        final small = '${b['root']}|${b['id']}';
+        // Phones before the preview never send `size`.
+        final key = ((b['size'] as num?) ?? 0) > 192 ? '$small|big' : small;
         try {
+          // Only the preview open now keeps its big picture.
+          if (key != small) _thumbs.removeWhere((k, _) => k.endsWith('|big'));
           _thumbs[key] = base64Decode(b['jpeg'] as String);
           if (_thumbs.length > 500) _thumbs.remove(_thumbs.keys.first);
         } catch (_) {
           // damaged: the placeholder stays
         }
-        _thumbTimers.remove(key)?.cancel();
+        _thumbTimers.remove(small)?.cancel();
         _pump();
       case 'pb.x.fs.denied':
         _timeout?.cancel();

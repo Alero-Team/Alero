@@ -13,7 +13,7 @@ import '../scrcpy.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'phone_page.dart' show NeedsAdb;
 import 'expressive.dart' show Spring, motion, showAleroDialog;
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'phone_windows.dart' show CameraFailure;
 import 'screen.dart' show openScreen;
 import 'shell.dart' show confirm;
@@ -510,7 +510,7 @@ class _ControlsState extends State<_Controls> {
           ),
           const SizedBox(height: Gap.s),
           // The second drawer: every other control, and what is playing on the phone.
-          AleroPress(
+          QollqePress(
             radius: Radii.chip,
             onTap: () => setState(() => _more = !_more),
             child: Padding(
@@ -757,12 +757,12 @@ class _TileState extends State<_Tile> {
                 clipBehavior: Clip.antiAlias,
                 child: CustomPaint(
                   painter: _FillFrom(_at, v, fill),
-                  child: AleroPress(
+                  child: QollqePress(
                     radius: Radii.tile + 8 * v,
                     onTap: onTap,
                     child: AnimatedOpacity(
                       opacity: onTap == null ? 0.45 : 1,
-                      duration: AleroMotion.micro(context, Fluent.d167),
+                      duration: QollqeMotion.micro(context, Fluent.d167),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Row(
@@ -905,12 +905,12 @@ class _Square extends StatelessWidget {
         toggled: x.on,
         enabled: x.onTap != null,
         label: tip,
-        child: AleroPress(
+        child: QollqePress(
           radius: 18,
           onTap: x.onTap,
           child: AnimatedOpacity(
             opacity: x.onTap == null ? 0.45 : 1,
-            duration: AleroMotion.micro(context, Fluent.d167),
+            duration: QollqeMotion.micro(context, Fluent.d167),
             child: Material(
               color: s.surfaceContainer,
               shape: RoundedRectangleBorder(
@@ -923,7 +923,7 @@ class _Square extends StatelessWidget {
                   children: [
                     TweenAnimationBuilder<double>(
                       tween: Tween(end: on ? 1 : 0),
-                      duration: AleroMotion.micro(context, Fluent.d167),
+                      duration: QollqeMotion.micro(context, Fluent.d167),
                       builder: (_, v, _) => Container(
                         width: 34 * f,
                         height: 34 * f,
@@ -977,7 +977,7 @@ class Presence extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedSize(
     alignment: alignment,
-    duration: AleroMotion.micro(context, Fluent.d250),
+    duration: QollqeMotion.micro(context, Fluent.d250),
     curve: Fluent.enter,
     child: MotionFade(
       // Passthrough keeps full-width banners from shrinking and centering.

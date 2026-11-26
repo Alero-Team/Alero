@@ -87,12 +87,16 @@ fn apply(serial: &str, what: &str, on: bool) {
 pub fn spawn(rx: Receiver<Req>, tx: Sender<Msg>) {
     let _ = std::thread::Builder::new().name("island-adb".into()).spawn(move || {
         while let Ok(mut req) = rx.recv() {
-            // Polls pile up while adb is slow: only the last one matters, but no action is dropped.
-            while let Ok(next) = rx.try_recv() {
-                if req.act.is_some() && next.act.is_none() {
-                    continue;
+            // Polls pile up while adb is slow: only the last one matters. Actions are never skipped and run in
+            // order (two switches tapped quickly).
+            if req.act.is_none() {
+                while let Ok(next) = rx.try_recv() {
+                    let act = next.act.is_some();
+                    req = next;
+                    if act {
+                        break;
+                    }
                 }
-                req = next;
             }
             let serial = run(&["devices"]).and_then(|d| serial_in(&d, &req.ip));
             if let (Some(s), Some((what, on))) = (&serial, req.act) {

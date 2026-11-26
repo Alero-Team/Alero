@@ -9,7 +9,7 @@ import '../island_prefs.dart';
 import '../l10n.dart';
 import 'expressive.dart' show Spring, motion;
 import 'icon.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'settings.dart' show AleroSegments;
 import 'theme.dart';
 import 'widgets.dart';
@@ -186,10 +186,10 @@ class _IslandPanelState extends State<IslandPanel> {
                     title: 'Pantalla',
                     // A popup menu rather than DropdownButton: its route timing is fixed, this one takes the Fluent style.
                     child: _Monitor(
-                      value: const [-1, 0, 1, 2].contains(p.number('monitor'))
-                          ? p.number('monitor')
-                          : -1,
-                      onChanged: (v) => p.set('monitor', v),
+                      value: const [-1, 0, 1, 2].contains(p.number('screen'))
+                          ? p.number('screen')
+                          : 0,
+                      onChanged: (v) => p.set('screen', v),
                     ),
                   ),
                   _Slide(
@@ -467,11 +467,11 @@ class _SwatchesState extends State<_Swatches> {
                         button: true,
                         child: Tooltip(
                           message: tx(name),
-                          child: AleroPress(
+                          child: QollqePress(
                             radius: 17,
                             onTap: () => widget.onChanged(hex),
                             child: AnimatedContainer(
-                              duration: AleroMotion.micro(
+                              duration: QollqeMotion.micro(
                                 context,
                                 Fluent.d167,
                               ),
@@ -491,7 +491,7 @@ class _SwatchesState extends State<_Swatches> {
                               // Always mounted so the tick scales in and out instead of popping.
                               child: AnimatedScale(
                                 scale: cur == hex ? 1 : 0,
-                                duration: AleroMotion.micro(
+                                duration: QollqeMotion.micro(
                                   context,
                                   Fluent.d167,
                                 ),

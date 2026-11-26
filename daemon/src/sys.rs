@@ -13,6 +13,8 @@ pub struct Caps {
 
 pub struct Media {
     pub app: String,
+    /// Current page URL when the platform reports it (MPRIS); never inferred from the song title.
+    pub source_url: String,
     pub title: String,
     pub artist: String,
     pub playing: bool,
@@ -89,6 +91,15 @@ mod other {
     }
     pub fn media_wake(_: std::thread::Thread) {}
     pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
+        None
+    }
+    pub fn app_name(_: &str) -> Option<String> {
+        None
+    }
+    pub fn wallpaper_file() -> Option<std::path::PathBuf> {
+        None
+    }
+    pub fn picture_jpeg(_: &std::path::Path, _: u32) -> Option<Vec<u8>> {
         None
     }
     pub fn keep_com_alive() {}
@@ -547,6 +558,7 @@ mod win {
             .unwrap_or((0, 0));
         Some(Media {
             app: s.SourceAppUserModelId().map(|h| h.to_string()).unwrap_or_default(),
+            source_url: String::new(),
             title: props.Title().map(|h| h.to_string()).unwrap_or_default(),
             artist: props.Artist().map(|h| h.to_string()).unwrap_or_default(),
             playing,
@@ -644,6 +656,24 @@ mod win {
         }
     }
 
+    /// The name the Start menu shows for the app behind a media session ("Spotify", "Firefox"), not its raw ID.
+    pub fn app_name(aumid: &str) -> Option<String> {
+        use windows::core::HSTRING;
+        use windows::Win32::System::Com::CoTaskMemFree;
+        use windows::Win32::UI::Shell::{FOLDERID_AppsFolder, IShellItem, SHCreateItemInKnownFolder, KF_FLAG_DEFAULT, SIGDN_NORMALDISPLAY};
+        if aumid.is_empty() {
+            return None;
+        }
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let item: IShellItem = SHCreateItemInKnownFolder(&FOLDERID_AppsFolder, KF_FLAG_DEFAULT, &HSTRING::from(aumid)).ok()?;
+            let p = item.GetDisplayName(SIGDN_NORMALDISPLAY).ok()?;
+            let name = p.to_string().ok();
+            CoTaskMemFree(Some(p.0 as *const _));
+            name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty())
+        }
+    }
+
     /// Full path of a running process by its file name ("Spotify.exe").
     fn exe_path(name: &str) -> Option<String> {
         use windows::Win32::Foundation::CloseHandle;
@@ -690,6 +720,30 @@ mod win {
             return read_stream(&stream.cast().ok()?, size as u32);
         }
         shrink_cover(&stream.cast().ok()?, 400)
+    }
+
+    /// The picture on the desktop now: the copy Windows draws from (it follows a slideshow too).
+    /// shortcut: Spotlight and per-monitor pictures are not looked up; the stock picture stands in.
+    pub fn wallpaper_file() -> Option<std::path::PathBuf> {
+        let p = std::path::PathBuf::from(std::env::var_os("APPDATA")?).join(r"Microsoft\Windows\Themes\TranscodedWallpaper");
+        p.is_file().then_some(p)
+    }
+
+    /// Any picture Windows can read, as a JPEG whose longest side is `max` px (None when that is over 150 KB).
+    pub fn picture_jpeg(path: &std::path::Path, max: u32) -> Option<Vec<u8>> {
+        use windows::core::Interface;
+        use windows::Storage::Streams::{DataWriter, InMemoryRandomAccessStream};
+        let bytes = std::fs::read(path).ok()?;
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let stream = InMemoryRandomAccessStream::new().ok()?;
+        let w = DataWriter::CreateDataWriter(&stream).ok()?;
+        w.WriteBytes(&bytes).ok()?;
+        w.StoreAsync().ok()?.join().ok()?;
+        w.DetachStream().ok()?;
+        stream.Seek(0).ok()?;
+        shrink_cover(&stream.cast().ok()?, max)
     }
 
     fn read_stream(stream: &windows::Storage::Streams::IRandomAccessStream, size: u32) -> Option<Vec<u8>> {
@@ -827,6 +881,12 @@ mod tests {
     /// On the normal desktop input must not be reported as blocked (that would nag the phone on every move).
     #[test]
     fn normal_desktop_is_not_secure() {
+        use windows::Win32::System::StationsAndDesktops::{CloseDesktop, OpenInputDesktop, DESKTOP_CONTROL_FLAGS, DESKTOP_READOBJECTS};
+        // A service (the self-hosted CI runner, session 0) has no input desktop at all: nothing to test there.
+        match unsafe { OpenInputDesktop(DESKTOP_CONTROL_FLAGS(0), false, DESKTOP_READOBJECTS) } {
+            Ok(desk) => unsafe { let _ = CloseDesktop(desk); },
+            Err(_) => return eprintln!("skipped: no interactive input desktop"),
+        }
         assert!(!secure_desktop());
     }
 

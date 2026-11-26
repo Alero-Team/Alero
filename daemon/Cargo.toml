@@ -18,13 +18,13 @@ serde_json = "1"
 tao = "0.37"
 tray-icon = "0.25"
 png = "0.18"
-# Remote screen frames and screenshots. (MIT OR Apache-2.0) AND IJG.
+# Remote screen frames and screenshots. (MIT OR Apache-2.0) AND IJG: see docs/research/Licenses.md.
 jpeg-encoder = "0.6.1"
 # Already in Cargo.lock (0.21.7).
 base64 = "0.21.7"
 # Alero Island (desktop overlay): CPU 2D drawing, text and the cover's JPEG. All pure Rust, no system libraries.
 # tiny-skia: BSD-3-Clause. ab_glyph: Apache-2.0. jpeg-decoder: MIT OR Apache-2.0.
-tiny-skia = { version = "0.11", default-features = false, features = ["std"] }
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 ab_glyph = { version = "0.2", default-features = false, features = ["std"] }
 jpeg-decoder = { version = "0.3", default-features = false }
 

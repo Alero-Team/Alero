@@ -164,7 +164,7 @@ impl X11Host {
                 x, dpy, root, win, gc, visual: vi.visual, mapped: false, geom: (0, 0, 0, 0), drawn: None, fixes, input: false, shape: None,
                 buf: Vec::new(), raised: Instant::now(), dpi: 1.0, dpi_at: None, atoms, dnd: None, keys: false, prev_focus: None,
             };
-            // Starts click-through: the resting notch and the shadow must never cover the window below.
+            // Starts click-through: the resting notch must never intercept input to the window below.
             host.apply_input();
             Some(host)
         }

@@ -34,6 +34,10 @@ pub struct Call {
     pub can_answer: bool,
     pub name: String,
     pub text: String,
+    /// The phone's microphone is muted.
+    pub muted: bool,
+    /// When it was answered (the compact island's timer); None while it rings.
+    pub since: Option<Instant>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,6 +68,24 @@ pub struct Xfer {
     pub rate: u64,
     pub state: XState,
     pub at: Instant,
+    /// Where a received file was saved, once it is done.
+    pub path: Option<std::path::PathBuf>,
+    /// A received photo's preview (decoded off the drawing thread, see `run.rs`).
+    pub thumb: Option<Image>,
+}
+
+impl Xfer {
+    /// A received file, saved: the island asks what to do with it.
+    pub fn saved(&self) -> Option<&std::path::Path> {
+        self.path.as_deref().filter(|_| self.incoming && self.state == XState::Done)
+    }
+
+    /// A received photo the island can preview: JPEG or PNG, saved.
+    pub fn photo(&self) -> Option<&std::path::Path> {
+        let p = self.saved()?;
+        let ext = p.extension()?.to_str()?.to_ascii_lowercase();
+        matches!(ext.as_str(), "jpg" | "jpeg" | "png").then_some(p)
+    }
 }
 
 impl Xfer {
@@ -90,6 +112,8 @@ pub struct Notif {
     pub replyable: bool,
     /// The app has a "mark as read" action.
     pub markable: bool,
+    /// The sender's picture (the chat's contact photo), when the app gives one.
+    pub avatar: Option<Image>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +131,8 @@ pub struct Media {
     pub app: String,
     /// The phone's package (the computer's player id is in `app`).
     pub pkg: String,
+    /// The PC media worker verified this source, including the browser when applicable.
+    pub approved_source: bool,
     pub playing: bool,
     pub position_ms: i64,
     pub duration_ms: i64,
@@ -118,6 +144,10 @@ pub struct Media {
 }
 
 impl Media {
+    pub fn island_allowed(&self) -> bool {
+        !self.is_empty() && (self.approved_source || super::media::native_allowed(if self.pkg.is_empty() { &self.app } else { &self.pkg }))
+    }
+
     /// Position now, extrapolated from the last report while it plays (reports come only on change: no cap on its age).
     pub fn position_now(&self) -> i64 {
         let extra = match (self.playing, self.at) {
@@ -166,6 +196,8 @@ pub struct Model {
     pub info: HashMap<String, Info>,
     pub phone: HashMap<String, PhoneSt>,
     pub calls: HashMap<String, Call>,
+    /// The call that just ended (taken by the island to say how long it lasted).
+    pub ended: Option<Call>,
     pub offers: Vec<Offer>,
     pub xfers: Vec<Xfer>,
     pub notifs: VecDeque<Notif>,
@@ -197,8 +229,9 @@ fn linked(p: &PeerView) -> bool {
     p.trusted && p.state == PeerState::Connected
 }
 
+/// Dialers and chats wrap names in bidi isolates (U+2066..2069) and marks: invisible, but the fonts draw them as boxes.
 fn s(v: &Value, k: &str) -> String {
-    v[k].as_str().unwrap_or("").to_string()
+    v[k].as_str().unwrap_or("").chars().filter(|c| !matches!(c, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')).collect()
 }
 
 fn b64(v: &Value) -> Option<Vec<u8>> {
@@ -299,7 +332,7 @@ impl Model {
                 // The offer is answered: it is a transfer now.
                 self.offers.retain(|o| &o.id != id);
                 self.xfers.retain(|x| &x.id != id);
-                self.xfers.insert(0, Xfer { id: id.clone(), name: name.clone(), peer_name: peer_name.clone(), incoming: *incoming, done: 0, total: *size, rate: 0, state: XState::Running, at: Instant::now() });
+                self.xfers.insert(0, Xfer { id: id.clone(), name: name.clone(), peer_name: peer_name.clone(), incoming: *incoming, done: 0, total: *size, rate: 0, state: XState::Running, at: Instant::now(), path: None, thumb: None });
                 self.xfers.truncate(8);
                 out.push(Notice::XferStarted(id.clone()));
             }
@@ -310,11 +343,12 @@ impl Model {
                     x.rate = *bytes_per_sec;
                 }
             }
-            Event::TransferFinished { id, ok, message, .. } => {
+            Event::TransferFinished { id, ok, message, path, .. } => {
                 self.offers.retain(|o| &o.id != id);
                 if let Some(x) = self.xfers.iter_mut().find(|x| &x.id == id) {
                     x.state = if *ok { XState::Done } else { XState::Failed(message.clone()) };
                     x.at = Instant::now();
+                    x.path = (*ok && !path.is_empty()).then(|| path.into());
                     out.push(Notice::XferDone(id.clone(), *ok));
                 }
             }
@@ -350,13 +384,16 @@ impl Model {
             "pb.x.call" => {
                 if b["active"].as_bool() == Some(true) {
                     let was = self.calls.get(peer).map(|c| c.ringing);
-                    let c = Call { ringing: b["ringing"].as_bool().unwrap_or(false), can_answer: b["canAnswer"].as_bool().unwrap_or(false), name: s(b, "name"), text: s(b, "text") };
+                    let ringing = b["ringing"].as_bool().unwrap_or(false);
+                    let since = if ringing { None } else { self.calls.get(peer).and_then(|c| c.since).or(Some(Instant::now())) };
+                    let c = Call { ringing, can_answer: b["canAnswer"].as_bool().unwrap_or(false), name: s(b, "name"), text: s(b, "text"), muted: b["muted"].as_bool().unwrap_or(false), since };
                     let wake = was != Some(c.ringing);
                     self.calls.insert(peer.to_string(), c);
                     wake.then_some(Notice::Call)
                 } else {
-                    self.calls.remove(peer);
-                    Some(Notice::Call)
+                    // The snapshot a phone sends on connecting says "no call": that is not a call ending.
+                    self.ended = self.calls.remove(peer);
+                    self.ended.is_some().then_some(Notice::Call)
                 }
             }
             "pb.x.notif.posted" => {
@@ -379,6 +416,7 @@ impl Model {
                     at: Instant::now(),
                     replyable: b["replyable"].as_bool().unwrap_or(false),
                     markable: b["markable"].as_bool().unwrap_or(false),
+                    avatar: b64(&b["avatar"]).and_then(|d| decode_image(&d)),
                 };
                 // A reply (from the app or the phone) re-posts the chat with your own message last, and some apps
                 // re-post unchanged: neither is news, so the list updates but the island does not pop.
@@ -435,6 +473,7 @@ impl Model {
                     artist: s(b, "artist"),
                     app: s(b, "app"),
                     pkg: pkg.clone(),
+                    approved_source: false,
                     playing: b["playing"].as_bool().unwrap_or(false),
                     position_ms: b["position"].as_i64().unwrap_or(0),
                     duration_ms: b["duration"].as_i64().unwrap_or(0),
@@ -614,6 +653,17 @@ mod tests {
         r["text"] = json!("ok");
         assert!(m.feed(&msg("a", "pb.x.notif.posted", r)).is_empty());
         assert_eq!(m.notifs[0].text, "ok");
+    }
+
+    #[test]
+    fn a_chat_notification_carries_the_senders_photo() {
+        const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        let mut m = Model::default();
+        m.feed(&msg("a", "pb.x.notif.posted", json!({"key":"k","app":"WhatsApp","title":"\u{2068}Ana\u{2069}","text":"hola","avatar":PNG})));
+        assert!(m.notifs[0].avatar.is_some());
+        assert_eq!(m.notifs[0].title, "Ana");
+        m.feed(&msg("a", "pb.x.notif.posted", json!({"key":"j","app":"Gmail","title":"B","text":"c","avatar":""})));
+        assert!(m.notifs[0].avatar.is_none());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pb_app/ui/alero_motion.dart';
+import 'package:pb_app/ui/qollqe_motion.dart';
 
 Widget host(Widget c) => MaterialApp(home: Scaffold(body: c));
 

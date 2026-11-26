@@ -11,7 +11,7 @@ import 'src/rust/frb_generated.dart';
 import 'ui/shell.dart';
 import 'ui/brand.dart';
 import 'ui/expressive.dart' show motion, motionScale;
-import 'ui/alero_motion.dart' show MotionFade;
+import 'ui/qollqe_motion.dart' show MotionFade;
 import 'ui/setup.dart';
 import 'ui/app_lock.dart';
 import 'ui/icon.dart';

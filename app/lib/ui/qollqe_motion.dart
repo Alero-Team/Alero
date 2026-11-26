@@ -26,10 +26,10 @@ class Fluent {
   static const Curve point = Cubic(.55, .55, 0, 1);
 }
 
-/// Orion-inspired motion and the Material MotionScheme.
+/// Port of Qollqe's OrionInspiredMotion.kt and its Material MotionScheme.
 /// Applied on Windows and Android; respects reduced-motion accessibility.
-class AleroMotion {
-  const AleroMotion._();
+class QollqeMotion {
+  const QollqeMotion._();
 
   static Duration duration(BuildContext context, int ms) =>
       motion(context, Duration(milliseconds: ms));
@@ -63,7 +63,7 @@ class AleroMotion {
     child: Text(text, key: ValueKey(text), style: style),
   );
 
-  /// Tab changes: 98%-to-100% fade and a reversed leaving view.
+  /// Qollqe tab changes: 98%-to-100% fade and a reversed leaving view.
   static Widget tab(
     Widget child,
     Animation<double> animation,
@@ -91,7 +91,7 @@ class AleroMotion {
     );
   }
 
-  /// Card entrance: initial rows reveal with +24 px and 40 ms stagger.
+  /// Qollqe card entrance: initial rows reveal with +24 px and 40 ms stagger.
   static Widget reveal(BuildContext context, int index, Widget child) {
     // Inside a ScrollReveal the scroll entrance already moves it; a second slide would double the motion.
     if (calm(context) ||
@@ -101,10 +101,10 @@ class AleroMotion {
     }
     final delay = (index.clamp(0, 8)) * 40;
     return TweenAnimationBuilder<double>(
-      key: ValueKey('alero-reveal-$index'),
+      key: ValueKey('qollqe-reveal-$index'),
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 370 + delay) * motionScale,
-      curve: const _AleroDelayedSpring(.38),
+      curve: const _QollqeDelayedSpring(.38),
       builder: (_, v, c) => Opacity(
         opacity: v.clamp(0.0, 1.0).toDouble(),
         child: Transform.translate(offset: Offset(0, (1 - v) * 24), child: c),
@@ -119,7 +119,7 @@ class AleroMotion {
 /// side it enters from (below when scrolling down, above when scrolling back up), fades in over the first 55 %,
 /// and grows from 0.98. What enters in the same frame cascades 55 ms apart. It starts only once it is past
 /// [topInset] (the pinned bar) and [bottomInset] (the floating navigation), where it can actually be seen.
-/// Reduced motion: shown still. Entrance and AleroMotion.reveal inside it stay still, so nothing moves twice.
+/// Reduced motion: shown still. Entrance and QollqeMotion.reveal inside it stay still, so nothing moves twice.
 class ScrollReveal extends StatefulWidget {
   const ScrollReveal({
     super.key,
@@ -257,9 +257,9 @@ class _ScrollRevealState extends State<ScrollReveal>
 }
 
 /// Linear-style press for cards, rows and buttons: a 120 ms tint and border fade on hover or focus, and 0.97 scale
-/// while pressed. Still an InkWell, so keyboard, focus and accessibility work. Usage: `AleroPress(onTap: f, child: c)`.
-class AleroPress extends StatefulWidget {
-  const AleroPress({
+/// while pressed. Still an InkWell, so keyboard, focus and accessibility work. Usage: `QollqePress(onTap: f, child: c)`.
+class QollqePress extends StatefulWidget {
+  const QollqePress({
     super.key,
     required this.child,
     required this.onTap,
@@ -271,10 +271,10 @@ class AleroPress extends StatefulWidget {
   final double radius;
 
   @override
-  State<AleroPress> createState() => _AleroPressState();
+  State<QollqePress> createState() => _QollqePressState();
 }
 
-class _AleroPressState extends State<AleroPress> {
+class _QollqePressState extends State<QollqePress> {
   bool _down = false, _lit = false;
 
   @override
@@ -301,11 +301,11 @@ class _AleroPressState extends State<AleroPress> {
         },
         child: AnimatedScale(
           scale: _down ? .97 : 1,
-          duration: AleroMotion.micro(context, Fluent.d167),
+          duration: QollqeMotion.micro(context, Fluent.d167),
           curve: Fluent.enter,
           // Painted over the child: cards with their own fill would hide a tint underneath.
           child: AnimatedContainer(
-            duration: AleroMotion.micro(
+            duration: QollqeMotion.micro(
               context,
               const Duration(milliseconds: 120),
             ),
@@ -322,18 +322,18 @@ class _AleroPressState extends State<AleroPress> {
   }
 }
 
-/// Activity-only 850ms pulse. Never runs while idle or when reduced
+/// Qollqe's activity-only 850ms pulse. Never runs while idle or when reduced
 /// motion is enabled.
-class AleroPulse extends StatefulWidget {
-  const AleroPulse({super.key, required this.active, required this.child});
+class QollqePulse extends StatefulWidget {
+  const QollqePulse({super.key, required this.active, required this.child});
   final bool active;
   final Widget child;
 
   @override
-  State<AleroPulse> createState() => _AleroPulseState();
+  State<QollqePulse> createState() => _QollqePulseState();
 }
 
-class _AleroPulseState extends State<AleroPulse>
+class _QollqePulseState extends State<QollqePulse>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
     vsync: this,
@@ -347,7 +347,7 @@ class _AleroPulseState extends State<AleroPulse>
   }
 
   @override
-  void didUpdateWidget(covariant AleroPulse old) {
+  void didUpdateWidget(covariant QollqePulse old) {
     super.didUpdateWidget(old);
     _sync();
   }
@@ -377,8 +377,8 @@ class _AleroPulseState extends State<AleroPulse>
   );
 }
 
-class _AleroDelayedSpring extends Curve {
-  const _AleroDelayedSpring(this.delay);
+class _QollqeDelayedSpring extends Curve {
+  const _QollqeDelayedSpring(this.delay);
   final double delay;
 
   @override
@@ -456,7 +456,7 @@ class MotionFade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: AleroMotion.micro(context, Fluent.d250),
+    duration: QollqeMotion.micro(context, Fluent.d250),
     switchInCurve: Fluent.enter,
     switchOutCurve: Fluent.exit,
     layoutBuilder: layoutBuilder ?? AnimatedSwitcher.defaultLayoutBuilder,
@@ -491,7 +491,7 @@ class ArcExpand extends StatelessWidget {
               excluding: !expanded,
               child: AnimatedOpacity(
                 opacity: expanded ? 1 : 0,
-                duration: AleroMotion.micro(context, Fluent.d167),
+                duration: QollqeMotion.micro(context, Fluent.d167),
                 curve: Fluent.enter,
                 child: child,
               ),
@@ -534,7 +534,7 @@ class _SizeFadeState extends State<SizeFade> {
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
     tween: Tween(begin: _from, end: widget.show ? 1 : 0),
-    duration: AleroMotion.micro(context, Fluent.d250),
+    duration: QollqeMotion.micro(context, Fluent.d250),
     curve: Fluent.enter,
     onEnd: () {
       if (!widget.show) widget.onGone?.call();
@@ -744,7 +744,7 @@ class TweenValue extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
     tween: Tween(end: value),
-    duration: AleroMotion.micro(context, Fluent.d333),
+    duration: QollqeMotion.micro(context, Fluent.d333),
     curve: Fluent.enter,
     builder: (c, v, _) => builder(c, v),
   );
@@ -758,7 +758,7 @@ class MotionProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
     tween: Tween(end: value ?? 0),
-    duration: AleroMotion.micro(context, Fluent.d333),
+    duration: QollqeMotion.micro(context, Fluent.d333),
     curve: Fluent.enter,
     builder: (_, v, _) =>
         LinearProgressIndicator(value: value == null ? null : v),
@@ -780,7 +780,7 @@ class PopIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TweenAnimationBuilder<double>(
     tween: Tween(begin: 0, end: 1),
-    duration: AleroMotion.micro(context, const Duration(milliseconds: 150)),
+    duration: QollqeMotion.micro(context, const Duration(milliseconds: 150)),
     curve: Fluent.enter,
     builder: (_, v, c) => Opacity(
       opacity: v,

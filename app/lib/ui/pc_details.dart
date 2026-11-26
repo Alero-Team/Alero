@@ -10,7 +10,7 @@ import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
 import 'controls.dart' show Presence;
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import '../l10n.dart';
 
 /// What a connected computer reports and what the phone may do with it: the advanced side of "controlling the

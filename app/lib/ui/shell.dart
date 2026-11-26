@@ -20,7 +20,7 @@ import 'explorer.dart';
 import 'expressive.dart';
 import 'home.dart';
 import 'notifications.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'call_bar.dart';
 import 'calls_screen.dart';
 import 'vault.dart';
@@ -385,10 +385,10 @@ class _ShellState extends State<Shell>
         // and effect fade, reversed naturally when the destination leaves.
         // Both Windows and Android use this same transition.
         final page = PageTransitionSwitcher(
-          duration: AleroMotion.duration(context, 300),
+          duration: QollqeMotion.duration(context, 300),
           layoutBuilder: (entries) =>
               Stack(alignment: Alignment.topCenter, children: entries),
-          transitionBuilder: AleroMotion.tab,
+          transitionBuilder: QollqeMotion.tab,
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         // The computer always has the side menu: its phone sections do not fit a bottom bar.
@@ -500,7 +500,7 @@ class _ShellState extends State<Shell>
             Padding(
               padding: const EdgeInsets.all(8),
               child: AnimatedSwitcher(
-                duration: AleroMotion.micro(context, Fluent.d167),
+                duration: QollqeMotion.micro(context, Fluent.d167),
                 child: o < .5
                     ? IconButton(
                         key: const ValueKey('icon'),
@@ -707,14 +707,14 @@ class _NavItem extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final sel = selected;
-    // The selected pill is drawn by the sliding highlight behind the list; hover is AleroPress's tint.
+    // The selected pill is drawn by the sliding highlight behind the list; hover is QollqePress's tint.
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: Semantics(
         button: true,
         selected: sel,
         label: label,
-        child: AleroPress(
+        child: QollqePress(
           radius: 12,
           onTap: onTap,
           child: SizedBox(
@@ -725,7 +725,7 @@ class _NavItem extends StatelessWidget {
                 // Icon fill, color and label weight all follow the selection together.
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(end: sel ? 1 : 0),
-                  duration: AleroMotion.micro(context, Fluent.d167),
+                  duration: QollqeMotion.micro(context, Fluent.d167),
                   curve: Fluent.enter,
                   builder: (_, f, _) {
                     final fg = Color.lerp(s.onSurfaceVariant, s.onSurface, f)!;
@@ -975,7 +975,7 @@ class BrandMark extends StatelessWidget {
             bottom: 0,
             child: AnimatedOpacity(
               opacity: online ? 1 : 0,
-              duration: AleroMotion.micro(context, Fluent.d167),
+              duration: QollqeMotion.micro(context, Fluent.d167),
               child: Container(
                 width: size * .3,
                 height: size * .3,

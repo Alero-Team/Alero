@@ -46,6 +46,7 @@ const ICONS: &[(&str, &str)] = &[
     ("REPLY", "arrow_reply"),
     ("SPEAKER_LOW", "speaker_1"),
     ("MAIL_READ", "mail_read"),
+    ("MIC_OFF", "mic_off"),
 ];
 
 /// Android vector drawables (app/android/.../res/drawable): (file, Fluent name, filled, fill colour).

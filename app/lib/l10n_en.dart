@@ -441,6 +441,8 @@ const Map<String, String> kEnglish = {
   'Abrir': 'Open',
   'Abrir en el ordenador': 'Open on the computer',
   'Descargar carpeta': 'Download folder',
+  'Vista previa': 'Preview',
+  'Vista previa de {}': 'Preview of {}',
   'Descargar': 'Download',
   'Explorador': 'Explorer',
   'Archivos de {}': 'Files on {}',
@@ -1224,7 +1226,7 @@ const Map<String, String> kEnglish = {
   'La actualización no trae una huella SHA-256 válida.': 'The update has no valid SHA-256 checksum.',
   'La descarga no coincide con la huella SHA-256 publicada. No se instaló.': 'The download doesn\'t match the published SHA-256 checksum. It was not installed.',
   'Buscar actualizaciones al abrir': 'Check for updates on open',
-  'Consulta las versiones publicadas en GitHub (Alero-Team/Alero) sin enviar datos tuyos.': 'Looks at the releases published on GitHub (Alero-Team/Alero) without sending any data about you.',
+  'Consulta las versiones publicadas en GitHub (k0op4/Alero) sin enviar datos tuyos.': 'Looks at the releases published on GitHub (k0op4/Alero) without sending any data about you.',
   'Buscar actualizaciones': 'Check for updates',
   'Versión instalada: {}': 'Installed version: {}',
 };

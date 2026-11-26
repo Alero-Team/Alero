@@ -11,7 +11,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'call_bar.dart';
 import 'notifications.dart' show ago;
 import 'phone_page.dart' show phoneSwap;
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -291,7 +291,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                               horizontal: Gap.s,
                             ),
                             itemCount: list.length,
-                            itemBuilder: (_, i) => AleroMotion.reveal(
+                            itemBuilder: (_, i) => QollqeMotion.reveal(
                               context,
                               i,
                               _ConvoRow(
@@ -356,7 +356,7 @@ class _ConvoRow extends StatelessWidget {
       child: Material(
         color: selected ? s.secondaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(Radii.tile),
-        child: AleroPress(
+        child: QollqePress(
           radius: Radii.tile,
           onTap: onTap,
           child: Padding(
@@ -587,7 +587,7 @@ class _ConversationState extends State<_Conversation> {
                     reverse: true,
                     padding: const EdgeInsets.all(Gap.l),
                     itemCount: visibleMsgs.length,
-                    itemBuilder: (_, i) => AleroMotion.reveal(
+                    itemBuilder: (_, i) => QollqeMotion.reveal(
                       context,
                       i,
                       _Bubble(

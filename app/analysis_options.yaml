@@ -7,3 +7,4 @@ analyzer:
     - windows/**
     - linux/**
     - rust_builder/cargokit/**
+    - web/**

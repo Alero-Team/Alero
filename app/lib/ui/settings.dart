@@ -14,7 +14,7 @@ import 'icon.dart';
 import 'island_panel.dart';
 import '../l10n.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'update.dart';
 
 /// What Android has and has not granted, so the row never says "granted" for something that is not.
@@ -39,7 +39,7 @@ String _mediaStatus(Hub hub) {
 /// Material 3 Expressive connected button group: each option is its own button (round outer ends, small inner
 /// corners). The chosen one fills with the primary color and rounds fully; the one under the finger widens a
 /// little while its neighbours make room, and squares its corners. Same segments and callback shape as
-/// SegmentedButton; each button is a [AleroPress], so keyboard and screen readers keep working.
+/// SegmentedButton; each button is a [QollqePress], so keyboard and screen readers keep working.
 /// A null [selected] shows none chosen; a null [onChanged] disables it.
 class AleroSegments<T> extends StatefulWidget {
   const AleroSegments({
@@ -72,7 +72,7 @@ class _AleroSegmentsState<T> extends State<AleroSegments<T>> {
     final i = segments.indexWhere((e) => e.value == widget.selected);
     final on = widget.onChanged != null;
     final spring = motion(context, Spring.fast.settle);
-    final fade = AleroMotion.micro(context, Fluent.d167);
+    final fade = QollqeMotion.micro(context, Fluent.d167);
     return IntrinsicWidth(
       child: SizedBox(
         height: 40,
@@ -144,7 +144,7 @@ class _AleroSegmentsState<T> extends State<AleroSegments<T>> {
               ),
               child: ClipRRect(borderRadius: r ?? BorderRadius.zero, child: child),
             ),
-            child: AleroPress(
+            child: QollqePress(
               radius: _inner,
               onTap: enabled ? () => widget.onChanged!(seg.value) : null,
               child: TweenAnimationBuilder<Color?>(
@@ -264,7 +264,7 @@ class _Seed extends StatelessWidget {
         curve: Spring.fast,
         child: AnimatedOpacity(
           opacity: chosen ? 1 : (wallpaper ? .9 : 0),
-          duration: AleroMotion.micro(context, Fluent.d167),
+          duration: QollqeMotion.micro(context, Fluent.d167),
           child: Icon(
             chosen ? FluentIcons.checkmark_24_regular : FluentIcons.image_24_regular,
             size: 16,
@@ -849,7 +849,7 @@ class SettingsScreen extends StatelessWidget {
           SettingTile(
             title: 'Buscar actualizaciones al abrir',
             subtitle:
-                'Consulta las versiones publicadas en GitHub (Alero-Team/Alero) sin enviar datos tuyos.',
+                'Consulta las versiones publicadas en GitHub (k0op4/Alero) sin enviar datos tuyos.',
             trailing: AleroSwitch(
               value: hub.checkUpdates,
               onChanged: hub.setCheckUpdates,

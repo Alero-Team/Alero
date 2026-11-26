@@ -5,7 +5,7 @@ Version:        %{ver}
 Release:        1
 Summary:        Android and Linux over your local network or a USB cable
 License:        GPL-3.0-only
-URL:            https://github.com/Alero-Team/Alero
+URL:            https://github.com/k0op4/Alero
 BuildArch:      x86_64
 
 # The bundle ships its own libraries and static scrcpy/adb: no automatic dependency or provides, no stripping.

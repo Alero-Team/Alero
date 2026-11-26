@@ -283,6 +283,20 @@ pub fn transfer_clear(id: &str) {
     }
 }
 
+/// Opens a received file with its default app, as the toast's "Abrir" does; never one that runs code.
+pub fn open_path(path: &std::path::Path) {
+    if !runs_code(path) {
+        let _ = std::process::Command::new("explorer.exe").arg(path).spawn();
+    }
+}
+
+/// Opens the file's folder in Explorer with the file selected.
+pub fn show_in_folder(path: &std::path::Path) {
+    use std::os::windows::process::CommandExt;
+    // Explorer reads `/select,"path"` itself: the quotes go around the path only.
+    let _ = std::process::Command::new("explorer.exe").raw_arg(format!("/select,\"{}\"", path.display())).spawn();
+}
+
 /// The result card of a received file: replaces the progress card, with a thumbnail when it is a small image.
 /// Opening a file that runs code is never offered; only its folder.
 pub fn transfer_done(id: &str, file: &std::path::Path) {

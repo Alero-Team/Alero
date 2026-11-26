@@ -51,7 +51,7 @@ typedef Fetch = Future<Uint8List> Function(Uri url);
 
 // Wikimedia asks API clients to identify themselves.
 final _ua =
-    'Alero/$aleroVersion (https://github.com/Alero-Team/Alero; device pictures)';
+    'Alero/$aleroVersion (https://github.com/k0op4/Alero; device pictures)';
 const _maxBytes = 8 << 20;
 const _maxFiles = 60;
 const _retryNone = Duration(days: 14);

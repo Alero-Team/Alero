@@ -114,6 +114,20 @@ fn xdg_open(path: &Path) {
     let _ = Command::new("xdg-open").arg(path).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
 }
 
+/// Opens a received file with its default app, as the toast's "Abrir" does; never one that runs code.
+pub fn open_path(path: &Path) {
+    if !runs_code(path) {
+        xdg_open(path);
+    }
+}
+
+// shortcut: opens the folder without selecting the file (FileManager1.ShowItems over D-Bus would); upgrade if asked.
+pub fn show_in_folder(path: &Path) {
+    if let Some(dir) = path.parent() {
+        xdg_open(dir);
+    }
+}
+
 /// Toast with buttons. `Call` buttons reach `on_click` while this process runs (the tray daemon always does);
 /// `Open` buttons hand a file or folder to `xdg-open`, which opens it with the user's default app.
 /// Needs a notification server that supports actions (KDE Plasma, GNOME and most others do); without actions it

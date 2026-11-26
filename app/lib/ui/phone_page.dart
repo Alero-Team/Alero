@@ -5,7 +5,7 @@ import '../hub.dart';
 import '../phone_adb.dart';
 import '../phone_control.dart';
 import '../src/rust/api/engine.dart' as pb;
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -94,7 +94,7 @@ class PhonePage extends StatelessWidget {
 /// Crossfade between two states of a screen (key each state); the Stack passes the parent's constraints through unchanged, so
 /// the content keeps the tight or loose box it had before.
 Widget phoneSwap(BuildContext context, Widget child) => AnimatedSwitcher(
-  duration: AleroMotion.micro(context, Fluent.d250),
+  duration: QollqeMotion.micro(context, Fluent.d250),
   switchInCurve: Fluent.enter,
   switchOutCurve: Fluent.exit,
   layoutBuilder: (current, previous) => Stack(

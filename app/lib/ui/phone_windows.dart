@@ -7,7 +7,7 @@ import '../phone_control.dart';
 import '../scrcpy.dart';
 import '../native.dart';
 import '../obs_webcam.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -332,7 +332,7 @@ class _PhoneRecordPanelState extends State<PhoneRecordPanel> {
                     ? FilledButton.tonalIcon(
                         key: const ValueKey('stop'),
                         onPressed: _stop,
-                        icon: AleroPulse(
+                        icon: QollqePulse(
                           active: true,
                           child: Icon(
                             FluentIcons.record_stop_24_regular,

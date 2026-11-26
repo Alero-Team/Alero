@@ -8,7 +8,7 @@ import '../remote.dart';
 import '../src/rust/api/engine.dart' as pb;
 import 'notifications.dart' show ago;
 import 'phone_page.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import 'icon.dart';
@@ -241,7 +241,7 @@ class _CallsState extends State<_Calls> {
                           key: const ValueKey('log'),
                           children: [
                             for (final (i, c) in log.take(60).indexed)
-                              AleroMotion.reveal(
+                              QollqeMotion.reveal(
                                 context,
                                 i,
                                 ListTile(

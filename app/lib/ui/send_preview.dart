@@ -9,7 +9,7 @@ import '../hub.dart';
 import '../native.dart';
 import 'expressive.dart' show Spring, motion, showAleroDialog;
 import 'icon.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
 import '../l10n.dart';
@@ -68,7 +68,7 @@ Widget _fadeIn(BuildContext context, Widget child, int? frame, bool sync) =>
     ? child
     : AnimatedOpacity(
         opacity: frame == null ? 0 : 1,
-        duration: AleroMotion.micro(context, Fluent.d250),
+        duration: QollqeMotion.micro(context, Fluent.d250),
         curve: Fluent.enter,
         child: child,
       );
@@ -291,7 +291,7 @@ class _TransferState extends State<_Transfer> {
               // The height follows the swap between moving, waiting and finished.
               AnimatedSize(
                 alignment: Alignment.topCenter,
-                duration: AleroMotion.micro(context, Fluent.d250),
+                duration: QollqeMotion.micro(context, Fluent.d250),
                 curve: Fluent.enter,
                 child: MotionSwitch(
                   axis: Axis.vertical,

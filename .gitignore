@@ -25,3 +25,6 @@ app/test/shots/out/
 
 # Claude Code local settings
 .claude/
+
+# Python tooling caches
+__pycache__/

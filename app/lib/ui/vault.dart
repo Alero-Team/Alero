@@ -12,7 +12,7 @@ import 'icon.dart';
 import 'theme.dart';
 import '../l10n.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'controls.dart' show Presence;
 
 /// A local vault on each device, deliberately separate from normal Alero
@@ -583,7 +583,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                           for (final entry in _items)
                             Card(
                               key: ValueKey(entry.id),
-                              child: AleroPress(
+                              child: QollqePress(
                                 onTap: _busy
                                     ? null
                                     : entry.isNote

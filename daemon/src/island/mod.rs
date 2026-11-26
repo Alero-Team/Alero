@@ -8,6 +8,7 @@ pub mod config;
 pub mod fluent;
 pub mod gfx;
 pub mod link;
+pub mod media;
 pub mod model;
 pub mod motion;
 pub mod run;
@@ -110,8 +111,16 @@ impl Exec for EngineExec {
                 let request = format!("island-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
                 return self.send(&ctx.target, "pb.x.notif.reply", json!({"key": key, "text": text, "request": request}));
             }
+            Cmd::OpenFile(p) => crate::platform::open_path(&p),
+            Cmd::ShowFile(p) => crate::platform::show_in_folder(&p),
+            Cmd::Discard(p) => {
+                if let Err(e) = std::fs::remove_file(&p) {
+                    return Some((false, t("No se pudo descartar", "Could not discard").into(), e.to_string()));
+                }
+                return Some((true, t("Archivo descartado", "File discarded").into(), t("Solo se borró la copia del ordenador", "Only the computer's copy was deleted").into()));
+            }
             // run.rs carries these out itself.
-            Cmd::Beep | Cmd::Adb { .. } | Cmd::AskPcVolume | Cmd::Lyrics { .. } | Cmd::SaveLyrics(_) | Cmd::Keyboard(_) => {}
+            Cmd::Beep | Cmd::Adb { .. } | Cmd::AskPcVolume | Cmd::Lyrics { .. } | Cmd::SaveLyrics(_) | Cmd::Keyboard(_) | Cmd::Thumb { .. } => {}
         }
         None
     }

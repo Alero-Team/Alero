@@ -1,23 +1,31 @@
 name: Checks
 on:
   push:
-    branches: [main]
+    branches-ignore: [main]
+    paths-ignore: ['**.md', 'docs/**', 'branding/**']
   pull_request:
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
   checks:
-    runs-on: windows-latest
+    if: contains(fromJSON('["k0op4/Alero-Private","k0op4/Alero"]'), github.repository)
+    runs-on: ${{ github.repository == 'k0op4/Alero-Private' && fromJSON('["self-hosted","alero-private"]') || 'windows-latest' }}
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      # Self-hosted: rustup vive en el perfil de alero-runner; Git\bin da el bash de las acciones compuestas.
+      - if: runner.environment == 'self-hosted'
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.cargo\bin", "$env:ProgramFiles\Git\bin"
       # Pinned to a commit (v2.9.1): a moved tag must not run new code next to the signing key.
       - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba
         with:
           flutter-version: '3.47.8'
           channel: stable
           cache: true
+      - run: python -m unittest discover -s tools -p test_publish_release.py -v
       - run: cargo test --locked --workspace
       - run: flutter pub get --enforce-lockfile
         working-directory: app
@@ -26,11 +34,14 @@ jobs:
       - run: flutter test --no-pub
         working-directory: app
   linux:
+    # Solo en el público (minutos gratis): en el privado costaría minutos de GitHub y Linux se compila en la máquina Linux
+    # propia. Corre en PR, manual y en Packages del tag v* (hereda event_name=push); los push a otras ramas no lo disparan.
+    if: github.repository == 'k0op4/Alero' && (github.event_name != 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     # Ubuntu 22.04 (glibc 2.35): the package built here also runs on Debian 12 and later.
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       # Same pinned commit and Flutter version as the other jobs.
       - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba
         with:
@@ -80,7 +91,7 @@ jobs:
             code=0; /usr/lib/alero/alero_daemon || code=$?; test "$code" = 2'
           docker run --rm -v "$PWD/dist:/dist:ro" debian:trixie sh -ec "apt-get update -qq && apt-get install -y -qq /dist/*.deb >/dev/null; $check"
           docker run --rm -v "$PWD/dist:/dist:ro" fedora:42 sh -ec "dnf -y -q --setopt=install_weak_deps=False install /dist/*.rpm; $check"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: Alero-linux
           path: dist/*

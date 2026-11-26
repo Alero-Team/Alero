@@ -7,7 +7,7 @@ import '../src/rust/api/engine.dart' as pb;
 import 'brand.dart';
 import 'clipboard.dart';
 import 'expressive.dart';
-import 'alero_motion.dart';
+import 'qollqe_motion.dart';
 import 'media.dart';
 import 'notifications.dart';
 import 'phone_home.dart';
@@ -572,7 +572,7 @@ class _Hero extends StatelessWidget {
                         child: Semantics(
                           button: true,
                           label: tr('Ver {} en Dispositivos', [p.name]),
-                          child: AleroPress(
+                          child: QollqePress(
                             onTap: () => go(Section.devices),
                             radius: 12,
                             child: Center(child: picture),
@@ -635,7 +635,7 @@ class _Hero extends StatelessWidget {
                                     charging: info!.charging,
                                   ),
                                   const SizedBox(width: 8),
-                                  AleroMotion.number(
+                                  QollqeMotion.number(
                                     '${info!.battery}%',
                                     type.titleLarge,
                                   ),
@@ -672,7 +672,7 @@ class _Hero extends StatelessWidget {
                                           charging: info!.charging,
                                         ),
                                       ),
-                                      duration: AleroMotion.micro(
+                                      duration: QollqeMotion.micro(
                                         context,
                                         Fluent.d333,
                                       ),
@@ -756,7 +756,7 @@ class BatteryLine extends StatelessWidget {
       children: [
         BatteryGlyph(info.battery, charging: info.charging),
         const SizedBox(width: Gap.xs + 2),
-        AleroMotion.number(
+        QollqeMotion.number(
           '${info.battery} %${info.charging ? ' · cargando' : ''}',
           Theme.of(context).textTheme.bodyMedium
               ?.copyWith(color: s.onSurfaceVariant, fontFeatures: tabular),
@@ -841,7 +841,7 @@ class _StatusPanel extends StatelessWidget {
                   const SizedBox(height: 9),
                   TweenAnimationBuilder<Color?>(
                     tween: ColorTween(end: tone),
-                    duration: AleroMotion.micro(context, Fluent.d333),
+                    duration: QollqeMotion.micro(context, Fluent.d333),
                     builder: (_, c, _) => TweenValue(
                       progress.clamp(0, 1),
                       builder: (_, v) => LinearProgressIndicator(
@@ -950,8 +950,8 @@ class _RecentState extends State<_Recent> {
       icon: FluentIcons.history_24_regular,
       action: wide ? filters() : null,
       child: AnimatedSize(
-        duration: AleroMotion.duration(context, 320),
-        curve: AleroMotion.spatial,
+        duration: QollqeMotion.duration(context, 320),
+        curve: QollqeMotion.spatial,
         alignment: Alignment.topCenter,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

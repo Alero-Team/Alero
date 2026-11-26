@@ -18,7 +18,9 @@ import android.os.Looper
 import android.os.StatFs
 import android.view.RoundedCorner
 import android.view.WindowManager
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
@@ -28,7 +30,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
- * Phone side of the app messages (`pb.x.*`). Runs in the foreground service, so it keeps
+ * Phone side of the app messages (Protocol.md §6, `pb.x.*`). Runs in the foreground service, so it keeps
  * working without the UI. Each handler only uses public Android APIs; the special ones (notification access)
  * are granted by the user in system settings.
  */
@@ -73,6 +75,16 @@ object Features {
                 }
             }
         }, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        // A new wallpaper on the phone: every computer draws the new one (its colours change with it).
+        if (Build.VERSION.SDK_INT >= 27) {
+            ctx.getSystemService(WallpaperManager::class.java).addOnColorsChangedListener({ _, which ->
+                if (which and WallpaperManager.FLAG_SYSTEM != 0) Thread {
+                    nowFile().delete()
+                    wallpaperMessage()?.let { Bridge.broadcast("pb.x.wallpaper", it) }
+                    Bridge.broadcast("pb.x.info", info())
+                }.start()
+            }, main)
+        }
     }
 
     private fun loop() {
@@ -299,29 +311,57 @@ object Features {
 
     private fun wallpaperFile() = File(ctx.filesDir, "wallpaper.jpg")
 
-    /** Small JPEG that fits in one app message (64 KiB after base64). */
+    private fun nowFile() = File(ctx.cacheDir, "wallpaper-now.jpg")
+
+    /**
+     * The phone's wallpaper as a small JPEG that fits one app message: the picture picked in Alero, else the one on
+     * the home screen (Android shows it to apps with «Todas las carpetas»; a live wallpaper gives its thumbnail),
+     * else the phone's stock picture. Each is drawn once and kept until the wallpaper changes.
+     */
     private fun wallpaperMessage(): JSONObject? {
-        val f = File(ctx.cacheDir, "stock-wallpaper.jpg")
-        if (!f.exists()) {
-            try {
-                val drawable = ctx.getSystemService(WallpaperManager::class.java).getBuiltInDrawable() ?: return null
-                val width = 320
-                val height = (width.toFloat() * drawable.intrinsicHeight / maxOf(1, drawable.intrinsicWidth)).toInt().coerceIn(1, 960)
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                drawable.setBounds(0, 0, width, height)
-                drawable.draw(android.graphics.Canvas(bitmap))
-                f.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 78, it) }
-                bitmap.recycle()
-            } catch (_: Exception) { return null }
-        }
+        val f = wallpaperFile().takeIf { it.exists() }
+            ?: nowFile().takeIf { it.exists() || draw(homeWallpaper(), it) }
+            ?: File(ctx.cacheDir, "stock-wallpaper.jpg").takeIf { it.exists() || draw(stockWallpaper(), it) }
+            ?: return null
         return JSONObject().put("jpeg", Base64.encodeToString(f.readBytes(), Base64.NO_WRAP))
+    }
+
+    @SuppressLint("MissingPermission") // checked: allFiles() is the permission Android asks for since 13
+    private fun homeWallpaper(): Drawable? = try {
+        val wm = ctx.getSystemService(WallpaperManager::class.java)
+        wm.wallpaperInfo?.loadThumbnail(ctx.packageManager) ?: if (Files.allFiles()) wm.drawable else null
+    } catch (_: Exception) { null }
+
+    private fun stockWallpaper(): Drawable? = try {
+        ctx.getSystemService(WallpaperManager::class.java).getBuiltInDrawable()
+    } catch (_: Exception) { null }
+
+    /** 360 px wide, the quality lowered until it is under 120 KB. */
+    private fun draw(d: Drawable?, to: File): Boolean {
+        d ?: return false
+        return try {
+            val width = 360
+            val height = (width.toFloat() * d.intrinsicHeight / maxOf(1, d.intrinsicWidth)).toInt().coerceIn(1, 960)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            d.setBounds(0, 0, width, height)
+            d.draw(android.graphics.Canvas(bitmap))
+            var out: ByteArray
+            var q = 80
+            do {
+                out = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.JPEG, q, it) }.toByteArray()
+                q -= 15
+            } while (out.size > 120_000 && q > 20)
+            bitmap.recycle()
+            out.size <= 120_000 && run { to.writeBytes(out); true }
+        } catch (_: Exception) { false }
     }
 
     /** Scales the picked image down to a thumbnail the computer can draw inside its phone outline. */
     fun setWallpaper(uri: Uri?): Boolean {
         if (uri == null) {
             wallpaperFile().delete()
-            Bridge.broadcast("pb.x.wallpaper", JSONObject().put("jpeg", ""))
+            // Back to the phone's own wallpaper (or none the computer can draw).
+            Bridge.broadcast("pb.x.wallpaper", wallpaperMessage() ?: JSONObject().put("jpeg", ""))
             return true
         }
         val cr = ctx.contentResolver

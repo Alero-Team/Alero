@@ -27,11 +27,11 @@ void main() {
   test('parseRelease picks the asset by exact name and ignores old releases', () {
     final j = {
       'tag_name': 'v2.6.0',
-      'html_url': 'https://github.com/Alero-Team/Alero/releases/tag/v2.6.0',
+      'html_url': 'https://github.com/k0op4/Alero/releases/tag/v2.6.0',
       'assets': [
         {
           'name': 'Alero-2.6.0-android-arm64.apk',
-          'browser_download_url': 'https://github.com/Alero-Team/Alero/releases/download/v2.6.0/Alero-2.6.0-android-arm64.apk',
+          'browser_download_url': 'https://github.com/k0op4/Alero/releases/download/v2.6.0/Alero-2.6.0-android-arm64.apk',
           'digest': 'sha256:abc',
           'size': 10,
         },
@@ -59,7 +59,7 @@ void main() {
       downloadVerified(local, f, onProgress: (_) {}, cancelled: () => false),
       throwsA(isA<HttpException>()),
     );
-    const noDigest = UpdateAsset('a', 'https://github.com/Alero-Team/Alero/x', '', 5);
+    const noDigest = UpdateAsset('a', 'https://github.com/k0op4/Alero/x', '', 5);
     await expectLater(
       downloadVerified(noDigest, f, onProgress: (_) {}, cancelled: () => false),
       throwsA(isA<HttpException>()),

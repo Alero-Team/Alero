@@ -1,5 +1,61 @@
 # Cambios
 
+## Beta 2.6.3 (2.6.3) — 2026-11-25
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Alero Island (Windows and Linux)
+
+- **Calls like on the iPhone:** an answered call folds into a compact island with a pulse and the call timer; hanging up shows "Call ended" with its length. Answer, decline, hang up and mute work from the island (Android answers through the system's call service, which background apps are allowed to use).
+- **Signal and other VoIP apps:** a call notification that is replaced while the call goes on no longer restarts the timer.
+- **Compact player:** it steps back after a few seconds even when the player re-announces the same song, fades out instead of vanishing, and a card opening over it cross-fades instead of leaving an empty pill. The equalizer runs every frame on whole pixels (it dropped to ~9 fps and bars looked uneven).
+- **Notifications:** chats show the sender's photo with the app's logo on its corner. Moving the pointer to a notification opens the island on Notificaciones at once.
+- **Received files:** a photo shows a preview; any file offers Open, Folder and Discard (Discard deletes only the computer's copy).
+- **Primary monitor by default:** with several screens the island appears on the main one. Contact names no longer show invisible direction marks as boxes.
+
+### Android
+
+- **File explorer:** double-click (or "Preview") shows a photo or video large and any other file with its details, then Delete, Rename, Download or Open on the computer.
+- **Remote control card:** shows the computer's real desktop wallpaper (it follows changes) with a slow drift and touchpad taps instead of the wandering pointer.
+- **Now playing from a computer:** the player's logo and its plain name ("Spotify", "Firefox") instead of its system ID.
+- **Phone wallpaper on the computer:** the phone sends its actual home-screen wallpaper when it can read it ("All folders" access), else the picked image or the stock one; the picked image is now actually sent.
+
+### Computer
+
+- The computer sends its current wallpaper (Windows, KDE Plasma, GNOME) instead of the stock picture, and again when it changes.
+
+## Beta 2.6.2 (2.6.2) — 2026-11-24
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Alero Island (Windows and Linux)
+
+- **No click afterimage:** removed the 0.55-second ink ripple. Buttons show their pressed state immediately and clear it on release.
+- **No outer shadow:** removed the blurred shadow and its rendering buffers.
+- **Lighter transitions:** content fades without rescaling every frame; the island keeps its size animation. After a long missed frame, springs settle instead of replaying stale motion.
+- **Windows under load:** reuse the native bitmap as the island changes size instead of reallocating it every frame; pace frames at the monitor refresh rate without blocking on DWM when other apps occupy the GPU.
+- Includes the Island, streaming-source and Android fixes prepared for 2.6.1, which was built privately but not published.
+
+## Beta 2.6.1 (2.6.1) — 2026-11-24
+
+Install the Android APK and the Windows or Linux package from this version together.
+
+### Alero Island (Windows and Linux)
+
+- **Smoother animation:** the compositor processes only the visible content, skips shadow pixels hidden by the card and uses SIMD rasterization. The daemon is optimized for speed while keeping the existing animation styles.
+- **No cover decoding during animation:** album covers are prepared off the rendering thread. Common symbols and emoji no longer trigger loading large language font collections first.
+- **Player controls stay inside the card:** the expanded player leaves enough bottom space for its playback and volume buttons.
+- **Streaming sources only:** supported music and video players and streaming websites can open the media island. WhatsApp voice messages, TikTok and unidentified audio sources do not trigger it.
+
+### Android
+
+- **Devices:** removed the send shortcut from paired-device cards; connection and forget actions remain available.
+- **Album covers:** image dimensions are read from metadata without decoding the full image just to size the player; asynchronous updates are discarded when their widget has been disposed.
+
+### Development and releases
+
+- Checks and package builds run in the private repository. All Windows, Android and Linux packages must pass the private pipeline before their source snapshot and existing artifacts can be promoted to the public release repository.
+
 ## Beta 2.6 (2.6.0) — 2026-11-23
 
 Install the Android APK and the Windows or Linux package from this version together.
@@ -392,9 +448,16 @@ Instala juntos el APK de Android y el instalador de Windows: el límite de empar
 - **Diseño nuevo, como Enlace Móvil:** lista limpia con el icono de la app, «App · hora», el nombre en negrita y el mensaje; a la derecha ⋯ y ×. Al pasar el ratón aparecen Responder, Marcar como leído y Silenciar. Arriba, «Historial» y «Borrar todo». El tamaño sigue la pantalla y el tamaño de mosaicos.
 - **Responder y listo:** la respuesta se escribe en una barra con el botón de enviar dentro; al enviarla, la notificación se descarta en el teléfono y desaparece de la lista.
 
-### Seguridad
+### Seguridad (auditoría)
 
-- Mejoras de seguridad tras una auditoría interna.
+- **Archivos recibidos:** un archivo llamado solo «.bat», «.lnk» u otra extensión ya no recibe el botón «Abrir»; la lista de tipos que no se abren suma Office con macros, temas, Escritorio remoto, instaladores por referencia y similares. Los archivos recibidos en Windows llevan la marca de Internet, así que SmartScreen y la Vista protegida de Office actúan como con una descarga.
+- **Desconectar corta de verdad:** un teléfono desconectado ya no puede seguir enviando órdenes (ratón, teclado, bloquear) por la conexión que tenía abierta.
+- **Emparejamiento:** como mucho 6 intentos por minuto desde una misma dirección (20 en total), y emparejar con un dispositivo de la lista fija su identidad. Si se supera: «Demasiados intentos… espera un minuto».
+- **Olvidar dispositivo es definitivo:** la lista de emparejados se guarda de uno en uno; un anuncio de red a la vez ya no puede devolver un dispositivo olvidado, y un archivo dañado nunca se sobrescribe con una lista vacía.
+- **Android:** el registro de llamadas solo se comparte con Llamadas activado, y los contactos con Llamadas o SMS. Desde el ordenador ya no se pueden marcar códigos con * o # (desvíos, PIN de la SIM, USSD).
+- **Pedir un archivo:** solo el dispositivo al que se lo pediste puede enviarlo sin pregunta.
+- **ADB inalámbrico:** la dirección del teléfono solo se acepta si responde el propio teléfono.
+- **Publicación:** la clave de firma de Android solo existe durante el paso que compila el APK, y la publicación comprueba que el APK lleva el certificado de siempre.
 
 ## Beta 1.2 (1.2.0) — 2026-11-09
 
@@ -547,9 +610,9 @@ Instala juntos el APK de Android y el instalador de Windows de esta versión: el
 - **Personalizar:** acceso directo a Apariencia y Ajustes desde el inicio de Windows.
 - **Datos reales:** el resumen, los archivos, la reproducción, las notificaciones y los controles siguen conectados a las funciones existentes de Alero; no se utilizan nombres ni mensajes ficticios de las capturas.
 
-### Animaciones
+### Animaciones de Qollqe
 
-- Se adaptaron los movimientos de Material 3 Expressive/Orion: presión elástica al 95,5 %, entrada y salida de apartados con transición de escala 98–100 % y fundido, aparición escalonada de tarjetas con desplazamiento vertical y movimiento animado de cifras.
+- Se adaptaron del ZIP de Qollqe los movimientos de Material 3 Expressive/Orion: presión elástica al 95,5 %, entrada y salida de apartados con transición de escala 98–100 % y fundido, aparición escalonada de tarjetas con desplazamiento vertical y movimiento animado de cifras.
 - Indicador de actividad pulsante solo para transferencias reales, detenido durante inactividad.
 - Se respeta la preferencia de accesibilidad «Reducir animaciones» en Windows y Android.
 - **Píldora de Android:** mantiene el mismo diseño y la transición elástica entre opciones.

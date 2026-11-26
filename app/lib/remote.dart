@@ -5,7 +5,7 @@ import 'dart:ui' show Color;
 import 'device_image.dart';
 import 'l10n.dart' show L10n, tr, tx;
 
-/// Plain views of the app messages a paired device sends (`pb.x.*`). Parsing only: unknown or
+/// Plain views of the app messages a paired device sends (`pb.x.*`, Protocol.md §6). Parsing only: unknown or
 /// missing fields fall back to empty values, because the other side may be an older or newer version.
 
 class ScreenShape {
@@ -331,7 +331,8 @@ class MediaState {
       speed = (j['speed'] as num?)?.toDouble() ?? 1,
       actions = (j['actions'] as num?)?.toInt(),
       receivedAt = DateTime.now().millisecondsSinceEpoch,
-      art = _art(j['art']);
+      art = _bytes(j['art']),
+      icon = _bytes(j['icon']);
   final bool active, playing;
 
   /// Played on another device (Chromecast, a speaker), not on the phone itself.
@@ -339,6 +340,9 @@ class MediaState {
   final String app, pkg, title, artist, album;
   final int duration, position, at, volume, volumeMax;
   final Uint8List? art;
+
+  /// The player's logo, sent by a computer (a phone's apps come by package, see `Hub.appIcons`).
+  final Uint8List? icon;
   final double speed;
   final int? actions;
   final int receivedAt;
@@ -355,19 +359,18 @@ class MediaState {
     return duration > 0 ? p.clamp(0, duration) : p.clamp(0, 1 << 53);
   }
 
-  // The same cover arrives with every update (each few seconds): decode it once and hand back the same bytes,
-  // so the image cache keeps the decoded picture instead of decoding it again.
-  static String? _lastArt;
-  static Uint8List? _lastBytes;
+  // The same cover (and app logo) arrives with every update (each few seconds): decode each once and hand back the
+  // same bytes, so the image cache keeps the decoded picture instead of decoding it again.
+  static final _decoded = <String, Uint8List>{};
 
-  static Uint8List? _art(Object? s) {
+  static Uint8List? _bytes(Object? s) {
     if (s is! String || s.isEmpty) return null;
-    if (s == _lastArt) return _lastBytes;
+    final hit = _decoded[s];
+    if (hit != null) return hit;
     try {
       final bytes = base64Decode(s);
-      _lastArt = s;
-      _lastBytes = bytes;
-      return bytes;
+      if (_decoded.length >= 4) _decoded.remove(_decoded.keys.first);
+      return _decoded[s] = bytes;
     } catch (_) {
       return null;
     }

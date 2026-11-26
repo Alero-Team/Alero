@@ -68,14 +68,16 @@ pub trait Host {
 
 pub enum Msg {
     Event(Event),
-    /// The computer's player, with its cover as the bytes of an image file. None: nothing is playing.
-    Media(Option<(crate::sys::Media, Option<Vec<u8>>, Option<Image>)>),
+    /// The computer's player, with its cover decoded on the media thread. None: nothing is playing.
+    Media(Option<(crate::sys::Media, Option<Image>, Option<Image>)>),
     /// A phone's state over adb (peer id); None: no adb for it now.
     Adb(String, Option<super::adb::Radios>),
     /// A song's synced lyrics (its key; None when there are none).
     Lyrics(String, Option<crate::lyrics::Lines>),
     /// The computer's output volume, 0..1.
     PcVolume(Option<f32>),
+    /// A received photo's preview (transfer id; None when it cannot be decoded).
+    Thumb(String, Option<Image>),
 }
 
 /// What the executor needs to know to address a command.
@@ -118,6 +120,7 @@ fn spawn_media(tx: Sender<Msg>, wants: Arc<AtomicBool>) -> std::thread::Thread {
         .spawn(move || {
             let mut last = String::new();
             let mut art: Option<Vec<u8>> = None;
+            let mut cover: Option<Image> = None;
             let mut icon: (String, Option<Image>) = (String::new(), None);
             crate::sys::media_wake(std::thread::current());
             // What was last sent, to send again only when something the island shows changed.
@@ -142,25 +145,28 @@ fn spawn_media(tx: Sender<Msg>, wants: Arc<AtomicBool>) -> std::thread::Thread {
                 asked = Instant::now();
                 let state = crate::sys::media_state();
                 let msg = match state {
-                    Some(m) if !(m.title.is_empty() && m.artist.is_empty()) => {
+                    Some(m) if !(m.title.is_empty() && m.artist.is_empty()) && super::media::approved_pc(&m) => {
                         let key = format!("{}\u{1}{}\u{1}{}", m.app, m.title, m.artist);
                         if key != last {
                             last = key;
                             art = crate::sys::media_art();
+                            // Decoding a large cover must never stall an opening animation.
+                            cover = art.as_deref().and_then(decode_image);
                         }
                         if icon.0 != m.app {
                             let img = crate::sys::app_icon(&m.app).and_then(|(w, h, px)| Image::from_rgba(w, h, px));
                             icon = (m.app.clone(), img);
                         }
-                        Some((m, art.clone(), icon.1.clone()))
+                        Some((m, cover.clone(), icon.1.clone()))
                     }
                     _ => {
                         last.clear();
                         art = None;
+                        cover = None;
                         None
                     }
                 };
-                let now = msg.as_ref().map(|(m, a, _)| Sent::of(m, a.as_deref()));
+                let now = msg.as_ref().map(|(m, _, _)| Sent::of(m, art.as_deref()));
                 if sent.as_ref().is_none_or(|s| !Sent::same(s, &now)) {
                     if tx.send(Msg::Media(msg)).is_err() {
                         return;
@@ -223,6 +229,8 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     // Debug: `ALERO_ISLAND_SIM=demo` (or a script, see `link::parse_sim`) fakes device connections and disconnections.
     let mut sim = std::env::var("ALERO_ISLAND_SIM").map(|v| super::link::parse_sim(&v)).unwrap_or_default().into_iter().peekable();
     let sim_start = Instant::now();
+    // Debug: `ALERO_ISLAND_FRAMES=<file>` logs each drawn frame: unix ms, dt ms, update+render+present ms, open.
+    let mut frames = std::env::var_os("ALERO_ISLAND_FRAMES").and_then(|p| std::fs::File::create(p).ok()).map(std::io::LineWriter::new);
     // Lyrics on or off is the island's own choice (its player button), kept apart from the app's settings file.
     let lyrics_file = data.join("island-lyrics");
     island.set_lyrics_pref(std::fs::read_to_string(&lyrics_file).is_ok_and(|s| s.trim() == "on"));
@@ -249,7 +257,6 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
     let mut full_at: Option<Instant> = None;
     let mut full = false;
     let mut reduce = false;
-    let mut last_art: Option<Vec<u8>> = None;
     let mut closed_since: Option<Instant> = Some(Instant::now());
     let mut pending: Vec<HostEvent> = Vec::new();
     let devices_file = data.join("island-devices.json");
@@ -293,27 +300,21 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 }
                 Msg::Lyrics(key, lines) => island.set_lyrics(key, lines),
                 Msg::PcVolume(v) => island.set_pc_volume(v),
+                Msg::Thumb(id, img) => island.set_thumb(&id, img),
                 Msg::Media(m) => {
-                    // The player thread repeats the same cover every second: decode it only when it changes.
-                    let same_art = m.as_ref().map(|(_, a, _)| a) == Some(&last_art);
-                    let old_art = island.model.pc_media.as_mut().and_then(|p| p.art.take());
-                    if let Some((_, a, _)) = &m {
-                        last_art.clone_from(a);
-                    } else {
-                        last_art = None;
-                    }
                     island.model.pc_media = m.map(|(m, art, icon)| Media {
                         icon,
                         title: m.title,
                         artist: m.artist,
                         pkg: String::new(),
+                        approved_source: true,
                         app: m.app,
                         playing: m.playing,
                         position_ms: m.position_ms,
                         duration_ms: m.duration_ms,
                         speed: if m.speed > 0.0 { m.speed } else { 1.0 },
                         at: Some(Instant::now()),
-                        art: if same_art { old_art } else { art.and_then(|b| decode_image(&b)) },
+                        art,
                     });
                     island.mark_dirty();
                 }
@@ -493,6 +494,14 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         let _ = std::fs::write(&lyrics_file, if on { "on" } else { "off" });
                     }
                     Cmd::Keyboard(on) => host.set_keyboard(on),
+                    Cmd::Thumb { id, path } => {
+                        // Read and decoded in its own thread: a 50 MP photo never stalls a frame.
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-thumb".into()).spawn(move || {
+                            let img = std::fs::read(&path).ok().and_then(|b| super::gfx::thumbnail(&b));
+                            let _ = tx.send(Msg::Thumb(id, img));
+                        });
+                    }
                     Cmd::PcSeek(ms) => {
                         exec.run(Cmd::PcSeek(ms), &ctx);
                         media.unpark();
@@ -518,6 +527,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
         }
 
         // ------------------------------------------------------------------------------ time and drawing
+        let work = Instant::now();
         let st = island.update(dt);
         let want = island.wants_media();
         if want && !wants.swap(true, Ordering::Relaxed) {
@@ -545,7 +555,7 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                     island.render(cv);
                     let (cw, ch) = (cv.width_px(), cv.height_px());
                     match island.crop_box().filter(|_| host.resizes_cleanly()) {
-                        // Only the rows and columns the island (and its shadow) can reach go to the window.
+                        // Only the rows and columns the island can reach go to the window.
                         Some(b) => {
                             let x0 = ((b.x * geom.k).floor().max(0.0) as u32).min(cw);
                             let x1 = ((b.right() * geom.k).ceil() as u32).clamp(x0, cw);
@@ -562,6 +572,11 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         None => host.present(Some((cv.pm.data(), cw, ch, geom.x, geom.y))),
                     }
                     shown = true;
+                    if let Some(f) = frames.as_mut() {
+                        use std::io::Write;
+                        let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs_f64() * 1000.0;
+                        let _ = writeln!(f, "{at:.1} {:.2} {:.2} {}", dt * 1000.0, work.elapsed().as_secs_f64() * 1000.0, island.is_open() as u8);
+                    }
                 }
             }
         } else {
@@ -601,7 +616,7 @@ mod tests {
     use super::*;
 
     fn m(title: &str, playing: bool, pos: i64) -> crate::sys::Media {
-        crate::sys::Media { app: "Spotify".into(), title: title.into(), artist: "A".into(), playing, position_ms: pos, duration_ms: 200_000, actions: 0, speed: 1.0 }
+        crate::sys::Media { app: "Spotify".into(), source_url: String::new(), title: title.into(), artist: "A".into(), playing, position_ms: pos, duration_ms: 200_000, actions: 0, speed: 1.0 }
     }
 
     /// The player thread sends again only what the island would draw differently: a new song, play/pause, a seek.

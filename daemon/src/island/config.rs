@@ -34,6 +34,8 @@ impl Default for Modules {
 pub struct IslandConfig {
     pub enabled: bool,
     /// -1: the monitor under the pointer, 0: the primary one, n: the n-th monitor of the system's list.
+    /// Stored as `screen`: the old `monitor` key defaulted to -1, so renaming moves every install to the primary.
+    #[serde(rename = "screen")]
     pub monitor: i32,
     pub hide_fullscreen: bool,
     /// Width of the trigger zone on the top edge, in px (100..400).
@@ -66,7 +68,7 @@ impl Default for IslandConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            monitor: -1,
+            monitor: 0,
             hide_fullscreen: true,
             zone_width: 220,
             open_delay_ms: 120,
@@ -177,6 +179,14 @@ mod tests {
         let c: IslandConfig = serde_json::from_str("{}").unwrap();
         assert_eq!(c, IslandConfig::default());
         assert_eq!(c.background(), [0, 0, 0]);
+    }
+
+    #[test]
+    fn the_old_pointer_default_moves_to_the_primary_screen() {
+        let old: IslandConfig = serde_json::from_str(r#"{"monitor":-1}"#).unwrap();
+        assert_eq!(old.monitor, 0);
+        let chosen: IslandConfig = serde_json::from_str(r#"{"screen":-1}"#).unwrap();
+        assert_eq!(chosen.monitor, -1);
     }
 
     #[test]

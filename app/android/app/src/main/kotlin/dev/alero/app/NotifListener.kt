@@ -172,9 +172,24 @@ class NotifListener : NotificationListenerService() {
 
     private fun icon(pkg: String): String = appIcon(this, pkg)
 
+    /**
+     * The large icon; else, for chats that put the photo on the sender instead (WhatsApp, Signal and Telegram on
+     * recent Android), the last message's Person icon.
+     */
+    @Suppress("DEPRECATION") // the typed getters need Android 13
+    private fun avatarIcon(sbn: StatusBarNotification): android.graphics.drawable.Icon? {
+        sbn.notification.getLargeIcon()?.let { return it }
+        val x = sbn.notification.extras
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            val last = x.getParcelableArray(Notification.EXTRA_MESSAGES)?.lastOrNull() as? Bundle
+            (last?.get("sender_person") as? android.app.Person)?.icon?.let { return it }
+        }
+        return null
+    }
+
     /** The picture an app puts beside its notification (a chat's contact photo), as a small JPEG. "" if none. */
     private fun avatar(sbn: StatusBarNotification): String = try {
-        val d = sbn.notification.getLargeIcon()?.loadDrawable(this)
+        val d = avatarIcon(sbn)?.loadDrawable(this)
         if (d == null) "" else {
             val b = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
             val out = ByteArrayOutputStream()

@@ -1,0 +1,138 @@
+name: Packages
+# Privado (k0op4/Alero-Private): push a main o ejecución manual, runner propio, solo artefactos.
+# Público (k0op4/Alero): solo etiquetas v*; compila, firma y deja una release en borrador.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: packages
+  cancel-in-progress: false
+jobs:
+  checks:
+    if: >-
+      (github.repository == 'k0op4/Alero-Private' && github.ref_type == 'branch') ||
+      (github.repository == 'k0op4/Alero' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v'))
+    uses: ./.github/workflows/ci.yml
+  packages:
+    needs: checks
+    # Los secretos de firma viven en el entorno `release` del público y como secretos del repositorio en el privado.
+    # Un nombre vacío equivale a no usar entorno.
+    environment: ${{ github.repository == 'k0op4/Alero' && 'release' || '' }}
+    runs-on: ${{ github.repository == 'k0op4/Alero-Private' && fromJSON('["self-hosted","alero-private"]') || 'windows-2022' }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      # Self-hosted: rustup vive en el perfil de alero-runner; Git\bin da el bash de las acciones compuestas.
+      - if: runner.environment == 'self-hosted'
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.cargo\bin", "$env:ProgramFiles\Git\bin"
+      # Pinned to a commit (v2.9.1): a moved tag must not run new code next to the signing key.
+      - uses: subosito/flutter-action@1508160852fb97248640997f7cfb38da241df0ba
+        with:
+          flutter-version: '3.47.8'
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: cargo fetch --locked
+      - name: Resolve Flutter dependencies
+        shell: pwsh
+        working-directory: app
+        run: flutter pub get --enforce-lockfile
+      - run: rustup target add aarch64-linux-android
+      # The signing key exists only inside this step: it is written, used by Gradle and deleted here, so no
+      # other step (dependency fetches, choco, the Windows build, uploads) ever sees it or its passwords.
+      - name: Build signed Android APK
+        shell: pwsh
+        env:
+          SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ALERO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALERO_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ALERO_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if (!$env:SIGNING_KEY) { throw 'Configure the Android signing secrets before building packages.' }
+          $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
+          [IO.File]::WriteAllBytes($keyFile, [Convert]::FromBase64String($env:SIGNING_KEY))
+          $env:SIGNING_KEY = $null
+          $env:ALERO_ANDROID_KEYSTORE = $keyFile
+          try {
+            $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
+            ./tools/build-android.ps1 -FlutterRoot $flutterRoot -AndroidSdk $env:ANDROID_HOME -SkipAnalyze
+          } finally {
+            Remove-Item -LiteralPath $keyFile -ErrorAction SilentlyContinue
+          }
+      - name: Verify signed release APK
+        shell: pwsh
+        run: |
+          $apk = Get-ChildItem dist -Filter '*-android-arm64.apk' | Select-Object -First 1
+          if (!$apk) { throw 'Android APK missing' }
+          $tool = Get-ChildItem "$env:ANDROID_HOME/build-tools" -Filter apksigner.bat -Recurse |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$tool) { throw 'Android apksigner unavailable' }
+          $out = & $tool.FullName verify --verbose --print-certs $apk.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed' }
+          $out
+          # Installed copies only accept updates from this signer: a different key must never be published.
+          if (-not ($out -match '59b6277d2183eda236122557e8f55f4d55fc62bf6071e2f6111a1dccdc20adaa')) {
+            throw 'APK is not signed with the expected release certificate'
+          }
+      # En self-hosted Inno Setup ya está instalado (el runner no es admin y no puede usar choco).
+      - name: Install packaging tools
+        if: runner.environment != 'self-hosted'
+        run: choco install innosetup --yes --no-progress
+      - name: Windows package
+        shell: pwsh
+        run: |
+          $flutterRoot = Split-Path (Split-Path (Get-Command flutter).Source)
+          # Hashtable: un array splateado pasaría '-IsccPath' como texto posicional, no como nombre de parámetro.
+          $iscc = if ($env:ALERO_ISCC) { @{ IsccPath = $env:ALERO_ISCC } } else { @{} }
+          ./tools/build-windows.ps1 -FlutterRoot $flutterRoot -SkipAnalyze @iscc
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Alero-packages
+          path: dist/*
+          if-no-files-found: error
+      - name: Remove temporary signing key
+        if: always()
+        shell: pwsh
+        run: |
+          $keyFile = Join-Path $env:RUNNER_TEMP 'alero-signing.keystore'
+          if (Test-Path -LiteralPath $keyFile) { Remove-Item -LiteralPath $keyFile }
+  # Solo en el público y con una etiqueta v*: crea la release en borrador. Es el único job con permiso de escritura.
+  release:
+    if: github.repository == 'k0op4/Alero' && github.ref_type == 'tag'
+    needs: [checks, packages]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: Alero-packages
+          path: packages
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: Alero-linux
+          path: packages
+      - name: Create the draft release
+        run: |
+          if gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName --jq '.[].tagName' | grep -qxF "$TAG"; then
+            echo "A release for $TAG already exists."; exit 1
+          fi
+          title=$(python3 tools/release_notes.py --tag "$TAG" --packages packages --notes-file "$RUNNER_TEMP/notes.md" --source "$GITHUB_SHA")
+          mapfile -t assets < <(find packages -maxdepth 1 -type f ! -name '*.sha256' | sort)
+          gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "$title" --notes-file "$RUNNER_TEMP/notes.md"

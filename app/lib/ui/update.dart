@@ -7,7 +7,7 @@ import '../l10n.dart';
 import '../native.dart';
 import '../updater.dart';
 import 'expressive.dart' show showAleroDialog;
-import 'alero_motion.dart' show ToastMotion;
+import 'qollqe_motion.dart' show ToastMotion;
 import 'theme.dart' show Gap;
 
 bool _checking = false;

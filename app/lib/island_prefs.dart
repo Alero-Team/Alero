@@ -27,7 +27,8 @@ class IslandPrefs extends ChangeNotifier {
 
   static const defaults = <String, Object>{
     'enabled': true,
-    'monitor': -1,
+    // Renamed from 'monitor' (-1, the pointer's): every install moves to the primary screen once.
+    'screen': 0,
     'hide_fullscreen': true,
     'zone_width': 220,
     'open_delay_ms': 120,
