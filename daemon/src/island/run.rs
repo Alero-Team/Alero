@@ -5,7 +5,7 @@
 //! moves or changes, paced by the display.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -76,8 +76,15 @@ pub enum Msg {
     Lyrics(String, Option<crate::lyrics::Lines>),
     /// The computer's output volume, 0..1.
     PcVolume(Option<f32>),
+    /// Whether the computer's output and its microphone are muted (None: unknown).
+    PcMutes(Option<bool>, Option<bool>),
     /// A received photo's preview (transfer id; None when it cannot be decoded).
     Thumb(String, Option<Image>),
+    DropThumb(String, Option<Image>),
+    /// Claude Code or Codex started working, went idle or closed (see `pc`).
+    Agent(super::pc::Agent, super::pc::Work),
+    /// The answer of something the island does in its own thread: (good, title, text).
+    Note(bool, String, String),
 }
 
 /// What the executor needs to know to address a command.
@@ -97,6 +104,28 @@ pub struct Handle(Arc<Mutex<Sender<Msg>>>);
 
 /// The island is on screen and opens by itself for a file offer, so it can be answered there without the window.
 static SHOWS_OFFERS: AtomicBool = AtomicBool::new(false);
+
+/// Preview threads alive now: a provider that hangs must not pile up threads.
+static THUMBS: AtomicUsize = AtomicUsize::new(0);
+
+/// A slot for one preview thread (at most 2 at once); freed when dropped, even if the thread never starts.
+struct ThumbSlot;
+
+impl ThumbSlot {
+    fn take() -> Option<Self> {
+        if THUMBS.fetch_add(1, Ordering::AcqRel) >= 2 {
+            THUMBS.fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(ThumbSlot)
+    }
+}
+
+impl Drop for ThumbSlot {
+    fn drop(&mut self) {
+        THUMBS.fetch_sub(1, Ordering::AcqRel);
+    }
+}
 
 impl Handle {
     pub fn shows_offers(&self) -> bool {
@@ -239,6 +268,9 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
 
     let wants = Arc::new(AtomicBool::new(false));
     let media = spawn_media(tx.clone(), wants.clone());
+    let pc_on = Arc::new(AtomicBool::new(cfg.enabled && cfg.modules.pc));
+    let agents_on = Arc::new(AtomicBool::new(cfg.enabled && cfg.modules.agents));
+    super::pc::spawn(tx.clone(), pc_on.clone(), agents_on.clone());
 
     let mut canvas: Option<Canvas> = None;
     let mut crop: Vec<u8> = Vec::new();
@@ -276,6 +308,8 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 }
                 cfg = next;
                 SHOWS_OFFERS.store(cfg.enabled && cfg.auto_expand && cfg.modules.incoming, Ordering::Relaxed);
+                pc_on.store(cfg.enabled && cfg.modules.pc, Ordering::Relaxed);
+                agents_on.store(cfg.enabled && cfg.modules.agents, Ordering::Relaxed);
                 island.set_config(cfg.clone());
             }
             // The phones' pictures: read again only when the app rewrote the list.
@@ -300,7 +334,11 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                 }
                 Msg::Lyrics(key, lines) => island.set_lyrics(key, lines),
                 Msg::PcVolume(v) => island.set_pc_volume(v),
+                Msg::PcMutes(out, mic) => island.set_pc_mutes(out, mic),
                 Msg::Thumb(id, img) => island.set_thumb(&id, img),
+                Msg::DropThumb(name, img) => island.set_drop_thumb(&name, img),
+                Msg::Agent(a, w) => island.set_agent(a, w),
+                Msg::Note(good, title, text) => island.flash(good, title, text),
                 Msg::Media(m) => {
                     island.model.pc_media = m.map(|(m, art, icon)| Media {
                         icon,
@@ -444,7 +482,20 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
             match ev {
                 HostEvent::Wheel(n) => island.wheel(n),
                 HostEvent::Drag(d) => island.drag(d),
-                HostEvent::Drop(files) => island.dropped(files),
+                HostEvent::Drop(files) => {
+                    // Same condition as `dropped()`: with no phone to send to there is nothing to preview.
+                    let slot = if island.model.target().is_some() { ThumbSlot::take() } else { None };
+                    if let (Some(path), Some(slot)) = (files.first().cloned(), slot) {
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-drop-thumb".into()).spawn(move || {
+                            let _slot = slot;
+                            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                            let img = crate::sys::file_thumbnail(&path, 96, true).and_then(|(w, h, px)| Image::from_rgba(w, h, px));
+                            let _ = tx.send(Msg::DropThumb(name, img));
+                        });
+                    }
+                    island.dropped(files);
+                }
                 HostEvent::Hotkey => island.hotkey(),
                 HostEvent::Text(s) => island.text(&s),
                 HostEvent::Key(k) => island.key(k),
@@ -488,17 +539,74 @@ pub fn run(mut host: Box<dyn Host>, rx: Receiver<Msg>, tx: Sender<Msg>, data: Pa
                         let tx = tx.clone();
                         let _ = std::thread::Builder::new().name("island-volume".into()).spawn(move || {
                             let _ = tx.send(Msg::PcVolume(crate::sys::volume()));
+                            let _ = tx.send(Msg::PcMutes(crate::sys::muted(false), crate::sys::muted(true)));
+                        });
+                    }
+                    Cmd::PcMute { mic, on } => {
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-mute".into()).spawn(move || {
+                            if !crate::sys::set_muted(mic, on) {
+                                let _ = tx.send(Msg::Note(false, crate::lang::t("No se pudo cambiar el sonido", "Could not change the sound").into(), String::new()));
+                            }
+                            // Whatever happened, the tile shows what the system says.
+                            let _ = tx.send(Msg::PcMutes(crate::sys::muted(false), crate::sys::muted(true)));
+                        });
+                    }
+                    // Sleep blocks until the computer wakes: never on this thread.
+                    Cmd::PcPower(what) => {
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-power".into()).spawn(move || {
+                            if !crate::sys::power(what) {
+                                let _ = tx.send(Msg::Note(false, crate::lang::t("No se pudo completar", "Could not do it").into(), String::new()));
+                            }
+                        });
+                    }
+                    Cmd::PcShot => {
+                        let tx = tx.clone();
+                        let _ = std::thread::Builder::new().name("island-pcshot".into()).spawn(move || {
+                            // Let the island fold away first, or it is in the picture.
+                            std::thread::sleep(Duration::from_millis(1100));
+                            let dir = super::pc::downloads_dir().map(|d| d.join("Alero"));
+                            let _ = tx.send(match dir.and_then(|d| super::pc::screenshot(&d)) {
+                                Some(name) => Msg::Note(true, crate::lang::t("Captura guardada", "Screenshot saved").into(), name),
+                                None => Msg::Note(false, crate::lang::t("No se pudo capturar", "Could not capture").into(), String::new()),
+                            });
                         });
                     }
                     Cmd::SaveLyrics(on) => {
                         let _ = std::fs::write(&lyrics_file, if on { "on" } else { "off" });
                     }
                     Cmd::Keyboard(on) => host.set_keyboard(on),
+                    // The phone's screenshot needs only adb: no reason to start the app's window for it.
+                    Cmd::App("shot") => {
+                        let (tx, ip) = (tx.clone(), adb_peer.as_ref().map(|(_, ip)| ip.clone()));
+                        let _ = std::thread::Builder::new().name("island-shot".into()).spawn(move || {
+                            // Same folder as the app's own screenshot (hub.downloads: Downloads/Alero).
+                            let dir = super::pc::downloads_dir().map(|d| d.join("Alero"));
+                            let why = if ip.is_none() { crate::lang::t("Sin teléfono conectado.", "No phone connected.") } else { crate::lang::t("Requiere la depuración del teléfono.", "The phone needs debugging on.") };
+                            let saved = ip.zip(dir).and_then(|(ip, dir)| super::adb::screenshot(&ip, &dir));
+                            let _ = tx.send(match saved {
+                                Some(name) => Msg::Note(true, crate::lang::t("Captura guardada", "Screenshot saved").into(), name),
+                                None => Msg::Note(false, crate::lang::t("No se pudo capturar", "Could not capture").into(), why.into()),
+                            });
+                        });
+                    }
                     Cmd::Thumb { id, path } => {
                         // Read and decoded in its own thread: a 50 MP photo never stalls a frame.
                         let tx = tx.clone();
+                        let Some(slot) = ThumbSlot::take() else {
+                            let _ = tx.send(Msg::Thumb(id, None));
+                            continue;
+                        };
                         let _ = std::thread::Builder::new().name("island-thumb".into()).spawn(move || {
-                            let img = std::fs::read(&path).ok().and_then(|b| super::gfx::thumbnail(&b));
+                            let _slot = slot;
+                            let fast = matches!(path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("jpg" | "jpeg" | "png"));
+                            let img = if fast {
+                                std::fs::read(&path).ok().and_then(|b| super::gfx::thumbnail(&b))
+                            } else {
+                                // Only what Explorer already cached: no shell provider ever parses a received file.
+                                crate::sys::file_thumbnail(&path, 256, false).and_then(|(w, h, px)| super::gfx::Image::from_rgba(w, h, px))
+                            };
                             let _ = tx.send(Msg::Thumb(id, img));
                         });
                     }

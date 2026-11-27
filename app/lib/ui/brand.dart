@@ -14,17 +14,12 @@ class AleroMark extends StatelessWidget {
     this.size = 40,
     this.color,
     this.draw = 1,
-    this.sweep = 0,
-    this.dim = 0,
   });
   final double size;
   final Color? color;
 
   /// 0..1: how much of each stroke is drawn (animate it for a draw-on entrance).
   final double draw;
-
-  /// Loading: [dim] 0..1 fades the strokes back while a bright trace runs along them, at [sweep] 0..1.
-  final double sweep, dim;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -37,8 +32,6 @@ class AleroMark extends StatelessWidget {
         painter: _Mark(
           color ?? Theme.of(context).colorScheme.onSurface,
           draw,
-          sweep,
-          dim,
         ),
       ),
     ),
@@ -46,10 +39,9 @@ class AleroMark extends StatelessWidget {
 }
 
 class _Mark extends CustomPainter {
-  _Mark(this.color, this.draw, this.sweep, this.dim);
+  _Mark(this.color, this.draw);
   final Color color;
-  final double draw, sweep, dim;
-  static const _trace = .4; // the running trace's share of each stroke
+  final double draw;
 
   // The two paths in SVG units (x 18..100, y 18..78), stroke 10 => the mark spans 13..105 by 13..83.
   static Path _p1() => Path()
@@ -78,24 +70,6 @@ class _Mark extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     for (final p in [_p1(), _p2()]) {
-      if (dim > 0) {
-        canvas.drawPath(
-          p,
-          Paint.from(pen)
-            ..color = color.withValues(alpha: color.a * (1 - .72 * dim)),
-        );
-        for (final m in p.computeMetrics()) {
-          final a = (sweep * (1 + _trace) - _trace) * m.length;
-          canvas.drawPath(
-            m.extractPath(
-              a.clamp(0, m.length),
-              (a + _trace * m.length).clamp(0, m.length),
-            ),
-            pen,
-          );
-        }
-        continue;
-      }
       if (draw >= 1) {
         canvas.drawPath(p, pen);
         continue;
@@ -107,8 +81,7 @@ class _Mark extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_Mark o) =>
-      o.color != color || o.draw != draw || o.sweep != sweep || o.dim != dim;
+  bool shouldRepaint(_Mark o) => o.color != color || o.draw != draw;
 }
 
 /// Mark plus the wordmark. The trade name is always written "Alero".
@@ -163,7 +136,8 @@ const splashBase = Duration(milliseconds: 650);
 /// Start-up screen on every launch. On Android it continues the native splash (res/drawable/alero_splash.xml:
 /// same centre, same ~41 dp mark, same colour), so the mark starts complete and only the wordmark and tint
 /// appear; elsewhere there is no native splash, so the mark is drawn on. After that entrance, and until main
-/// swaps it for the app, the mark dims and a trace runs along its strokes (never with reduced motion).
+/// swaps it for the app, the mark breathes (a slow, slight shrink and fade from its resting frame, so a quick
+/// start shows no jump before the app fades in). Never with reduced motion.
 class AleroSplash extends StatefulWidget {
   const AleroSplash({super.key});
 
@@ -177,11 +151,7 @@ class _AleroSplashState extends State<AleroSplash>
   late final _in = AnimationController(vsync: this);
   late final _loop = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1300),
-  );
-  late final _dim = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 300),
+    duration: const Duration(milliseconds: 1100),
   );
   var _started = false;
 
@@ -196,9 +166,7 @@ class _AleroSplashState extends State<AleroSplash>
       return;
     }
     _in.forward().whenCompleteOrCancel(() {
-      if (!mounted) return;
-      _dim.forward();
-      _loop.repeat();
+      if (mounted) _loop.repeat(reverse: true);
     });
   }
 
@@ -206,7 +174,6 @@ class _AleroSplashState extends State<AleroSplash>
   void dispose() {
     _in.dispose();
     _loop.dispose();
-    _dim.dispose();
     super.dispose();
   }
 
@@ -214,20 +181,26 @@ class _AleroSplashState extends State<AleroSplash>
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     return AnimatedBuilder(
-      animation: Listenable.merge([_in, _loop, _dim]),
+      animation: Listenable.merge([_in, _loop]),
       builder: (context, _) {
         final v = Curves.easeInOutCubic.transform(_in.value);
         final name = const Interval(.4, 1, curve: Curves.easeOut).transform(v);
+        final breath = Curves.easeInOutSine.transform(_loop.value);
         return Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            AleroMark(
-              size: _size,
-              draw: isPhone ? 1 : const Interval(0, .7).transform(v),
-              color: Color.lerp(s.onSurface, s.primary, v),
-              sweep: Curves.easeInOutSine.transform(_loop.value),
-              dim: Curves.easeOut.transform(_dim.value),
+            Transform.scale(
+              scale: 1 - .05 * breath,
+              child: AleroMark(
+                size: _size,
+                draw: isPhone ? 1 : const Interval(0, .7).transform(v),
+                color: Color.lerp(
+                  s.onSurface,
+                  s.primary,
+                  v,
+                )!.withValues(alpha: 1 - .4 * breath),
+              ),
             ),
             Transform.translate(
               offset: Offset(0, 38 + (1 - name) * 8),

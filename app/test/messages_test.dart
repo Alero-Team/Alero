@@ -71,6 +71,22 @@ void main() {
     },
   );
 
+  test('the badge counts each unread conversation once', () {
+    final fromSmsApp = PhoneNotif({
+      'key': 's',
+      'app': 'Mensajes',
+      'title': 'Mamá',
+      'time': 3000,
+      'chat': true,
+      'sms': true,
+    });
+    // Unread SMS thread 1 + WhatsApp chat; the SMS app's own notification is the same SMS thread again.
+    expect(Convo.unreadCount(threads, [...notifs, fromSmsApp]), 2);
+    // Without the SMS store loaded that notification is the only source.
+    expect(Convo.unreadCount(const [], [fromSmsApp]), 1);
+    expect(Convo.app(notifs.first, unread: false).unread, isFalse);
+  });
+
   test('search matches names and text', () {
     expect(Convo.inbox(threads, notifs, 'llego').map((c) => c.key), ['sms:1']);
     expect(Convo.inbox(threads, notifs, 'LUC').map((c) => c.key), ['app:w']);

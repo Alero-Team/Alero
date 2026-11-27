@@ -72,6 +72,14 @@ const _moduleNames = <String, (String, IconData)>{
     'Conexión y desconexión de dispositivos',
     FluentIcons.plug_connected_24_regular,
   ),
+  'pc': (
+    'Funciones de ordenador',
+    FluentIcons.desktop_pulse_24_regular,
+  ),
+  'agents': (
+    'Claude Code y Codex trabajando',
+    FluentIcons.bot_24_regular,
+  ),
 };
 
 Color _hex(String s) {

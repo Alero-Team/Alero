@@ -227,6 +227,8 @@ class NotifListener : NotificationListenerService() {
             .put("time", sbn.postTime)
             .put("clearable", sbn.isClearable)
             .put("chat", chat(sbn))
+            // The phone's own SMS app: the computer already lists those chats from the SMS store, once.
+            .put("sms", sbn.packageName == android.provider.Telephony.Sms.getDefaultSmsPackage(this))
             .put("conversation", (x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) ?: title).toString().take(200))
             .put("messages", messages(sbn))
             .put("markable", semantic(sbn, Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) != null)

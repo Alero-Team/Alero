@@ -21,11 +21,15 @@ pub struct Modules {
     pub status: bool,
     /// A paired device connecting or disconnecting.
     pub link: bool,
+    /// This computer's own activity: downloads in its Downloads folder, and its controls.
+    pub pc: bool,
+    /// Claude Code and Codex at work, in the closed island.
+    pub agents: bool,
 }
 
 impl Default for Modules {
     fn default() -> Self {
-        Self { player: true, send: true, incoming: true, notifications: true, call: true, clipboard: true, controls: true, status: true, link: true }
+        Self { player: true, send: true, incoming: true, notifications: true, call: true, clipboard: true, controls: true, status: true, link: true, pc: true, agents: true }
     }
 }
 

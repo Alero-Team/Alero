@@ -196,6 +196,7 @@ class PhoneNotif {
       markable = j['markable'] == true,
       mutable = j['mutable'] == true,
       chat = j['chat'] == true,
+      sms = j['sms'] == true,
       conversation = j['conversation'] as String? ?? '',
       avatar = _picture(j['avatar']),
       messages = [
@@ -211,6 +212,9 @@ class PhoneNotif {
 
   /// A messaging app's conversation, with the last messages its notification carries.
   final bool chat;
+
+  /// Posted by the phone's default SMS app (the same conversation also comes through the SMS store).
+  final bool sms;
   final String conversation;
   final List<ChatMsg> messages;
 

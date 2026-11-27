@@ -12,10 +12,12 @@ use serde_json::{json, Value};
 use tiny_skia::Pixmap;
 
 use super::config::{luma, IslandConfig};
+use super::airdrop::{self, AirDrop};
 use super::link::{Alert, LinkAlerts};
 use super::gfx::{color, icon, icon_filled, mix, Canvas, Fonts, Icon, Image, Rgb, Weight, R};
 use super::model::{Model, Notice, XState};
 use super::motion::{Motion, Spring, Style};
+use super::pc::{Agent, Work};
 use crate::lang::t;
 
 /// Logical size of the drawing surface (the window is this big times the scale). The largest screen plus the
@@ -34,6 +36,11 @@ const LINK_SECS: f32 = 2.8;
 const NOTE_AGE_DONE: f32 = 1.5;
 /// The notch while something lives in it (music, charging): the iPhone's compact island.
 const LIVE: (f32, f32) = (320.0, 40.0);
+/// The notch when an agent has been at work a while: just its creature and dots, out of the way.
+const MINI: (f32, f32) = (84.0, 34.0);
+/// How long the agent's full line shows when it starts, and after the pointer leaves it, in seconds.
+const AGENT_FULL: f64 = 6.0;
+const AGENT_PEEK: f64 = 2.0;
 /// Logical size of the window while the island is closed: the widest closed notch (LIVE swollen under the pointer),
 /// its ears and room for the spring's overshoot. See `rest_box`.
 const REST_BOX: (f32, f32) = (620.0, 84.0);
@@ -51,10 +58,12 @@ enum Live {
     Call,
     /// The call just ended (for a moment): how long it lasted in seconds, -1 if it was never answered.
     CallEnded(i64),
+    /// Claude Code or Codex is working on this computer.
+    Agent(Agent),
+    /// It just stopped (for a moment).
+    AgentDone(Agent),
 }
 
-/// The colour of a file landing on the island (the drop target, its rim and the landing rings).
-const DROP: Rgb = [138, 180, 248];
 const DANGER: Rgb = [255, 69, 58];
 const SUCCESS: Rgb = [48, 209, 88];
 
@@ -132,6 +141,12 @@ pub enum Act {
     OpenFile(String),
     ShowFile(String),
     Discard(String),
+    /// A control of this computer: "mic" or "mute" (toggles), "lock", "sleep", "shot".
+    Pc(&'static str),
+    /// The computer's volume slider on the controls page.
+    PcVol,
+    /// The controls page's "This computer | Phone" switch.
+    ControlsSource,
 }
 
 /// What the host has to carry out (the island has no engine of its own).
@@ -172,6 +187,12 @@ pub enum Cmd {
     OpenFile(PathBuf),
     ShowFile(PathBuf),
     Discard(PathBuf),
+    /// Mutes or unmutes this computer's microphone (`mic`) or output.
+    PcMute { mic: bool, on: bool },
+    /// "lock" or "sleep" this computer.
+    PcPower(&'static str),
+    /// A full-screen capture of this computer into Downloads/Alero.
+    PcShot,
 }
 
 /// Quick answers offered under a chat notification.
@@ -212,6 +233,13 @@ struct Ui {
     vol: Spring,
     vol_until: f64,
     pc_volume: Option<f32>,
+    /// The controls page shows this computer's controls (when a phone is connected too; without one it always does).
+    controls_pc: bool,
+    /// Whether this computer's output / microphone is muted (None: not known yet).
+    pc_out_muted: Option<bool>,
+    pc_mic_muted: Option<bool>,
+    /// The computer's audio state was asked for this visit to its controls.
+    pc_asked: bool,
     seek: Option<f32>,
     tiles: HashMap<&'static str, TileFx>,
     read: HashSet<String>,
@@ -227,13 +255,22 @@ struct Ui {
     /// A file carried towards the island (0..1, from the distance), and the landing after a drop.
     near: Spring,
     land: Option<f32>,
+    /// Seconds the landing has held its last frame, waiting for the card.
+    land_held: f32,
     after_land: Option<(View, Option<f32>)>,
     squash: Spring,
+    air: AirDrop,
+    air_thumb: Option<Image>,
+    /// File names waiting for TransferStarted, and the progress of each transfer in this drop.
+    air_pending: Vec<String>,
+    air_files: HashMap<String, f32>,
     /// Seconds since a device alert was shown (the stagger of its icon, badge and text); NOTE_AGE_DONE: finished.
     note_age: f32,
     /// How much of the compact island's content shows (0..1), and the last thing it showed: it fades out with it.
     live_a: f32,
     live_last: Option<Live>,
+    /// 0 = the agent's full line, 1 = the minimal notch (eased).
+    agent_min: f32,
 }
 
 impl Ui {
@@ -251,6 +288,10 @@ impl Ui {
             vol: Spring::new(0.0, 0.5, 0.72),
             vol_until: 0.0,
             pc_volume: None,
+            controls_pc: false,
+            pc_out_muted: None,
+            pc_mic_muted: None,
+            pc_asked: false,
             seek: None,
             tiles: HashMap::new(),
             read: HashSet::new(),
@@ -263,11 +304,17 @@ impl Ui {
             swipe_back: HashMap::new(),
             near: Spring::new(0.0, 0.35, 1.0),
             land: None,
+            land_held: 0.0,
             after_land: None,
             squash: Spring::new(1.0, 0.40, 0.42),
+            air: AirDrop::new(),
+            air_thumb: None,
+            air_pending: Vec::new(),
+            air_files: HashMap::new(),
             note_age: NOTE_AGE_DONE,
             live_a: 0.0,
             live_last: None,
+            agent_min: 0.0,
         }
     }
 }
@@ -376,6 +423,12 @@ pub struct Island {
     media_off: Option<f64>,
     /// Until when the closed island says the call ended, and how long it lasted (see `Live::CallEnded`).
     call_end: (f64, i64),
+    /// What each coding agent on this computer is doing (indexed by `Agent`), and which one just finished until when.
+    agents: [Work; 2],
+    agent_done: Option<(Agent, f64)>,
+    /// Clock time the current work began (the creature's entrance) and until when its full line shows.
+    agent_t0: f64,
+    agent_full_until: f64,
     /// An answered call's card folds into the compact island at this clock time.
     collapse_at: Option<f64>,
     /// The phone already asked for its media (an island started after the phone connected missed its first state).
@@ -453,6 +506,10 @@ impl Island {
             profile: [0.0; 4],
             clock: 0.0,
             reduce_motion: false,
+            agents: [Work::Gone; 2],
+            agent_done: None,
+            agent_t0: 0.0,
+            agent_full_until: 0.0,
             ui: Ui::new(),
             links: LinkAlerts::default(),
             last_hit: None,
@@ -526,7 +583,12 @@ impl Island {
 
     /// Wants the phone polled over adb (the controls are on screen).
     pub fn wants_adb(&self) -> bool {
-        self.phase == Phase::Open && self.shown == View::Page(Page::Controls)
+        self.phase == Phase::Open && self.shown == View::Page(Page::Controls) && !self.controls_pc()
+    }
+
+    /// The controls page is this computer's: always without a phone, else the one the switch picked. Needs `modules.pc`.
+    fn controls_pc(&self) -> bool {
+        self.cfg.modules.pc && (self.model.target().is_none() || self.ui.controls_pc)
     }
 
     /// Also while closed: the compact island shows what is playing.
@@ -551,7 +613,47 @@ impl Island {
                 return Some(Live::Charging(i.battery));
             }
         }
-        (self.cfg.modules.player && self.clock < self.media_until && self.media_line().is_some_and(|(m, _)| m.playing)).then_some(Live::Media)
+        if self.cfg.modules.player && self.clock < self.media_until && self.media_line().is_some_and(|(m, _)| m.playing) {
+            return Some(Live::Media);
+        }
+        // The computer's own agents come last: a call, the lyrics or a song that just changed are about the user now.
+        if self.cfg.modules.agents {
+            if let Some((a, _)) = self.agent_done.filter(|(_, until)| self.clock < *until) {
+                return Some(Live::AgentDone(a));
+            }
+            return [Agent::Claude, Agent::Codex].into_iter().find(|a| self.agents[*a as usize] == Work::Working).map(Live::Agent);
+        }
+        None
+    }
+
+    /// Claude Code or Codex changed state (see `pc`). When one that was working stops, the closed island says so.
+    pub fn set_agent(&mut self, a: Agent, w: Work) {
+        let was = std::mem::replace(&mut self.agents[a as usize], w);
+        // Closed mid-turn (Gone) is not "finished".
+        if was == Work::Working && w == Work::Idle {
+            self.agent_done = Some((a, self.clock + 4.0));
+        }
+        if was != Work::Working && w == Work::Working {
+            self.agent_t0 = self.clock;
+            self.agent_full_until = self.clock + AGENT_FULL;
+        }
+        self.dirty = true;
+    }
+
+    /// The agent has been at work a while and nobody is looking: only its creature shows.
+    fn agent_mini(&self) -> bool {
+        matches!(self.live(), Some(Live::Agent(_))) && self.clock >= self.agent_full_until
+    }
+
+    /// What `draw_live` needs for the agent: seconds since its creature appeared (or since it finished), how far
+    /// the line has folded into the minimal notch, and how far the creature has gone back into the notch (0..1).
+    fn agent_look(&self) -> (f32, f32, f32) {
+        let t0 = match self.agent_done.filter(|(_, until)| self.clock < *until) {
+            Some((_, until)) => until - 4.0,
+            None => self.agent_t0,
+        };
+        let out = if self.live().is_none() { 1.0 - self.ui.live_a } else { 0.0 };
+        ((self.clock - t0) as f32, self.ui.agent_min, out)
     }
 
     /// Playing started or the song changed: the closed island shows it for a moment, then steps back.
@@ -636,6 +738,23 @@ impl Island {
         self.dirty = true;
     }
 
+    /// The answer to [`Cmd::AskPcVolume`], second part: output and microphone mute.
+    pub fn set_pc_mutes(&mut self, out: Option<bool>, mic: Option<bool>) {
+        (self.ui.pc_out_muted, self.ui.pc_mic_muted) = (out, mic);
+        self.dirty = true;
+    }
+
+    /// The controls page's volume slider: at most ~15 changes a second while dragging, the last one on release.
+    fn set_pc_vol(&mut self, v: f32, first: bool) {
+        let v = v.clamp(0.0, 1.0);
+        self.ui.pc_volume = Some(v);
+        if first || self.clock - self.last_slider >= 0.066 {
+            self.last_slider = self.clock;
+            self.cmds.push(Cmd::PcVolume(v));
+        }
+        self.dirty = true;
+    }
+
     /// The player's volume, 0..1 (the computer's output, or the phone's media volume).
     fn player_volume(&self) -> Option<f32> {
         if self.media_line().is_some_and(|(_, pc)| pc) {
@@ -680,6 +799,14 @@ impl Island {
     /// Animation state that runs whatever the island shows.
     fn update_ui(&mut self, dt: f32) {
         let mut busy = false;
+        // This computer's volume and mutes: asked once per visit to its controls.
+        let on_pc = self.phase == Phase::Open && self.shown == View::Page(Page::Controls) && self.controls_pc();
+        if on_pc && !self.ui.pc_asked {
+            self.ui.pc_asked = true;
+            self.cmds.push(Cmd::AskPcVolume);
+        } else if !on_pc {
+            self.ui.pc_asked = false;
+        }
         // Lyrics: asked once per song while they are on.
         if self.lyrics_now() {
             if let (Some(key), Some((m, _))) = (self.song_key(), self.media_line()) {
@@ -780,8 +907,10 @@ impl Island {
         self.ui.near.step(dt);
         self.ui.squash.step(dt);
         busy |= !self.ui.near.settled(0.002) || !self.ui.squash.settled(0.0005);
+        let land_speed = if self.motion.style == Style::Off { 1.8 } else { 1.0 };
         if let Some(t) = self.ui.land.as_mut() {
-            *t += dt;
+            // A hitch must not skip the pop. At the end it holds ("Got it, sending…") until the card takes over.
+            *t = (*t + dt.min(0.05) * land_speed).min(1.0);
             let t = *t;
             if t >= 0.65 {
                 if let Some((v, secs)) = self.ui.after_land.take() {
@@ -789,9 +918,47 @@ impl Island {
                 }
             }
             if t >= 1.0 {
-                self.ui.land = None;
+                self.ui.land_held += dt;
+                // The send never started (it failed, or the phone left): the idle text comes back.
+                if !(self.phase == Phase::Open && self.want == View::Drop) || self.ui.land_held > 2.5 {
+                    self.ui.land = None;
+                    self.ui.land_held = 0.0;
+                }
             }
-            busy = true;
+            busy |= t < 1.0;
+        }
+        self.ui.air.set_reduced(self.motion.style == Style::Off);
+        if self.ui.air.active() {
+            for (id, progress) in &mut self.ui.air_files {
+                if let Some(x) = self.model.xfers.iter().find(|x| &x.id == id) {
+                    // All bytes sent still needs the receiver's integrity check and acknowledgement.
+                    *progress = if x.state == XState::Done { 1.0 } else { x.fraction().min(0.999) };
+                    if let XState::Failed(msg) = &x.state {
+                        self.ui.air.set_failure(&mut self.fonts, msg);
+                        self.ui.air.finish(false);
+                    }
+                }
+            }
+            let count = self.ui.air_pending.len() + self.ui.air_files.len();
+            if count > 0 {
+                self.ui.air.progress(self.ui.air_files.values().sum::<f32>() / count as f32);
+                if self.ui.air_pending.is_empty() && self.ui.air_files.values().all(|f| *f >= 1.0) {
+                    self.ui.air.finish(true);
+                }
+            }
+        }
+        busy |= self.ui.air.update(dt);
+        if let Some(age) = self.ui.air.done_for() {
+            let hold = if self.ui.air.stage == airdrop::Stage::Failed { 4.0 } else { 1.2 };
+            if age > hold && self.phase == Phase::Open && self.shown == View::Drop {
+                self.close();
+            }
+            if age > hold + 0.6 {
+                self.ui.air.reset();
+                self.ui.air_thumb = None;
+                self.ui.air_files.clear();
+                self.ui.air_pending.clear();
+            }
         }
         if self.ui.replying.is_some() {
             // The caret blinks.
@@ -805,6 +972,14 @@ impl Island {
     }
 
     // ------------------------------------------------------------------------------------------------ input
+
+    pub fn set_drop_thumb(&mut self, name: &str, img: Option<Image>) {
+        if self.ui.air_pending.first().is_some_and(|f| f == name)
+            || self.ui.air_files.keys().any(|id| self.model.xfers.iter().any(|x| &x.id == id && x.name == name)) {
+            self.ui.air_thumb = img;
+            self.dirty = true;
+        }
+    }
 
     /// Pointer in canvas logical units, or None when it is somewhere else.
     pub fn set_pointer(&mut self, p: Option<(f32, f32)>) {
@@ -845,6 +1020,16 @@ impl Island {
         }
         match d {
             Drag::Enter | Drag::Over => {
+                // A send under way keeps its labels and landing; this drag only joins it if dropped.
+                let sending = self.ui.air.active();
+                if !self.drag_over && !sending {
+                    let phone = self.model.target().map(|p| p.name.clone());
+                    self.ui.air.set_labels(&mut self.fonts, phone.as_deref(), "");
+                }
+                self.ui.air.hover(true);
+                if !sending {
+                    self.ui.land = None;
+                }
                 self.drag_active = true;
                 self.drag_over = true;
                 self.life = 1.6;
@@ -853,6 +1038,7 @@ impl Island {
                 }
             }
             Drag::Leave => {
+                self.ui.air.hover(false);
                 self.drag_over = false;
                 self.life = 0.7;
             }
@@ -870,11 +1056,30 @@ impl Island {
             self.show_note(Note { icon: Some(Icon::Phone), title: t("Sin teléfono conectado", "No phone connected").into(), text: t("Conecta un teléfono para enviar archivos.", "Connect a phone to send files.").into(), good: false, w: 0.0, img: None, badge: None, avatar: None, notif: false });
             return;
         }
+        let names: Vec<String> = files.iter().map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).collect();
+        // Dropped during a send: it joins that send (the card waits for these too) instead of forgetting the first.
+        if self.ui.air.active() && !matches!(self.ui.air.stage, airdrop::Stage::Done | airdrop::Stage::Failed) {
+            self.ui.air_pending.extend(names);
+            self.cmds.push(Cmd::SendFiles(files));
+            self.life = self.life.max(2.0);
+            return;
+        }
+        self.ui.air_pending = names;
+        self.ui.air_files.clear();
+        self.ui.air_thumb = None;
+        let name = self.ui.air_pending[0].clone();
+        let label = if files.len() > 1 { format!("{} (+{})", name, files.len() - 1) } else { name };
+        let phone = self.model.target().map(|p| p.name.clone());
+        self.ui.air.set_labels(&mut self.fonts, phone.as_deref(), &label);
+        self.ui.air.set_reduced(self.motion.style == Style::Off);
+        self.ui.air.dropped();
         self.cmds.push(Cmd::SendFiles(files));
         self.life = 2.0;
         // The landing: the island takes the hit (flattens, then rebounds twice), the circle pops, rings spread.
+        // It is the confirmation that the drop worked, so it plays under reduced motion too (quicker, no squash).
+        self.ui.land = Some(0.0);
+        self.ui.land_held = 0.0;
         if !matches!(self.motion.style, Style::Off) {
-            self.ui.land = Some(0.0);
             self.ui.squash.snap(1.0);
             self.ui.squash.vel = 0.0;
             self.ui.squash.value = 1.07;
@@ -900,6 +1105,7 @@ impl Island {
                 Act::Volume => self.slide(i, x, true),
                 Act::Seek => self.ui.seek = Some(((x - r.x) / r.w).clamp(0.0, 1.0)),
                 Act::PlayerVolume => self.set_player_volume((x - r.x) / r.w, true),
+                Act::PcVol => self.set_pc_vol((x - r.x) / r.w, true),
                 Act::NotifRow(key) => self.ui.swipe = Some((key, x, 0.0)),
                 _ => {},
             }
@@ -917,6 +1123,7 @@ impl Island {
                     self.dirty = true;
                 }
                 Act::PlayerVolume => self.set_player_volume((x - r.x) / r.w, false),
+                Act::PcVol => self.set_pc_vol((x - r.x) / r.w, false),
                 _ => {}
             }
         }
@@ -974,6 +1181,13 @@ impl Island {
         // The pc volume's last value while dragging.
         if down.is_some_and(|i| self.hits.get(i).is_some_and(|h| h.act == Act::PlayerVolume)) {
             if let Some(v) = self.ui.pc_volume.filter(|_| self.media_line().is_some_and(|(_, pc)| pc)) {
+                self.cmds.push(Cmd::PcVolume(v));
+            }
+            self.dirty = true;
+            return;
+        }
+        if down.is_some_and(|i| self.hits.get(i).is_some_and(|h| h.act == Act::PcVol)) {
+            if let Some(v) = self.ui.pc_volume {
                 self.cmds.push(Cmd::PcVolume(v));
             }
             self.dirty = true;
@@ -1209,7 +1423,26 @@ impl Island {
                     self.stop_reply();
                 }
             }
-            Act::Seek | Act::PlayerVolume => {}
+            Act::Pc(what) => match what {
+                "mic" | "mute" => {
+                    let mic = what == "mic";
+                    let on = !(if mic { self.ui.pc_mic_muted } else { self.ui.pc_out_muted }).unwrap_or(false);
+                    if mic {
+                        self.ui.pc_mic_muted = Some(on);
+                        self.flip_tile("pcmic", on);
+                    } else {
+                        self.ui.pc_out_muted = Some(on);
+                    }
+                    self.cmds.push(Cmd::PcMute { mic, on });
+                }
+                "lock" | "sleep" => self.cmds.push(Cmd::PcPower(what)),
+                _ => {
+                    self.cmds.push(Cmd::PcShot);
+                    self.close();
+                }
+            },
+            Act::ControlsSource => self.ui.controls_pc = !self.controls_pc(),
+            Act::Seek | Act::PlayerVolume | Act::PcVol => {}
             Act::VolButton => {
                 if self.ui.vol.target > 0.5 {
                     self.ui.vol_until = 0.0;
@@ -1278,6 +1511,10 @@ impl Island {
             Act::OpenFile(id) => self.file_cmd(&id, Cmd::OpenFile),
             Act::ShowFile(id) => self.file_cmd(&id, Cmd::ShowFile),
             Act::Discard(id) => {
+                // A browser download is the user's own file: never deleted from here, whatever drew the button.
+                if self.model.xfers.iter().any(|x| x.id == id && x.local()) {
+                    return;
+                }
                 self.file_cmd(&id, Cmd::Discard);
                 self.model.xfers.retain(|x| x.id != id);
             }
@@ -1331,13 +1568,29 @@ impl Island {
                         self.cmds.push(Cmd::Beep);
                     }
                 }
+                // A download of this computer can last minutes: its card says so for a moment and goes (the Files
+                // page keeps it), then comes back with the result.
+                // It never jumps over a page the user is using.
+                Notice::XferStarted(id) if m.pc && id.starts_with(super::pc::PC_ID) => {
+                    if self.phase != Phase::Open {
+                        self.open_event(View::Transfer(id), Some(self.cfg.event_secs as f32));
+                    }
+                }
                 Notice::XferStarted(id) if m.send || m.incoming => self.open_event(View::Transfer(id), None),
-                Notice::XferDone(id, _) => {
-                    // A received photo gets a preview: decoded off this thread, the card grows to it when ready.
-                    if let Some(p) = self.model.xfers.iter().find(|x| x.id == id).and_then(|x| x.photo()) {
+                Notice::XferDone(id, ok) => {
+                    if let Some(progress) = self.ui.air_files.get_mut(&id) {
+                        if ok { *progress = 1.0; } else { self.ui.air.finish(false); }
+                    }
+                    let local = self.model.xfers.iter().find(|x| x.id == id).is_some_and(|x| x.local());
+                    // A saved file gets a preview: made off this thread, the card shows it when ready.
+                    if let Some(p) = self.model.xfers.iter().find(|x| x.id == id).and_then(|x| x.saved()) {
                         self.cmds.push(Cmd::Thumb { id: id.clone(), path: p.to_path_buf() });
                     }
-                    if self.shown == View::Transfer(id.clone()) {
+                    let on_card = self.phase == Phase::Open && self.shown == View::Transfer(id.clone());
+                    if local && ok && m.pc && self.phase != Phase::Open {
+                        let secs = self.xfer_life(&id);
+                        self.open_event(View::Transfer(id.clone()), Some(secs));
+                    } else if on_card {
                         self.life = self.xfer_life(&id);
                         self.reason = Reason::Event(Some(self.life));
                     }
@@ -1398,6 +1651,15 @@ impl Island {
     }
 
     fn open_event(&mut self, v: View, secs: Option<f32>) {
+        if let View::Transfer(id) = &v {
+            if let Some(x) = self.model.xfers.iter().find(|x| &x.id == id && !x.incoming && !x.local()) {
+                if let Some(n) = self.ui.air_pending.iter().position(|f| f == &x.name) {
+                    self.ui.air_pending.remove(n);
+                    self.ui.air_files.insert(id.clone(), x.fraction());
+                    return;
+                }
+            }
+        }
         if self.ui.land.is_some_and(|t| t < 0.65) && matches!(v, View::Transfer(_)) {
             self.ui.after_land = Some((v, secs));
             return;
@@ -1425,12 +1687,16 @@ impl Island {
     /// answers), reaching out to a file on its way.
     fn rest_size(&mut self) -> (f32, f32) {
         let swell = |hot: bool, w: f32| (w + if hot { 14.0 } else { 0.0 }, LIVE.1 + if hot { 2.0 } else { 0.0 });
-        let (mut tw, mut th) = match (self.live(), self.hot) {
+        let live = if self.ui.air.active() && !matches!(self.live(), Some(Live::Call | Live::CallEnded(_))) { Some(Live::Media) } else { self.live() };
+        let (mut tw, mut th) = match (live, self.hot) {
             // The sung line: the notch hugs it.
             (Some(Live::Lyric), hot) => {
                 let line = self.lyric_text();
                 swell(hot, (self.fonts.measure(&line, 15.0, Weight::Medium) + 74.0).clamp(200.0, 560.0))
             }
+            (Some(Live::Agent(_)), _) if self.agent_mini() => MINI,
+            // The agent's creature is on its way back into the notch: the notch waits for it, then closes.
+            (None, _) if matches!(self.ui.live_last, Some(Live::Agent(_) | Live::AgentDone(_))) && self.ui.live_a > 0.0 => MINI,
             (Some(_), hot) => swell(hot, LIVE.0),
             (None, true) => (PEEK.0 + 20.0, PEEK.1 + 4.0),
             (None, false) => PEEK,
@@ -1557,7 +1823,8 @@ impl Island {
                     58.0 + m.notifs.iter().take(4).map(|n| if self.ui.replying.as_deref() == Some(n.key.as_str()) { 136.0 } else { 54.0 }).sum::<f32>()
                 },
             ),
-            View::Page(Page::Clipboard) => (404.0, 116.0 + 38.0 * m.clips.len().min(3) as f32),
+            View::Page(Page::Clipboard) => (404.0, if m.clips.is_empty() { 140.0 } else { 116.0 + 38.0 * m.clips.len().min(3) as f32 }),
+            View::Page(Page::Controls) if self.controls_pc() => (404.0, controls_top(4) + 66.0),
             View::Page(Page::Controls) => {
                 let n = control_keys(&self.cfg.controls, m.target_id().is_some_and(|id| m.adb.contains_key(&id))).len();
                 (404.0, controls_top(n) + 66.0)
@@ -1565,13 +1832,12 @@ impl Island {
             View::Call => (384.0, 92.0),
             View::Offer => (384.0, 136.0),
             View::Transfer(id) => match m.xfers.iter().find(|x| &x.id == id) {
-                Some(x) if x.thumb.is_some() && x.photo().is_some() => (440.0, 156.0),
-                Some(x) if x.saved().is_some() => (440.0, 120.0),
+                Some(x) if x.saved().is_some() => (440.0, 156.0),
                 _ => (384.0, 92.0),
             },
             View::Note => (if self.note.w > 0.0 { self.note.w } else { 372.0 }, 76.0),
             // A file over it: the target swells to meet it.
-            View::Drop => if self.drag_over || self.ui.land.is_some() { (392.0, 138.0) } else { (364.0, 128.0) },
+            View::Drop => airdrop::SIZE,
         }
     }
 
@@ -1622,6 +1888,16 @@ impl Island {
                 return Status { visible: false, animating: false };
             }
             let live = self.live();
+            // Looking at the minimal notch brings the line back for a moment.
+            if matches!(live, Some(Live::Agent(_))) && self.pointer_near() {
+                self.agent_full_until = self.agent_full_until.max(self.clock + AGENT_PEEK);
+            }
+            let goal = if self.agent_mini() { 1.0 } else { 0.0 };
+            if self.ui.agent_min != goal {
+                let step = if self.motion.style == Style::Off { 1.0 } else { dt / 0.3 };
+                self.ui.agent_min = if goal > self.ui.agent_min { (self.ui.agent_min + step).min(1.0) } else { (self.ui.agent_min - step).max(0.0) };
+                self.dirty = true;
+            }
             let (tw, th) = self.rest_size();
             self.w.to(tw);
             self.h.to(th);
@@ -1634,13 +1910,19 @@ impl Island {
             }
             let goal = if live.is_some() { 1.0 } else { 0.0 };
             if self.ui.live_a != goal {
-                let step = if self.motion.style == Style::Off { 1.0 } else { dt / 0.28 };
+                // The agent's creature takes a little longer to leave: it hops back into the notch.
+                let span = if goal == 0.0 && matches!(self.ui.live_last, Some(Live::Agent(_) | Live::AgentDone(_))) { 0.5 } else { 0.28 };
+                let step = if self.motion.style == Style::Off { 1.0 } else { dt / span };
                 self.ui.live_a = if goal > self.ui.live_a { (self.ui.live_a + step).min(1.0) } else { (self.ui.live_a - step).max(0.0) };
                 self.dirty = true;
             }
             // The equalizer and a call's pulse run every frame: skipping frames lets the loop sleep 100 ms between
             // them (measured: ~9 fps). About 2 % of a core while they show.
             if matches!(live, Some(Live::Media | Live::Call)) {
+                self.dirty = true;
+            }
+            // The agent's pixel creature moves about 12 times a second: frames only at those ticks.
+            if matches!(live, Some(Live::Agent(_) | Live::AgentDone(_))) && (self.clock * 12.0).floor() != ((self.clock - dt as f64) * 12.0).floor() {
                 self.dirty = true;
             }
             return Status { visible: true, animating: moving || self.dirty };
@@ -1747,6 +2029,10 @@ impl Island {
         if self.phase == Phase::Open && matches!(self.shown, View::Page(Page::Player) | View::Page(Page::Home) | View::Transfer(_)) && self.clock.fract() < dt as f64 {
             self.dirty = true;
         }
+        // A download of unknown size draws a gliding bar: every frame while its card is up.
+        if self.phase == Phase::Open && matches!(&self.shown, View::Transfer(id) if self.model.xfers.iter().any(|x| &x.id == id && x.no_total())) {
+            self.dirty = true;
+        }
         Status { visible: true, animating: moving || self.dirty }
     }
 
@@ -1818,6 +2104,11 @@ impl Island {
 
     /// A short message from the executor (a file that could not be sent, say).
     pub fn flash(&mut self, good: bool, title: String, text: String) {
+        if !good && self.ui.air.active() {
+            self.ui.air.set_failure(&mut self.fonts, &text);
+            self.ui.air.finish(false);
+            self.ui.air_pending.clear();
+        }
         let note = Note { icon: Some(if good { Icon::Check } else { Icon::Close }), title, text, good, w: 0.0, img: None, badge: None, avatar: None, notif: false };
         // Even with automatic opening off, the answer to something the user just did is shown.
         let keep = self.cfg.auto_expand;
@@ -1894,19 +2185,28 @@ impl Island {
         }
         #[cfg(test)]
         { self.profile[1] = profile_at.elapsed().as_secs_f64() * 1000.0; profile_at = Instant::now(); }
+        let look = self.agent_look();
         if self.phase == Phase::Closed {
             // The compact island's content appears as the notch reaches its width.
             let n = self.ui.near.value.clamp(0.0, 1.0);
             if n > 0.25 {
-                // A file on its way: only the upload arrow, so a button held for something else says nothing more.
-                icon(cv, Icon::Send, pill.cx(), pill.cy(), 18.0, color(DROP, ((n - 0.25) / 0.5).clamp(0.0, 1.0)), None);
+                // A file on its way: only the send card's phone, small, so a button held for something else says nothing more.
+                AirDrop::draw_hint(cv, (pill.cx(), pill.cy()), pal.fg, pal.accent, ((n - 0.25) / 0.5).clamp(0.0, 1.0));
+            } else if self.ui.air.active() && !matches!(self.live(), Some(Live::Call | Live::CallEnded(_))) {
+                let a = ((pill.w - PEEK.0) / (LIVE.0 - PEEK.0)).clamp(0.0, 1.0).powi(2);
+                self.ui.air.draw_pill(cv, pill, self.ui.air_thumb.as_ref(), pal.fg, pal.accent, a);
             } else if let Some(l) = self.live().or(self.ui.live_last).filter(|_| self.ui.live_a > 0.0) {
                 let full = if l == Live::Lyric { 200.0 } else { LIVE.0 };
-                let a = ((pill.w - PEEK.0) / (full - PEEK.0)).clamp(0.0, 1.0).powi(2) * (1.0 - n * 4.0).clamp(0.0, 1.0) * smooth(self.ui.live_a);
+                // The agent's notch can be narrower than the resting one: it appears with its height.
+                // Leaving, the creature does its own exit (see `agent_look`) instead of fading with the height.
+                let grown = if matches!(l, Live::Agent(_) | Live::AgentDone(_)) { if look.2 > 0.0 { 1.0 } else { (pill.h - PEEK.1) / (MINI.1 - PEEK.1) } } else { (pill.w - PEEK.0) / (full - PEEK.0) };
+                // A leaving creature stays solid: its exit is its shrink, not a fade.
+                let fade = if look.2 > 0.0 && matches!(l, Live::Agent(_) | Live::AgentDone(_)) { 1.0 } else { smooth(self.ui.live_a) };
+                let a = grown.clamp(0.0, 1.0).powi(2) * (1.0 - n * 4.0).clamp(0.0, 1.0) * fade;
                 if a > 0.02 {
                     let lyric = (self.lyric_text(), self.ui.lyric_prev.clone(), smooth(self.ui.lyric_t));
                     let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal: &pal, pointer: None, pressed: None };
-                    draw_live(&mut d, &self.model, self.player_pc, l, pill, a, self.clock, &lyric);
+                    draw_live(&mut d, &self.model, self.player_pc, l, pill, a, self.clock, &lyric, look);
                 }
             }
             return;
@@ -1921,7 +2221,7 @@ impl Island {
             if a > 0.02 {
                 let lyric = (self.lyric_text(), self.ui.lyric_prev.clone(), smooth(self.ui.lyric_t));
                 let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal: &pal, pointer: None, pressed: None };
-                draw_live(&mut d, &self.model, self.player_pc, l, pill, a, self.clock, &lyric);
+                draw_live(&mut d, &self.model, self.player_pc, l, pill, a, self.clock, &lyric, look);
                 self.hits.clear();
             }
         }
@@ -1945,7 +2245,8 @@ impl Island {
             let mask = shape.as_ref().and_then(|p| cv.mask_path(p));
             // The content reaches full opacity before the island finishes growing.
             let alpha = (p * 1.35 - 0.1).clamp(0.0, 1.0);
-            cv.blit_area(&layer.pm, R::new(origin.0, origin.1, vw, vh).inflate(2.0), alpha, 1.0, pill.cx(), origin.1 + vh / 2.0, mask.as_ref());
+            let scale = self.motion.content_scale + (1.0 - self.motion.content_scale) * p;
+            cv.blit_area(&layer.pm, R::new(origin.0, origin.1, vw, vh).inflate(2.0), alpha, scale, pill.cx(), origin.1 + vh / 2.0, mask.as_ref());
             self.layer = Some(layer);
             #[cfg(test)]
             { self.profile[3] = profile_at.elapsed().as_secs_f64() * 1000.0; }
@@ -1965,19 +2266,23 @@ impl Island {
             lines: self.ui.lyrics.as_ref().filter(|(k, _)| Some(k) == key.as_ref()).map(|(_, l)| l.as_ref()),
             volume: self.player_volume(),
         };
+        let pc_ctl = (self.controls_pc(), self.cfg.modules.pc && self.model.target().is_some());
         let mut d = Draw { cv, fonts: &mut self.fonts, hits: &mut self.hits, pal, pointer: self.pointer, pressed };
         match view {
-            View::Page(Page::Home) => draw_home(&mut d, &self.model, &self.cfg, body, media, self.seen_notifs),
+            View::Page(Page::Home) => draw_home(&mut d, &self.model, &self.cfg, body, media, self.seen_notifs, if self.cfg.modules.agents { self.agents } else { [Work::Gone; 2] }),
             View::Page(Page::Player) => draw_player(&mut d, body, media, sources, &pv),
             View::Page(Page::Files) => draw_files(&mut d, &self.model, body),
             View::Page(Page::Notifs) => draw_notifs(&mut d, &self.model, body, &self.ui, self.clock),
             View::Page(Page::Clipboard) => draw_clipboard(&mut d, &self.model, body, self.copied),
-            View::Page(Page::Controls) => draw_controls(&mut d, &self.model, &self.cfg.controls, body, self.clock < self.wifi_confirm, &self.ui.tiles),
+            View::Page(Page::Controls) => draw_controls(&mut d, &self.model, &self.cfg.controls, body, self.clock < self.wifi_confirm, &self.ui, pc_ctl),
             View::Call => draw_call(&mut d, &self.model, body),
             View::Offer => draw_offer(&mut d, &self.model, body),
-            View::Transfer(id) => draw_transfer(&mut d, &self.model, body, id),
+            View::Transfer(id) => draw_transfer(&mut d, &self.model, body, id, self.clock),
             View::Note => draw_note(&mut d, &self.note, body, self.ui.note_age),
-            View::Drop => draw_drop(&mut d, &self.model, body, self.drag_over, self.ui.land, self.clock),
+            View::Drop => {
+                let look = airdrop::Look { fg: pal.fg, accent: pal.accent, on: pal.on_accent, thumb: self.ui.air_thumb.as_ref() };
+                self.ui.air.draw(d.cv, d.fonts, body, &look);
+            }
         }
 
     }
@@ -2169,9 +2474,12 @@ fn back(d: &mut Draw, body: R) {
     d.round((body.right() - PAD - 15.0, body.y + 27.0), 30.0, Icon::Back, Act::Go(Page::Home), None, d.pal.fg);
 }
 
-fn draw_home(d: &mut Draw, m: &Model, cfg: &IslandConfig, body: R, media: Option<(&super::model::Media, bool)>, seen: Instant) {
+fn draw_home(d: &mut Draw, m: &Model, cfg: &IslandConfig, body: R, media: Option<(&super::model::Media, bool)>, seen: Instant, agents: [Work; 2]) {
     let mut y = body.y + 16.0;
     if cfg.modules.status {
+        // Without a phone the row is this computer (see `modules.pc`), with what it is doing.
+        let pc_mode = cfg.modules.pc && m.target().is_none();
+        let downloads = m.xfers.iter().filter(|x| x.local() && x.state == XState::Running).count();
         // Row of 48: the phone, its name and state, the battery; everything on the row's centre line.
         let mid = y + 24.0;
         let c = (body.x + PAD + 22.0, mid);
@@ -2184,10 +2492,10 @@ fn draw_home(d: &mut Draw, m: &Model, cfg: &IslandConfig, body: R, media: Option
             }
             None => {
                 d.cv.circle(c.0, c.1, 22.0, color(d.pal.chip, 1.0), None);
-                icon(d.cv, Icon::Phone, c.0, c.1, 22.0, color(d.pal.fg, 1.0), None);
+                icon(d.cv, if pc_mode { Icon::Cast } else { Icon::Phone }, c.0, c.1, 22.0, color(d.pal.fg, 1.0), None);
             }
         }
-        d.add(R::new(body.x + PAD, y, body.w - 2.0 * PAD - 84.0, 48.0), Act::Device);
+        d.add(R::new(body.x + PAD, y, body.w - 2.0 * PAD - 84.0, 48.0), if pc_mode && downloads > 0 { Act::Go(Page::Files) } else { Act::Device });
         let tx = body.x + PAD + 58.0;
         match m.target() {
             Some(p) => {
@@ -2206,6 +2514,20 @@ fn draw_home(d: &mut Draw, m: &Model, cfg: &IslandConfig, body: R, media: Option
                     }
                     d.text(&format!("{}%", i.battery), bx + 30.0, mid + 5.0, 13.5, Weight::Medium, 1.0);
                 }
+            }
+            None if pc_mode => {
+                let mut parts: Vec<String> = Vec::new();
+                for a in [Agent::Claude, Agent::Codex] {
+                    if agents[a as usize] == Work::Working {
+                        parts.push(format!("{} {}", a.name(), t("trabajando", "working")));
+                    }
+                }
+                if downloads > 0 {
+                    parts.push(format!("{downloads} {}", if downloads == 1 { t("descarga", "download") } else { t("descargas", "downloads") }));
+                }
+                let sub = if parts.is_empty() { t("Conecta un teléfono para más funciones", "Connect a phone for more").to_string() } else { parts.join(" · ") };
+                d.text(t("Este equipo", "This computer"), tx, mid - 3.0, 15.5, Weight::Bold, 1.0);
+                d.text_in(&sub, tx, mid + 15.0, body.w - 2.0 * PAD - 58.0, 12.5, Weight::Regular, 0.6);
             }
             None => {
                 d.text(t("Sin teléfono conectado", "No phone connected"), tx, mid - 3.0, 15.5, Weight::Bold, 1.0);
@@ -2507,6 +2829,7 @@ fn draw_xfer_row(d: &mut Draw, x: &super::model::Xfer, r: R) {
     icon(d.cv, ic, r.x + 11.0, r.cy(), 18.0, color(col, 1.0), None);
     d.text_in(&x.name, r.x + 30.0, r.y + 13.0, r.w - 30.0 - 74.0, 13.0, Weight::Medium, 1.0);
     let right = match &x.state {
+        XState::Running if x.no_total() => fmt_size(x.done),
         XState::Running => format!("{}%", (x.fraction() * 100.0) as u32),
         XState::Done => t("Listo", "Done").to_string(),
         XState::Failed(_) => t("Falló", "Failed").to_string(),
@@ -2717,7 +3040,7 @@ fn draw_clipboard(d: &mut Draw, m: &Model, body: R, copied: Option<(usize, f32)>
         d.add(row, Act::CopyClip(i));
     }
     if m.clips.is_empty() {
-        d.cv.text_centered(d.fonts, t("Lo que copies en el teléfono aparece aquí", "What you copy on the phone shows up here"), body.cx(), body.bottom() - 22.0, 12.5, Weight::Regular, d.pal.fg, 0.5);
+        d.cv.text_centered(d.fonts, t("Lo que copies en el teléfono aparece aquí", "What you copy on the phone shows up here"), body.cx(), (r.bottom() + body.bottom()) / 2.0 + 4.4, 12.5, Weight::Regular, d.pal.fg, 0.5);
     }
 }
 
@@ -2795,9 +3118,58 @@ fn controls_top(n: usize) -> f32 {
     if rows == 0 { 40.0 } else { 48.0 + rows as f32 * 70.0 - 8.0 }
 }
 
-fn draw_controls(d: &mut Draw, m: &Model, list: &str, body: R, wifi_confirm: bool, fx: &HashMap<&'static str, TileFx>) {
+/// The "This computer | Phone" switch (like the player's): `pc` is the side shown, `act` flips it.
+fn source_switch(d: &mut Draw, x: f32, y: f32, pc: bool, act: Act) {
+    let mut x = x;
+    for (is_pc, label) in [(true, t("Este equipo", "This computer")), (false, t("Teléfono", "Phone"))] {
+        let r = R::new(x, y, d.fonts.measure(label, 12.0, Weight::Medium) + 20.0, 22.0);
+        let on = is_pc == pc;
+        let (bg, fg) = if on { (d.pal.accent, d.pal.on_accent) } else { (if d.hot(r) { d.pal.chip_hi } else { d.pal.chip }, d.pal.fg) };
+        d.cv.squircle(r, 11.0, color(bg, 1.0), None);
+        d.cv.text(d.fonts, label, r.x + 10.0, r.y + 15.4, 12.0, Weight::Medium, fg, 1.0);
+        if !on {
+            d.add(r, act.clone());
+        }
+        x = r.right() + 6.0;
+    }
+}
+
+/// This computer's controls: microphone, lock, sleep, screenshot, and the output volume with its mute.
+fn draw_pc_controls(d: &mut Draw, body: R, ui: &Ui) {
+    let mic = ui.pc_mic_muted.unwrap_or(false);
+    let tiles = [
+        ("pcmic", Icon::MicOff, if mic { t("Mic apagado", "Mic off") } else { t("Micrófono", "Microphone") }, mic, Act::Pc("mic")),
+        ("pclock", Icon::Lock, t("Bloquear", "Lock"), false, Act::Pc("lock")),
+        ("pcsleep", Icon::Moon, t("Suspender", "Sleep"), false, Act::Pc("sleep")),
+        ("pcshot", Icon::Screenshot, t("Captura", "Screenshot"), false, Act::Pc("shot")),
+    ];
+    let tile_w = (body.w - 2.0 * PAD - 3.0 * 8.0) / 4.0;
+    for (i, (k, ic, label, on, act)) in tiles.into_iter().enumerate() {
+        tile(d, R::new(body.x + PAD + i as f32 * (tile_w + 8.0), body.y + 48.0, tile_w, 62.0), ic, label, on, act, ui.tiles.get(k), false);
+    }
+    let track = R::new(body.x + PAD + 30.0, body.y + controls_top(4) + 22.0, body.w - 2.0 * PAD - 30.0, 10.0);
+    let fg = d.pal.fg;
+    d.round((body.x + PAD + 10.0, track.cy()), 26.0, if ui.pc_out_muted == Some(true) { Icon::Mute } else { Icon::Volume }, Act::Pc("mute"), None, fg);
+    let f = ui.pc_volume.unwrap_or(0.0).clamp(0.0, 1.0);
+    let accent = d.pal.accent;
+    d.bar(track, f, accent);
+    d.cv.circle(track.x + (track.w * f).clamp(5.0, track.w - 5.0), track.cy(), 7.0, color(fg, 1.0), None);
+    d.add(R::new(track.x, track.y - 10.0, track.w, track.h + 20.0), Act::PcVol);
+    d.text(t("Volumen del equipo", "Computer volume"), track.x, track.bottom() + 17.0, 12.5, Weight::Regular, 0.5);
+}
+
+fn draw_controls(d: &mut Draw, m: &Model, list: &str, body: R, wifi_confirm: bool, ui: &Ui, (pc, switch): (bool, bool)) {
     back(d, body);
-    header(d, body, t("Controles del teléfono", "Phone controls"));
+    if switch {
+        source_switch(d, body.x + PAD, body.y + 16.0, pc, Act::ControlsSource);
+    } else {
+        header(d, body, if pc { t("Controles de este equipo", "This computer's controls") } else { t("Controles del teléfono", "Phone controls") });
+    }
+    if pc {
+        draw_pc_controls(d, body, ui);
+        return;
+    }
+    let fx = &ui.tiles;
     let Some(id) = m.target_id() else {
         d.cv.text_centered(d.fonts, t("Sin teléfono conectado", "No phone connected"), body.cx(), body.cy() + 14.0, 13.5, Weight::Medium, d.pal.fg, 0.6);
         return;
@@ -2869,7 +3241,7 @@ fn badged(d: &mut Draw, pic: &Image, radius: f32, app: Option<&Image>, r: R, a: 
     }
 }
 
-fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f32, clock: f64, lyric: &(String, String, f32)) {
+fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f32, clock: f64, lyric: &(String, String, f32), look: (f32, f32, f32)) {
     let cy = pill.cy();
     match l {
         Live::Lyric => {
@@ -2951,6 +3323,147 @@ fn draw_live(d: &mut Draw, m: &Model, pref: Option<bool>, l: Live, pill: R, a: f
                 d.cv.text(d.fonts, &s, pill.right() - 16.0 - w, cy + 5.2, 15.0, Weight::Bold, SUCCESS, a);
             }
         }
+        Live::Agent(ag) | Live::AgentDone(ag) => {
+            let done = matches!(l, Live::AgentDone(_));
+            let (age, mini, out) = look;
+            let left = R::new(pill.x + 11.0, cy - 11.0, 26.0, 22.0);
+            match ag {
+                Agent::Claude => claude_mascot(d, left, age, done, out, a),
+                Agent::Codex => codex_glyph(d, left, age, done, out, a),
+            }
+            // The words go first when it leaves.
+            let a = a * (1.0 - out * 3.0).clamp(0.0, 1.0);
+            // The line fades as the notch folds into the creature and its dots.
+            let ta = a * (1.0 - mini);
+            let x = left.right() + 11.0;
+            if ta > 0.02 {
+                let msg = format!("{} {}", ag.name(), if done { t("terminó", "finished") } else { t("trabajando…", "working…") });
+                let line = d.fonts.fit(&msg, 15.0, Weight::Medium, pill.right() - 44.0 - x);
+                d.cv.text(d.fonts, &line, x, cy + 5.2, 15.0, Weight::Medium, d.pal.fg, ta);
+            }
+            if done {
+                icon(d.cv, Icon::Check, pill.right() - 24.0, cy, 18.0, color(SUCCESS, a * (1.0 - mini)), None);
+            } else {
+                // Three dots take turns at being lit.
+                let tint = if ag == Agent::Claude { CLAUDE } else { d.pal.fg };
+                let tick = (clock * 3.0) as u32;
+                // Never over the creature while the notch folds.
+                let x0 = (pill.right() - 38.0).max(left.right() + 8.0);
+                for i in 0..3u32 {
+                    d.cv.circle(x0 + 8.0 * i as f32, cy, 2.2, color(tint, a * if (tick + i) % 3 == 0 { 1.0 } else { 0.3 }), None);
+                }
+            }
+        }
+    }
+}
+
+/// Claude Code's orange.
+const CLAUDE: Rgb = [217, 119, 87];
+
+/// Squash-and-stretch of an entrance: (x scale, y scale) for `t` seconds after appearing.
+fn pop(t: f32) -> (f32, f32) {
+    let p = (t / 0.4).clamp(0.0, 1.0);
+    let (s, w) = (back_out(p), (p * std::f32::consts::PI).sin() * 0.14);
+    (s * (1.0 + w), s * (1.0 - w))
+}
+
+/// The way out, `o` 0..1: a quick squash and stretch, then it shrinks to nothing.
+fn gone(o: f32) -> (f32, f32) {
+    let s = 1.0 - smooth(((o - 0.15) / 0.85).clamp(0.0, 1.0));
+    let w = (o * std::f32::consts::PI * 2.0).sin() * 0.18 * (1.0 - o);
+    (s * (1.0 + w), s * (1.0 - w))
+}
+
+/// How high it has hopped on its way out, in logical pixels: up toward the notch.
+fn leap(o: f32) -> f32 {
+    10.0 * (o * std::f32::consts::PI * 0.75).sin().max(0.0) + 6.0 * o
+}
+
+/// Height of the two hops of a celebration, in rows, `t` seconds after finishing.
+fn hop(t: f32) -> f32 {
+    if !(0.0..1.2).contains(&t) {
+        return 0.0;
+    }
+    (t * 2.0 * std::f32::consts::PI / 0.6).sin().abs() * 3.0 * (1.0 - t / 1.2)
+}
+
+/// A little blocky creature in Claude's orange, drawn on whole device pixels. Working: it bobs, its legs and arms
+/// alternate like typing, it blinks and now and then glances sideways as if thinking. Done: it hops with its arms up
+/// and sparkles. `t`: seconds since it appeared (or finished). `out` (0..1): it hops up and shrinks back into the
+/// notch as the island lets it go.
+fn claude_mascot(d: &mut Draw, r: R, t: f32, done: bool, out: f32, a: f32) {
+    let k = d.cv.k;
+    let snap = |v: f32| (v * k).round() / k;
+    let u = snap(2.0).max(1.0 / k);
+    let (x0, y0) = (snap(r.cx() - 6.5 * u), snap(r.cy() - 4.5 * u));
+    let (sx, sy) = if out > 0.0 { gone(out) } else if done { (1.0, 1.0) } else { pop(t) };
+    let (fx, fy) = (x0 + 6.5 * u, y0 + 9.0 * u);
+    let step = (t * 6.0) as i32 & 1;
+    let blink = t % 3.7 < 0.14;
+    // A glance every 7 s: left, right, back.
+    let g = t % 7.0 - 5.6;
+    let look = if done || !(0.0..1.4).contains(&g) { 0.0 } else if g < 0.5 { -1.0 } else if g < 1.0 { 1.0 } else { 0.0 };
+    let jump = if out > 0.0 { leap(out) } else if done { snap(hop(t) * u) } else { 0.0 };
+    let bob = if done || step == 0 { 0.0 } else { 1.0 / k };
+    let up = done && t < 1.6;
+    // Blocks scale around the feet while it pops in; at rest the scale is 1 and they land on whole pixels.
+    let mut block = |c: f32, row: f32, w: f32, h: f32, col: Rgb| {
+        let (bx, by) = (x0 + c * u, y0 + row * u - jump - bob);
+        d.cv.squircle(R::new(fx + (bx - fx) * sx, fy + (by - fy) * sy, w * u * sx, h * u * sy), 0.0, color(col, a), None);
+    };
+    block(2.0, 0.0, 9.0, 7.0, CLAUDE);
+    // Arms: typing alternately, or raised.
+    let (la, ra) = if up { (0.0, 0.0) } else { (step as f32, 1.0 - step as f32) };
+    block(0.0, if up { 1.0 } else { 3.0 + la }, 2.0, 2.0, CLAUDE);
+    block(11.0, if up { 1.0 } else { 3.0 + ra }, 2.0, 2.0, CLAUDE);
+    let ink = [28, 20, 18];
+    for c in [3.0, 9.0] {
+        let c = c + look;
+        if up {
+            // Happy eyes: a thin arch.
+            block(c, 2.5, 1.0, 1.0, ink);
+        } else if blink {
+            block(c, 3.0, 1.0, 1.0, ink);
+        } else {
+            block(c, 2.0, 1.0, 2.0, ink);
+        }
+    }
+    // Legs: when working one pair lifts on each beat.
+    for (n, c) in [2.0, 4.0, 8.0, 10.0].into_iter().enumerate() {
+        let lift = if done || (n as i32 & 1) as i32 != step { 0.0 } else { 1.0 };
+        let (bx, by) = (x0 + c * u, y0 + (7.0 + lift) * u);
+        d.cv.squircle(R::new(fx + (bx - fx) * sx, fy + (by - fy) * sy, u * sx, (2.0 - lift) * u * sy), 0.0, color(CLAUDE, a), None);
+    }
+    if done && t < 1.8 {
+        // Sparkles: small crosses that twinkle around its head.
+        let spark = [255, 232, 200];
+        for (n, (cx, cy, ph)) in [(-2.0, -1.0, 0.0), (14.5, -2.0, 0.3), (13.0, 5.0, 0.6)].into_iter().enumerate() {
+            let s = ((t - ph * 0.5) * 7.0 + n as f32).sin() * 0.5 + 0.5;
+            if t > ph * 0.5 && s > 0.25 {
+                let (px, py) = (x0 + cx * u, y0 + cy * u - jump);
+                d.cv.squircle(R::new(px - u, py, u * 3.0, u), 0.0, color(spark, a * s), None);
+                d.cv.squircle(R::new(px, py - u, u, u * 3.0), 0.0, color(spark, a * s), None);
+            }
+        }
+    }
+}
+
+/// Codex: a light chip with a terminal prompt whose cursor blinks; it pops in and hops when it finishes.
+fn codex_glyph(d: &mut Draw, r: R, t: f32, done: bool, out: f32, a: f32) {
+    let (sx, sy) = if out > 0.0 { gone(out) } else if done { (1.0, 1.0) } else { pop(t) };
+    let rise = if out > 0.0 { leap(out) } else { hop(if done { t } else { -1.0 }) * 2.0 };
+    let c = R::new(r.cx() - 11.0 * sx, r.cy() - 11.0 * sy - rise, 22.0 * sx, 22.0 * sy);
+    d.cv.squircle(c, 6.0, color([240, 240, 245], a), None);
+    let ink = color([20, 20, 28], a);
+    let mut pb = tiny_skia::PathBuilder::new();
+    pb.move_to(c.x + 6.5 * sx, c.y + 6.5 * sy);
+    pb.line_to(c.x + 11.5 * sx, c.y + 11.0 * sy);
+    pb.line_to(c.x + 6.5 * sx, c.y + 15.5 * sy);
+    if let Some(p) = pb.finish() {
+        d.cv.stroke_path(&p, ink, 2.0, None);
+    }
+    if done || (t * 3.0) as u32 & 1 == 0 {
+        d.cv.squircle(R::new(c.x + 12.5 * sx, c.y + 14.5 * sy, 5.0 * sx, 2.0 * sy), 1.0, ink, None);
     }
 }
 
@@ -2993,36 +3506,46 @@ fn draw_offer(d: &mut Draw, m: &Model, body: R) {
     d.pill(R::new(body.x + PAD + half + 10.0, y, half, 34.0), t("Aceptar", "Accept"), Act::Accept(o.id.clone()), accent, on);
 }
 
-fn draw_transfer(d: &mut Draw, m: &Model, body: R, id: &str) {
+fn draw_transfer(d: &mut Draw, m: &Model, body: R, id: &str, clock: f64) {
     let Some(x) = m.xfers.iter().find(|x| x.id == id) else { return };
-    // A received file: what to do with it, under its preview when it is a photo.
+    // A saved file: its preview (or a placeholder with its type) and what to do with it.
     if x.saved().is_some() {
-        let (tx, y) = if let (Some(img), Some(_)) = (&x.thumb, x.photo()) {
-            let pic = R::new(body.x + PAD, body.y + 18.0, 120.0, 120.0);
+        let pic = R::new(body.x + PAD, body.y + 18.0, 120.0, 120.0);
+        if let Some(img) = &x.thumb {
             d.cv.image(img, pic, 14.0, 1.0, None);
-            let tx = pic.right() + 14.0;
-            let tw = body.right() - PAD - tx;
-            d.text_in(t("Foto recibida", "Photo received"), tx, body.y + 36.0, tw, 12.5, Weight::Regular, 0.62);
-            d.text_in(&x.name, tx, body.y + 56.0, tw, 14.5, Weight::Bold, 1.0);
-            d.text(&fmt_size(x.total), tx, body.y + 74.0, 12.5, Weight::Regular, 0.6);
-            (tx, pic.bottom() - 34.0)
         } else {
-            let (cx, cy) = (body.x + PAD + 20.0, body.y + 40.0);
-            d.cv.circle(cx, cy, 20.0, color(d.pal.chip, 1.0), None);
-            icon(d.cv, Icon::Check, cx, cy, 20.0, color(SUCCESS, 1.0), None);
-            let tx = body.x + PAD + 52.0;
-            let tw = body.right() - PAD - tx;
-            d.text_in(&x.name, tx, body.y + 34.0, tw, 14.5, Weight::Bold, 1.0);
-            d.text_in(&format!("{} · {}", t("Archivo recibido", "File received"), fmt_size(x.total)), tx, body.y + 52.0, tw, 12.5, Weight::Regular, 0.62);
-            (body.x + PAD, body.bottom() - PAD - 34.0)
-        };
+            d.cv.squircle(pic, 14.0, color(d.pal.chip, 1.0), None);
+            icon(d.cv, Icon::File, pic.cx(), pic.cy() - 8.0, 40.0, color(d.pal.fg, 0.55), None);
+            let ext = x.ext().to_uppercase();
+            if !ext.is_empty() && ext.chars().count() <= 5 {
+                d.cv.text_centered(d.fonts, &ext, pic.cx(), pic.cy() + 38.0, 13.0, Weight::Bold, d.pal.fg, 0.6);
+            }
+        }
+        let tx = pic.right() + 14.0;
         let tw = body.right() - PAD - tx;
-        // Discarding deletes only the computer's copy: the phone keeps the original.
-        let (w, y) = ((tw - 16.0) / 3.0, y);
+        let what = match x.ext().as_str() {
+            _ if x.local() => t("Descarga completa", "Download complete"),
+            "jpg" | "jpeg" | "png" | "webp" | "heic" | "heif" | "gif" | "bmp" | "avif" => t("Foto recibida", "Photo received"),
+            "mp4" | "mkv" | "mov" | "avi" | "webm" | "3gp" | "m4v" => t("Vídeo recibido", "Video received"),
+            "pdf" | "doc" | "docx" | "odt" | "xls" | "xlsx" | "ods" | "ppt" | "pptx" | "odp" | "txt" | "rtf" | "csv" => t("Documento recibido", "Document received"),
+            _ => t("Archivo recibido", "File received"),
+        };
+        d.text_in(what, tx, body.y + 36.0, tw, 12.5, Weight::Regular, 0.62);
+        d.text_in(&x.name, tx, body.y + 56.0, tw, 14.5, Weight::Bold, 1.0);
+        // A download never knew its total: what was written is its size.
+        d.text(&fmt_size(x.total.max(x.done)), tx, body.y + 74.0, 12.5, Weight::Regular, 0.6);
+        let y = pic.bottom() - 34.0;
+        let tw = body.right() - PAD - tx;
+        // Discarding deletes only the computer's copy: the phone keeps the original. A download is the user's own file:
+        // no button here deletes it.
+        let n = if x.local() { 2.0 } else { 3.0 };
+        let w = (tw - 8.0 * (n - 1.0)) / n;
         let (chip, fg, accent, on) = (d.pal.chip, d.pal.fg, d.pal.accent, d.pal.on_accent);
         d.pill(R::new(tx, y, w, 34.0), t("Abrir", "Open"), Act::OpenFile(x.id.clone()), accent, on);
         d.pill(R::new(tx + w + 8.0, y, w, 34.0), t("Carpeta", "Folder"), Act::ShowFile(x.id.clone()), chip, fg);
-        d.pill(R::new(tx + 2.0 * (w + 8.0), y, w, 34.0), t("Descartar", "Discard"), Act::Discard(x.id.clone()), chip, DANGER);
+        if !x.local() {
+            d.pill(R::new(tx + 2.0 * (w + 8.0), y, w, 34.0), t("Descartar", "Discard"), Act::Discard(x.id.clone()), chip, DANGER);
+        }
         return;
     }
     let ic = match (&x.state, x.incoming) {
@@ -3043,16 +3566,30 @@ fn draw_transfer(d: &mut Draw, m: &Model, body: R, id: &str) {
     d.text_in(&x.name, tx, body.y + 32.0, tw, 14.5, Weight::Bold, 1.0);
     let line = match &x.state {
         XState::Running => {
-            let verb = if x.incoming { t("Recibiendo", "Receiving") } else { t("Enviando", "Sending") };
-            if x.rate > 0 { format!("{verb} · {}/s", fmt_size(x.rate)) } else { verb.to_string() }
+            let verb = if x.local() { t("Descargando", "Downloading") } else if x.incoming { t("Recibiendo", "Receiving") } else { t("Enviando", "Sending") };
+            match (x.rate > 0, x.no_total()) {
+                (true, true) => format!("{verb} · {} · {}/s", fmt_size(x.done), fmt_size(x.rate)),
+                (true, false) => format!("{verb} · {}/s", fmt_size(x.rate)),
+                (false, true) => format!("{verb} · {}", fmt_size(x.done)),
+                (false, false) => verb.to_string(),
+            }
         }
         XState::Done => if x.incoming { t("Archivo recibido", "File received").into() } else { t("Enviado al teléfono", "Sent to the phone").into() },
         XState::Failed(msg) => if msg.is_empty() { t("No se pudo completar", "Could not finish").to_string() } else { msg.clone() },
     };
     d.text_in(&line, tx, body.y + 50.0, tw, 12.5, Weight::Regular, 0.62);
     let accent = col;
-    d.bar(R::new(tx, body.y + 62.0, tw, 5.0), x.fraction(), accent);
-    if x.state == XState::Running {
+    let bar = R::new(tx, body.y + 62.0, tw, 5.0);
+    if x.no_total() {
+        // No total to measure against: a stretch of the bar glides back and forth (a smooth triangle wave).
+        d.cv.squircle(bar, bar.h / 2.0, color(d.pal.fg, 0.16), None);
+        let (len, phase) = (bar.w * 0.28, (clock as f32 * 0.7).fract());
+        let e = smooth(if phase < 0.5 { phase * 2.0 } else { 2.0 - phase * 2.0 });
+        d.cv.squircle(R::new(bar.x + (bar.w - len) * e, bar.y, len, bar.h), bar.h / 2.0, color(accent, 1.0), None);
+    } else {
+        d.bar(bar, x.fraction(), accent);
+    }
+    if x.state == XState::Running && !x.local() {
         d.round((body.right() - PAD - 15.0, body.cy()), 30.0, Icon::Close, Act::Cancel(x.id.clone()), None, d.pal.fg);
     }
 }
@@ -3096,59 +3633,6 @@ fn draw_note(d: &mut Draw, n: &Note, body: R, age: f32) {
         d.text_in(&n.title, tx, body.cy() - 4.5, tw, 14.0, Weight::Bold, tx_alpha);
         d.text_in(&n.text, tx, body.cy() + 13.5, tw, 12.5, Weight::Regular, 0.65 * tx_alpha);
     }
-}
-
-fn draw_drop(d: &mut Draw, m: &Model, body: R, over: bool, land: Option<f32>, clock: f64) {
-    let zone = body.inset(12.0, 12.0, 12.0, 12.0);
-    let landing = land.is_some();
-    if over || landing {
-        d.cv.squircle(zone, 24.0, color(DROP, if landing { 0.16 } else { 0.12 }), None);
-    }
-    let path = super::gfx::squircle(zone, 18.0, 3.6);
-    match (&path, landing) {
-        (Some(p), true) => d.cv.stroke_path(p, color(DROP, 1.0), 1.5, None),
-        _ => dashed(d, zone, if over { DROP } else { d.pal.fg }, if over { 1.0 } else { 0.32 }),
-    }
-    // While a file is over it, a light runs round the rim.
-    if over && !landing {
-        if let Some(p) = &path {
-            let around = 2.0 * (zone.w + zone.h);
-            d.cv.stroke_dashed(p, color(DROP, 0.95), 2.4, (54.0, around), -(clock as f32 * 260.0) % around);
-        }
-    }
-    let c = (zone.cx(), zone.y + 40.0);
-    match land {
-        Some(t) => {
-            // The circle pops (1 → 1.32 → 0.9 → 1) and launches its arrow, which comes back from below.
-            let k = (t / 0.62).clamp(0.0, 1.0);
-            let s = if k < 0.34 { 0.72 + 0.6 * (k / 0.34) } else if k < 0.58 { 1.32 - 0.42 * ((k - 0.34) / 0.24) } else if k < 0.78 { 0.9 + 0.16 * ((k - 0.58) / 0.2) } else { 1.06 - 0.06 * ((k - 0.78) / 0.22) };
-            d.cv.circle(c.0, c.1, 23.0 * s, color(DROP, 1.0), None);
-            let (dy, a) = if k < 0.38 { (-24.0 * (k / 0.38), 1.0 - k / 0.38) } else { (20.0 * (1.0 - (k - 0.38) / 0.62), ((k - 0.38) / 0.62).min(1.0)) };
-            icon(d.cv, Icon::Send, c.0, c.1 + dy, 22.0, color([11, 18, 32], a), None);
-            // Two rings spread out from it.
-            for delay in [0.0, 0.12] {
-                let tt = t - delay;
-                if tt > 0.0 && tt < 0.75 {
-                    let e = 1.0 - (1.0 - tt / 0.75).powi(3);
-                    d.cv.ring(c.0, c.1, 23.0 * (0.9 + 3.5 * e), color(DROP, 0.85 * (1.0 - e)), 2.0, None);
-                }
-            }
-        }
-        None => {
-            if over {
-                d.cv.circle(c.0, c.1, 27.0, color(DROP, 0.28), None);
-            }
-            icon(d.cv, Icon::Send, c.0, c.1 + if over { 3.0 } else { 0.0 }, if over { 34.0 } else { 30.0 }, color(if over { DROP } else { d.pal.fg }, 1.0), None);
-        }
-    }
-    let msg = match (landing, m.target()) {
-        (true, _) => t("Recibido, enviando…", "Got it, sending…").to_string(),
-        (false, Some(p)) => format!("{} {}", t("Suelta para enviar a", "Drop to send to"), p.name),
-        (false, None) => t("Conecta un teléfono para enviar archivos", "Connect a phone to send files").to_string(),
-    };
-    let fit = d.fonts.fit(&msg, 13.5, Weight::Medium, zone.w - 24.0);
-    let w = d.fonts.measure(&fit, 13.5, Weight::Medium);
-    d.text(&fit, zone.cx() - w / 2.0, zone.bottom() - 26.0, 13.5, Weight::Medium, 1.0);
 }
 
 #[cfg(test)]
@@ -3295,6 +3779,7 @@ mod tests {
             "home" => View::Page(Page::Home),
             "notifs" => View::Page(Page::Notifs),
             "lyrics" => View::Page(Page::Player),
+            "drop" => View::Drop,
             _ => View::Page(Page::Player),
         };
         if scene == "notifs" {
@@ -3307,6 +3792,10 @@ mod tests {
             i.model.pc_media.as_mut().unwrap().art = Some(super::super::gfx::Image::from_rgba(32, 32, [180, 70, 120, 255].repeat(32 * 32)).unwrap());
             i.set_lyrics_pref(true);
             i.set_lyrics("Transition profile|Alero".into(), Some(crate::lyrics::parse_lrc("[00:00.00]Una línea para comprobar el movimiento\n[00:01.50]La siguiente línea se desplaza suavemente")));
+        }
+        if scene == "drop" {
+            with_phone(&mut i);
+            i.drag(Drag::Enter);
         }
         println!("scene={scene}");
         let mut cv = i.new_canvas(k);
@@ -3323,6 +3812,21 @@ mod tests {
             if frame > 0 { intervals.push(dt as f64 * 1000.0); }
             if frame == 0 || frame == 100 { i.open(view.clone(), Reason::Key); }
             if frame == 65 { i.close(); }
+            if scene == "drop" {
+                if frame == 35 {
+                    i.dropped(vec![PathBuf::from("alero-share-qa.png")]);
+                    i.take_cmds();
+                    let n = i.model.feed(&Event::TransferStarted { id: "qa".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "alero-share-qa.png".into(), size: 105, incoming: false });
+                    i.notices(n);
+                }
+                if (35..140).contains(&frame) {
+                    i.model.feed(&Event::TransferProgress { id: "qa".into(), done: (frame - 35) as u64, total: 105, bytes_per_sec: 60 });
+                }
+                if frame == 140 {
+                    let n = i.model.feed(&Event::TransferFinished { id: "qa".into(), ok: true, code: String::new(), message: String::new(), path: String::new() });
+                    i.notices(n);
+                }
+            }
             i.update(dt);
             let start = Instant::now();
             i.render(&mut cv);
@@ -3395,7 +3899,7 @@ mod tests {
     }
 
     #[test]
-    fn a_dropped_file_shows_its_progress_card() {
+    fn a_dropped_file_keeps_the_airdrop_card_until_it_finishes() {
         let mut i = island();
         i.cfg.auto_expand = false;
         with_phone(&mut i);
@@ -3405,8 +3909,371 @@ mod tests {
         assert!(matches!(i.take_cmds().as_slice(), [Cmd::SendFiles(_)]));
         let n = i.model.feed(&Event::TransferStarted { id: "s".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "a.txt".into(), size: 10, incoming: false });
         i.notices(n);
-        assert_eq!(i.want, View::Transfer("s".into()));
+        run(&mut i, 0.6);
+        assert_eq!(i.want, View::Drop);
+        assert!(i.ui.air_files.contains_key("s"));
         assert!(i.is_open());
+        i.model.feed(&Event::TransferProgress { id: "s".into(), done: 10, total: 10, bytes_per_sec: 10 });
+        run(&mut i, 0.6);
+        assert_eq!(i.ui.air.stage, airdrop::Stage::Send, "wait for the receiver, even with all bytes sent");
+        let n = i.model.feed(&Event::TransferFinished { id: "s".into(), ok: true, code: String::new(), message: String::new(), path: String::new() });
+        i.notices(n);
+        run(&mut i, 0.5);
+        assert_eq!(i.ui.air.stage, airdrop::Stage::Done);
+        run(&mut i, 3.0);
+        assert!(!i.ui.air.active());
+    }
+
+    #[test]
+    fn airdrop_waits_for_every_file_and_leaves_incoming_previews_alone() {
+        let mut i = island();
+        with_phone(&mut i);
+        i.set_agent(Agent::Claude, Work::Working);
+        i.drag(Drag::Enter);
+        i.dropped(vec![PathBuf::from("a.txt"), PathBuf::from("b.txt")]);
+        for (id, name) in [("a", "a.txt"), ("b", "b.txt")] {
+            let n = i.model.feed(&Event::TransferStarted { id: id.into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: name.into(), size: 10, incoming: false });
+            i.notices(n);
+        }
+        let n = i.model.feed(&Event::TransferFinished { id: "a".into(), ok: true, code: String::new(), message: String::new(), path: String::new() });
+        i.notices(n);
+        run(&mut i, 1.0);
+        assert_eq!(i.ui.air.stage, airdrop::Stage::Send, "the second file is still sending");
+        i.close();
+        run(&mut i, 1.0);
+        assert!(i.rest_size().0 >= LIVE.0, "the agent's mini notch must not clip the transfer ring");
+        let n = i.model.feed(&Event::TransferStarted { id: "in".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "photo.jpg".into(), size: 10, incoming: true });
+        i.notices(n);
+        run(&mut i, 0.6);
+        assert_eq!(i.want, View::Transfer("in".into()));
+        assert_eq!(i.ui.air_files.len(), 2);
+    }
+
+    #[test]
+    fn a_drag_or_drop_during_a_send_joins_it_instead_of_resetting_it() {
+        let mut i = island();
+        with_phone(&mut i);
+        i.drag(Drag::Enter);
+        i.dropped(vec![PathBuf::from("a.txt")]);
+        let n = i.model.feed(&Event::TransferStarted { id: "a".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "a.txt".into(), size: 10, incoming: false });
+        i.notices(n);
+        run(&mut i, 0.6);
+        let land = i.ui.land;
+        i.drag(Drag::Enter);
+        assert_eq!(i.ui.land, land, "a drag over a send keeps its landing");
+        i.dropped(vec![PathBuf::from("b.txt")]);
+        assert_eq!(i.ui.air_files.len(), 1, "the first file is still followed");
+        let n = i.model.feed(&Event::TransferStarted { id: "b".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "b.txt".into(), size: 10, incoming: false });
+        i.notices(n);
+        let n = i.model.feed(&Event::TransferFinished { id: "a".into(), ok: true, code: String::new(), message: String::new(), path: String::new() });
+        i.notices(n);
+        run(&mut i, 1.0);
+        assert_eq!(i.ui.air.stage, airdrop::Stage::Send, "waits for the joined file");
+    }
+
+    #[test]
+    fn a_failed_drop_does_not_leave_a_permanent_progress_pill() {
+        let mut i = island();
+        with_phone(&mut i);
+        i.drag(Drag::Enter);
+        i.dropped(vec![PathBuf::from("missing.txt")]);
+        i.flash(false, "missing.txt".into(), "File not found".into());
+        run(&mut i, 6.0);
+        assert!(!i.ui.air.active());
+        assert!(i.ui.air_pending.is_empty());
+    }
+
+    #[test]
+    fn a_working_agent_lives_in_the_closed_island_yields_to_a_call_and_says_when_it_finishes() {
+        let mut i = island();
+        with_phone(&mut i);
+        i.set_agent(Agent::Claude, Work::Working);
+        assert_eq!(i.live(), Some(Live::Agent(Agent::Claude)));
+        let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":true,"ringing":false,"name":"Ana"}) });
+        i.notices(n);
+        assert_eq!(i.live(), Some(Live::Call), "a call outranks the agent");
+        let n = i.model.feed(&Event::Message { peer_id: "p".into(), kind: "pb.x.call".into(), body: json!({"active":false}) });
+        i.notices(n);
+        run(&mut i, 3.0);
+        assert_eq!(i.live(), Some(Live::Agent(Agent::Claude)));
+        i.set_agent(Agent::Claude, Work::Idle);
+        assert_eq!(i.live(), Some(Live::AgentDone(Agent::Claude)));
+        run(&mut i, 4.5);
+        assert_eq!(i.live(), None);
+        // Drawn without panicking, closed (the creature and the Codex chip).
+        i.set_rest(true);
+        for a in [Agent::Claude, Agent::Codex] {
+            i.set_agent(a, Work::Working);
+            run(&mut i, 0.5);
+            let mut cv = i.new_canvas(1.5);
+            i.render(&mut cv);
+        }
+        i.cfg.modules.agents = false;
+        assert_eq!(i.live(), None);
+    }
+
+    #[test]
+    fn the_agent_line_steps_back_to_a_notch_hover_brings_it_back_and_the_switch_hides_it() {
+        let mut i = island();
+        i.set_rest(true);
+        i.set_agent(Agent::Claude, Work::Working);
+        run(&mut i, 2.0);
+        assert!(!i.agent_mini());
+        assert_eq!((i.w.value.round(), i.h.value.round()), (LIVE.0, LIVE.1), "the full line first");
+        run(&mut i, 5.0);
+        assert!(i.agent_mini());
+        assert_eq!((i.w.value.round(), i.h.value.round()), (MINI.0, MINI.1), "then just the creature");
+        // The pointer on the notch: the line comes back, and goes again a moment after it leaves.
+        i.set_pointer(Some((CANVAS_W / 2.0, 10.0)));
+        run(&mut i, 0.1);
+        assert!(!i.agent_mini());
+        i.set_pointer(None);
+        run(&mut i, 3.0);
+        assert!(i.agent_mini());
+        // Finished: the full line with the celebration, then nothing.
+        i.set_agent(Agent::Claude, Work::Idle);
+        assert_eq!(i.live(), Some(Live::AgentDone(Agent::Claude)));
+        assert!(!i.agent_mini());
+        assert!(i.agent_look().0 < 0.1, "the celebration starts now");
+        // Its own switch: off, nothing shows; the computer's downloads still work.
+        i.set_agent(Agent::Claude, Work::Working);
+        i.cfg.modules.agents = false;
+        assert_eq!(i.live(), None);
+        i.cfg.modules.pc = true;
+        let id = "pc:/dl/c.zip.crdownload".to_string();
+        let n = i.model.feed(&Event::TransferStarted { id: id.clone(), peer_id: String::new(), peer_name: String::new(), name: "c.zip".into(), size: 0, incoming: true });
+        i.notices(n);
+        assert_eq!(i.want, View::Transfer(id));
+    }
+
+    /// Frames of the closed island with the agent, for looking at: `cargo test -- --ignored agent_frames`.
+    #[test]
+    #[ignore]
+    fn agent_frames() {
+        let dir = std::path::PathBuf::from(std::env::var("FRAMES_DIR").expect("FRAMES_DIR"));
+        std::fs::create_dir_all(&dir).unwrap();
+        // With the animation on, so the fold into the minimal notch and the way out can be looked at.
+        let mut i = Island::new(IslandConfig::default());
+        i.set_rest(true);
+        let mut shots: Vec<(String, Canvas)> = Vec::new();
+        let mut snap = |i: &mut Island, name: &str| {
+            let mut cv = i.new_canvas(2.0);
+            i.render(&mut cv);
+            shots.push((name.to_string(), cv));
+        };
+        i.set_agent(Agent::Claude, Work::Working);
+        for (n, secs) in [("pop0", 0.08), ("pop1", 0.1), ("pop2", 0.12)] {
+            run(&mut i, secs);
+            snap(&mut i, n);
+        }
+        for n in 0..4 {
+            run(&mut i, 0.17);
+            snap(&mut i, &format!("work{n}"));
+        }
+        // t = 3.7 s: the blink; 5.6 s: the glance.
+        let t = i.agent_look().0;
+        run(&mut i, 3.72 - t);
+        snap(&mut i, "blink");
+        let t = i.agent_look().0;
+        run(&mut i, 5.7 - t);
+        snap(&mut i, "glance");
+        let t = i.agent_look().0;
+        run(&mut i, 5.98 - t);
+        for n in 0..6 {
+            run(&mut i, 0.07);
+            snap(&mut i, &format!("fold{n}"));
+        }
+        run(&mut i, 1.0);
+        snap(&mut i, "mini");
+        i.set_agent(Agent::Claude, Work::Idle);
+        for (n, secs) in [("done0", 0.15), ("done1", 0.15), ("done2", 0.3), ("done3", 0.4)] {
+            run(&mut i, secs);
+            snap(&mut i, n);
+        }
+        // The celebration ends and the notch shrinks back to rest.
+        run(&mut i, 2.9);
+        for n in 0..6 {
+            run(&mut i, 0.07);
+            snap(&mut i, &format!("away{n}"));
+        }
+        i.set_agent(Agent::Codex, Work::Working);
+        run(&mut i, 0.5);
+        snap(&mut i, "codex");
+        for (name, cv) in &shots {
+            save_crop(cv, &dir.join(format!("{name}.png")), 340.0, 56.0);
+        }
+    }
+
+    /// The top-centre `w` x `h` logical units of a 2x canvas, over a grey desktop, doubled again, as a PNG.
+    fn save_crop(cv: &Canvas, path: &std::path::Path, w: f32, h: f32) {
+        let (z, x0, w, h) = (2usize, (CANVAS_W / 2.0 - w / 2.0) as usize * 2, w as usize * 2, h as usize * 2);
+        let mut out = vec![0u8; w * z * h * z * 3];
+        for y in 0..h * z {
+            for x in 0..w * z {
+                let o = ((y / z) * cv.width_px() as usize + x0 + x / z) * 4;
+                let p = &cv.pm.data()[o..o + 4];
+                for c in 0..3 {
+                    out[(y * w * z + x) * 3 + c] = (p[c] as u32 + 90 * (255 - p[3] as u32) / 255) as u8;
+                }
+            }
+        }
+        let mut enc = png::Encoder::new(std::fs::File::create(path).unwrap(), (w * z) as u32, (h * z) as u32);
+        enc.set_color(png::ColorType::Rgb);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&out).unwrap();
+    }
+
+    /// Received-file cards for looking at: `cargo test -- --ignored card_frames`.
+    #[test]
+    #[ignore]
+    fn card_frames() {
+        let dir = std::path::PathBuf::from(std::env::var("FRAMES_DIR").expect("FRAMES_DIR"));
+        std::fs::create_dir_all(&dir).unwrap();
+        // A synthetic picture: a diagonal gradient with a bright disc.
+        let img = {
+            let (w, h) = (160u32, 90u32);
+            let mut px = Vec::new();
+            for y in 0..h {
+                for x in 0..w {
+                    let d = ((x as f32 - 80.0).powi(2) + (y as f32 - 45.0).powi(2)).sqrt();
+                    px.extend(if d < 22.0 { [250, 220, 90, 255] } else { [(x * 255 / w) as u8, 80, (y * 255 / h) as u8, 255] });
+                }
+            }
+            Image::from_rgba(w, h, px).unwrap()
+        };
+        for (name, id, file, thumb) in [
+            ("card_photo", "a", "C:/Descargas/PXL_1.jpg", true),
+            ("card_video", "b", "C:/Descargas/clip.mp4", true),
+            ("card_placeholder", "c", "C:/Descargas/informe.pdf", false),
+            ("card_unknown", "e", "C:/Descargas/datos.bin", false),
+            ("card_download", "pc:/dl/setup.exe", "C:/Descargas/setup.exe", false),
+        ] {
+            let mut i = island();
+            with_phone(&mut i);
+            let file_name = file.rsplit('/').next().unwrap();
+            let n = i.model.feed(&Event::TransferStarted { id: id.into(), peer_id: "p".into(), peer_name: "Pixel".into(), name: file_name.into(), size: 3_000_000, incoming: true });
+            i.notices(n);
+            let n = i.model.feed(&Event::TransferFinished { id: id.into(), ok: true, code: String::new(), message: String::new(), path: file.into() });
+            i.notices(n);
+            if thumb {
+                i.set_thumb(id, Some(img.clone()));
+            }
+            run(&mut i, 1.0);
+            let mut cv = i.new_canvas(2.0);
+            i.render(&mut cv);
+            save_crop(&cv, &dir.join(format!("{name}.png")), 470.0, 170.0);
+        }
+    }
+
+    /// The send animation for looking at: `cargo test -- --ignored drop_frames`.
+    #[test]
+    #[ignore]
+    fn drop_frames() {
+        let dir = std::path::PathBuf::from(std::env::var("FRAMES_DIR").expect("FRAMES_DIR"));
+        std::fs::create_dir_all(&dir).unwrap();
+        // With the animation on (the tests' island has it off).
+        let mut i = Island::new(IslandConfig::default());
+        with_phone(&mut i);
+        let snap = |i: &mut Island, name: &str| {
+            let mut cv = i.new_canvas(2.0);
+            i.render(&mut cv);
+            save_crop(&cv, &dir.join(format!("drop_{name}.png")), 470.0, 190.0);
+        };
+        i.drag(Drag::Enter);
+        for (n, s) in [("hover0", 0.6), ("hover1", 0.5)] {
+            run(&mut i, s);
+            snap(&mut i, n);
+        }
+        i.dropped(vec![PathBuf::from("foto.jpg")]);
+        run(&mut i, 0.2);
+        snap(&mut i, "fly");
+        let n = i.model.feed(&Event::TransferStarted { id: "q".into(), peer_id: "p".into(), peer_name: "Pixel 9a".into(), name: "foto.jpg".into(), size: 100, incoming: false });
+        i.notices(n);
+        let n = i.model.feed(&Event::TransferProgress { id: "q".into(), done: 40, total: 100, bytes_per_sec: 1 });
+        i.notices(n);
+        run(&mut i, 1.0);
+        snap(&mut i, "send40");
+        let n = i.model.feed(&Event::TransferFinished { id: "q".into(), ok: true, code: String::new(), message: String::new(), path: String::new() });
+        i.notices(n);
+        run(&mut i, 0.5);
+        snap(&mut i, "done");
+    }
+
+    #[test]
+    fn a_pc_download_shows_its_card_without_a_size_and_then_its_result() {
+        let mut i = island();
+        let id = "pc:/dl/a.zip.crdownload".to_string();
+        let n = i.model.feed(&Event::TransferStarted { id: id.clone(), peer_id: String::new(), peer_name: String::new(), name: "a.zip".into(), size: 0, incoming: true });
+        i.notices(n);
+        assert_eq!(i.want, View::Transfer(id.clone()));
+        let n = i.model.feed(&Event::TransferProgress { id: id.clone(), done: 5_000_000, total: 0, bytes_per_sec: 1_000_000 });
+        i.notices(n);
+        let mut cv = i.new_canvas(1.0);
+        run(&mut i, 0.6);
+        i.render(&mut cv);
+        // The card goes after a few seconds (a long download must not hold the island), the result brings it back.
+        run(&mut i, 8.0);
+        assert!(!i.is_open());
+        let n = i.model.feed(&Event::TransferFinished { id: id.clone(), ok: true, code: String::new(), message: String::new(), path: "/dl/a.zip".into() });
+        i.notices(n);
+        // The card had closed (its view is still the last one): only a real reopening counts.
+        assert!(i.is_open(), "the result brings the island back");
+        assert_eq!(i.want, View::Transfer(id.clone()));
+        run(&mut i, 0.6);
+        i.render(&mut cv);
+        assert!(i.hits.iter().any(|h| matches!(h.act, Act::OpenFile(_))));
+        assert!(!i.hits.iter().any(|h| matches!(h.act, Act::Discard(_))), "a download is never deleted from the island");
+        assert!(i.take_cmds().contains(&Cmd::Thumb { id, path: "/dl/a.zip".into() }), "a finished download gets a preview too");
+    }
+
+    #[test]
+    fn a_new_download_does_not_jump_over_the_page_in_use() {
+        let mut i = island();
+        i.open(View::Page(Page::Home), Reason::Hover);
+        run(&mut i, 0.2);
+        let id = "pc:/dl/b.zip.crdownload".to_string();
+        let n = i.model.feed(&Event::TransferStarted { id, peer_id: String::new(), peer_name: String::new(), name: "b.zip".into(), size: 0, incoming: true });
+        i.notices(n);
+        assert_eq!(i.want, View::Page(Page::Home));
+    }
+
+    #[test]
+    fn without_a_phone_the_controls_are_this_computers_and_a_switch_picks_with_one() {
+        let mut i = island();
+        assert!(i.controls_pc());
+        i.act(Act::Pc("mic"));
+        i.act(Act::Pc("mic"));
+        i.act(Act::Pc("lock"));
+        i.act(Act::Pc("shot"));
+        assert_eq!(i.take_cmds(), vec![Cmd::PcMute { mic: true, on: true }, Cmd::PcMute { mic: true, on: false }, Cmd::PcPower("lock"), Cmd::PcShot]);
+        i.open(View::Page(Page::Controls), Reason::Key);
+        run(&mut i, 0.8);
+        let mut cv = i.new_canvas(1.0);
+        i.render(&mut cv);
+        assert!(i.hits.iter().any(|h| h.act == Act::Pc("sleep")) && i.hits.iter().any(|h| h.act == Act::PcVol));
+        assert_eq!(i.take_cmds().iter().filter(|c| **c == Cmd::AskPcVolume).count(), 1, "asked once per visit");
+        with_phone(&mut i);
+        assert!(!i.controls_pc(), "a phone connected: its controls, unless the switch says otherwise");
+        i.act(Act::ControlsSource);
+        assert!(i.controls_pc());
+        i.cfg.modules.pc = false;
+        assert!(!i.controls_pc(), "module off: as before");
+    }
+
+    #[test]
+    fn the_landing_plays_with_animations_off_and_holds_until_the_card_arrives() {
+        let mut i = island();
+        with_phone(&mut i);
+        i.set_zone(true, true, 0.3);
+        i.dropped(vec![PathBuf::from("a.txt")]);
+        run(&mut i, 0.2);
+        assert!(i.ui.land.is_some_and(|t| t > 0.0 && t < 1.0));
+        // No transfer yet: it holds its last frame instead of snapping back to "Drop to send".
+        run(&mut i, 1.0);
+        assert_eq!(i.ui.land, Some(1.0));
+        // The send never started: it does not say "sending" forever.
+        run(&mut i, 3.0);
+        assert!(i.ui.land.is_none());
     }
 
     #[test]
@@ -3725,7 +4592,6 @@ mod tests {
         let done = i.model.feed(&Event::TransferFinished { id: "x".into(), ok: true, code: String::new(), message: String::new(), path: "C:/Descargas/PXL_1.jpg".into() });
         i.notices(done);
         assert!(i.take_cmds().contains(&Cmd::Thumb { id: "x".into(), path: "C:/Descargas/PXL_1.jpg".into() }));
-        assert_eq!(i.size_of(&View::Transfer("x".into())), (440.0, 120.0), "the choices come at once, the preview when decoded");
         i.set_thumb("x", Some(Image { w: 4, h: 3, data: vec![255; 48] }));
         let (w, h) = i.size_of(&View::Transfer("x".into()));
         assert!(w * 1.08 <= CANVAS_W && h * 1.08 + 30.0 <= CANVAS_H && h > 92.0);
@@ -3745,12 +4611,13 @@ mod tests {
         i.notices(started);
         let done = i.model.feed(&Event::TransferFinished { id: "d".into(), ok: true, code: String::new(), message: String::new(), path: "C:/Descargas/informe.pdf".into() });
         i.notices(done);
-        assert!(!i.take_cmds().iter().any(|c| matches!(c, Cmd::Thumb { .. })), "only photos get decoded");
-        assert_eq!(i.size_of(&View::Transfer("d".into())), (440.0, 120.0));
+        assert!(i.take_cmds().contains(&Cmd::Thumb { id: "d".into(), path: "C:/Descargas/informe.pdf".into() }), "every file asks for a preview");
+        assert_eq!(i.size_of(&View::Transfer("d".into())), (440.0, 156.0), "the same card with or without a preview");
         run(&mut i, 0.6);
         let mut cv = i.new_canvas(1.0);
         i.render(&mut cv);
-        assert!(i.hits.iter().any(|h| h.act == Act::Discard("d".into())), "the choices are drawn");
+        let acts: Vec<_> = i.hits.iter().map(|h| h.act.clone()).collect();
+        assert!(acts.contains(&Act::OpenFile("d".into())) && acts.contains(&Act::ShowFile("d".into())) && acts.contains(&Act::Discard("d".into())), "the placeholder card keeps its three buttons");
         run(&mut i, 2.5);
         assert!(i.is_open(), "it waits for a decision");
         i.act(Act::OpenFile("d".into()));

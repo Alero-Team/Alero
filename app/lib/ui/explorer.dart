@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'qollqe_motion.dart';
 
 import 'package:flutter/material.dart' hide Icon, Text;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../fs_client.dart';
@@ -183,6 +186,91 @@ bool _media(FsClient fs, FsEntry e) =>
         fs.root == 'images' ||
         fs.root == 'video');
 
+// A child InkWell wins the tap arena, so a parent onDoubleTap never fires: clicks are counted here instead.
+String? _lastClick;
+DateTime _lastClickAt = DateTime(0);
+Timer? _pendingToggle;
+const _doubleClick = Duration(milliseconds: 350);
+
+/// Click on an entry: folders open; a double click on a file previews it and changes nothing else. Selecting
+/// starts with a long press ([_pressSelect]); once something is selected a single click toggles a file, but only
+/// after the double-click window, so a double click never selects.
+void _click(BuildContext context, FsClient fs, FsEntry e) {
+  if (e.dir) return fs.enter(e);
+  final now = DateTime.now();
+  final twice = _lastClick == e.id && now.difference(_lastClickAt) < _doubleClick;
+  _lastClick = twice ? null : e.id;
+  _lastClickAt = now;
+  _pendingToggle?.cancel();
+  if (twice) {
+    _peek(context, fs, e);
+    return;
+  }
+  if (fs.selected.isEmpty) return;
+  _pendingToggle = Timer(_doubleClick, () {
+    if (context.mounted) fs.toggle(e);
+  });
+}
+
+/// Tiles on screen and the entry each shows (an element can be reused for another entry: rebuilt, it updates).
+final _tiles = <BuildContext, FsEntry>{};
+
+/// Long press: the file is selected; keep pressing and move to add every file passed over.
+void _pressSelect(FsClient fs, FsEntry e) {
+  _pendingToggle?.cancel();
+  if (!e.dir && !fs.selected.contains(e.id)) fs.toggle(e);
+}
+
+void _dragSelect(FsClient fs, Offset at) {
+  _tiles.removeWhere((c, _) => !c.mounted);
+  for (final MapEntry(key: c, value: e) in _tiles.entries) {
+    if (e.dir || fs.selected.contains(e.id)) continue;
+    final box = c.findRenderObject();
+    if (box is RenderBox && box.hasSize && (box.localToGlobal(Offset.zero) & box.size).contains(at)) {
+      fs.toggle(e);
+    }
+  }
+}
+
+/// "Seleccionar todo" / "Deseleccionar todo" for the selection bar.
+Widget _selectAllAction(FsClient fs) {
+  final all = fs.entries.where((e) => !e.dir).every((e) => fs.selected.contains(e.id));
+  return Padding(
+    padding: const EdgeInsets.only(right: Gap.s),
+    child: OutlinedButton.icon(
+      onPressed: all ? fs.clearSelection : fs.selectAll,
+      icon: Icon(
+        all ? FluentIcons.dismiss_24_regular : FluentIcons.checkmark_circle_24_regular,
+        size: 18,
+      ),
+      label: Text(all ? 'Deseleccionar todo' : 'Seleccionar todo'),
+    ),
+  );
+}
+
+/// Escape clears the selection from anywhere in the screen (no text field needs the focus first).
+Widget _escClears(FsClient fs, Widget child) => CallbackShortcuts(
+  bindings: {
+    const SingleActivator(LogicalKeyboardKey.escape): () {
+      if (fs.selected.isNotEmpty) fs.clearSelection();
+    },
+  },
+  child: Focus(autofocus: true, child: child),
+);
+
+/// "Vista previa" for the selection bar: only when exactly one file is selected.
+Widget _previewAction(BuildContext context, FsClient fs, List<FsEntry> chosen) =>
+    chosen.length == 1 && !chosen.first.dir
+    ? Padding(
+        padding: const EdgeInsets.only(right: Gap.s),
+        child: FilledButton.tonalIcon(
+          onPressed: () => _peek(context, fs, chosen.first),
+          icon: const Icon(FluentIcons.eye_24_regular, size: 18),
+          label: const Text('Vista previa'),
+        ),
+      )
+    : const SizedBox.shrink();
+
 /// Double click on a file: look at it first (photos and videos big, the rest by its icon and details), then choose.
 Future<void> _peek(BuildContext context, FsClient fs, FsEntry e) async {
   final media = _media(fs, e);
@@ -317,7 +405,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
     builder: (context, _) {
       final t = Theme.of(context).textTheme;
       final phone = _phone;
-      return SafeArea(
+      return _escClears(fs, SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(Gap.xxl, Gap.xl, Gap.xxl, Gap.xl),
           child: Column(
@@ -389,7 +477,7 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             ],
           ),
         ),
-      );
+      ));
     },
   );
 
@@ -403,6 +491,8 @@ class _ExplorerScreenState extends State<ExplorerScreen> {
             : Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _selectAllAction(fs),
+                  _previewAction(context, fs, chosen),
                   Padding(
                     padding: const EdgeInsets.only(right: Gap.s),
                     child: FilledButton.icon(
@@ -826,18 +916,19 @@ class _GridTile extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final sel = fs.selected.contains(e.id);
+    _tiles[context] = e;
     return Semantics(
       button: true,
       selected: sel,
       label: '${e.name}${e.dir ? ', carpeta' : ''}',
-      // The press tints and shrinks; double tap, right click and long press stay on the outer detector.
+      // The press tints and shrinks; right click and long press stay on the outer detector.
       child: GestureDetector(
-        onDoubleTap: e.dir ? null : () => _peek(context, fs, e),
         onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
-        onLongPressStart: (d) => _menu(context, fs, e, d.globalPosition),
+        onLongPressStart: (_) => _pressSelect(fs, e),
+        onLongPressMoveUpdate: (d) => _dragSelect(fs, d.globalPosition),
         child: QollqePress(
           radius: Radii.tile,
-          onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
+          onTap: () => _click(context, fs, e),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             decoration: BoxDecoration(
@@ -922,17 +1013,19 @@ class _Row extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final sel = fs.selected.contains(e.id);
+    _tiles[context] = e;
     return Material(
       color: sel
           ? s.primaryContainer.withValues(alpha: 0.4)
           : Colors.transparent,
       borderRadius: BorderRadius.circular(Radii.tile),
       child: GestureDetector(
-        onDoubleTap: e.dir ? null : () => _peek(context, fs, e),
         onSecondaryTapUp: (d) => _menu(context, fs, e, d.globalPosition),
+        onLongPressStart: (_) => _pressSelect(fs, e),
+        onLongPressMoveUpdate: (d) => _dragSelect(fs, d.globalPosition),
         child: QollqePress(
           radius: Radii.tile,
-          onTap: () => e.dir ? fs.enter(e) : fs.toggle(e),
+          onTap: () => _click(context, fs, e),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: Gap.m, vertical: 6),
             child: Row(
@@ -1044,7 +1137,7 @@ class _ScrolledState extends State<_Scrolled> {
 }
 
 /// "Fotos": the phone's photos (or videos), newest first, as a big grid. Same session, thumbnails and actions
-/// as the explorer; click selects, double click previews it, right click for more.
+/// as the explorer; long press (and drag) selects, double click previews it, right click for more.
 class PhotosScreen extends StatefulWidget {
   const PhotosScreen(this.hub, {super.key});
   final Hub hub;
@@ -1093,7 +1186,7 @@ class _PhotosScreenState extends State<PhotosScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => PhonePage(
+  Widget build(BuildContext context) => _escClears(fs, PhonePage(
     hub: hub,
     title: 'Fotos',
     actions: (phone) => [
@@ -1112,6 +1205,8 @@ class _PhotosScreenState extends State<PhotosScreen> {
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          _selectAllAction(fs),
+                          _previewAction(context, fs, chosen),
                           FilledButton.icon(
                             onPressed: () {
                               fs.download(chosen);
@@ -1251,5 +1346,5 @@ class _PhotosScreenState extends State<PhotosScreen> {
         );
       },
     ),
-  );
+  ));
 }

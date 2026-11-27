@@ -465,14 +465,6 @@ impl Canvas {
         self.pm.fill_path(path, &paint, FillRule::Winding, tf, mask);
     }
 
-    /// A dashed outline whose dashes can travel (`phase`, logical units): a light running round the island.
-    pub fn stroke_dashed(&mut self, path: &Path, c: Color, width: f32, dash: (f32, f32), phase: f32) {
-        let mut stroke = Stroke { width, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Stroke::default() };
-        stroke.dash = tiny_skia::StrokeDash::new(vec![dash.0, dash.1], phase);
-        let tf = self.tf();
-        self.pm.stroke_path(path, &Self::paint(c), &stroke, tf, None);
-    }
-
     /// A circle outline.
     pub fn ring(&mut self, cx: f32, cy: f32, rad: f32, c: Color, width: f32, mask: Option<&Mask>) {
         if let Some(p) = PathBuilder::from_circle(cx, cy, rad.max(0.1)) {

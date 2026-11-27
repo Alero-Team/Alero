@@ -1,5 +1,33 @@
 # Cambios
 
+## 3.0 (3.0.0) — 2026-11-27
+
+The first stable release of Alero. Install the Android APK and the Windows or Linux package from this version together.
+
+### Sending files
+
+- **One animation everywhere:** the island, the computer app and the phone draw the same send. The receiving device fills like a glass as the bytes arrive and a tick pops on its screen at the end. A file dragged toward the closed island shows the same phone, small.
+- Files dropped while a send is going join it instead of restarting it, and the card waits for all of them.
+- **Android:** sharing from other apps opens the picker at once, refreshes the connected computers and keeps the send confirmation. Cloud files are read once, off the main thread and without filling the storage; files that cannot be read say so.
+
+### Alero Island (Windows and Linux)
+
+- **Claude Code and Codex:** shown as working from their own session logs instead of CPU use, so opening them no longer says "working" or "finished" at random, and closing one mid-reply does not count as finished. A minimal mode with its own switch keeps only the creature, which hops back into the notch when it leaves.
+- Previews for any file, and the computer's own controls and downloads when no phone is connected.
+- The empty clipboard hint sits centred under its button.
+
+### App
+
+- **File explorer:** a double-click only previews. Select with a long press and drag across more files; Escape clears the selection, and Select all is in the selection bar.
+- **Devices:** Connect, Disconnect and Delete sit on each device's row, all the same size.
+- The selected option of every segmented control (resolution, quality, frame rate, orientation) is clearly marked.
+- **Start-up:** the logo breathes calmly while Alero loads. On Android, motion is calmer (25 % slower).
+- Fixes to page transitions, the conversation counter and opening previews from the explorer.
+
+### Security
+
+- Thumbnails of files received from the phone no longer go through third-party Windows preview handlers (only Explorer's own cache), at most two at a time.
+
 ## Beta 2.6.3 (2.6.3) — 2026-11-25
 
 Install the Android APK and the Windows or Linux package from this version together.

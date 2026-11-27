@@ -593,7 +593,7 @@ fn short_app(app: &str) -> String {
 }
 
 /// Straight RGBA as a PNG, for the phone.
-fn png_of(w: u32, h: u32, rgba: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn png_of(w: u32, h: u32, rgba: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     let mut enc = png::Encoder::new(&mut out, w, h);
     enc.set_color(png::ColorType::Rgba);

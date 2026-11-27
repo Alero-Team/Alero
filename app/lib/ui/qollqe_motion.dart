@@ -63,34 +63,6 @@ class QollqeMotion {
     child: Text(text, key: ValueKey(text), style: style),
   );
 
-  /// Qollqe tab changes: 98%-to-100% fade and a reversed leaving view.
-  static Widget tab(
-    Widget child,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-  ) {
-    final incoming = animation.drive(CurveTween(curve: Curves.easeOutCubic));
-    final leaving = secondaryAnimation.drive(
-      CurveTween(curve: Curves.easeOutCubic),
-    );
-    return IgnorePointer(
-      ignoring: secondaryAnimation.value > 0,
-      child: FadeTransition(
-        opacity: incoming,
-        child: FadeTransition(
-          opacity: ReverseAnimation(leaving),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: .98, end: 1).animate(incoming),
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 1, end: .98).animate(leaving),
-              child: RepaintBoundary(child: child),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Qollqe card entrance: initial rows reveal with +24 px and 40 ms stagger.
   static Widget reveal(BuildContext context, int index, Widget child) {
     // Inside a ScrollReveal the scroll entrance already moves it; a second slide would double the motion.
@@ -126,9 +98,13 @@ class ScrollReveal extends StatefulWidget {
     required this.child,
     this.topInset = 64,
     this.bottomInset = 72,
+    this.replay = true,
   });
   final Widget child;
   final double topInset, bottomInset;
+
+  /// Plays again each time it scrolls back into view; off, it plays once (the computer: no blank gaps while scrolling).
+  final bool replay;
 
   /// Whether [context] is inside a ScrollReveal, so mount entrances can skip their own motion.
   static bool inside(BuildContext context) =>
@@ -208,6 +184,11 @@ class _ScrollRevealState extends State<ScrollReveal>
         top + box.size.height > widget.topInset;
     if (seen && !_shown) {
       _shown = true;
+      // A resize or menu fold brought it in: not new content, so no motion (as [Entrance]).
+      if (Entrance.quiet) {
+        _c.value = 1;
+        return;
+      }
       // forward = the content moves down, so the user is scrolling back up and this enters from the top.
       _dir = _pos?.userScrollDirection == ScrollDirection.forward ? -1 : 1;
       final delay = _slot() * _stagger;
@@ -220,7 +201,7 @@ class _ScrollRevealState extends State<ScrollReveal>
           if (mounted) _c.forward();
         });
       }
-    } else if (!seen && _shown && !_c.isAnimating && !(_wait?.isActive ?? false)) {
+    } else if (widget.replay && !seen && _shown && !_c.isAnimating && !(_wait?.isActive ?? false)) {
       // Gone off screen: reset, so it plays again when it comes back.
       _shown = false;
       _c.value = 0;

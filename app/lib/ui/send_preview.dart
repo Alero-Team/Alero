@@ -3,12 +3,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide Icon, Text;
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import '../hub.dart';
 import '../native.dart';
-import 'expressive.dart' show Spring, motion, showAleroDialog;
-import 'icon.dart';
+import 'expressive.dart' show motion, showAleroDialog;
 import 'qollqe_motion.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -450,9 +448,10 @@ class _Arrived extends StatelessWidget {
   }
 }
 
-/// The send, drawn: this device on the left, the other on the right, and small dots travelling the line
-/// between them while bytes move. The line fills with the progress; on arrival the other device becomes a
-/// tick that lands with a spring. Still (line and tick only) when the system asks for reduced motion.
+/// The send, drawn as Alero Island draws it: the device that receives (the phone, or the computer) fills like
+/// a glass as the bytes arrive, its surface rippling; on arrival a tick (or a cross) pops on the full screen.
+/// Before the first byte an arrow bobs on the empty screen. Still (no ripple, bob or hop) when the system asks
+/// for reduced motion. The island's card (daemon/src/island/airdrop.rs) is the same drawing: keep them in step.
 class SendFlight extends StatefulWidget {
   const SendFlight({
     super.key,
@@ -462,7 +461,7 @@ class SendFlight extends StatefulWidget {
     this.ok = true,
   });
 
-  /// The files come to this device: the other one is drawn on the left.
+  /// The files come to this device (it is the one drawn); otherwise the other device is.
   final bool incoming;
 
   /// With [done]: it arrived (a tick) or it did not (a cross).
@@ -476,12 +475,17 @@ class SendFlight extends StatefulWidget {
   State<SendFlight> createState() => _SendFlightState();
 }
 
-class _SendFlightState extends State<SendFlight>
-    with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(
+class _SendFlightState extends State<SendFlight> with TickerProviderStateMixin {
+  late final _wave = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
   );
+  late final _pop = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+  );
+
+  bool get _still => MediaQuery.of(context).disableAnimations;
 
   @override
   void didChangeDependencies() {
@@ -496,142 +500,186 @@ class _SendFlightState extends State<SendFlight>
   }
 
   void _sync() {
-    if (widget.done || MediaQuery.of(context).disableAnimations) {
-      _c.stop();
-    } else if (!_c.isAnimating) {
-      _c.repeat();
+    if (widget.done) {
+      _wave.stop();
+      if (_still) {
+        _pop.value = 1;
+      } else if (_pop.value == 0 && !_pop.isAnimating) {
+        _pop.forward();
+      }
+      return;
+    }
+    _pop.value = 0;
+    if (_still) {
+      _wave.stop();
+    } else if (!_wave.isAnimating) {
+      _wave.repeat();
     }
   }
 
   @override
   void dispose() {
-    _c.dispose();
+    _wave.dispose();
+    _pop.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
-    final here = isPhone
-        ? FluentIcons.phone_24_regular
-        : FluentIcons.desktop_24_regular;
-    final there = isPhone
-        ? FluentIcons.desktop_24_regular
-        : FluentIcons.phone_24_regular;
-    final (from, to) = widget.incoming ? (there, here) : (here, there);
-    Widget device(IconData icon, {bool lit = false}) => AnimatedContainer(
-      duration: motion(context, const Duration(milliseconds: 300)),
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: !lit
-            ? s.secondaryContainer
-            : widget.ok
-            ? s.primary
-            : s.error,
-        shape: BoxShape.circle,
-      ),
-      child: Icon(
-        icon,
-        size: 22,
-        color: !lit
-            ? s.onSecondaryContainer
-            : widget.ok
-            ? s.onPrimary
-            : s.onError,
-      ),
-    );
+    // Sending from the computer or receiving on the phone: the phone fills; otherwise the computer does.
+    final phone = widget.incoming == isPhone;
     return Semantics(
       label: widget.done
           ? 'Transferencia terminada'
           : widget.incoming
           ? 'Recibiendo'
           : 'Enviando',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: Gap.s),
-        child: Row(
-          children: [
-            device(from),
-            Expanded(
-              child: SizedBox(
-                height: 44,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(end: widget.progress.clamp(0, 1).toDouble()),
-                  duration: motion(context, const Duration(milliseconds: 450)),
-                  curve: Curves.easeOutCubic,
-                  builder: (_, v, _) => RepaintBoundary(
-                    child: CustomPaint(
-                      painter: _Flight(_c, v, s.primary, s.outlineVariant),
-                    ),
-                  ),
-                ),
+      child: SizedBox(
+        height: 112,
+        width: double.infinity,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: widget.progress.clamp(0, 1).toDouble()),
+          duration: motion(context, const Duration(milliseconds: 450)),
+          curve: Curves.easeOutCubic,
+          builder: (_, v, _) => RepaintBoundary(
+            child: CustomPaint(
+              painter: _Glass(
+                _wave,
+                _pop,
+                v,
+                phone: phone,
+                done: widget.done,
+                ok: widget.ok,
+                still: _still,
+                ink: s.onSurface,
+                accent: widget.ok ? s.primary : s.error,
+                on: widget.ok ? s.onPrimary : s.onError,
               ),
             ),
-            // The arrival: the other device swaps for a tick that overshoots a little and settles.
-            AnimatedSwitcher(
-              duration: motion(context, const Duration(milliseconds: 420)),
-              switchInCurve: Spring.fast,
-              transitionBuilder: (child, a) =>
-                  ScaleTransition(scale: a, child: child),
-              child: widget.done
-                  ? KeyedSubtree(
-                      key: const ValueKey('done'),
-                      child: device(
-                        widget.ok
-                            ? FluentIcons.checkmark_24_regular
-                            : FluentIcons.dismiss_24_regular,
-                        lit: true,
-                      ),
-                    )
-                  : KeyedSubtree(
-                      key: const ValueKey('going'),
-                      child: device(to),
-                    ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _Flight extends CustomPainter {
-  _Flight(this.phase, this.progress, this.color, this.track)
-    : super(repaint: phase);
-  final Animation<double> phase;
+class _Glass extends CustomPainter {
+  _Glass(
+    this.wave,
+    this.pop,
+    this.progress, {
+    required this.phone,
+    required this.done,
+    required this.ok,
+    required this.still,
+    required this.ink,
+    required this.accent,
+    required this.on,
+  }) : super(repaint: Listenable.merge([wave, pop]));
+  final Animation<double> wave, pop;
   final double progress;
-  final Color color, track;
+  final bool phone, done, ok, still;
+  final Color ink, accent, on;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const pad = 10.0;
-    final y = size.height / 2, w = size.width - pad * 2;
-    if (w <= 0) return;
-    final line = Paint()
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(Offset(pad, y), Offset(pad + w, y), line..color = track);
-    if (progress > 0) {
-      canvas.drawLine(
-        Offset(pad, y),
-        Offset(pad + w * progress, y),
-        line..color = color,
+    canvas.translate(size.width / 2, size.height / 2);
+    final p = pop.value;
+    // The arrival makes it hop once.
+    if (done && !still) canvas.scale(1 + .08 * math.sin(p * math.pi));
+    final (body, screen) = phone
+        ? (
+            RRect.fromLTRBR(-24, -42, 24, 42, const Radius.circular(11)),
+            RRect.fromLTRBR(-20, -38, 20, 38, const Radius.circular(8)),
+          )
+        : (
+            RRect.fromLTRBR(-46, -38, 46, 22, const Radius.circular(8)),
+            RRect.fromLTRBR(-42, -34, 42, 18, const Radius.circular(5)),
+          );
+    canvas.drawRRect(screen, Paint()..color = accent.withValues(alpha: .12));
+    final level = done ? 1.0 : progress;
+    if (level > 0) {
+      final r = screen.outerRect;
+      final y = r.bottom - r.height * level;
+      final amp = done || still ? 0.0 : 2.4;
+      final t = wave.value * 2 * math.pi;
+      final glass = Path()..moveTo(r.left - 2, r.bottom + 2);
+      for (var x = r.left - 2; x <= r.right + 2; x += 2) {
+        glass.lineTo(x, y + math.sin(x / 5 + t) * amp);
+      }
+      glass
+        ..lineTo(r.right + 2, r.bottom + 2)
+        ..close();
+      canvas
+        ..save()
+        ..clipRRect(screen)
+        ..drawPath(glass, Paint()..color = accent)
+        ..restore();
+    }
+    final pen = Paint()
+      ..color = ink
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawRRect(body, pen);
+    if (phone) {
+      canvas.drawRRect(
+        RRect.fromLTRBR(-6, -38, 6, -34.6, const Radius.circular(1.7)),
+        Paint()..color = ink,
+      );
+    } else {
+      canvas
+        ..drawLine(const Offset(0, 22), const Offset(0, 34), pen)
+        ..drawLine(const Offset(-16, 34), const Offset(16, 34), pen);
+    }
+    final c = screen.center;
+    // Before the first byte: "it goes in here".
+    if (!done && progress <= 0) {
+      final b = still ? 0.0 : math.sin(wave.value * 2 * math.pi * 1.1) * 3;
+      final arrow = Path()
+        ..moveTo(c.dx, c.dy - 12 + b)
+        ..lineTo(c.dx, c.dy + 10 + b)
+        ..moveTo(c.dx - 8, c.dy + 3 + b)
+        ..lineTo(c.dx, c.dy + 11 + b)
+        ..lineTo(c.dx + 8, c.dy + 3 + b);
+      canvas.drawPath(
+        arrow,
+        Paint.from(pen)
+          ..color = accent
+          ..strokeWidth = 2.6,
       );
     }
-    if (!phase.isAnimating) return;
-    // Three dots, a third of the way apart; each grows out of the left end and melts into the right one.
-    for (var i = 0; i < 3; i++) {
-      final t = (phase.value + i / 3) % 1;
-      final edge = math.sin(t * math.pi);
-      canvas.drawCircle(
-        Offset(pad + w * Curves.easeInOut.transform(t), y),
-        2 + 3 * edge,
-        Paint()..color = color.withValues(alpha: edge.clamp(0, 1).toDouble()),
+    if (done && p > 0) {
+      final k = 30 * Curves.easeOutBack.transform(p);
+      final mark = ok
+          ? (Path()
+              ..moveTo(c.dx - .32 * k, c.dy + .02 * k)
+              ..lineTo(c.dx - .08 * k, c.dy + .26 * k)
+              ..lineTo(c.dx + .34 * k, c.dy - .24 * k))
+          : (Path()
+              ..moveTo(c.dx - .24 * k, c.dy - .24 * k)
+              ..lineTo(c.dx + .24 * k, c.dy + .24 * k)
+              ..moveTo(c.dx + .24 * k, c.dy - .24 * k)
+              ..lineTo(c.dx - .24 * k, c.dy + .24 * k));
+      canvas.drawPath(
+        mark,
+        Paint.from(pen)
+          ..color = on.withValues(alpha: p.clamp(0, 1).toDouble())
+          ..strokeWidth = .14 * k,
       );
     }
   }
 
   @override
-  bool shouldRepaint(_Flight old) =>
-      old.progress != progress || old.color != color || old.track != track;
+  bool shouldRepaint(_Glass old) =>
+      old.progress != progress ||
+      old.done != done ||
+      old.ok != ok ||
+      old.phone != phone ||
+      old.still != still ||
+      old.ink != ink ||
+      old.accent != accent ||
+      old.on != on;
 }

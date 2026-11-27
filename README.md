@@ -23,7 +23,7 @@
     <img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white" alt="Windows x64" />
     <img src="https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black" alt="Linux x64" />
     <img src="https://img.shields.io/badge/Flutter-Rust-02569B?logo=flutter&logoColor=white" alt="Flutter y Rust" />
-    <img src="https://img.shields.io/badge/Estado-Beta-F59E0B" alt="Versión Beta" />
+    <img src="https://img.shields.io/badge/Estado-Estable-22C55E" alt="Versión estable" />
     <img src="https://img.shields.io/badge/Licencia-GPL--3.0--or--later-blue" alt="Licencia GPL-3.0 o posterior" />
   </p>
 
@@ -119,7 +119,7 @@ El ajuste opcional **Seguridad** de Android desbloquea la app con la huella del 
 
 Los paquetes de Android, Windows y Linux se publican en **[GitHub Releases](https://github.com/Alero-Team/Alero/releases)** junto con las novedades de cada versión. Consulta también el [historial de cambios](CHANGELOG.md).
 
-Alero sigue en fase Beta. Descarga siempre el APK y el instalador de la misma versión.
+Descarga siempre el APK y el instalador de la misma versión.
 
 ## Firma y limitaciones
 

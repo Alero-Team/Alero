@@ -409,6 +409,19 @@ pub fn set_volume(v: f32) -> bool {
     run("pactl", &["set-sink-volume", "@DEFAULT_SINK@", &format!("{}%", (v.clamp(0.0, 1.0) * 100.0).round() as u32)])
 }
 
+/// Whether the default output (or microphone) is muted (`pactl`: "Mute: yes").
+pub fn muted(mic: bool) -> Option<bool> {
+    let (get, dev) = if mic { ("get-source-mute", "@DEFAULT_SOURCE@") } else { ("get-sink-mute", "@DEFAULT_SINK@") };
+    // pactl translates "Mute: yes"; the C locale keeps the word this parses.
+    let out = Command::new(which("pactl")?).args([get, dev]).env("LC_ALL", "C").stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).contains("yes"))
+}
+
+pub fn set_muted(mic: bool, on: bool) -> bool {
+    let (set, dev) = if mic { ("set-source-mute", "@DEFAULT_SOURCE@") } else { ("set-sink-mute", "@DEFAULT_SINK@") };
+    run("pactl", &[set, dev, if on { "1" } else { "0" }])
+}
+
 /// "lock", "sleep" or "shutdown" (the phone confirms first).
 pub fn power(action: &str) -> bool {
     match action {
@@ -515,6 +528,11 @@ pub fn media_state() -> Option<Media> {
 /// hand over huge images turn out to be common.
 /// shortcut: no app icon on Linux (MPRIS gives none directly); look it up via the desktop entry if wanted.
 pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
+    None
+}
+
+/// shortcut: no file previews on Linux (the freedesktop cache is keyed by the URI's md5 and the repo has no md5), add when wanted.
+pub fn file_thumbnail(_: &std::path::Path, _: i32, _: bool) -> Option<(u32, u32, Vec<u8>)> {
     None
 }
 

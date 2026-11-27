@@ -307,31 +307,41 @@ class _Paired extends StatelessWidget {
       es(p.detail),
     ].where((x) => x.isNotEmpty).join(' · ');
 
+    const actionStyle = ButtonStyle(
+      visualDensity: VisualDensity.standard,
+      minimumSize: WidgetStatePropertyAll(Size(0, 48)),
+      iconSize: WidgetStatePropertyAll(20),
+    );
     final actions = <Widget>[
-      if (connected && !isPhone)
-        IconButton.filledTonal(
-          tooltip: tr('Enviar archivos a {}', [p.name]),
-          onPressed: () => hub.send(p.id),
-          icon: const Icon(FluentIcons.arrow_upload_24_regular),
-        ),
       if (p.state == pb.PeerState.rejected)
         TextButton(
+          style: actionStyle,
           onPressed: () => hub.pair(p.id),
           child: const Text('Emparejar de nuevo'),
         ),
       if (connected || p.state == pb.PeerState.connecting)
         OutlinedButton.icon(
+          style: actionStyle,
           onPressed: () => hub.disconnect(p.id),
           icon: const Icon(FluentIcons.link_dismiss_24_regular),
           label: const Text('Desconectar'),
         ),
       if (p.state == pb.PeerState.disconnected)
         FilledButton.tonalIcon(
+          style: actionStyle,
           onPressed: () => hub.reconnect(p.id),
           icon: const Icon(FluentIcons.link_24_regular),
           label: const Text('Conectar'),
         ),
       IconButton(
+        style: IconButton.styleFrom(
+          visualDensity: VisualDensity.standard,
+          fixedSize: const Size(48, 48),
+          iconSize: 20,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Radii.button),
+          ),
+        ),
         tooltip: tr('Olvidar {}', [p.name]),
         icon: Icon(FluentIcons.delete_24_regular, color: s.error),
         onPressed: () async {
@@ -351,9 +361,8 @@ class _Paired extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: Gap.s),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Connected peers gain extra buttons. On narrow screens they belong
-          // on a second line, not in the name/status line.
-          final compact = constraints.maxWidth < 680;
+          // Only on phone-width cards the actions drop below, lined up with the text (after the icon).
+          final compact = constraints.maxWidth < 520;
           final summary = Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -416,16 +425,25 @@ class _Paired extends StatelessWidget {
             children: [
               summary,
               const SizedBox(height: Gap.xs),
-              Align(
-                alignment: Alignment.centerRight,
+              Padding(
+                // Very narrow: keep the full width so the labels do not wrap.
+                padding: EdgeInsets.only(left: constraints.maxWidth < 400 ? 0 : 40 + Gap.m),
+                child: Align(
+                alignment: Alignment.centerLeft,
                 child: MotionFade(
-                  child: Wrap(
+                  child: Row(
                     key: ValueKey(p.state),
-                    alignment: WrapAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
                     spacing: Gap.s,
-                    runSpacing: Gap.xs,
-                    children: actions,
+                    children: [
+                      for (final action in actions)
+                        if (action is IconButton)
+                          action
+                        else
+                          Flexible(child: action),
+                    ],
                   ),
+                ),
                 ),
               ),
             ],

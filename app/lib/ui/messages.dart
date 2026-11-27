@@ -29,12 +29,11 @@ class Convo {
       source = 'SMS',
       thread = t,
       notif = null;
-  Convo.app(PhoneNotif n)
+  Convo.app(PhoneNotif n, {this.unread = true})
     : key = 'app:${n.key}',
       title = n.conversation.isNotEmpty ? n.conversation : n.title,
       snippet = n.messages.isNotEmpty ? n.messages.last.body : n.text,
       time = n.time,
-      unread = true,
       source = n.app,
       thread = null,
       notif = n;
@@ -43,6 +42,10 @@ class Convo {
   final bool unread;
   final SmsThread? thread;
   final PhoneNotif? notif;
+
+  /// What the Mensajes badge shows: the inbox's unread rows, so the badge and the list cannot disagree.
+  static int unreadCount(List<SmsThread> threads, List<PhoneNotif> notifs) =>
+      inbox(threads, notifs).where((c) => c.unread).length;
 
   /// SMS threads and app chats together, newest first; [query] filters by name or text.
   static List<Convo> inbox(
@@ -53,7 +56,8 @@ class Convo {
     final q = query.trim().toLowerCase();
     return [
           for (final t in threads) Convo.sms(t),
-          for (final n in notifs.where((n) => n.chat)) Convo.app(n),
+          // With the SMS store loaded the default SMS app's notifications would list (and count) each chat twice.
+          for (final n in notifs.where((n) => n.chat && !(n.sms && threads.isNotEmpty))) Convo.app(n),
         ]
         .where(
           (c) =>
@@ -201,7 +205,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
     for (final conversation in live.where((c) => c.notif != null)) {
       _recentChats.remove(conversation.key);
-      _recentChats[conversation.key] = conversation;
+      // Kept only after its notification goes away: by then it is no longer unread.
+      _recentChats[conversation.key] = Convo.app(conversation.notif!, unread: false);
     }
     while (_recentChats.length > 50) {
       _recentChats.remove(_recentChats.keys.first);

@@ -1,4 +1,3 @@
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
@@ -66,17 +65,13 @@ class Spring extends Curve {
   }
 }
 
-/// How much longer every app animation runs than its base value: 1x on computer and phone (the user asked for
-/// normal speed). Kept as one knob so every spatial duration can be retuned in one place.
-const motionScale = 1.0;
+/// How much longer every app animation runs than its base value. Computer 1x. Phone 1.25x: 1x read as rushed
+/// there and 1.45x as sluggish under the finger. Kept as one knob so every spatial duration retunes in one place.
+double get motionScale => isPhone ? 1.25 : 1.0;
 
-/// Low-end machine (4 cores or fewer): decorative motion (staggered entrances, scroll reveals, waves) is skipped,
-/// functional motion (page changes, press feedback, switches) stays. Settable so tests can pin either case.
-bool lowEndDevice = Platform.numberOfProcessors <= 4;
-
-/// True when decorative animations should not play: reduced motion asked by the system, or a low-end machine.
-bool calm(BuildContext c) =>
-    lowEndDevice || MediaQuery.of(c).disableAnimations;
+/// True when decorative animations should not play: only when the system asks for reduced motion, so every
+/// machine and every page moves the same way (a core-count guess made the same app animate on some PCs only).
+bool calm(BuildContext c) => MediaQuery.of(c).disableAnimations;
 
 /// Animation length, or zero when the system asks for reduced motion.
 Duration motion(BuildContext c, Duration d) =>
@@ -138,7 +133,7 @@ class IslandPageTransitionsBuilder extends PageTransitionsBuilder {
   Duration get transitionDuration => Spring.spatial.settle * motionScale;
 
   @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 260);
+  Duration get reverseTransitionDuration => transitionDuration;
 
   @override
   Widget buildTransitions<T>(
@@ -148,6 +143,7 @@ class IslandPageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
+    if (calm(context)) return child;
     // drive(), not CurvedAnimation: this runs on every rebuild and CurvedAnimation leaks a listener each time.
     final grow = animation.drive(
       Tween<double>(

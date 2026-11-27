@@ -40,6 +40,17 @@ class ReleaseTest(unittest.TestCase):
             with self.subTest(pubspec=pubspec), self.assertRaises(ValueError):
                 notes_tool.metadata(pubspec, changelog)
 
+    def test_a_stable_release_stops_calling_the_public_readme_a_beta(self):
+        readme = ('<img src="https://img.shields.io/badge/Estado-Beta-F59E0B" alt="Versión Beta" />\n'
+                  'Versión 2.6.3.\nAlero sigue en fase Beta. Descarga siempre el APK y el instalador de la misma versión.\n')
+        beta = release.spanish_readme(readme, '2.6.3', '2.6.4', 'Alero Beta 2.6.4')
+        self.assertIn('Estado-Beta', beta)
+        self.assertIn('2.6.4', beta)
+        stable = release.spanish_readme(readme, '2.6.3', '3.0.0', 'Alero 3.0')
+        self.assertNotIn('Beta', stable)
+        self.assertIn('Estado-Estable', stable)
+        self.assertIn('Versión 3.0.0.\nDescarga siempre', stable)
+
     def test_all_six_matching_packages_and_hashes_are_required(self):
         with tempfile.TemporaryDirectory() as name:
             folder = Path(name)

@@ -106,6 +106,19 @@ void main() {
     expect(FsEntry({'dir': true, 'size': 1000}).itemCount, '999+ elementos');
   });
 
+  test('selectAll picks files only and clearSelection empties it', () {
+    final fs = FsClient(Hub())
+      ..entries = [
+        FsEntry({'id': 'a', 'name': 'a'}),
+        FsEntry({'id': 'd', 'name': 'd', 'dir': true}),
+        FsEntry({'id': 'b', 'name': 'b'}),
+      ];
+    fs.selectAll();
+    expect(fs.selected, {'a', 'b'});
+    fs.clearSelection();
+    expect(fs.selected, isEmpty);
+  });
+
   test(
     'reply waits for a result from the matching peer, key and request',
     () async {

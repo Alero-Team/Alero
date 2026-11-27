@@ -32,8 +32,12 @@ def verify_packages(folder, version):
     for name in sorted(expected):
         content = (folder / (name + '.sha256')).read_text(encoding='utf-8').strip()
         match = re.fullmatch(r'([0-9a-fA-F]{64})\s+\*?(.+)', content)
+        # The release runner (ubuntu-22.04) has Python 3.10: no hashlib.file_digest.
+        sha = hashlib.sha256()
         with (folder / name).open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+            for chunk in iter(lambda: stream.read(1 << 20), b''):
+                sha.update(chunk)
+        digest = sha.hexdigest()
         if not match or match[2] != name or match[1].lower() != digest:
             raise ValueError('Invalid or mismatched SHA-256: ' + name)
         hashes[name] = digest

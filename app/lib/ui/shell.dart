@@ -196,6 +196,9 @@ class _ShellState extends State<Shell>
     };
     // Once the phones are known (the island may have started the app for one of these).
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // A cold-start share can arrive before the shell subscribes to Hub.
+      _questions();
       for (final (id, what) in [...hub.islandQueue]) {
         hub.onIslandControl?.call(id, what);
       }
@@ -385,10 +388,10 @@ class _ShellState extends State<Shell>
         // and effect fade, reversed naturally when the destination leaves.
         // Both Windows and Android use this same transition.
         final page = PageTransitionSwitcher(
-          duration: QollqeMotion.duration(context, 300),
+          duration: motion(context, Spring.spatial.settle),
           layoutBuilder: (entries) =>
               Stack(alignment: Alignment.topCenter, children: entries),
-          transitionBuilder: QollqeMotion.tab,
+          transitionBuilder: orionTabTransition,
           child: KeyedSubtree(key: ValueKey(_section), child: _page()),
         );
         // The computer always has the side menu: its phone sections do not fit a bottom bar.
@@ -399,9 +402,16 @@ class _ShellState extends State<Shell>
 
   int _badge(Section s) => switch (s) {
     Section.notifications => hub.notifs.values.expand((items) => items).length,
-    Section.messages =>
-      hub.sms.threads.where((t) => !t.read).length +
-          hub.notifs.values.expand((l) => l).where((n) => n.chat).length,
+    // The connected phone only, as the Mensajes list itself shows it.
+    Section.messages => switch (hub.connectedPhone?.id) {
+      final id? => Convo.unreadCount(
+        hub.sms.peerId == id && hub.info[id]?.sms == true
+            ? hub.sms.threads
+            : const [],
+        hub.notifs[id] ?? const [],
+      ),
+      null => 0,
+    },
     _ => 0,
   };
 
@@ -1040,67 +1050,70 @@ class _ShareSheet extends StatelessWidget {
   final Hub hub;
 
   @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final s = hub.share;
-    final online = hub.peers
-        .where((p) => p.trusted && p.state == pb.PeerState.connected)
-        .toList();
-    final what = s == null
-        ? ''
-        : s.files.isNotEmpty
-        ? (s.files.length == 1
-              ? s.files.first.name ?? 'Un archivo'
-              : tr('{} archivos', [s.files.length]))
-        : tr('Texto: «{}»', [
-            s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text,
-          ]);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(Gap.m),
-        child: SolidSurface(
-          padding: const EdgeInsets.all(Gap.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Enviar a…', style: t.titleLarge),
-              const SizedBox(height: Gap.xs),
-              Text(
-                what,
-                style: t.bodyMedium?.copyWith(color: context.pal.muted),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: Gap.l),
-              if (online.isEmpty)
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: hub,
+    builder: (context, _) {
+      final t = Theme.of(context).textTheme;
+      final s = hub.share;
+      final online = hub.peers
+          .where((p) => p.trusted && p.state == pb.PeerState.connected)
+          .toList();
+      final what = s == null
+          ? ''
+          : s.files.isNotEmpty
+          ? (s.files.length == 1
+                ? s.files.first.name ?? 'Un archivo'
+                : tr('{} archivos', [s.files.length]))
+          : tr('Texto: «{}»', [
+              s.text.length > 60 ? '${s.text.substring(0, 60)}…' : s.text,
+            ]);
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(Gap.m),
+          child: SolidSurface(
+            padding: const EdgeInsets.all(Gap.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Enviar a…', style: t.titleLarge),
+                const SizedBox(height: Gap.xs),
                 Text(
-                  'Ningún dispositivo conectado. Abre la app en el ordenador.',
-                  style: t.bodyMedium,
-                )
-              else
-                for (final p in online)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Gap.s),
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        hub.sendShare(p.id);
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(FluentIcons.desktop_24_regular),
-                      label: Text(p.name),
+                  what,
+                  style: t.bodyMedium?.copyWith(color: context.pal.muted),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: Gap.l),
+                if (online.isEmpty)
+                  Text(
+                    'Ningún dispositivo conectado. Abre la app en el ordenador.',
+                    style: t.bodyMedium,
+                  )
+                else
+                  for (final p in online)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Gap.s),
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          hub.sendShare(p.id);
+                        },
+                        icon: const Icon(FluentIcons.desktop_24_regular),
+                        label: Text(p.name),
+                      ),
                     ),
-                  ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
-              ),
-            ],
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
 }
 
 /// Same 6-digit code on both screens; the user confirms they match (SAS).
@@ -1287,7 +1300,7 @@ class _ScreenFrameState extends State<ScreenFrame> {
         : phone
         ? ScrollReveal(topInset: 0, child: c)
         : wide && !isPhone
-        ? ScrollReveal(topInset: 0, bottomInset: 0, child: c)
+        ? ScrollReveal(topInset: 0, bottomInset: 0, replay: false, child: c)
         : Reveal(index: i, child: c);
     final list = ListView(
       padding: EdgeInsets.fromLTRB(

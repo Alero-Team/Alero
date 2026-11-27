@@ -50,6 +50,16 @@ def exportable(name):
     return not (name.startswith(('.claude/', '.codex/')) or name in {'AGENTS.md', 'docs/DEVELOPMENT.md'})
 
 
+def spanish_readme(text, previous_version, version, title):
+    """The public Spanish README with this version's number; a release without "Beta" in its title is stable."""
+    text = re.sub(r'Beta ' + re.escape(previous_version.removesuffix('.0')) + r'(?![\d.])',
+                  'Beta ' + version, text).replace(previous_version, version)
+    if 'Beta' not in title:
+        text = (text.replace('badge/Estado-Beta-F59E0B" alt="Versión Beta"', 'badge/Estado-Estable-22C55E" alt="Versión estable"')
+                .replace('Alero sigue en fase Beta. ', ''))
+    return text
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--commit', default='origin/main', help='Private commit to publish (default: origin/main)')
@@ -90,8 +100,7 @@ def main():
             if exportable(info.filename):
                 source.extract(info, public)
     # Preserve the public-facing Spanish introduction and provide the current English guide.
-    spanish = re.sub(r'Beta ' + re.escape(previous_version.removesuffix('.0')) + r'(?![\d.])',
-                     'Beta ' + version, spanish).replace(previous_version, version)
+    spanish = spanish_readme(spanish, previous_version, version, title)
     (public / 'README.md').write_text(spanish, encoding='utf-8', newline='\n')
     english = run('git', 'show', f'{sha}:README.md', cwd=root)
     english = re.sub(r'Development, checks and builds run.*?(?=\n## Signing)',

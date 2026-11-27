@@ -37,6 +37,10 @@ fn adb() -> Option<PathBuf> {
 
 // shortcut: no timeout on adb calls (a hung adb only stalls this thread, not the island); add one if that shows up.
 fn run(args: &[&str]) -> Option<String> {
+    run_raw(args).map(|b| String::from_utf8_lossy(&b).into_owned())
+}
+
+fn run_raw(args: &[&str]) -> Option<Vec<u8>> {
     let mut c = Command::new(adb()?);
     c.args(args).env("ADB_MDNS_AUTO_CONNECT", "adb-tls-connect").stdin(Stdio::null()).stderr(Stdio::null());
     #[cfg(target_os = "linux")]
@@ -47,7 +51,7 @@ fn run(args: &[&str]) -> Option<String> {
         c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     let out = c.output().ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    out.status.success().then_some(out.stdout)
 }
 
 /// From `adb devices`: the phone's wireless-debugging serial (`ip:port`), else the only ready device.
@@ -81,6 +85,15 @@ fn apply(serial: &str, what: &str, on: bool) {
         _ => return,
     };
     let _ = run(&["-s", serial, "shell", &cmd]);
+}
+
+/// A screenshot of the phone into `dir`, like the app's "Captura" but with no window: the island does it by itself.
+/// Returns the file's name. Runs in its own thread (see `run.rs`): adb and a full-screen PNG take a while.
+pub fn screenshot(ip: &str, dir: &std::path::Path) -> Option<String> {
+    let serial = run(&["devices"]).and_then(|d| serial_in(&d, ip))?;
+    let png = run_raw(&["-s", &serial, "exec-out", "screencap", "-p"]).filter(|b| b.starts_with(b"\x89PNG"))?;
+    std::fs::create_dir_all(dir).ok()?;
+    super::pc::save_new(dir, "Captura-telefono", &png)
 }
 
 /// The adb thread: answers each request with `Msg::Adb(peer, radios)`; None when the phone has no adb now.

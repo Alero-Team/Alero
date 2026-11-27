@@ -23,7 +23,7 @@ void main() {
     await t.pump();
     expect(t.widget<Opacity>(find.byType(Opacity)).opacity, 1);
     await t.pump(const Duration(seconds: 2));
-    expect(t.widget<AleroMark>(find.byType(AleroMark)).dim, 0);
+    expect(t.widget<AleroMark>(find.byType(AleroMark)).color!.a, 1);
   });
 
   testWidgets(
@@ -37,8 +37,9 @@ void main() {
       final a = t.widget<AleroMark>(find.byType(AleroMark));
       await t.pump(const Duration(milliseconds: 400));
       final b = t.widget<AleroMark>(find.byType(AleroMark));
-      expect(a.dim, 1);
-      expect(b.sweep, isNot(a.sweep));
+      expect(a.color!.a, lessThan(1)); // breathing, never gone
+      expect(a.color!.a, greaterThan(.5));
+      expect(b.color, isNot(a.color));
       await t.pump(const Duration(seconds: 5));
       expect(t.binding.hasScheduledFrame, isTrue);
     },

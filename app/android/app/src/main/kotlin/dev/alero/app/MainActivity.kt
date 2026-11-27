@@ -38,7 +38,7 @@ class MainActivity : FlutterActivity() {
         (applicationContext.getSystemService(WIFI_SERVICE) as WifiManager).createMulticastLock("alero:ui").apply { setReferenceCounted(false) }
     }
     private val fileLocations by lazy { getSharedPreferences("file_locations", MODE_PRIVATE) }
-    private val sourceUris = HashMap<Int, Uri>()
+    private val sourceUris = java.util.concurrent.ConcurrentHashMap<Int, Uri>() // written off the main thread
     private var pickResult: MethodChannel.Result? = null
     private var scanResult: MethodChannel.Result? = null
     private var wallpaperResult: MethodChannel.Result? = null
@@ -52,6 +52,8 @@ class MainActivity : FlutterActivity() {
         Tr.load(this)
         security.secureWindow()
         Notifier.init(this)
+        // Copies left by a process killed mid-copy (a finished copy is unlinked at once); fresh ones may still be in use.
+        File(cacheDir, "outgoing").listFiles()?.forEach { if (it.lastModified() < System.currentTimeMillis() - 600_000) it.delete() }
         Features.start(this)
         if (Prefs.background(this)) PbService.update(this, emptyList()) // no service unless asked or a computer is connected
         shared = intent
@@ -403,7 +405,7 @@ class MainActivity : FlutterActivity() {
                         .setOrientationLocked(true)
                         .initiateScan(listOf(com.google.zxing.integration.android.IntentIntegrator.QR_CODE))
                 }
-                "takeShared" -> result.success(takeShared())
+                "takeShared" -> takeShared(result)
                 "pickWallpaper" -> {
                     wallpaperResult?.success(false)
                     wallpaperResult = result
@@ -416,18 +418,23 @@ class MainActivity : FlutterActivity() {
     }
 
     /** What another app shared with us: files as open descriptors (like pickFiles) and/or text. */
-    private fun takeShared(): Map<String, Any>? {
-        val i = shared ?: return null
+    private fun takeShared(result: MethodChannel.Result) {
+        val i = shared
         shared = null
-        i.getStringExtra(WIDGET)?.let { return mapOf("widget" to it) }
-        if (i.action != Intent.ACTION_SEND && i.action != Intent.ACTION_SEND_MULTIPLE) return null
+        if (i == null) return result.success(null)
+        i.getStringExtra(WIDGET)?.let { return result.success(mapOf("widget" to it)) }
+        if (i.action != Intent.ACTION_SEND && i.action != Intent.ACTION_SEND_MULTIPLE) return result.success(null)
         val uris = mutableListOf<Uri>()
         if (i.action == Intent.ACTION_SEND) {
             @Suppress("DEPRECATION") (i.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uris += it }
         } else {
             @Suppress("DEPRECATION") i.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris += it }
         }
-        return mapOf("files" to descriptors(uris), "text" to (i.getStringExtra(Intent.EXTRA_TEXT) ?: ""))
+        // Providers may put some or all URIs in ClipData; do not send duplicates.
+        i.clipData?.let { c -> for (k in 0 until c.itemCount) c.getItemAt(k).uri?.let { if (it !in uris) uris += it } }
+        val text = i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: ""
+        // Opening a descriptor can wait on the provider (cloud files): never on the main thread.
+        Thread { val files = safeDescriptors(uris); runOnUiThread { result.success(mapOf("files" to files, "text" to text)) } }.start()
     }
 
     private fun pick(result: MethodChannel.Result) {
@@ -480,7 +487,7 @@ class MainActivity : FlutterActivity() {
         if (resultCode == Activity.RESULT_OK && data != null) {
             data.clipData?.let { c -> for (k in 0 until c.itemCount) uris += c.getItemAt(k).uri } ?: data.data?.let { uris += it }
         }
-        r.success(descriptors(uris))
+        Thread { val files = safeDescriptors(uris); runOnUiThread { r.success(files) } }.start()
     }
 
     // The descriptor stays open until Dart calls closeFd when the transfer ends: the engine reads from it.
@@ -495,25 +502,85 @@ class MainActivity : FlutterActivity() {
         else -> true
     }
 
-    private fun descriptors(uris: List<Uri>) =
-        uris.mapNotNull { uri ->
-            if (ownData(uri)) return@mapNotNull null
-            val pfd = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null } ?: return@mapNotNull null
+    private fun descriptors(uris: List<Uri>): List<Map<String, Any>> {
+        var failed = 0
+        val out = uris.mapNotNull { uri ->
+            val pfd = try { if (ownData(uri)) null else openSource(uri) }
+                catch (e: Exception) { android.util.Log.w("AleroShare", "opening shared file failed", e); null }
+            if (pfd == null) { failed++; return@mapNotNull null }
             synchronized(open) { open[pfd.fd] = pfd }
             sourceUris[pfd.fd] = uri
             try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            catch (_: SecurityException) { /* Shares may grant access only while the sender allows it. */ }
-            mapOf("fd" to pfd.fd, "name" to safeName(displayName(uri)))
+            catch (_: Exception) { /* Shares may grant access only while the sender allows it. */ }
+            mapOf("fd" to pfd.fd, "name" to displayName(uri))
+        }
+        if (failed > 0) runOnUiThread { Toast.makeText(this, Tr.t("No se pudo leer $failed archivo(s).", "Couldn't read $failed file(s)."), Toast.LENGTH_LONG).show() }
+        return out
+    }
+
+    /**
+     * A seekable descriptor holding exactly the file's bytes: the engine seeks it and trusts its size for the offer.
+     * Pipes (Drive, cloud) and providers whose size differs from the real content (transcoded media) go through a cache copy.
+     */
+    private fun openSource(uri: Uri): ParcelFileDescriptor? {
+        val direct = try { contentResolver.openFileDescriptor(uri, "r") } catch (e: Exception) { android.util.Log.w("AleroShare", "openFileDescriptor failed for $uri", e); null }
+        val size = direct?.statSize ?: -1L // -1: not a regular file
+        val declared = declaredSize(uri)
+        if (direct != null && size >= 0 && (declared?.let { it < 0 || it == size } ?: (size > 0))) return direct
+        // A pipe is read once: its open descriptor is the copy's input (reopening the URI would make the provider serve it twice).
+        val pipe = direct != null && size < 0
+        if (!pipe) direct?.close()
+        val copy = copyToCache(uri, if (pipe) direct else null)
+        // No copy (low storage): the direct descriptor's size is wrong or unknown, so the receiver would reject it.
+        return copy
+    }
+
+    /** Dart awaits this answer: an unexpected provider error must not leave the pick or the share hanging. */
+    private fun safeDescriptors(uris: List<Uri>): List<Map<String, Any>> =
+        try { descriptors(uris) } catch (e: Exception) {
+            android.util.Log.w("AleroShare", "reading shared files failed", e)
+            runOnUiThread { Toast.makeText(this, Tr.t("No se pudieron leer los archivos.", "Couldn't read the files."), Toast.LENGTH_LONG).show() }
+            emptyList()
         }
 
-    private fun displayName(uri: Uri): String =
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getString(0) else null
-        } ?: uri.lastPathSegment ?: "archivo"
+    private fun declaredSize(uri: Uri): Long? =
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+            }
+        } catch (_: Exception) { null }
 
-    /** Windows-hostile characters are replaced; the core would reject them otherwise. */
-    private fun safeName(n: String) =
-        n.map { if (it.isISOControl() || it in "/\\:*?\"<>|") '_' else it }.joinToString("").trim().trimEnd('.').ifEmpty { "archivo" }
+    /** Streams the URI into a cache file, opens it and unlinks it: the descriptor stays valid and nothing is left behind. */
+    private fun copyToCache(uri: Uri, open: ParcelFileDescriptor? = null): ParcelFileDescriptor? {
+        val f = try { File.createTempFile("send", null, File(cacheDir, "outgoing").apply { mkdirs() }) } catch (_: Exception) { return null }
+        return try {
+            val input = if (open != null) ParcelFileDescriptor.AutoCloseInputStream(open) else contentResolver.openInputStream(uri) ?: return null
+            // Never fill the storage: past the free space (minus a margin) the copy is dropped and the usual error toast shows.
+            val room = cacheDir.usableSpace - 64L * 1024 * 1024
+            input.use { i ->
+                f.outputStream().use { o ->
+                    val buf = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = i.read(buf)
+                        if (n < 0) break
+                        total += n
+                        if (total > room) throw java.io.IOException("not enough free space for the copy")
+                        o.write(buf, 0, n)
+                    }
+                }
+            }
+            ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY)
+        } catch (e: Exception) {
+            android.util.Log.w("AleroShare", "cache copy failed for $uri", e)
+            null
+        } finally { f.delete() }
+    }
+
+    /** Raw provider name; Dart makes it safe for the receiver (cleanName). */
+    private fun displayName(uri: Uri): String =
+        (try { contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } } catch (_: Exception) { null })
+            ?: uri.lastPathSegment ?: "archivo"
 
     /** Moves a received file from the app's private folder to Downloads/Alero. Returns where it went. */
     private fun publish(path: String): String {

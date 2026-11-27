@@ -23,6 +23,32 @@ class Picked {
   final int? fd;
 }
 
+/// A provider's file name made acceptable to the receiver (core `safe_name`): no Windows-hostile characters,
+/// reserved device names or trailing dots/spaces, and short enough (UTF-8) to stay under 255 bytes with `.part`.
+String cleanName(String name) {
+  var s = [
+    for (final r in name.runes)
+      r < 32 ||
+              (r >= 127 && r < 160) ||
+              r'/\:*?"<>|'.contains(String.fromCharCode(r))
+          ? '_'
+          : String.fromCharCode(r),
+  ].join().trim();
+  final dot = s.lastIndexOf('.');
+  final ext = dot > 0 && s.length - dot <= 16 ? s.substring(dot) : '';
+  final stem = s.substring(0, s.length - ext.length).runes.toList();
+  while (stem.isNotEmpty &&
+      utf8.encode(String.fromCharCodes(stem)).length +
+              utf8.encode(ext).length >
+          200) {
+    stem.removeLast();
+  }
+  s = '${String.fromCharCodes(stem)}$ext'.replaceAll(RegExp(r'[ .]+$'), '');
+  if (s.isEmpty) return 'archivo';
+  const reserved = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+  return reserved.contains(s.split('.').first.toUpperCase()) ? '_$s' : s;
+}
+
 /// Everything platform-specific. Android goes through a small Kotlin channel (MainActivity.kt);
 /// desktop uses the window plugin (the tray lives in the daemon). Nothing here decides protocol or trust.
 class Native {
@@ -174,7 +200,7 @@ class Native {
     final l = await _ch.invokeListMethod<Map>('pickFiles') ?? [];
     return [
       for (final m in l)
-        Picked('fd:${m['fd']}', m['name'] as String, m['fd'] as int),
+        Picked('fd:${m['fd']}', cleanName(m['name'] as String), m['fd'] as int),
     ];
   }
 
@@ -199,7 +225,7 @@ class Native {
     final files = [
       for (final f in (m['files'] as List? ?? []))
         if (f is Map)
-          Picked('fd:${f['fd']}', f['name'] as String, f['fd'] as int),
+          Picked('fd:${f['fd']}', cleanName(f['name'] as String), f['fd'] as int),
     ];
     return Shared(files, m['text'] as String? ?? '');
   }

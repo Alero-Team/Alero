@@ -69,6 +69,12 @@ mod other {
     pub fn set_volume(_: f32) -> bool {
         false
     }
+    pub fn muted(_: bool) -> Option<bool> {
+        None
+    }
+    pub fn set_muted(_: bool, _: bool) -> bool {
+        false
+    }
     pub fn power(_: &str) -> bool {
         false
     }
@@ -91,6 +97,9 @@ mod other {
     }
     pub fn media_wake(_: std::thread::Thread) {}
     pub fn app_icon(_: &str) -> Option<(u32, u32, Vec<u8>)> {
+        None
+    }
+    pub fn file_thumbnail(_: &std::path::Path, _: i32, _: bool) -> Option<(u32, u32, Vec<u8>)> {
         None
     }
     pub fn app_name(_: &str) -> Option<String> {
@@ -576,25 +585,34 @@ mod win {
         s.TryChangePlaybackPositionAsync(ms.max(0) * 10_000).ok().and_then(|a| a.join().ok()).unwrap_or(false)
     }
 
-    /// The default output's master volume (the one the volume keys move), through Core Audio.
-    fn endpoint() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume> {
-        use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
+    /// The default output's (or, with `mic`, the default microphone's) master volume, through Core Audio.
+    fn endpoint(mic: bool) -> Option<windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume> {
+        use windows::Win32::Media::Audio::{eCapture, eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
         unsafe {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
             let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-            let dev = en.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+            let dev = en.GetDefaultAudioEndpoint(if mic { eCapture } else { eRender }, eConsole).ok()?;
             dev.Activate(CLSCTX_ALL, None).ok()
         }
     }
 
     /// Output volume, 0 to 1.
     pub fn volume() -> Option<f32> {
-        unsafe { endpoint()?.GetMasterVolumeLevelScalar().ok() }
+        unsafe { endpoint(false)?.GetMasterVolumeLevelScalar().ok() }
     }
 
     pub fn set_volume(v: f32) -> bool {
-        endpoint().is_some_and(|e| unsafe { e.SetMasterVolumeLevelScalar(v.clamp(0.0, 1.0), std::ptr::null()).is_ok() })
+        endpoint(false).is_some_and(|e| unsafe { e.SetMasterVolumeLevelScalar(v.clamp(0.0, 1.0), std::ptr::null()).is_ok() })
+    }
+
+    /// Whether the default output (or microphone) is muted.
+    pub fn muted(mic: bool) -> Option<bool> {
+        unsafe { endpoint(mic)?.GetMute().ok().map(|b| b.as_bool()) }
+    }
+
+    pub fn set_muted(mic: bool, on: bool) -> bool {
+        endpoint(mic).is_some_and(|e| unsafe { e.SetMute(on, std::ptr::null()).is_ok() })
     }
 
     /// Now as a Windows `DateTime` (100 ns ticks since 1601-01-01 UTC), like the timeline's update time.
@@ -628,6 +646,31 @@ mod win {
                 Err(_) => SHCreateItemFromParsingName(&HSTRING::from(exe_path(aumid)?), None).ok()?,
             };
             let bmp = item.GetImage(SIZE { cx: 64, cy: 64 }, SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK).ok()?;
+            rgba_of(bmp)
+        }
+    }
+
+    /// The preview Explorer already has cached for a file (a video frame, a PDF page, a photo), about `px` wide at
+    /// most, straight RGBA. Cache only: no thumbnail provider runs on the file, so a hostile file is never parsed
+    /// here. Runs on its own thread: some preview providers need an apartment-threaded COM.
+    /// `own`: a file the user picked (any shell provider may render it); otherwise (received from the phone) only
+    /// what Explorer already has cached, so no third-party provider parses it unasked.
+    pub fn file_thumbnail(path: &std::path::Path, px: i32, own: bool) -> Option<(u32, u32, Vec<u8>)> {
+        use windows::core::HSTRING;
+        use windows::Win32::Foundation::SIZE;
+        use windows::Win32::System::Com::COINIT_APARTMENTTHREADED;
+        use windows::Win32::UI::Shell::{IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_BIGGERSIZEOK, SIIGBF_INCACHEONLY, SIIGBF_THUMBNAILONLY};
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let item: IShellItemImageFactory = SHCreateItemFromParsingName(&HSTRING::from(path.to_string_lossy().replace('/', "\\")), None).ok()?;
+            let cached = if own { SIIGBF_BIGGERSIZEOK } else { SIIGBF_INCACHEONLY };
+            rgba_of(item.GetImage(SIZE { cx: px, cy: px }, SIIGBF_BIGGERSIZEOK | SIIGBF_THUMBNAILONLY | cached).ok()?)
+        }
+    }
+
+    /// A shell bitmap (consumed) as straight RGBA.
+    unsafe fn rgba_of(bmp: windows::Win32::Graphics::Gdi::HBITMAP) -> Option<(u32, u32, Vec<u8>)> {
+        unsafe {
             let mut bm = BITMAP::default();
             let ok = GetObjectW(bmp.into(), size_of::<BITMAP>() as i32, Some((&mut bm as *mut BITMAP).cast())) != 0;
             let (w, h) = (bm.bmWidth, bm.bmHeight.abs());
@@ -643,14 +686,18 @@ mod win {
             if !read {
                 return None;
             }
+            // Some providers fill the colours and leave alpha at 0: that is an opaque picture, not an empty one
+            // (unless every colour is 0 too: a truly transparent icon).
+            let opaque = bgra.chunks_exact(4).all(|p| p[3] == 0) && bgra.iter().any(|&c| c != 0);
             // The shell hands premultiplied BGRA; the island wants straight RGBA (it premultiplies again).
             for p in bgra.chunks_exact_mut(4) {
-                let a = p[3] as u32;
+                let a = if opaque { 255 } else { p[3] as u32 };
                 let un = |c: u8| if a == 0 { 0 } else { ((c as u32 * 255 + a / 2) / a).min(255) as u8 };
                 let (b, g, r) = (un(p[0]), un(p[1]), un(p[2]));
                 p[0] = r;
                 p[1] = g;
                 p[2] = b;
+                p[3] = a as u8;
             }
             Some((w as u32, h as u32, bgra))
         }
@@ -901,6 +948,14 @@ mod tests {
 /// Manual check with something playing: `cargo test -p pb-daemon -- --ignored cover`.
 #[cfg(all(test, windows))]
 mod live {
+    #[test]
+    #[ignore]
+    fn the_shell_previews_a_file() {
+        let (w, h, px) = super::file_thumbnail(std::path::Path::new("C:/Windows/notepad.exe"), 256, true).expect("no preview");
+        assert!(w > 0 && h > 0 && px.len() == w as usize * h as usize * 4 && px.chunks_exact(4).any(|p| p[3] > 0));
+        println!("preview {w}x{h}");
+    }
+
     #[test]
     #[ignore]
     fn app_icons_resolve() {

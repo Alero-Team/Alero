@@ -23,6 +23,8 @@ class IslandPrefs extends ChangeNotifier {
     'controls',
     'status',
     'link',
+    'pc',
+    'agents',
   ];
 
   static const defaults = <String, Object>{

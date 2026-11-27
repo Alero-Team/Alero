@@ -92,6 +92,8 @@ pub struct Motion {
     pub content: (f32, f32),
     /// Seconds the content waits for the container to start growing before it appears.
     pub content_delay: f32,
+    /// Content grows into place with the card, as in 2.5.1.
+    pub content_scale: f32,
 }
 
 impl Motion {
@@ -103,12 +105,13 @@ impl Motion {
             page: (0.42, 0.80),
             content: (0.26, 1.0),
             content_delay: 0.07,
+            content_scale: 0.90,
         };
         match style {
             Style::Normal => base,
-            Style::Soft => Self { expand: (0.52, 0.90), collapse: (0.42, 0.95), page: (0.46, 0.92), ..base },
+            Style::Soft => Self { expand: (0.52, 0.90), collapse: (0.42, 0.95), page: (0.46, 0.92), content_scale: 0.95, ..base },
             // The springs are still there but so stiff that they settle at once.
-            Style::Off => Self { style, expand: (0.04, 1.0), collapse: (0.04, 1.0), page: (0.04, 1.0), content: (0.04, 1.0), content_delay: 0.0 },
+            Style::Off => Self { style, expand: (0.04, 1.0), collapse: (0.04, 1.0), page: (0.04, 1.0), content: (0.04, 1.0), content_delay: 0.0, content_scale: 1.0 },
         }
     }
 }

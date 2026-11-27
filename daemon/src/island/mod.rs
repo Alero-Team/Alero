@@ -4,6 +4,7 @@
 //! platform windows. Settings come from `island.json` (written by the app's Ajustes), see `config`.
 
 pub mod adb;
+mod airdrop;
 pub mod config;
 pub mod fluent;
 pub mod gfx;
@@ -11,6 +12,7 @@ pub mod link;
 pub mod media;
 pub mod model;
 pub mod motion;
+pub mod pc;
 pub mod run;
 pub mod ui;
 
@@ -95,9 +97,6 @@ impl Exec for EngineExec {
                     return Some((false, t("Sin teléfono conectado", "No phone connected").into(), String::new()));
                 };
                 (self.app)(p, what);
-                if what == "shot" {
-                    return Some((true, t("Capturando la pantalla del teléfono", "Taking a phone screenshot").into(), t("Se guarda en la carpeta de descargas", "It goes to the downloads folder").into()));
-                }
             }
             Cmd::PcSeek(ms) => {
                 crate::sys::media_seek(ms);
@@ -120,7 +119,7 @@ impl Exec for EngineExec {
                 return Some((true, t("Archivo descartado", "File discarded").into(), t("Solo se borró la copia del ordenador", "Only the computer's copy was deleted").into()));
             }
             // run.rs carries these out itself.
-            Cmd::Beep | Cmd::Adb { .. } | Cmd::AskPcVolume | Cmd::Lyrics { .. } | Cmd::SaveLyrics(_) | Cmd::Keyboard(_) | Cmd::Thumb { .. } => {}
+            Cmd::Beep | Cmd::Adb { .. } | Cmd::AskPcVolume | Cmd::PcMute { .. } | Cmd::PcPower(_) | Cmd::PcShot | Cmd::Lyrics { .. } | Cmd::SaveLyrics(_) | Cmd::Keyboard(_) | Cmd::Thumb { .. } => {}
         }
         None
     }

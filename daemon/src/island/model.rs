@@ -70,7 +70,7 @@ pub struct Xfer {
     pub at: Instant,
     /// Where a received file was saved, once it is done.
     pub path: Option<std::path::PathBuf>,
-    /// A received photo's preview (decoded off the drawing thread, see `run.rs`).
+    /// A saved file's preview (decoded off the drawing thread, see `run.rs`).
     pub thumb: Option<Image>,
 }
 
@@ -80,15 +80,23 @@ impl Xfer {
         self.path.as_deref().filter(|_| self.incoming && self.state == XState::Done)
     }
 
-    /// A received photo the island can preview: JPEG or PNG, saved.
-    pub fn photo(&self) -> Option<&std::path::Path> {
-        let p = self.saved()?;
-        let ext = p.extension()?.to_str()?.to_ascii_lowercase();
-        matches!(ext.as_str(), "jpg" | "jpeg" | "png").then_some(p)
+    /// The saved file's extension, lowercase ("" when it has none).
+    pub fn ext(&self) -> String {
+        self.saved().and_then(|p| p.extension()).and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
     }
 }
 
 impl Xfer {
+    /// A download of this computer (see `pc`), not a transfer with a phone.
+    pub fn local(&self) -> bool {
+        self.id.starts_with(super::pc::PC_ID)
+    }
+
+    /// Its size is not known (a browser's partial file): the bar cannot say how far it is.
+    pub fn no_total(&self) -> bool {
+        self.local() && self.state == XState::Running && self.total == 0
+    }
+
     pub fn fraction(&self) -> f32 {
         if self.state == XState::Done {
             1.0
@@ -333,8 +341,14 @@ impl Model {
                 self.offers.retain(|o| &o.id != id);
                 self.xfers.retain(|x| &x.id != id);
                 self.xfers.insert(0, Xfer { id: id.clone(), name: name.clone(), peer_name: peer_name.clone(), incoming: *incoming, done: 0, total: *size, rate: 0, state: XState::Running, at: Instant::now(), path: None, thumb: None });
-                self.xfers.truncate(8);
-                out.push(Notice::XferStarted(id.clone()));
+                // A burst of downloads of this computer never pushes out a running phone transfer.
+                while self.xfers.len() > 8 {
+                    let at = self.xfers.iter().rposition(|x| x.state != XState::Running || x.local()).unwrap_or(self.xfers.len() - 1);
+                    self.xfers.remove(at);
+                }
+                if self.xfers.iter().any(|x| &x.id == id) {
+                    out.push(Notice::XferStarted(id.clone()));
+                }
             }
             Event::TransferProgress { id, done, total, bytes_per_sec } => {
                 if let Some(x) = self.xfers.iter_mut().find(|x| &x.id == id) {
@@ -349,6 +363,10 @@ impl Model {
                     x.state = if *ok { XState::Done } else { XState::Failed(message.clone()) };
                     x.at = Instant::now();
                     x.path = (*ok && !path.is_empty()).then(|| path.into());
+                    // A browser names its file at the end ("Unconfirmed 123.crdownload"): the card shows the real name.
+                    if let (true, Some(n)) = (x.local(), x.path.as_ref().and_then(|p| p.file_name())) {
+                        x.name = n.to_string_lossy().into_owned();
+                    }
                     out.push(Notice::XferDone(id.clone(), *ok));
                 }
             }
@@ -558,6 +576,27 @@ mod tests {
         assert_eq!(n, vec![Notice::XferDone("t".into(), true)]);
         assert_eq!(m.xfers[0].fraction(), 1.0);
         assert_eq!(m.running().count(), 0);
+    }
+
+    #[test]
+    fn a_download_of_this_computer_has_no_size_and_takes_the_real_name_at_the_end() {
+        let mut m = Model::default();
+        m.feed(&Event::TransferStarted { id: "pc:/dl/Unconfirmed 1.crdownload".into(), peer_id: String::new(), peer_name: String::new(), name: "Descarga".into(), size: 0, incoming: true });
+        assert!(m.xfers[0].local() && m.xfers[0].no_total());
+        m.feed(&Event::TransferFinished { id: "pc:/dl/Unconfirmed 1.crdownload".into(), ok: true, code: String::new(), message: String::new(), path: "/dl/foto.png".into() });
+        assert_eq!(m.xfers[0].name, "foto.png");
+        assert!(!m.xfers[0].no_total());
+    }
+
+    #[test]
+    fn a_burst_of_downloads_never_evicts_a_running_phone_transfer() {
+        let mut m = Model::default();
+        m.feed(&Event::TransferStarted { id: "t".into(), peer_id: "a".into(), peer_name: "Pixel".into(), name: "x".into(), size: 9, incoming: true });
+        for i in 0..12 {
+            m.feed(&Event::TransferStarted { id: format!("pc:/dl/{i}.part"), peer_id: String::new(), peer_name: String::new(), name: "d".into(), size: 0, incoming: true });
+        }
+        assert_eq!(m.xfers.len(), 8);
+        assert!(m.xfers.iter().any(|x| x.id == "t"));
     }
 
     #[test]

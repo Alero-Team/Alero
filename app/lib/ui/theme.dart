@@ -413,8 +413,14 @@ ThemeData buildTheme(
         side: const WidgetStatePropertyAll(BorderSide.none),
         backgroundColor: WidgetStateProperty.resolveWith(
           (st) => st.contains(WidgetState.selected)
-              ? scheme.secondaryContainer
-              : scheme.surfaceContainer,
+              ? scheme.primary
+              : scheme.surfaceContainerHighest,
+        ),
+        // Same look as AleroSegments: the chosen one is filled with primary.
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (st) => st.contains(WidgetState.selected)
+              ? scheme.onPrimary
+              : scheme.onSurface,
         ),
       ),
     ),

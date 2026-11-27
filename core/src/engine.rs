@@ -1067,7 +1067,20 @@ impl Inner {
                 self.hello_out(&mut tls, "data").map_err(|e| if e == "NOT_TRUSTED" { TransferError::Rejected("the other device does not trust this one".into()) } else { TransferError::Io(e) })?;
                 tls.timeouts(Duration::from_secs(30));
                 *lk(&x.sock) = tls.tcp().try_clone().ok();
-                let mut progress = |d: u64, t: u64| self.emit_progress(&mut meter, &x.id, d, t);
+                // The receiver may wait for a person to accept; the first progress call means it did.
+                let tcp = tls.tcp().try_clone().ok();
+                if let Some(t) = &tcp {
+                    let _ = t.set_read_timeout(Some(OFFER_TIMEOUT + Duration::from_secs(10)));
+                }
+                let mut accepted = false;
+                let mut progress = |d: u64, t: u64| {
+                    if !std::mem::replace(&mut accepted, true) {
+                        if let Some(c) = &tcp {
+                            let _ = c.set_read_timeout(Some(Duration::from_secs(30)));
+                        }
+                    }
+                    self.emit_progress(&mut meter, &x.id, d, t)
+                };
                 send_file_ex(&mut tls, &path, &x.name, &x.id, DEFAULT_BLOCK, None, &x.cancel, &mut progress).map(|_| ())
             })();
             match outcome {

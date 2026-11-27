@@ -225,6 +225,12 @@ class FsClient extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Selects every file in the folder (folders cannot be selected, like in [toggle]).
+  void selectAll() {
+    selected.addAll(entries.where((e) => !e.dir).map((e) => e.id));
+    notifyListeners();
+  }
+
   void toggle(FsEntry e) {
     if (e.dir) return;
     if (!selected.remove(e.id)) selected.add(e.id);
