@@ -6,7 +6,7 @@
 
 Connect Android and Windows directly over your local network or a USB cable. Transfer files, browse your phone, share the clipboard, mirror notifications and control either device from the other, without a cloud account.
 
-**Alero 3.0 (3.0.0), the first stable release.** [Download Android, Windows and Linux](https://github.com/k0op4/Alero/releases) · [Changelog](CHANGELOG.md)
+**Alero 3.0.1 (3.0.1), the first stable release.** [Download Android, Windows and Linux](https://github.com/k0op4/Alero/releases) · [Changelog](CHANGELOG.md)
 
 ## Screenshots
 

@@ -83,7 +83,12 @@ List<_Dest> get _dests => [
     ),
     _Dest(Section.explorer, 'Explorador', FluentIcons.folder_24_regular),
   ],
-  if (!isPhone) const _Dest(Section.vault, 'Alero Vault', FluentIcons.lock_closed_24_regular),
+  if (!isPhone)
+    const _Dest(
+      Section.vault,
+      'Alero Vault',
+      FluentIcons.lock_closed_24_regular,
+    ),
   const _Dest(
     Section.devices,
     'Dispositivos',
@@ -111,7 +116,10 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell>
-    with WidgetsBindingObserver, WindowListener, SingleTickerProviderStateMixin {
+    with
+        WidgetsBindingObserver,
+        WindowListener,
+        SingleTickerProviderStateMixin {
   bool _sidebarCollapsed = false;
 
   /// The side menu's width, moved by a soft spring: it overshoots about 4 px and settles in ~620 ms.
@@ -435,9 +443,7 @@ class _ShellState extends State<Shell>
                 children: [
                   const AleroMark(size: 22),
                   const SizedBox(width: 9),
-                  Expanded(
-                    child: _MenuLabel(o, 'Alero', style: t.titleSmall),
-                  ),
+                  Expanded(child: _MenuLabel(o, 'Alero', style: t.titleSmall)),
                 ],
               ),
             ),
@@ -524,11 +530,21 @@ class _ShellState extends State<Shell>
                         onPressed: () => _go(Section.devices),
                         tooltip: tx('Dispositivos'),
                       )
-                    : _PhoneChip(
-                        online,
-                        hub,
+                    // Laid out at the open menu's width and clipped: while it fades out the menu is already
+                    // narrower, and squeezing it overflowed the row.
+                    : UnconstrainedBox(
                         key: const ValueKey('chip'),
-                        onTap: () => _go(Section.devices),
+                        constrainedAxis: Axis.vertical,
+                        alignment: Alignment.centerLeft,
+                        clipBehavior: Clip.hardEdge,
+                        child: SizedBox(
+                          width: _menuOpen - 16,
+                          child: _PhoneChip(
+                            online,
+                            hub,
+                            onTap: () => _go(Section.devices),
+                          ),
+                        ),
                       ),
               ),
             ),
@@ -548,8 +564,8 @@ class _ShellState extends State<Shell>
             child: AnimatedBuilder(
               animation: _menu,
               builder: (context, content) {
-                // The spring's overshoot is a few px; never thinner than the icons need.
-                final w = math.max(_menu.value, _menuShut - 6);
+                // The spring overshoots a few px; never thinner than the icons need (a narrower row overflowed).
+                final w = math.max(_menu.value, _menuShut);
                 return Stack(
                   children: [
                     Positioned(
@@ -618,7 +634,7 @@ double _smooth(double x) {
   return p * p * (3 - 2 * p);
 }
 
-/// A name in the side menu: fades and slides 10 px with how open the menu is ([o], 0 to 1); kept on one line
+/// A name in the side menu: fades with how open the menu is ([o], 0 to 1); kept on one line
 /// and clipped, so a narrowing menu never wraps or overflows it.
 class _MenuLabel extends StatelessWidget {
   const _MenuLabel(this.o, this.text, {this.style});
@@ -629,15 +645,12 @@ class _MenuLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Opacity(
     opacity: o.clamp(0.0, 1.0),
-    child: Transform.translate(
-      offset: Offset(-10 * (1 - o), 0),
-      child: Text(
-        text,
-        style: style,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.clip,
-      ),
+    child: Text(
+      text,
+      style: style,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.clip,
     ),
   );
 }
@@ -777,29 +790,26 @@ class _NavItem extends StatelessWidget {
                               maxWidth: _labelRoom,
                               child: Opacity(
                                 opacity: o,
-                                child: Transform.translate(
-                                  offset: Offset(-10 * (1 - o), 0),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle.lerp(
-                                            weight(t.labelLarge, 500),
-                                            t.labelLarge,
-                                            f,
-                                          )?.copyWith(color: fg),
-                                        ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle.lerp(
+                                          weight(t.labelLarge, 500),
+                                          t.labelLarge,
+                                          f,
+                                        )?.copyWith(color: fg),
                                       ),
-                                      if (badge > 0)
-                                        Transform.scale(
-                                          scale: .6 + .4 * o,
-                                          child: Badge(label: Text('$badge')),
-                                        ),
-                                    ],
-                                  ),
+                                    ),
+                                    if (badge > 0)
+                                      Transform.scale(
+                                        scale: .6 + .4 * o,
+                                        child: Badge(label: Text('$badge')),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -820,7 +830,7 @@ class _NavItem extends StatelessWidget {
 
 /// "Mi teléfono" from the concept: who is connected; one tap to Devices.
 class _PhoneChip extends StatelessWidget {
-  const _PhoneChip(this.online, this.hub, {super.key, required this.onTap});
+  const _PhoneChip(this.online, this.hub, {required this.onTap});
   final List<pb.Peer> online;
   final Hub hub;
   final VoidCallback onTap;

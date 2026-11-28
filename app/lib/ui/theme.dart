@@ -133,6 +133,28 @@ class Tokens {
   final Color bg, surface, elevated, secondary, border, borderStrong;
   final Color text, text2, accent, onAccent, success, error;
 
+  /// The same tokens with [c] mixed into the background, surfaces and borders: a colored background that keeps
+  /// the text's contrast (light mixes less, so it stays pastel).
+  Tokens tinted(Color c, Brightness b) {
+    final k = b == Brightness.light ? .7 : 1.0;
+    Color mix(Color base, double a) =>
+        Color.alphaBlend(c.withValues(alpha: a * k), base);
+    return Tokens(
+      bg: mix(bg, .14),
+      surface: mix(surface, .16),
+      elevated: mix(elevated, .18),
+      secondary: mix(secondary, .18),
+      border: mix(border, .20),
+      borderStrong: mix(borderStrong, .22),
+      text: text,
+      text2: text2,
+      accent: accent,
+      onAccent: onAccent,
+      success: success,
+      error: error,
+    );
+  }
+
   static const light = Tokens(
     bg: Color(0xFFF2F2F2),
     surface: Color(0xFFFFFFFF),
@@ -181,18 +203,23 @@ class Tokens {
 /// [seed] only tints the roles Alero does not set (tertiary), the accent stays monochrome.
 /// [expressive]: the Material 3 Expressive color style instead, a tonal palette from [seed] (the wallpaper's
 /// color or a fixed one); it follows light/dark and AMOLED the same way.
+/// [background] tints Alero's neutral surfaces (text keeps its contrast); [accent] replaces the monochrome
+/// accent, toned for the brightness so it stays readable. Neither applies to the Expressive style.
 ColorScheme schemeFor(
   Color seed,
   DynamicSchemeVariant variant,
   Brightness b, {
   bool amoled = false,
   bool expressive = false,
+  Color? background,
+  Color? accent,
 }) {
   if (expressive) return expressiveScheme(seed, b, amoled: amoled);
-  final k = b == Brightness.light
+  final base = b == Brightness.light
       ? Tokens.light
       : (amoled ? Tokens.amoled : Tokens.dark);
-  return ColorScheme.fromSeed(
+  final k = background == null ? base : base.tinted(background, b);
+  final scheme = ColorScheme.fromSeed(
     seedColor: seed,
     brightness: b,
     dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
@@ -224,6 +251,29 @@ ColorScheme schemeFor(
     error: k.error,
     surfaceTint: Colors.transparent,
   );
+  if (accent == null) return scheme;
+  // The chosen color as is while it stands out from the background (3:1, as controls need); otherwise its
+  // tone for this brightness. Text on it: black or white, whichever reads better.
+  final toned = ColorScheme.fromSeed(
+    seedColor: accent,
+    brightness: b,
+    dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+  );
+  final primary = contrast(accent, k.bg) >= 3 ? accent : toned.primary;
+  const black = Color(0xFF000000), white = Color(0xFFFFFFFF);
+  return scheme.copyWith(
+    primary: primary,
+    onPrimary: contrast(black, primary) > contrast(white, primary)
+        ? black
+        : white,
+    inversePrimary: toned.inversePrimary,
+  );
+}
+
+/// WCAG contrast ratio of two colors (1 to 21).
+double contrast(Color a, Color b) {
+  final (x, y) = (a.computeLuminance() + .05, b.computeLuminance() + .05);
+  return x > y ? x / y : y / x;
 }
 
 /// Material 3 Expressive color style: the system's tonal palette from [seed]. With [amoled] in dark, the
@@ -259,6 +309,8 @@ ThemeData buildTheme(
   Brightness b, {
   bool amoled = false,
   bool expressive = false,
+  Color? background,
+  Color? accent,
 }) {
   final scheme = schemeFor(
     seed,
@@ -266,6 +318,8 @@ ThemeData buildTheme(
     b,
     amoled: amoled,
     expressive: expressive,
+    background: background,
+    accent: accent,
   );
   final p = Palette.of(scheme);
   final base = ThemeData(

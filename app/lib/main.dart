@@ -73,6 +73,8 @@ class App extends StatelessWidget {
       hub.amoled,
       hub.colorStyle,
       hub.colorSeed,
+      hub.bgColor,
+      hub.accentColor,
       boot,
       L10n.instance,
     ]),
@@ -82,6 +84,13 @@ class App extends StatelessWidget {
       // A fixed seed chosen in Apariencia wins over the wallpaper's color (only the Expressive style uses it).
       final fixed = int.tryParse(hub.colorSeed.value, radix: 16);
       final seed = expressive && fixed != null ? Color(fixed) : system;
+      Color? pick(String hex) =>
+          switch (int.tryParse(hex.replaceFirst('#', ''), radix: 16)) {
+            final v? => Color(0xFF000000 | v),
+            null => null,
+          };
+      final background = pick(hub.bgColor.value);
+      final accent = pick(hub.accentColor.value);
       return MaterialApp(
         title: 'Alero',
         locale: L10n.instance.locale,
@@ -97,6 +106,8 @@ class App extends StatelessWidget {
           variant,
           Brightness.light,
           expressive: expressive,
+          background: background,
+          accent: accent,
         ),
         darkTheme: buildTheme(
           seed,
@@ -104,6 +115,8 @@ class App extends StatelessWidget {
           Brightness.dark,
           amoled: hub.amoled.value,
           expressive: expressive,
+          background: background,
+          accent: accent,
         ),
         themeMode: switch (hub.theme) {
           'light' => ThemeMode.light,

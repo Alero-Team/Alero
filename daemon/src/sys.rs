@@ -266,8 +266,11 @@ mod win {
         send(&seq);
     }
 
-    /// Volume and transport keys: they go to whatever the system treats as the active player.
+    /// Volume and transport keys. Transport goes first to the session the island shows; the key is the fallback.
     pub fn media_key(action: &str) -> bool {
+        if session_cmd(action) {
+            return true;
+        }
         let vk = match action {
             "volume_up" => VK_VOLUME_UP,
             "volume_down" => VK_VOLUME_DOWN,
@@ -576,6 +579,25 @@ mod win {
             actions,
             speed: playback.PlaybackRate().ok().and_then(|rate| rate.Value().ok()).unwrap_or(1.0),
         })
+    }
+
+    /// Play/pause, next, previous or stop on the current session (the one `media_state` reports). A simulated media
+    /// key goes wherever Windows or a browser holding the keys decides, so the island's buttons only worked at times.
+    /// False when nothing was done (no session, or the player refused): then the caller sends the key.
+    pub(crate) fn session_cmd(action: &str) -> bool {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let Some(mgr) = media_manager() else { return false };
+        let Ok(s) = mgr.GetCurrentSession() else { return false };
+        let op = match action {
+            "toggle" => s.TryTogglePlayPauseAsync(),
+            "next" => s.TrySkipNextAsync(),
+            "prev" => s.TrySkipPreviousAsync(),
+            "stop" => s.TryStopAsync(),
+            _ => return false,
+        };
+        op.ok().and_then(|a| a.join().ok()).unwrap_or(false)
     }
 
     /// Moves the current media session to `ms` (the island's progress bar).
@@ -980,6 +1002,17 @@ mod live {
         let small = super::win::cover(1).expect("shrunk cover");
         assert_eq!(&small[..2], &[0xff, 0xd8]);
         println!("shrunk: {} bytes", small.len());
+    }
+
+    /// The island's play/pause reaches the session it shows, not wherever the media key lands.
+    #[test]
+    #[ignore]
+    fn toggle_reaches_the_shown_session() {
+        let a = super::media_state().expect("play something first");
+        assert!(super::win::session_cmd("toggle"), "{} refused toggle", a.app);
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        assert_ne!(super::media_state().unwrap().playing, a.playing);
+        assert!(super::win::session_cmd("toggle"));
     }
 
     #[test]

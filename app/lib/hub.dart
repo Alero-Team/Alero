@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'device_image.dart';
 import 'fs_client.dart';
+import 'island_prefs.dart' show normalizeHex;
 import 'l10n.dart' show L10n, tr, tx;
 import 'native.dart';
 import 'pc_remote.dart';
@@ -238,6 +239,11 @@ class Hub extends ChangeNotifier {
   /// Where the Expressive palette comes from: 'wallpaper' (the system color) or a fixed seed as hex 'ff2f6b5e'.
   final colorSeed = ValueNotifier('wallpaper');
 
+  /// Computer, Alero style: tint of the background and surfaces, and the accent on buttons and selections.
+  /// '#RRGGBB', or '' for Alero's neutral, monochrome identity.
+  final bgColor = ValueNotifier('');
+  final accentColor = ValueNotifier('');
+
   /// Size of Home's tiles (padding and spacing): compact, normal or large.
   final tileSize = ValueNotifier('normal');
 
@@ -287,6 +293,8 @@ class Hub extends ChangeNotifier {
     amoled.value = s['amoled'] as bool? ?? true;
     colorStyle.value = s['colorStyle'] == 'expressive' ? 'expressive' : 'alero';
     colorSeed.value = s['colorSeed'] as String? ?? 'wallpaper';
+    bgColor.value = normalizeHex(s['bgColor'] as String? ?? '') ?? '';
+    accentColor.value = normalizeHex(s['accentColor'] as String? ?? '') ?? '';
     tileSize.value = s['tileSize'] as String? ?? 'normal';
     homeOrder = (s['homeOrder'] as List? ?? []).whereType<String>().toList();
     homeHidden = (s['homeHidden'] as List? ?? []).whereType<String>().toSet();
@@ -450,6 +458,8 @@ class Hub extends ChangeNotifier {
         'amoled': amoled.value,
         'colorStyle': colorStyle.value,
         'colorSeed': colorSeed.value,
+        'bgColor': bgColor.value,
+        'accentColor': accentColor.value,
         'tileSize': tileSize.value,
         'homeOrder': homeOrder,
         'homeHidden': homeHidden.toList(),
@@ -1263,6 +1273,18 @@ class Hub extends ChangeNotifier {
 
   void setColorSeed(String seed) {
     colorSeed.value = seed;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setBgColor(String color) {
+    bgColor.value = color;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setAccentColor(String color) {
+    accentColor.value = color;
     _saveSettings();
     notifyListeners();
   }

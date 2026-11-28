@@ -722,6 +722,36 @@ class SettingsScreen extends StatelessWidget {
               expanded: hub.colorStyle.value == 'expressive',
               child: _SeedPicker(hub),
             ),
+            ] else ...[
+              // The computer: Alero's identity with a background tint and an accent of the user's choice.
+              ColorSwatches(
+                title: 'Color de fondo',
+                options: const [
+                  ('', 'Alero'),
+                  ('#2563EB', 'Azul'),
+                  ('#2E9D5B', 'Verde'),
+                  ('#C2414B', 'Coral'),
+                  ('#E0A030', 'Ámbar'),
+                  ('#8E5CD9', 'Violeta'),
+                ],
+                value: hub.bgColor.value,
+                onChanged: hub.setBgColor,
+                fallback: s.surfaceContainerHigh,
+              ),
+              ColorSwatches(
+                title: 'Color de acento',
+                options: const [
+                  ('', 'Alero'),
+                  ('#8AB4F8', 'Azul'),
+                  ('#81C995', 'Verde'),
+                  ('#F28B82', 'Coral'),
+                  ('#FDD663', 'Ámbar'),
+                  ('#C58AF9', 'Violeta'),
+                ],
+                value: hub.accentColor.value,
+                onChanged: hub.setAccentColor,
+                fallback: s.onSurface,
+              ),
             ],
             // Named in both languages on purpose: it has to be findable whichever one the app is in now.
             Padding(

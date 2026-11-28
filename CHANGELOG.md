@@ -1,5 +1,13 @@
 # Cambios
 
+## 3.0.1 (3.0.1) — 2026-11-27
+
+The first stable release of Alero, published as 3.0.1: it carries everything listed under 3.0 below, plus these changes. Install the Android APK and the Windows or Linux package from this version together.
+
+- **Alero Island:** the computer's play/pause, next and previous buttons now control the player the island shows. They used to send a media key, which Windows (or a browser holding the keys) could hand to another player, so they worked only now and then. The phone's remote gets the same fix.
+- **Computer app:** background and accent colours in Ajustes › Apariencia, the same idea as the island's. The background tints Alero's neutral surfaces and keeps the text's contrast; the accent colours buttons, selections, sliders and progress, toned so it stays readable in light and dark.
+- **Side menu:** folding and unfolding it no longer clips the first letter of each name, overlaps the phone's mark or squeezes the rows during the spring's overshoot, also with the window maximized.
+
 ## 3.0 (3.0.0) — 2026-11-27
 
 The first stable release of Alero. Install the Android APK and the Windows or Linux package from this version together.

@@ -135,13 +135,13 @@ class _IslandPanelState extends State<IslandPanel> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const _Title('Aspecto'),
-                  _Swatches(
+                  ColorSwatches(
                     title: 'Color de fondo',
                     options: _backgrounds,
                     value: p.text('color'),
                     onChanged: (v) => p.set('color', v),
                   ),
-                  _Swatches(
+                  ColorSwatches(
                     title: 'Color de acento',
                     options: _accents,
                     value: p.text('accent'),
@@ -416,27 +416,32 @@ class _Slide extends StatelessWidget {
   }
 }
 
-class _Swatches extends StatefulWidget {
-  const _Swatches({
+/// A row of color circles plus a hex field. Values are '#RRGGBB'; an option with an empty hex is the default
+/// look, drawn with [fallback].
+class ColorSwatches extends StatefulWidget {
+  const ColorSwatches({
+    super.key,
     required this.title,
     required this.options,
     required this.value,
     required this.onChanged,
+    this.fallback = Colors.transparent,
   });
   final String title;
   final List<(String, String)> options;
   final String value;
   final ValueChanged<String> onChanged;
+  final Color fallback;
 
   @override
-  State<_Swatches> createState() => _SwatchesState();
+  State<ColorSwatches> createState() => _SwatchesState();
 }
 
-class _SwatchesState extends State<_Swatches> {
+class _SwatchesState extends State<ColorSwatches> {
   late final c = TextEditingController(text: widget.value);
 
   @override
-  void didUpdateWidget(_Swatches old) {
+  void didUpdateWidget(ColorSwatches old) {
     super.didUpdateWidget(old);
     if (old.value != widget.value && normalizeHex(c.text) != widget.value) {
       c.text = widget.value;
@@ -469,53 +474,55 @@ class _SwatchesState extends State<_Swatches> {
                   runSpacing: Gap.s,
                   children: [
                     for (final (hex, name) in widget.options)
-                      Semantics(
-                        label: tx(name),
-                        selected: cur == hex,
-                        button: true,
-                        child: Tooltip(
-                          message: tx(name),
-                          child: QollqePress(
-                            radius: 17,
-                            onTap: () => widget.onChanged(hex),
-                            child: AnimatedContainer(
-                              duration: QollqeMotion.micro(
-                                context,
-                                Fluent.d167,
-                              ),
-                              curve: Fluent.enter,
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: _hex(hex),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: cur == hex
-                                      ? s.primary
-                                      : Colors.transparent,
-                                  width: cur == hex ? 2.5 : 1,
-                                ),
-                              ),
-                              // Always mounted so the tick scales in and out instead of popping.
-                              child: AnimatedScale(
-                                scale: cur == hex ? 1 : 0,
+                      if ((hex.isEmpty ? widget.fallback : _hex(hex))
+                          case final color)
+                        Semantics(
+                          label: tx(name),
+                          selected: cur == hex,
+                          button: true,
+                          child: Tooltip(
+                            message: tx(name),
+                            child: QollqePress(
+                              radius: 17,
+                              onTap: () => widget.onChanged(hex),
+                              child: AnimatedContainer(
                                 duration: QollqeMotion.micro(
                                   context,
                                   Fluent.d167,
                                 ),
                                 curve: Fluent.enter,
-                                child: Icon(
-                                  FluentIcons.checkmark_24_regular,
-                                  size: 18,
-                                  color: _hex(hex).computeLuminance() > 0.5
-                                      ? Colors.black
-                                      : Colors.white,
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: cur == hex
+                                        ? s.primary
+                                        : Colors.transparent,
+                                    width: cur == hex ? 2.5 : 1,
+                                  ),
+                                ),
+                                // Always mounted so the tick scales in and out instead of popping.
+                                child: AnimatedScale(
+                                  scale: cur == hex ? 1 : 0,
+                                  duration: QollqeMotion.micro(
+                                    context,
+                                    Fluent.d167,
+                                  ),
+                                  curve: Fluent.enter,
+                                  child: Icon(
+                                    FluentIcons.checkmark_24_regular,
+                                    size: 18,
+                                    color: color.computeLuminance() > 0.5
+                                        ? Colors.black
+                                        : Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
                   ],
                 ),
               ),

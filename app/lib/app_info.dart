@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'l10n.dart' show tx;
 
 /// Same as `version:` in pubspec.yaml (test/updater_test.dart checks it): the update check compares against it.
-const aleroVersion = '3.0.0';
+const aleroVersion = '3.0.1';
 
 /// The release name people see.
-const aleroRelease = '3.0';
+const aleroRelease = '3.0.1';
 
 /// Flutter supplies Dart package notices; native components are bundled alongside them.
 void registerAleroLicenses() {
